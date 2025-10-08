@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/tour_service.dart';
 import '../widgets/tour_card.dart';
 import '../widgets/tour_filter_bar.dart';
+import '../widgets/article_list_widget.dart';
 
 class TourListScreen extends StatefulWidget {
   const TourListScreen({super.key});
@@ -174,40 +175,36 @@ class _TourListScreenState extends State<TourListScreen> {
 
           Expanded(
             child: isLoading
-                ? Center(
-              child: CircularProgressIndicator(color: oceanBlue),
-            )
-                : tours.isEmpty
-                ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.search_off_rounded,
-                    size: 80,
-                    color: Colors.grey[400],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    "Không tìm thấy tour nào",
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-            )
+                ? Center(child: CircularProgressIndicator(color: oceanBlue))
                 : RefreshIndicator(
               color: oceanBlue,
               onRefresh: () => _loadTours(),
-              child: ListView.builder(
+              child: ListView(
                 controller: _scrollController,
                 padding: const EdgeInsets.all(12),
-                itemCount: tours.length,
-                itemBuilder: (context, index) {
-                  return TourCard(tour: tours[index]);
-                },
+                children: [
+                  // ✅ Danh sách tour
+                  if (tours.isNotEmpty)
+                    ...tours.map((tour) => TourCard(tour: tour)).toList()
+                  else
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.search_off_rounded,
+                            size: 80, color: Colors.grey[400]),
+                        const SizedBox(height: 16),
+                        Text(
+                          "Không tìm thấy tour nào",
+                          style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                        ),
+                      ],
+                    ),
+
+                  const SizedBox(height: 24),
+
+                  // ✅ Danh sách bài viết luôn hiển thị ở dưới
+                  const ArticleListWidget(),
+                ],
               ),
             ),
           ),
