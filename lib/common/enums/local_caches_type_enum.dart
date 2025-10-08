@@ -1,0 +1,1 @@
+enum LocalCachesTypeEnum{all, app, web, none}
