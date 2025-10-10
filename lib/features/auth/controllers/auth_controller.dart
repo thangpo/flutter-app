@@ -914,7 +914,7 @@ class AuthController with ChangeNotifier {
     UserLogData? userData;
     try {
       final rawData = authServiceInterface.getUserEmail(); // Lấy chuỗi JSON từ SharedPreferences
-      if (rawData != null && rawData.isNotEmpty) {
+      if (rawData.isNotEmpty) {
         userData = UserLogData.fromJson(jsonDecode(rawData));
 
         // Chỉ giữ email/phone, password để null

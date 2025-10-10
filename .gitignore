@@ -63,3 +63,5 @@ android/build/
 # macOS
 macos/Pods/
 macos/build/
+
+*.zip

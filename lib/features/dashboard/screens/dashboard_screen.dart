@@ -21,7 +21,9 @@ import 'package:flutter_sixvalley_ecommerce/features/home/screens/fashion_theme_
 import 'package:flutter_sixvalley_ecommerce/features/home/screens/home_screens.dart';
 import 'package:flutter_sixvalley_ecommerce/features/more/screens/more_screen_view.dart';
 import 'package:flutter_sixvalley_ecommerce/features/order/screens/order_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_screen.dart';
 import 'package:provider/provider.dart';
+
 
 class DashBoardScreen extends StatefulWidget {
   const DashBoardScreen({super.key});
@@ -77,6 +79,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
               ? const HomePage() : (splashController.configModel!.activeTheme == "theme_aster")
               ? const AsterThemeHomeScreen(): const FashionThemeHomePage(),
         ),
+        NavigationModel(name: 'social', icon: Images.chats, screen: const SocialFeedScreen()),
 
         NavigationModel(name: 'inbox', icon: Images.messageImage, screen: const InboxScreen(isBackButtonExist: false)),
         NavigationModel(name: 'cart', icon: Images.cartArrowDownImage, screen: const CartScreen(showBackButton: false), showCartIcon: true),

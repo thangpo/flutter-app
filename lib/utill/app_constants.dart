@@ -8,7 +8,7 @@ class AppConstants {
   static const String appVersion = '15.4'; ///Flutter SDK 3.32.8
   static const LocalCachesTypeEnum cachesType = LocalCachesTypeEnum.all;
 
-  static const String baseUrl = 'https://ecomerce.vnshop247.com/';
+  static const String baseUrl = 'https://vnshop247.com/';
 
   static const String googleServerClientId = 'client_id here';
   static const String userId = 'userId';

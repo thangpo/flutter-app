@@ -270,12 +270,11 @@ class FlightBookingForm extends StatelessWidget {
         return Theme(
           data: ThemeData(
             primarySwatch: Colors.blue,
-            dialogBackgroundColor: Colors.white,
             colorScheme: ColorScheme.light(
               primary: Colors.blue,
               onPrimary: Colors.white,
               onSurface: Colors.black,
-            ),
+            ), dialogTheme: DialogThemeData(backgroundColor: Colors.white),
           ),
           child: child!,
         );
@@ -456,7 +455,7 @@ class FlightBookingForm extends StatelessWidget {
                   Switch(
                     value: isRoundTrip,
                     onChanged: onRoundTripChanged,
-                    activeColor: Colors.cyan,
+                    activeThumbColor: Colors.cyan,
                   ),
                 ],
               ),

@@ -208,7 +208,7 @@ class _FlightListWidgetState extends State<FlightListWidget> {
             availability: availability,
             logoUrl: logoUrl,
           );
-        }).toList(),
+        }),
       ],
     );
   }

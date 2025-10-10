@@ -47,7 +47,6 @@ import 'package:flutter_sixvalley_ecommerce/utill/custom_themes.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/dimensions.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_sixvalley_ecommerce/webview_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/home/widgets/affiliate_product_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/financial_center_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/features/home/widgets/all_seller_widget.dart';
@@ -424,9 +423,9 @@ class NewFeaturesSection extends StatelessWidget {
   final List<FeatureItem> features;
 
   const NewFeaturesSection({
-    Key? key,
+    super.key,
     required this.features,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

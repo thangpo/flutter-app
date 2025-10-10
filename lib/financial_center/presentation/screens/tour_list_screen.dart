@@ -185,7 +185,7 @@ class _TourListScreenState extends State<TourListScreen> {
                 children: [
                   // ✅ Danh sách tour
                   if (tours.isNotEmpty)
-                    ...tours.map((tour) => TourCard(tour: tour)).toList()
+                    ...tours.map((tour) => TourCard(tour: tour))
                   else
                     Column(
                       mainAxisAlignment: MainAxisAlignment.center,
