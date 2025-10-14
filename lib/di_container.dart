@@ -184,6 +184,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'data/datasource/remote/dio/logging_interceptor.dart';
 import 'features/loyaltyPoint/domain/repositories/loyalty_point_repository.dart';
 import 'features/search_product/domain/repositories/search_product_repository.dart';
+import 'package:get/get.dart';
+
+
 
 final sl = GetIt.instance;
 
@@ -503,4 +506,7 @@ Future<void> init() async {
   sl.registerLazySingleton(() => WalletService(walletRepositoryInterface : sl()));
   sl.registerLazySingleton(() => SearchProductService(searchProductRepositoryInterface : sl()));
   sl.registerLazySingleton(() => RestockService(restockRepositoryInterface : sl()));
+  if (!GetIt.I.isRegistered<AuthServiceInterface>()) {
+    sl.registerLazySingleton<AuthServiceInterface>(() => AuthService(authRepoInterface: sl()));
+  }
 }

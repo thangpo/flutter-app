@@ -48,7 +48,7 @@ class _ArticleListWidgetState extends State<ArticleListWidget> {
     if (isLoading) {
       return Center(
         child: CircularProgressIndicator(
-          valueColor: AlwaysStoppedAnimation<Color>(Colors.cyan.shade600),
+          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0077BE)),
         ),
       );
     }
@@ -58,12 +58,12 @@ class _ArticleListWidgetState extends State<ArticleListWidget> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.article_outlined, size: 80, color: Colors.cyan.shade300),
+            Icon(Icons.article_outlined, size: 80, color: Color(0xFF0077BE)),
             const SizedBox(height: 16),
             Text(
               "Không có bài viết nào",
               style: TextStyle(
-                color: Colors.cyan.shade700,
+                color: Color(0xFF4DA8DA),
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
               ),
@@ -81,7 +81,7 @@ class _ArticleListWidgetState extends State<ArticleListWidget> {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Colors.cyan.shade600, Colors.cyan.shade400],
+              colors: [Color(0xFF0077BE), Color(0xFF4DA8DA)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -178,8 +178,8 @@ class _ArticleListWidgetState extends State<ArticleListWidget> {
                             borderRadius: BorderRadius.circular(16),
                             gradient: LinearGradient(
                               colors: [
-                                Colors.cyan.shade400,
-                                Colors.cyan.shade600,
+                                Color(0xFF4DA8DA),
+                                Color(0xFF0077BE),
                               ],
                             ),
                             boxShadow: [
@@ -205,7 +205,7 @@ class _ArticleListWidgetState extends State<ArticleListWidget> {
                                     color: Colors.cyan.shade100,
                                     child: Icon(
                                       Icons.image_not_supported,
-                                      color: Colors.cyan.shade400,
+                                      color: Color(0xFF4DA8DA),
                                       size: 40,
                                     ),
                                   ),
