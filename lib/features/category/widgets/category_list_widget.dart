@@ -19,44 +19,78 @@ class CategoryListWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<CategoryController>(
       builder: (context, categoryProvider, child) {
-        return Column(children: [
+        final categories = categoryProvider.categoryList;
 
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeExtraExtraSmall),
-            child: TitleRowWidget(
-              title: getTranslated('CATEGORY', context),
-              onTap: () {
-                if(categoryProvider.categoryList.isNotEmpty) {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoryScreen()));
-                }
-              },
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // --- Tiêu đề "Danh mục"
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: Dimensions.paddingSizeSmall),
+              child: TitleRowWidget(
+                title: getTranslated('CATEGORY', context),
+                onTap: () {
+                  if (categories.isNotEmpty) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const CategoryScreen(),
+                      ),
+                    );
+                  }
+                },
+              ),
             ),
-          ),
-          const SizedBox(height: Dimensions.paddingSizeSmall),
+            const SizedBox(height: Dimensions.paddingSizeSmall),
 
-          categoryProvider.categoryList.isNotEmpty ?
-          SizedBox( height: Provider.of<LocalizationController>(context, listen: false).isLtr ? MediaQuery.of(context).size.width/3.7 : MediaQuery.of(context).size.width/3,
-            child: ListView.builder(
-              padding: EdgeInsets.zero,
-              scrollDirection: Axis.horizontal,
-              itemCount: categoryProvider.categoryList.length > 10 ? 10 : categoryProvider.categoryList.length,
-              shrinkWrap: true,
-              itemBuilder: (BuildContext context, int index) {
-                return InkWell( splashColor: Colors.transparent, highlightColor: Colors.transparent,
+            // --- Hiển thị danh mục dạng Grid
+            categories.isNotEmpty
+                ? Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: Dimensions.paddingSizeSmall),
+              child: GridView.builder(
+                shrinkWrap: true,
+                physics:
+                const NeverScrollableScrollPhysics(), // để cuộn theo màn hình cha
+                gridDelegate:
+                const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 4, // 4 danh mục mỗi hàng
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 8,
+                  childAspectRatio:
+                  0.75, // tỉ lệ width/height, 0.7–0.8 là đẹp
+                ),
+                itemCount: categories.length,
+                itemBuilder: (context, index) {
+                  final category = categories[index];
+                  return InkWell(
+                    splashColor: Colors.transparent,
+                    highlightColor: Colors.transparent,
                     onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => BrandAndCategoryProductScreen(
-                          isBrand: false,
-                          id: categoryProvider.categoryList[index].id,
-                          name: categoryProvider.categoryList[index].name)));
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => BrandAndCategoryProductScreen(
+                            isBrand: false,
+                            id: category.id,
+                            name: category.name,
+                          ),
+                        ),
+                      );
                     },
-                    child: CategoryWidget(category: categoryProvider.categoryList[index],
-                        index: index,length:  categoryProvider.categoryList.length),
-                );
-              },
-            ),
-          ) : const CategoryShimmerWidget(),
-        ]);
-
+                    child: CategoryWidget(
+                      category: category,
+                      index: index,
+                      length: categories.length,
+                    ),
+                  );
+                },
+              ),
+            )
+                : const CategoryShimmerWidget(),
+          ],
+        );
       },
     );
   }

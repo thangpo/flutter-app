@@ -183,7 +183,6 @@ class _TourListScreenState extends State<TourListScreen> {
                 controller: _scrollController,
                 padding: const EdgeInsets.all(12),
                 children: [
-                  // ✅ Danh sách tour
                   if (tours.isNotEmpty)
                     ...tours.map((tour) => TourCard(tour: tour))
                   else
@@ -202,7 +201,6 @@ class _TourListScreenState extends State<TourListScreen> {
 
                   const SizedBox(height: 24),
 
-                  // ✅ Danh sách bài viết luôn hiển thị ở dưới
                   const ArticleListWidget(),
                 ],
               ),
