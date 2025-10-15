@@ -454,7 +454,6 @@ class NewFeaturesSection extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
             Row(
               children: [
                 Container(
@@ -518,8 +517,6 @@ class NewFeaturesSection extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 16),
-
-            // Features Grid
             _buildFeaturesGrid(),
           ],
         ),
@@ -528,7 +525,6 @@ class NewFeaturesSection extends StatelessWidget {
   }
 
   Widget _buildFeaturesGrid() {
-    // Nếu có 2 items hoặc ít hơn, hiển thị dạng grid
     if (features.length <= 2) {
       return Row(
         children: features.map((feature) {
@@ -541,7 +537,6 @@ class NewFeaturesSection extends StatelessWidget {
         }).toList(),
       );
     }
-    // Nếu có 3-4 items, hiển thị grid 2x2
     else if (features.length <= 4) {
       return GridView.builder(
         shrinkWrap: true,
@@ -558,7 +553,6 @@ class NewFeaturesSection extends StatelessWidget {
         },
       );
     }
-    // Nếu nhiều hơn 4 items, hiển thị horizontal scroll
     else {
       return SizedBox(
         height: 140,
@@ -605,7 +599,6 @@ class NewFeaturesSection extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Icon/Image Container
             Container(
               width: 60,
               height: 60,
@@ -646,8 +639,6 @@ class NewFeaturesSection extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 10),
-
-            // Title
             Text(
               feature.title,
               style: TextStyle(
@@ -660,8 +651,6 @@ class NewFeaturesSection extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
-
-            // Description (optional)
             if (feature.description != null) ...[
               const SizedBox(height: 4),
               Text(
