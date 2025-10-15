@@ -75,15 +75,26 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         NavigationModel(
           name: 'home',
           icon: Images.homeImage,
-          screen: (splashController.configModel!.activeTheme == "default")
-              ? const HomePage() : (splashController.configModel!.activeTheme == "theme_aster")
-              ? const AsterThemeHomeScreen(): const FashionThemeHomePage(),
+          screen: const SocialFeedScreen(),
         ),
-        NavigationModel(name: 'social', icon: Images.chats, screen: const SocialFeedScreen()),
+        NavigationModel(name: 'reels', icon: Images.ReelsImage, screen: const InboxScreen(isBackButtonExist: false)),
+        NavigationModel(name: 'friends', icon: Images.friendImage, screen: const InboxScreen(isBackButtonExist: false)),
 
-        NavigationModel(name: 'inbox', icon: Images.messageImage, screen: const InboxScreen(isBackButtonExist: false)),
-        NavigationModel(name: 'cart', icon: Images.cartArrowDownImage, screen: const CartScreen(showBackButton: false), showCartIcon: true),
-        NavigationModel(name: 'orders', icon: Images.shoppingImage, screen:  const OrderScreen(isBacButtonExist: false)),
+        NavigationModel(
+          name: 'shop',
+          icon: Images.storeIcon,
+          screen: (splashController.configModel!.activeTheme == "default")
+              ? const HomePage()
+              : (splashController.configModel!.activeTheme == "theme_aster")
+              ? const AsterThemeHomeScreen()
+              : const FashionThemeHomePage(),
+        ),
+
+        NavigationModel(name: 'notifications', icon: Images.notification, screen: const InboxScreen(isBackButtonExist: false)),
+
+        // NavigationModel(name: 'inbox', icon: Images.messageImage, screen: const InboxScreen(isBackButtonExist: false)),
+        // NavigationModel(name: 'cart', icon: Images.cartArrowDownImage, screen: const CartScreen(showBackButton: false), showCartIcon: true),
+        // NavigationModel(name: 'orders', icon: Images.shoppingImage, screen:  const OrderScreen(isBacButtonExist: false)),
         NavigationModel(name: 'more', icon: Images.moreImage, screen:  const MoreScreen()),
 
       ];

@@ -9,6 +9,10 @@ class Images {
   static const String logoImage = 'assets/images/logo.png';
   static const String logoWithNameImage = 'assets/images/logo_with_name.png';
   static const String logoWithNameImageWhite = 'assets/images/logo_with_name_white.png';
+  static const String logoWithNameSocialImage = 'assets/images/logo_with_name_social.png';
+  static const String logoWithNameSocialImageWhite = 'assets/images/logo_with_name_social_white.png';
+  static const String friendImage = 'assets/images/friends.png';
+  static const String ReelsImage = 'assets/images/clapperboard.png';
   static const String messageImage = 'assets/images/inbox.png';
   static const String moreImage = 'assets/images/more.png';
   static const String shoppingImage = 'assets/images/order.png';
