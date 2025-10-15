@@ -587,6 +587,7 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
         "customer_notes": specialRequestController.text,
         "zip_code": postalController.text,
         "coupon_code": couponController.text.isNotEmpty ? couponController.text : null,
+        "amount": booking.total.toStringAsFixed(0),
         "contact_info": {
           "first_name": firstNameController.text,
           "last_name": lastNameController.text,
@@ -602,21 +603,17 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
 
       if (paymentMethod == 'sepay') {
         response = await dio.post(
-          'https://vietnamtoure.com/api/sepay/payment',
-          data: {
-            "amount": booking.total.toStringAsFixed(0),
-            "booking_data": data,
-          },
+          'https://vietnamtoure.com/api/bookings/sepay/payment',
+          data: data,
           options: Options(headers: {'Accept': 'application/json'}),
         );
 
         if (response.statusCode == 200 && response.data['status'] == true) {
           final paymentInfo = response.data['data'];
-
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => SepayQrPage(paymentData: response.data),
+              builder: (context) => SepayQrPage(paymentData: paymentInfo),
             ),
           );
         } else {
