@@ -16,7 +16,7 @@ class ApiService {
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
       final products = data["data"] as List;
-      return products.take(20).toList();
+      return products.take(40).toList();
     } else {
       throw Exception("Lỗi khi load sản phẩm: ${response.statusCode}");
     }

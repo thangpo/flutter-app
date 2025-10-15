@@ -50,6 +50,8 @@ import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.d
 import 'package:flutter_sixvalley_ecommerce/theme/dark_theme.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/light_theme.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
+import 'package:flutter_sixvalley_ecommerce/features/auth/screens/login_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/booking_confirm_screen.dart';
 import 'package:provider/provider.dart';
 import 'di_container.dart' as di;
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
@@ -162,37 +164,36 @@ class MyApp extends StatelessWidget {
     for (var language in AppConstants.languages) {
       locals.add(Locale(language.languageCode!, language.countryCode));
     }
-    return Consumer<ThemeController>(builder: (context, themeController, _) {
-      return MaterialApp(
-        title: AppConstants.appName,
-        navigatorKey: navigatorKey,
-        debugShowCheckedModeBanner: false,
-        theme: themeController.darkTheme
-            ? dark
-            : light(
-                primaryColor: themeController.selectedPrimaryColor,
-                secondaryColor: themeController.selectedPrimaryColor,
-              ),
-        locale: Provider.of<LocalizationController>(context).locale,
-        localizationsDelegates: [
-          AppLocalization.delegate,
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-          FallbackLocalizationDelegate()
-        ],
-        builder: (context, child) {
-          return MediaQuery(
-              data: MediaQuery.of(context)
-                  .copyWith(textScaler: TextScaler.noScaling),
-              child: SafeArea(top: false, child: child!));
-        },
-        supportedLocales: locals,
-        home: SplashScreen(
-          body: body,
-        ),
-      );
-    });
+    return Consumer<ThemeController>(
+        builder: (context, themeController, _) {
+          return MaterialApp(
+            title: AppConstants.appName,
+            navigatorKey: navigatorKey,
+            debugShowCheckedModeBanner: false,
+            theme: themeController.darkTheme ? dark : light(
+              primaryColor: themeController.selectedPrimaryColor,
+              secondaryColor: themeController.selectedPrimaryColor,
+            ),
+            locale: Provider.of<LocalizationController>(context).locale,
+            localizationsDelegates: [
+              AppLocalization.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+              FallbackLocalizationDelegate()
+            ],
+            builder:(context,child) {
+              return MediaQuery(data: MediaQuery.of(context).copyWith(textScaler: TextScaler.noScaling), child: SafeArea(top: false, child: child!));
+            },
+            supportedLocales: locals,
+            home: SplashScreen(body: body,),
+            routes: {
+              '/login': (context) => const LoginScreen(),
+              '/booking-confirm': (context) => const BookingConfirmScreen(),
+            },
+          );
+        }
+    );
   }
 }
 
