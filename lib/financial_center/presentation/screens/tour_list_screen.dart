@@ -184,7 +184,7 @@ class _TourListScreenState extends State<TourListScreen> {
                 padding: const EdgeInsets.all(12),
                 children: [
                   if (tours.isNotEmpty)
-                    ...tours.map((tour) => TourCard(tour: tour)).toList()
+                    ...tours.map((tour) => TourCard(tour: tour))
                   else
                     Column(
                       mainAxisAlignment: MainAxisAlignment.center,

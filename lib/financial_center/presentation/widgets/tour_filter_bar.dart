@@ -159,7 +159,7 @@ class _TourFilterBarState extends State<TourFilterBar> {
                 border: Border.all(color: lightOceanBlue.withOpacity(0.3)),
               ),
               child: DropdownButtonFormField<int?>(
-                value: selectedLocationId,
+                initialValue: selectedLocationId,
                 decoration: InputDecoration(
                   labelText: 'Chọn địa chỉ',
                   labelStyle: TextStyle(color: oceanBlue.withOpacity(0.8)),
@@ -178,7 +178,7 @@ class _TourFilterBarState extends State<TourFilterBar> {
                       value: loc['id'] as int?,
                       child: Text(loc['name'] ?? ''),
                     );
-                  }).toList(),
+                  }),
                 ],
                 onChanged: (value) {
                   setState(() => selectedLocationId = value);

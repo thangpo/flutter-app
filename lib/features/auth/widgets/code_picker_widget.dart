@@ -1,4 +1,4 @@
-library country_code_picker;
+library;
 
 // ignore: depend_on_referenced_packages
 import 'package:collection/collection.dart';

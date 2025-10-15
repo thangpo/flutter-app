@@ -423,9 +423,9 @@ class NewFeaturesSection extends StatelessWidget {
   final List<FeatureItem> features;
 
   const NewFeaturesSection({
-    Key? key,
+    super.key,
     required this.features,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

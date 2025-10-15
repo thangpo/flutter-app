@@ -460,7 +460,7 @@ class _FlightDetailScreenState extends State<FlightDetailScreen> {
                                 },
                               ),
                             );
-                          }).toList(),
+                          }),
 
                         const SizedBox(height: 20),
                         Text(
@@ -505,7 +505,7 @@ class _FlightDetailScreenState extends State<FlightDetailScreen> {
                                     : null,
                               );
                             });
-                          }).toList(),
+                          }),
                       ],
                     ),
                   ),

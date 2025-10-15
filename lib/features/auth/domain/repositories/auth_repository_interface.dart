@@ -7,6 +7,35 @@ abstract class AuthRepoInterface<T> implements RepositoryInterface{
 
   Future<ApiResponseModel> registration(Map<String, dynamic> body);
 
+  Future<ApiResponseModel> socialCreateAccount({
+    required String username,
+    required String password,
+    required String email,
+    required String confirmPassword,
+    required String serverKey,
+    String? firstName,
+    String? lastName,
+  });
+
+  Future<void> saveSocialAccessToken(String token);
+
+  Future<String?> getSocialAccessToken();
+  Future<void> clearSocialAccessToken();
+
+  Future<void> saveSocialUserId(String userId);
+  Future<String?> getSocialUserId();
+  Future<void> clearSocialUserId();
+
+  // Social login/logout
+  Future<ApiResponseModel> socialWoLogin({
+    required String username,
+    required String password,
+    required String serverKey,
+    String? timezone,
+    String? deviceId,
+  });
+  Future<ApiResponseModel> socialLogout({required String accessToken});
+
   Future<ApiResponseModel> login(String? userInput, String? password, String? type);
 
   Future<ApiResponseModel> logout();

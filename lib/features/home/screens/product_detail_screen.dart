@@ -45,10 +45,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         isLoading = false;
       });
 
-      if (result.shopName != null && result.shopName!.isNotEmpty) {
+      if (result.shopName.isNotEmpty) {
         final list = await productRepo.getProductsByShop(
           domain: widget.domain,
-          shopName: result.shopName!,
+          shopName: result.shopName,
         );
         setState(() {
           relatedProducts = list;
@@ -310,7 +310,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   const SizedBox(height: 20),
 
                   // Cửa hàng
-                  if (product?.shopName?.isNotEmpty == true)
+                  if (product?.shopName.isNotEmpty == true)
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -371,7 +371,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             ),
 
             // Mô tả sản phẩm
-            if (product?.desc?.isNotEmpty == true)
+            if (product?.desc.isNotEmpty == true)
               Container(
                 margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 padding: const EdgeInsets.all(20),
@@ -416,7 +416,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      product!.desc!,
+                      product!.desc,
                       maxLines: isExpanded ? null : 4,
                       overflow: isExpanded
                           ? TextOverflow.visible

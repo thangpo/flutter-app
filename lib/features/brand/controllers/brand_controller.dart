@@ -16,7 +16,7 @@ class BrandController extends ChangeNotifier {
   Brand? get brandModel => _brandModel;
   Brand? get sellerWiseBrandModel => _sellerWiseBrandModel;
 
-  List<BrandModel> _brandList = [];
+  final List<BrandModel> _brandList = [];
   List<BrandModel> get brandList => _brandList;
 
   List<BrandModel>? _brandListSorted;
