@@ -109,7 +109,7 @@ class AppConstants {
   static const String getCartDataUri = '/api/v1/cart';
   static const String addToCartUri = '/api/v1/cart/add';
   static const String updateCartQuantityUri = '/api/v1/cart/update';
-  static const String removeFromCartUri = '/api/v1/cart/revv    move';
+  static const String removeFromCartUri = '/api/v1/cart/remove';
   static const String getShippingMethod = '/api/v1/shipping-method/by-seller';
   static const String chooseShippingMethod =
       '/api/v1/shipping-method/choose-for-order';
