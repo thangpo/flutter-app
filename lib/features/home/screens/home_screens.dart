@@ -127,8 +127,6 @@ class HomePage extends StatefulWidget {
         await profileController.getUserInfo(Get.context!);
       }
     }
-
-
 }
 
 class _HomePageState extends State<HomePage> {

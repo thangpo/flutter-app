@@ -8,6 +8,11 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
 
+bool _isImageUrl(String url) {
+  final u = url.toLowerCase();
+  return u.endsWith('.png') || u.endsWith('.jpg') || u.endsWith('.jpeg') || u.endsWith('.gif') || u.endsWith('.webp');
+}
+
 class SocialFeedPage {
   final List<SocialPost> posts;
   final String? lastId;
@@ -62,85 +67,99 @@ class SocialRepository {
 
   SocialFeedPage parseNewsFeed(Response res) {
     final data = res.data;
-    final List<SocialPost> list = [];
+    final list = <SocialPost>[];
     String? lastId;
 
     if (data is Map) {
-      // Hỗ trợ đủ 3 kiểu key: data / posts / news_feed
-      dynamic container = data['data'];
-      if (container == null) container = data['posts'];
-      if (container == null) container = data['news_feed'];
-
-      // Nếu 'data' bản nào đó lại là Map { data: [...] }
-      if (container is Map && container['data'] is List) {
-        container = container['data'];
-      }
-
-      final posts = (container is List) ? container : const [];
-
+      final posts = (data['data'] ?? data['posts'] ?? data['news_feed']);
       if (posts is List) {
-        for (final it in posts) {
-          if (it is Map) {
-            // ---- PARSE MỖI POST Ở TRONG LOOP ----
-            final Map<String, dynamic> m = Map<String, dynamic>.from(it);
+        for (final raw in posts) {
+          if (raw is! Map) continue;
+          final m = Map<String, dynamic>.from(raw);
 
-            // text ưu tiên postText_API -> postText
-            final String text =
-                (m['postText_API'] ?? m['postText'] ?? '').toString();
+          final String id = (m['post_id'] ?? m['id'] ?? '').toString();
+          if (id.isEmpty) continue;
 
-            // thời gian
-            final String timeText = (m['post_time'] ?? '').toString();
+          final String text = (m['postText_API'] ?? m['postText'] ?? '').toString();
+          final String timeText = (m['post_time'] ?? m['time_text'] ?? '').toString();
 
-            // publisher
-            final Map pub =
-                (m['publisher'] is Map) ? m['publisher'] as Map : const {};
-            final String userName =
-                (pub['name'] ?? pub['username'] ?? '').toString();
-            final String userAvatar = (pub['avatar'] ?? '').toString();
+          // publisher
+          final Map pub = (m['publisher'] is Map) ? m['publisher'] as Map : const {};
+          final String userName = (pub['name'] ?? pub['username'] ?? '').toString();
+          final String userAvatar = (pub['avatar'] ?? '').toString();
 
-            // ảnh đơn (đường dẫn full)
-            final String singleFull = (m['postFile_full'] ?? '').toString();
+          // multi-image
+          final List pm = (m['photo_multi'] is List) ? m['photo_multi'] as List : const [];
+          final List<String> multiImages = [
+            ...pm.whereType<Map>()
+                .map((x) => (x['image'] ?? '').toString())
+                .where((s) => s.isNotEmpty),
+          ];
 
-            // multi-image
-            final List multi = (m['photo_multi'] is List)
-                ? (m['photo_multi'] as List)
-                : const [];
-            final List<String> multiImages = [
-              ...multi
-                  .whereType<Map>()
-                  .map((x) => (x['image'] ?? '').toString())
-                  .where((s) => s.isNotEmpty),
-            ];
+          // single image
+          final String singleFull = (m['postFile_full'] ?? '').toString();
+          final List<String> imageUrls = multiImages.where(_isImageUrl).toList(growable:false)
+                 + (singleFull.isNotEmpty && _isImageUrl(singleFull) ? [singleFull] : <String>[]);
 
-            // gộp ảnh: ưu tiên multi; nếu không có thì dùng đơn
-            final List<String> imageUrls = multiImages.isNotEmpty
-                ? multiImages
-                : (singleFull.isNotEmpty ? [singleFull] : <String>[]);
+          // file
+          final String fileUrl = (m['postFile'] ?? m['postFile_full'] ?? '').toString();
+          final String fileName = (m['postFileName'] ?? '').toString();
 
-            // post type
-            final String? postType =
-                (m['postType']?.toString().isNotEmpty ?? false)
-                    ? m['postType'].toString()
-                    : null;
+          // detect media type
+          String? videoUrl, audioUrl;
+          if (fileUrl.isNotEmpty) {
+            final u = fileUrl.toLowerCase();
+            if (u.endsWith('.mp4') || u.endsWith('.mov') || u.endsWith('.m4v')) {
+              videoUrl = fileUrl;
+            } else if (u.endsWith('.mp3') || u.contains('/sounds/')) {
+              audioUrl = fileUrl;
+            }
+          }
 
-            // id (phục vụ phân trang)
-            final String id = (m['post_id'] ?? m['id'] ?? '').toString();
+          // product
+          final Map product = (m['product'] is Map) ? m['product'] as Map : const {};
+          final bool hasProduct = product.isNotEmpty;
+          final String productName = (product['name'] ?? '').toString();
+          final List pImgsRaw = (product['images'] is List) ? product['images'] as List : const [];
+          final List<String> productImages = [
+            ...pImgsRaw.whereType<Map>()
+                .map((x) => (x['image'] ?? '').toString())
+                .where((s) => s.isNotEmpty),
+          ];
+          final double? productPrice = product['price'] is num
+              ? (product['price'] as num).toDouble()
+              : double.tryParse((product['price'] ?? '').toString());
+          final String? productCurrency = (product['currency'] ?? '').toString().isNotEmpty
+              ? product['currency'].toString()
+              : null;
 
-            final post = SocialPost(
+          final String? postType = (m['postType']?.toString().isNotEmpty ?? false)
+              ? m['postType'].toString()
+              : null;
+
+          list.add(
+            SocialPost(
               id: id,
               userName: userName.isNotEmpty ? userName : null,
               userAvatar: userAvatar.isNotEmpty ? userAvatar : null,
               text: text.isNotEmpty ? text : null,
               timeText: timeText.isNotEmpty ? timeText : null,
-              imageUrl: imageUrls.isNotEmpty
-                  ? imageUrls.first
-                  : null, // giữ tương thích
-              imageUrls: imageUrls, // dùng UI mới
+              imageUrl: imageUrls.isNotEmpty ? imageUrls.first : null,
+              imageUrls: imageUrls,
+              fileUrl: fileUrl.isNotEmpty ? fileUrl : null,
+              fileName: fileName.isNotEmpty ? fileName : null,
+              videoUrl: videoUrl,
+              audioUrl: audioUrl,
               postType: postType,
-            );
-            list.add(post);
-            lastId = id; // để load more (after_post_id)
-          }
+              hasProduct: hasProduct,
+              productTitle: productName.isNotEmpty ? productName : null,
+              productImages: productImages.isNotEmpty ? productImages : null,
+              productPrice: productPrice,
+              productCurrency: productCurrency,
+              pollOptions: (m['options'] is List) ? List<Map<String,dynamic>>.from(m['options']) : null,
+            ),
+          );
+          lastId = id;
         }
       }
     }
