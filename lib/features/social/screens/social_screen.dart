@@ -4,6 +4,13 @@ import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
+import 'package:flutter_html/flutter_html.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:video_player/video_player.dart';
+import 'package:intl/intl.dart';
+import 'package:visibility_detector/visibility_detector.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/price_converter.dart';
 
 class SocialFeedScreen extends StatefulWidget {
   const SocialFeedScreen({super.key});
@@ -51,20 +58,36 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> {
                       },
                       child: ListView.builder(
                         padding: EdgeInsets.zero,
-                        itemCount: sc.posts.length +
-                            2, // +2: "Bạn đang nghĩ gì?" + "Stories"// +1 cho vùng "Bạn đang nghĩ gì?"
+                        itemCount: sc.posts.length + 2, // +1: What'sOnYourMind, +1: Stories
                         itemBuilder: (ctx, i) {
-                          if (i == 0) return _WhatsOnYourMind();
+                          if (i == 0) {
+                            // Block "Bạn đang nghĩ gì?"
+                            return Column(
+                              children: [
+                                _WhatsOnYourMind(),
+                                const _SectionSeparator(), // tách với Stories
+                              ],
+                            );
+                          }
                           if (i == 1) {
+                            // Block Stories + separator
                             return Consumer<SocialController>(
                               builder: (context, sc2, __) {
-                                final items = sc2.stories;
-                                if (items.isEmpty)
+                                if (sc2.stories.isEmpty) {
+                                  // Nếu chưa có stories, có thể trả spacer mỏng cho đều layout
                                   return const SizedBox.shrink();
-                                return _StoriesSectionFromApi(stories: items);
+                                }
+                                return Column(
+                                  children: [
+                                    _StoriesSectionFromApi(stories: sc2.stories),
+                                    // const _SectionSeparator(), // <-- khoảng cách & Divider giống post
+                                  ],
+                                );
                               },
                             );
                           }
+
+                          // Các post: bắt đầu từ i=2
                           final SocialPost p = sc.posts[i - 2];
                           return _PostCardFromApi(post: p);
                         },
@@ -86,6 +109,12 @@ class _FacebookHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final onSurface = cs.onSurface;
+    final theme = Theme.of(context);
+// Ưu tiên appBarTheme.backgroundColor; fallback sang highlightColor của app (Home cũng đang dùng highlightColor)
+    final Color appBarColor = theme.appBarTheme.backgroundColor ?? theme.highlightColor;
+// Chọn màu chữ/icon tương phản trên nền appBarColor
+    final bool isDark = ThemeData.estimateBrightnessForColor(appBarColor) == Brightness.dark;
+    final Color onAppBar = isDark ? Colors.white : Colors.black87;
 
     return Container(
       padding: EdgeInsets.only(
@@ -95,7 +124,7 @@ class _FacebookHeader extends StatelessWidget {
         bottom: 8,
       ),
       // surface cho thanh trên
-      color: cs.surface,
+      color: appBarColor,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -108,9 +137,9 @@ class _FacebookHeader extends StatelessWidget {
           ),
           Row(
             children: [
-              _HeaderIcon(icon: Icons.search),
+              _HeaderIcon(icon: Icons.search,  iconColor: onAppBar, bubbleColor: onAppBar.withOpacity(0.08)),
               const SizedBox(width: 12),
-              _HeaderIcon(icon: Icons.messenger_outline),
+              _HeaderIcon(icon: Icons.messenger_outline, iconColor: onAppBar, bubbleColor: onAppBar.withOpacity(0.08)),
             ],
           ),
         ],
@@ -121,7 +150,13 @@ class _FacebookHeader extends StatelessWidget {
 
 class _HeaderIcon extends StatelessWidget {
   final IconData icon;
-  const _HeaderIcon({required this.icon});
+  final Color? iconColor;
+  final Color? bubbleColor;
+  const _HeaderIcon({
+    required this.icon,
+    this.iconColor,
+    this.bubbleColor,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -132,10 +167,10 @@ class _HeaderIcon extends StatelessWidget {
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         // elevated container theo surfaceVariant
-        color: cs.surfaceVariant,
+        color: bubbleColor ?? cs.surfaceVariant,
         shape: BoxShape.circle,
       ),
-      child: Icon(icon, color: onSurface.withOpacity(.9), size: 24),
+      child: Icon(icon, color: iconColor ?? onSurface.withOpacity(.9), size: 24),
     );
   }
 }
@@ -176,6 +211,20 @@ class _WhatsOnYourMind extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _SectionSeparator extends StatelessWidget {
+  const _SectionSeparator({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      children: [
+        const SizedBox(height: 8),
+      ],
     );
   }
 }
@@ -372,6 +421,270 @@ class _StoryCard extends StatelessWidget {
   }
 }
 
+bool _isAudio(String? url) {
+  if (url == null) return false;
+  final u = url.toLowerCase();
+  return u.endsWith('.mp3') || u.contains('/sounds/');
+}
+
+bool _isPdf(String? url) {
+  if (url == null) return false;
+  final u = url.toLowerCase();
+  return u.endsWith('.pdf');
+}
+
+bool _isVideo(String? url) {
+  if (url == null) return false;
+  final u = url.toLowerCase();
+  return u.endsWith('.mp4') || u.endsWith('.mov') || u.endsWith('.m4v');
+}
+
+// ảnh full-width, tự giữ tỷ lệ theo kích thước thật
+class _AutoRatioNetworkImage extends StatefulWidget {
+  final String url;
+  const _AutoRatioNetworkImage(this.url, {super.key});
+  @override
+  State<_AutoRatioNetworkImage> createState() => _AutoRatioNetworkImageState();
+}
+class _AutoRatioNetworkImageState extends State<_AutoRatioNetworkImage> {
+  double? _ratio;
+  @override
+  void initState() {
+    super.initState();
+    final img = Image.network(widget.url);
+    img.image.resolve(const ImageConfiguration()).addListener(
+      ImageStreamListener((info, _) {
+        if (mounted && info.image.height != 0) {
+          setState(() => _ratio = info.image.width / info.image.height);
+        }
+      }),
+    );
+  }
+  @override
+  Widget build(BuildContext context) {
+    final ratio = _ratio ?? (16/9);
+    return LayoutBuilder(
+      builder: (ctx, c) => SizedBox(
+        width: double.infinity,
+        height: c.maxWidth / ratio,
+        child: Image.network(widget.url, fit: BoxFit.cover),
+      ),
+    );
+  }
+}
+
+class _MediaCarousel extends StatefulWidget {
+  final List<Widget> pages;
+  const _MediaCarousel({required this.pages, super.key});
+  @override
+  State<_MediaCarousel> createState() => _MediaCarouselState();
+}
+class _MediaCarouselState extends State<_MediaCarousel> {
+  final _pc = PageController();
+  int _index = 0;
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        AspectRatio(
+          aspectRatio: 1, // vuông như Instagram, hoặc 4/5 nếu thích
+          child: PageView(
+            controller: _pc,
+            onPageChanged: (i) => setState(() => _index = i),
+            children: widget.pages,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(widget.pages.length, (i) {
+            final active = i == _index;
+            return Container(
+              width: active ? 10 : 6,
+              height: 6,
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              decoration: BoxDecoration(
+                color: active ? Colors.white70 : Colors.white24,
+                borderRadius: BorderRadius.circular(3),
+              ),
+            );
+          }),
+        ),
+      ],
+    );
+  }
+}
+
+class _AudioTile extends StatefulWidget {
+  final String url;
+  final String? title;
+  const _AudioTile({required this.url, this.title, super.key});
+  @override
+  State<_AudioTile> createState() => _AudioTileState();
+}
+class _AudioTileState extends State<_AudioTile> {
+  final _player = AudioPlayer();
+  bool _playing = false;
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final onSurface = cs.onSurface;
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surfaceVariant.withOpacity(.35),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        children: [
+          IconButton(
+            icon: Icon(_playing ? Icons.pause_circle : Icons.play_circle),
+            onPressed: () async {
+              if (_playing) {
+                await _player.pause();
+              } else {
+                await _player.play(UrlSource(widget.url));
+              }
+              setState(() => _playing = !_playing);
+            },
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(widget.title ?? 'Audio',
+                style: TextStyle(color: onSurface)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ImagesWithAutoAudio extends StatefulWidget {
+  final List<String> images;
+  final String audioUrl;
+  const _ImagesWithAutoAudio({required this.images, required this.audioUrl, super.key});
+
+  @override
+  State<_ImagesWithAutoAudio> createState() => _ImagesWithAutoAudioState();
+}
+
+class _ImagesWithAutoAudioState extends State<_ImagesWithAutoAudio> {
+  final _pc = PageController();
+  int _index = 0;
+  final _player = AudioPlayer();
+  bool _visible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    () async {
+      try {
+        await _player.setSourceUrl(widget.audioUrl);
+        await _player.setReleaseMode(ReleaseMode.loop);
+        await _player.setPlaybackRate(1.0);
+      } catch (_) {}
+    }();
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  void _onVisibilityChanged(VisibilityInfo info) {
+    final nowVisible = info.visibleFraction > 0.6;
+    if (nowVisible == _visible) return;
+    _visible = nowVisible;
+    final state = _player.state;
+    if (nowVisible) {
+      if (state != PlayerState.playing) { _player.resume(); }
+    } else {
+      if (state == PlayerState.playing) { _player.pause(); }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final height = width; // vuông giống FB
+    return VisibilityDetector(
+      key: UniqueKey(),
+      onVisibilityChanged: _onVisibilityChanged,
+      child: SizedBox(
+        width: double.infinity,
+        height: height,
+        child: PageView.builder(
+          controller: _pc,
+          onPageChanged: (i){ setState(()=> _index = i); },
+          itemCount: widget.images.length,
+          itemBuilder: (_, i) {
+            return Image.network(widget.images[i], fit: BoxFit.cover);
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _VideoPlayerTile extends StatefulWidget {
+  final String url;
+  const _VideoPlayerTile({required this.url, super.key});
+  @override
+  State<_VideoPlayerTile> createState() => _VideoPlayerTileState();
+}
+class _VideoPlayerTileState extends State<_VideoPlayerTile> {
+  VideoPlayerController? _c;
+  @override
+  void initState() {
+    super.initState();
+    _c = VideoPlayerController.networkUrl(Uri.parse(widget.url))
+      ..initialize().then((_) {
+        if (mounted) setState(() {});
+      });
+  }
+  @override
+  void dispose() {
+    _c?.dispose();
+    super.dispose();
+  }
+  @override
+  Widget build(BuildContext context) {
+    if (!(_c?.value.isInitialized ?? false)) {
+      return const AspectRatio(aspectRatio: 16/9, child: Center(child: CircularProgressIndicator()));
+    }
+    final ratio = _c!.value.aspectRatio == 0 ? (16/9) : _c!.value.aspectRatio;
+    return AspectRatio(
+      aspectRatio: ratio,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          VideoPlayer(_c!),
+          Align(
+            alignment: Alignment.center,
+            child: IconButton(
+              iconSize: 48,
+              color: Colors.white,
+              icon: Icon(_c!.value.isPlaying ? Icons.pause_circle : Icons.play_circle),
+              onPressed: () {
+                _c!.value.isPlaying ? _c!.pause() : _c!.play();
+                setState(() {});
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PostCardFromApi extends StatelessWidget {
   final SocialPost post;
   const _PostCardFromApi({required this.post});
@@ -380,6 +693,269 @@ class _PostCardFromApi extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final onSurface = cs.onSurface;
+    final images = post.imageUrls ?? const <String>[];
+    final hasMulti = images.length >= 2;
+    final hasSingle = images.length == 1 || (post.imageUrl ?? '').isNotEmpty;
+    final fileUrl = post.fileUrl;
+
+    String _fmtCurrency(num v, String? code){
+      final name = (code==null||code.isEmpty)?null:code;
+      try { final f = NumberFormat.currency(name: name, decimalDigits: (name=='VND')?0:2); return f.format(v); } catch(_){ return '${v.toString()} ${code??''}'.trim(); }
+    }
+
+    // VIDEO: ưu tiên render trước ảnh
+    // if (_isVideo(fileUrl)) {
+    //   return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    //     ClipRRect(
+    //       borderRadius: BorderRadius.circular(12),
+    //       child: _VideoPlayerTile(url: fileUrl!),
+    //     ),
+    //     const SizedBox(height: 8),
+    //     Padding(
+    //       padding: const EdgeInsets.symmetric(horizontal: 12),
+    //       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    //         if ((post.userName??'').isNotEmpty) Text(post.userName!, style: TextStyle(fontWeight: FontWeight.w600)),
+    //         if ((post.text??'').isNotEmpty) const SizedBox(height:4),
+    //         if ((post.text??'').isNotEmpty) Html(data: post.text!),
+    //       ]),
+    //     ),
+    //   ]);
+    // }
+
+    Widget _media() {
+      // 0) VIDEO
+      if (_isVideo(fileUrl)) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: _VideoPlayerTile(url: fileUrl!),
+        );
+      }
+
+      // 1) PRODUCT
+      if (post.hasProduct == true && (post.productImages?.isNotEmpty ?? false)) {
+        final imgs = post.productImages!;
+        return Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: cs.surfaceVariant.withOpacity(.35),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (post.productTitle != null && post.productTitle!.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(post.productTitle!,
+                      style: TextStyle(
+                        color: onSurface,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                      )),
+                ),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: _AutoRatioNetworkImage(imgs.first),
+              ),
+              const SizedBox(height: 6),
+              if (post.productPrice != null) ...[
+                Text(
+                  (() {
+                    final p = post.productPrice;
+                    if (p == null) return '';
+                    final asDouble = (p is num) ? p.toDouble() : double.tryParse(p.toString()) ?? 0;
+                    return PriceConverter.convertPrice(context, asDouble);
+                  })(),
+                  style: TextStyle(
+                    color: onSurface.withOpacity(.9),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      }
+
+      // 1.5) ẢNH + AUDIO => Carousel
+      // if (images.isNotEmpty && _isAudio(fileUrl)) {
+      //   final pages = <Widget>[
+      //     for (final u in images)
+      //       ClipRRect(
+      //         borderRadius: BorderRadius.circular(12),
+      //         child: Image.network(u, fit: BoxFit.cover),
+      //       ),
+      //     _AudioTile(url: fileUrl!, title: post.fileName),
+      //   ];
+      //   return _MediaCarousel(pages: pages);
+      // }
+      if (images.isNotEmpty && _isAudio(fileUrl)) {
+        return _ImagesWithAutoAudio(images: images, audioUrl: fileUrl!);
+      }
+
+      // 2) MULTI IMAGE GRID (2,3,4 ảnh…)
+      if (hasMulti) {
+        // tránh lỗi layout: luôn có width, height xác định
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: AspectRatio(
+                      aspectRatio: 1,
+                      child: Image.network(images[0], fit: BoxFit.cover),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: AspectRatio(
+                      aspectRatio: 1,
+                      child: Image.network(images[1], fit: BoxFit.cover),
+                    ),
+                  ),
+                ],
+              ),
+              if (images.length > 2) const SizedBox(height: 4),
+              if (images.length > 2)
+                Row(
+                  children: [
+                    Expanded(
+                      child: AspectRatio(
+                        aspectRatio: 1,
+                        child: Image.network(images[2], fit: BoxFit.cover),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: AspectRatio(
+                        aspectRatio: 1,
+                        child: (images.length > 3)
+                            ? Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Image.network(images[3], fit: BoxFit.cover),
+                            Container(
+                              alignment: Alignment.center,
+                              color: Colors.black45,
+                              child: Text(
+                                '+${images.length - 4}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                            : const SizedBox.shrink(),
+                      ),
+                    ),
+                  ],
+                ),
+
+            ],
+
+          ),
+        );
+      }
+
+      // 3) ẢNH ĐƠN
+      if (hasSingle) {
+        final String src = images.isNotEmpty ? images.first : (post.imageUrl!);
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: _AutoRatioNetworkImage(src),
+        );
+      }
+
+      // 4) FILE (Âm thanh / PDF / Khác)
+      if (fileUrl != null && fileUrl.isNotEmpty) {
+        if (_isAudio(fileUrl) && images.isNotEmpty) {
+          return _ImagesWithAutoAudio(images: images, audioUrl: fileUrl);
+        }
+        if (_isAudio(fileUrl)) {
+          return Container(
+            decoration: BoxDecoration(
+              color: cs.surfaceVariant.withOpacity(.35),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                const Icon(Icons.audiotrack),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(post.fileName ?? 'Âm thanh',
+                      style: TextStyle(color: onSurface)),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.play_arrow),
+                  onPressed: () {}, // TODO: hook player nếu cần
+                ),
+              ],
+            ),
+          );
+        } else if (_isPdf(fileUrl)) {
+          return Container(
+            decoration: BoxDecoration(
+              color: cs.surfaceVariant.withOpacity(.35),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                const Icon(Icons.picture_as_pdf),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(post.fileName ?? 'Tài liệu PDF',
+                      style: TextStyle(color: onSurface)),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.open_in_new),
+                  onPressed: () async {
+                    final uri = Uri.parse(fileUrl);
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    }
+                  },
+                ),
+              ],
+            ),
+          );
+        } else {
+          // fallback file khác
+          return Container(
+            decoration: BoxDecoration(
+              color: cs.surfaceVariant.withOpacity(.35),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                const Icon(Icons.insert_drive_file),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(post.fileName ?? 'Tệp đính kèm',
+                      style: TextStyle(color: onSurface)),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.open_in_new),
+                  onPressed: () {},
+                ),
+              ],
+            ),
+          );
+        }
+      }
+
+      // 5) Chỉ text
+      return const SizedBox.shrink();
+    }
 
     return Container(
       margin: const EdgeInsets.only(top: 8),
@@ -395,18 +971,14 @@ class _PostCardFromApi extends StatelessWidget {
                 CircleAvatar(
                   radius: 20,
                   backgroundColor: cs.surfaceVariant,
-                  backgroundImage:
-                      (post.userAvatar != null && post.userAvatar!.isNotEmpty)
-                          ? NetworkImage(post.userAvatar!)
-                          : null,
+                  backgroundImage: (post.userAvatar != null && post.userAvatar!.isNotEmpty)
+                      ? NetworkImage(post.userAvatar!)
+                      : null,
                   child: (post.userAvatar == null || post.userAvatar!.isEmpty)
                       ? Text(
-                          (post.userName?.isNotEmpty ?? false)
-                              ? post.userName![0].toUpperCase()
-                              : '?',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold, color: onSurface),
-                        )
+                    (post.userName?.isNotEmpty ?? false) ? post.userName![0].toUpperCase() : '?',
+                    style: TextStyle(fontWeight: FontWeight.bold, color: onSurface),
+                  )
                       : null,
                 ),
                 const SizedBox(width: 10),
@@ -414,80 +986,122 @@ class _PostCardFromApi extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(post.userName ?? '—',
-                          style: TextStyle(
-                              fontWeight: FontWeight.w600, color: onSurface)),
-                      Text(post.timeText ?? '',
-                          style: TextStyle(
-                              color: onSurface.withOpacity(.6), fontSize: 13)),
+                      // userName + postType cùng 1 dòng
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              post.userName ?? '—',
+                              style: TextStyle(fontWeight: FontWeight.w600, color: onSurface),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if ((post.postType ?? '').isNotEmpty) ...[
+                            const SizedBox(width: 6),
+                            Icon(
+                              post.postType == 'profile_picture'
+                                  ? Icons.person_outline
+                                  : post.postType == 'profile_cover_picture'
+                                  ? Icons.collections
+                                  : Icons.article_outlined,
+                              size: 16,
+                              color: onSurface.withOpacity(.6),
+                            ),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                post.postType == 'profile_picture'
+                                    ? 'đã cập nhật ảnh đại diện'
+                                    : post.postType == 'profile_cover_picture'
+                                    ? 'đã cập nhật ảnh bìa'
+                                    : post.postType!,
+                                style: TextStyle(
+                                  color: onSurface.withOpacity(.7),
+                                  fontStyle: FontStyle.italic,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      Text(
+                        post.timeText ?? '',
+                        style: TextStyle(color: onSurface.withOpacity(.6), fontSize: 13),
+                      ),
                     ],
                   ),
                 ),
                 IconButton(
-                    icon: Icon(Icons.more_horiz,
-                        color: onSurface.withOpacity(.7)),
-                    onPressed: () {}),
+                  icon: Icon(Icons.more_horiz, color: onSurface.withOpacity(.7)),
+                  onPressed: () {},
+                ),
               ],
             ),
           ),
-
-          if ((post.postType ?? '').isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              child: Row(
-                children: [
-                  Icon(
-                    post.postType == 'profile_picture'
-                        ? Icons.person_outline
-                        : post.postType == 'profile_cover_picture'
-                            ? Icons.collections
-                            : Icons.article_outlined,
-                    size: 16,
-                    color: onSurface.withOpacity(.6),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    post.postType == 'profile_picture'
-                        ? 'đã cập nhật ảnh đại diện'
-                        : post.postType == 'profile_cover_picture'
-                            ? 'đã cập nhật ảnh bìa'
-                            : post.postType!,
-                    style: TextStyle(
-                        color: onSurface.withOpacity(.7),
-                        fontStyle: FontStyle.italic),
-                  ),
-                ],
-              ),
-            ),
 
           // Text
           if ((post.text ?? '').isNotEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(
-                post.text!,
-                style: TextStyle(fontSize: 15, height: 1.35, color: onSurface),
+              child: Html(
+                data: post.text!,
+                style: {
+                  'body': Style(
+                    color: onSurface,
+                    fontSize: FontSize(15),
+                    lineHeight: LineHeight(1.35),
+                    margin: Margins.zero,
+                    padding: HtmlPaddings.zero,
+                  ),
+                },
+                onLinkTap: (url, _, __) async {
+                  if (url != null) {
+                    final uri = Uri.parse(url);
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  }
+                },
               ),
             ),
 
-          // Media (ưu tiên multi)
-          if (post.imageUrls.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _ImageGrid(urls: post.imageUrls),
-          ] else if ((post.imageUrl ?? '').isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _ImageGrid(urls: [post.imageUrl!]),
-          ],
+          // Poll
+          if (post.pollOptions != null && post.pollOptions!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final opt in post.pollOptions!) ...[
+                    Text(opt['text']?.toString() ?? ''),
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: LinearProgressIndicator(
+                        value: (((double.tryParse((opt['percentage_num'] ?? '0').toString()) ?? 0.0) / 100.0)).clamp(0, 1),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                ],
+              ),
+            ),
+
+          // Media block (đã chống lỗi layout)
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: _media(),
+          ),
 
           const SizedBox(height: 8),
+          // Actions
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: const [
                 _PostAction(icon: Icons.thumb_up_outlined, label: 'Thích'),
-                _PostAction(
-                    icon: Icons.mode_comment_outlined, label: 'Bình luận'),
+                _PostAction(icon: Icons.mode_comment_outlined, label: 'Bình luận'),
                 _PostAction(icon: Icons.share_outlined, label: 'Chia sẻ'),
               ],
             ),
