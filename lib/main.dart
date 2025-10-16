@@ -147,7 +147,8 @@ Future<void> main() async {
           create: (context) => di.sl<SellerProductController>()),
       ChangeNotifierProvider(create: (context) => di.sl<RestockController>()),
       ChangeNotifierProvider(
-        create: (_) => SocialController(service: di.sl<SocialServiceInterface>()),
+        create: (_) =>
+            SocialController(service: di.sl<SocialServiceInterface>())..refresh(),
       ),
     ],
     child: MyApp(body: body),
