@@ -601,8 +601,9 @@ class _ImagesWithAutoAudioState extends State<_ImagesWithAutoAudio> {
 
   void _onVisibilityChanged(VisibilityInfo info) {
     final nowVisible = info.visibleFraction > 0.6;
-    if (nowVisible == _visible) return;
+    if (nowVisible == _visible) return;     // không làm gì nếu state không đổi
     _visible = nowVisible;
+
     final state = _player.state;
     if (nowVisible) {
       if (state != PlayerState.playing) { _player.resume(); }
@@ -616,19 +617,40 @@ class _ImagesWithAutoAudioState extends State<_ImagesWithAutoAudio> {
     final width = MediaQuery.of(context).size.width;
     final height = width; // vuông giống FB
     return VisibilityDetector(
-      key: UniqueKey(),
+      key: ValueKey(widget.audioUrl),
       onVisibilityChanged: _onVisibilityChanged,
-      child: SizedBox(
-        width: double.infinity,
-        height: height,
-        child: PageView.builder(
-          controller: _pc,
-          onPageChanged: (i){ setState(()=> _index = i); },
-          itemCount: widget.images.length,
-          itemBuilder: (_, i) {
-            return Image.network(widget.images[i], fit: BoxFit.cover);
-          },
-        ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: double.infinity,
+            height: height,
+            child: PageView.builder(
+              controller: _pc,
+              onPageChanged: (i){ setState(()=> _index = i); },
+              itemCount: widget.images.length,
+              itemBuilder: (_, i) {
+                return Image.network(widget.images[i], fit: BoxFit.cover);
+              },
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(widget.images.length, (i){
+              final active = i == _index;
+              return Container(
+                width: active ? 10 : 6,
+                height: 6,
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                decoration: BoxDecoration(
+                  color: active ? Colors.white : Colors.white54,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              );
+            }),
+          ),
+        ],
       ),
     );
   }
