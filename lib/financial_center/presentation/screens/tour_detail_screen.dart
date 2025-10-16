@@ -112,12 +112,15 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
         };
 
         double calculateTotal() {
-          double total = 0;
+          double total = double.tryParse(tourData?['sale_price']?.toString() ??
+              tourData?['price']?.toString() ?? '0') ?? 0.0;
+
           for (var p in personTypes) {
             final name = p['name'];
             final price = double.parse(p['price']);
             total += (quantities[name] ?? 0) * price;
           }
+
           for (var e in extras) {
             final name = e['name'];
             if (extrasSelected[name] == true) {

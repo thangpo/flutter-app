@@ -17,7 +17,6 @@ class _TourOrderScreenState extends State<TourOrderScreen> {
 
   final TourOrderService _tourService = TourOrderService();
 
-  // Ocean blue color scheme
   static const Color oceanBlue = Color(0xFF006D9C);
   static const Color lightOceanBlue = Color(0xFF4DA8DA);
   static const Color paleOceanBlue = Color(0xFFE3F2FD);
@@ -122,7 +121,6 @@ class _TourOrderScreenState extends State<TourOrderScreen> {
       ),
       body: Column(
         children: [
-          // Filter section with ocean theme
           Container(
             margin: const EdgeInsets.all(16),
             padding: const EdgeInsets.all(16),
@@ -190,7 +188,6 @@ class _TourOrderScreenState extends State<TourOrderScreen> {
             ),
           ),
 
-          // Content section
           Expanded(
             child: _isLoading
                 ? Center(
@@ -285,7 +282,6 @@ class _TourOrderScreenState extends State<TourOrderScreen> {
                         padding: const EdgeInsets.all(16),
                         child: Row(
                           children: [
-                            // Icon with gradient background
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
@@ -310,8 +306,6 @@ class _TourOrderScreenState extends State<TourOrderScreen> {
                               ),
                             ),
                             const SizedBox(width: 16),
-
-                            // Content
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,

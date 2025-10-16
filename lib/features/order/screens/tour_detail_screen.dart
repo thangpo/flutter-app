@@ -90,7 +90,6 @@ class TourDetailScreen extends StatelessWidget {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // Header card with gradient
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(24),
@@ -156,7 +155,6 @@ class TourDetailScreen extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  // Tour Information Card
                   _buildSectionCard(
                     context,
                     icon: Icons.explore_outlined,
@@ -193,7 +191,6 @@ class TourDetailScreen extends StatelessWidget {
 
                   const SizedBox(height: 16),
 
-                  // Customer Information Card
                   _buildSectionCard(
                     context,
                     icon: Icons.person_outline,
@@ -230,7 +227,6 @@ class TourDetailScreen extends StatelessWidget {
 
                   const SizedBox(height: 16),
 
-                  // Notes Card
                   _buildSectionCard(
                     context,
                     icon: Icons.note_outlined,
@@ -297,7 +293,6 @@ class TourDetailScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Section header
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -329,7 +324,6 @@ class TourDetailScreen extends StatelessWidget {
               ],
             ),
           ),
-          // Section content
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
