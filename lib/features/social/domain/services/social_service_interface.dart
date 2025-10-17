@@ -4,4 +4,5 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 abstract class SocialServiceInterface {
   Future<List<SocialPost>> getNewsFeed({int limit, String? afterPostId});
   Future<List<SocialStory>> getStories({int limit, int offset});
+  Future<void> reactToPost({required String postId, required String reaction});
 }
