@@ -27,6 +27,50 @@ import 'package:flutter_sixvalley_ecommerce/common/basewidget/custom_textfield_w
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
+class Province {
+  final int id;
+  final String name;
+
+  Province({required this.id, required this.name});
+
+  factory Province.fromJson(Map<String, dynamic> json) {
+    return Province(
+      id: json['ProvinceID'],
+      name: json['ProvinceName'],
+    );
+  }
+}
+
+class District {
+  final int id;
+  final String name;
+
+  District({required this.id, required this.name});
+
+  factory District.fromJson(Map<String, dynamic> json) {
+    return District(
+      id: json['DistrictID'],
+      name: json['DistrictName'],
+    );
+  }
+}
+
+class Ward {
+  final int id;
+  final String name;
+
+  Ward({required this.id, required this.name});
+
+  factory Ward.fromJson(Map<String, dynamic> json) {
+    return Ward(
+      id: json['WardID'] ?? json['WardCode'], // Adjust based on actual API response
+      name: json['WardName'],
+    );
+  }
+}
 
 class AddNewAddressScreen extends StatefulWidget {
   final bool isEnableUpdate;
@@ -43,18 +87,12 @@ class _AddNewAddressScreenState extends State<AddNewAddressScreen> {
   final TextEditingController _contactPersonNameController = TextEditingController();
   final TextEditingController _contactPersonEmailController = TextEditingController();
   final TextEditingController _contactPersonNumberController = TextEditingController();
-  final TextEditingController _cityController = TextEditingController();
-  final TextEditingController _districtController = TextEditingController();
-  final TextEditingController _provinceIdController = TextEditingController();
   final TextEditingController _zipCodeController = TextEditingController();
   final TextEditingController _countryCodeController = TextEditingController();
   final FocusNode _addressNode = FocusNode();
   final FocusNode _nameNode = FocusNode();
   final FocusNode _emailNode = FocusNode();
   final FocusNode _numberNode = FocusNode();
-  final FocusNode _cityNode = FocusNode();
-  final FocusNode _districtNode = FocusNode();
-  final FocusNode _provinceIdNode = FocusNode();
   final FocusNode _zipNode = FocusNode();
   GoogleMapController? _controller;
   CameraPosition? _cameraPosition;
@@ -64,6 +102,18 @@ class _AddNewAddressScreenState extends State<AddNewAddressScreen> {
   late LatLng _defaut;
 
   final GlobalKey<FormState> _addressFormKey = GlobalKey();
+
+  List<Province> _provinces = [];
+  List<District> _districts = [];
+  List<Ward> _wards = [];
+
+  Province? _selectedProvince;
+  District? _selectedDistrict;
+  Ward? _selectedWard;
+
+  bool _isLoadingProvinces = false;
+  bool _isLoadingDistricts = false;
+  bool _isLoadingWards = false;
 
   @override
   void initState() {
@@ -86,6 +136,8 @@ class _AddNewAddressScreenState extends State<AddNewAddressScreen> {
     Provider.of<AddressController>(context, listen: false).getRestrictedDeliveryZipList();
 
     _checkPermission(() => Provider.of<LocationController>(context, listen: false).getCurrentLocation(context, true, mapController: _controller), context);
+    _fetchProvinces();
+
     if (widget.isEnableUpdate && widget.address != null) {
       _updateAddress = false;
 
@@ -100,9 +152,6 @@ class _AddNewAddressScreenState extends State<AddNewAddressScreen> {
       _contactPersonNameController.text = '${widget.address?.contactPersonName}';
       _countryCodeController.text = '${widget.address?.country}';
       _contactPersonEmailController.text = '${widget.address?.email}';
-      _cityController.text = '${widget.address?.city}';
-      _districtController.text = '${widget.address?.district ?? ''}';
-      _provinceIdController.text = '${widget.address?.province ?? ''}';
       _zipCodeController.text = '${widget.address?.zip}';
       if (widget.address!.addressType == 'Home') {
         Provider.of<AddressController>(context, listen: false).updateAddressIndex(0, false);
@@ -115,6 +164,9 @@ class _AddNewAddressScreenState extends State<AddNewAddressScreen> {
       Provider.of<AuthController>(context, listen: false).setCountryCode(countryCode, notify: false);
       String phoneNumberOnly = CountryCodeHelper.extractPhoneNumber(countryCode, widget.address?.phone ?? '');
       _contactPersonNumberController.text = phoneNumberOnly;
+
+      // Initialize address fields after provinces are loaded
+      _initializeExistingAddress();
     } else {
       if (Provider.of<ProfileController>(context, listen: false).userInfoModel != null) {
         _contactPersonNameController.text = '${Provider.of<ProfileController>(context, listen: false).userInfoModel!.fName ?? ''}'
@@ -125,6 +177,123 @@ class _AddNewAddressScreenState extends State<AddNewAddressScreen> {
         String phoneNumberOnly = CountryCodeHelper.extractPhoneNumber(countryCode, Provider.of<ProfileController>(context, listen: false).userInfoModel!.phone ?? '');
         _contactPersonNumberController.text = phoneNumberOnly;
       }
+    }
+  }
+
+  Future<void> _fetchProvinces() async {
+    setState(() {
+      _isLoadingProvinces = true;
+    });
+    try {
+      final response = await http.get(Uri.parse('https://vnshop247.com/api/v1/shippingAPI/ghn/addressProvinceAPI'));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body)['data'] as List;
+        setState(() {
+          _provinces = data.map((json) => Province.fromJson(json)).toList();
+          _isLoadingProvinces = false;
+        });
+        if (widget.isEnableUpdate && widget.address != null) {
+          _initializeExistingAddress();
+        }
+      }
+    } catch (e) {
+      setState(() {
+        _isLoadingProvinces = false;
+      });
+      showCustomSnackBar('Failed to load provinces', context);
+    }
+  }
+
+  Future<void> _fetchDistricts(int provinceId) async {
+    setState(() {
+      _isLoadingDistricts = true;
+      _districts = [];
+      _selectedDistrict = null;
+      _wards = [];
+      _selectedWard = null;
+    });
+    try {
+      final response = await http.get(Uri.parse('https://vnshop247.com/api/v1/shippingAPI/ghn/addressDistrict/$provinceId'));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body)['data']['original'] as List;
+        setState(() {
+          _districts = data.map((json) => District.fromJson(json)).toList();
+          _isLoadingDistricts = false;
+        });
+        if (widget.isEnableUpdate && widget.address != null) {
+          _initializeDistrictForExistingAddress();
+        }
+      }
+    } catch (e) {
+      setState(() {
+        _isLoadingDistricts = false;
+      });
+      showCustomSnackBar('Failed to load districts', context);
+    }
+  }
+
+  Future<void> _fetchWards(int districtId) async {
+    setState(() {
+      _isLoadingWards = true;
+      _wards = [];
+      _selectedWard = null;
+    });
+    try {
+      final response = await http.get(Uri.parse('https://vnshop247.com/api/v1/shippingAPI/ghn/addressWard/$districtId'));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body)['data'] as List;
+        setState(() {
+          _wards = data.map((json) => Ward.fromJson(json)).toList();
+          _isLoadingWards = false;
+        });
+        if (widget.isEnableUpdate && widget.address != null) {
+          _initializeWardForExistingAddress();
+        }
+      }
+    } catch (e) {
+      setState(() {
+        _isLoadingWards = false;
+      });
+      showCustomSnackBar('Failed to load wards', context);
+    }
+  }
+
+  void _initializeExistingAddress() {
+    if (_provinces.isNotEmpty && widget.address != null) {
+      setState(() {
+        _selectedProvince = _provinces.firstWhere(
+              (p) => p.name == widget.address!.city,
+          orElse: () => _provinces.first,
+        );
+      });
+      if (_selectedProvince != null) {
+        _fetchDistricts(_selectedProvince!.id);
+      }
+    }
+  }
+
+  void _initializeDistrictForExistingAddress() {
+    if (_districts.isNotEmpty && widget.address != null) {
+      setState(() {
+        _selectedDistrict = _districts.firstWhere(
+              (d) => d.name == widget.address!.province,
+          orElse: () => _districts.first,
+        );
+      });
+      if (_selectedDistrict != null) {
+        _fetchWards(_selectedDistrict!.id);
+      }
+    }
+  }
+
+  void _initializeWardForExistingAddress() {
+    if (_wards.isNotEmpty && widget.address != null) {
+      setState(() {
+        _selectedWard = _wards.firstWhere(
+              (w) => w.name == widget.address!.district,
+          orElse: () => _wards.first,
+        );
+      });
     }
   }
 
@@ -401,7 +570,6 @@ class _AddNewAddressScreenState extends State<AddNewAddressScreen> {
                               focusNode: _addressNode,
                               prefixIcon: Images.address,
                               required: true,
-                              nextFocus: _cityNode,
                               controller: locationController.locationController,
                               validator: (value) => ValidateCheck.validateEmptyText(value, "address_is_required"),
                             ),
@@ -515,43 +683,151 @@ class _AddNewAddressScreenState extends State<AddNewAddressScreen> {
                               ),
                             ),
                             const SizedBox(height: Dimensions.paddingSizeDefaultAddress),
-                            CustomTextFieldWidget(
-                              labelText: getTranslated('city', context),
-                              hintText: getTranslated('city', context),
-                              inputType: TextInputType.streetAddress,
-                              inputAction: TextInputAction.next,
-                              focusNode: _cityNode,
-                              required: true,
-                              nextFocus: _provinceIdNode,
-                              prefixIcon: Images.city,
-                              controller: _cityController,
-                              validator: (value) => ValidateCheck.validateEmptyText(value, 'city_is_required'),
+                            // Province Dropdown (labeled as City)
+                            Text(
+                              getTranslated('city', context)!,
+                              style: textRegular.copyWith(
+                                color: Theme.of(context).hintColor,
+                                fontSize: Dimensions.fontSizeSmall,
+                              ),
+                            ),
+                            const SizedBox(height: Dimensions.paddingSizeExtraSmall),
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).cardColor,
+                                borderRadius: BorderRadius.circular(5),
+                                border: Border.all(width: .1, color: Theme.of(context).hintColor.withValues(alpha: 0.1)),
+                              ),
+                              child: _isLoadingProvinces
+                                  ? const Center(child: CircularProgressIndicator())
+                                  : DropdownButtonFormField2<Province>(
+                                isExpanded: true,
+                                hint: Text(getTranslated('select_city', context) ?? 'Select City'),
+                                value: _selectedProvince,
+                                items: _provinces.map((province) => DropdownMenuItem<Province>(
+                                  value: province,
+                                  child: Text(province.name),
+                                )).toList(),
+                                onChanged: (Province? value) {
+                                  setState(() {
+                                    _selectedProvince = value;
+                                  });
+                                  if (value != null) {
+                                    _fetchDistricts(value.id);
+                                  }
+                                },
+                                buttonStyleData: const ButtonStyleData(padding: EdgeInsets.only(right: 8)),
+                                iconStyleData: IconStyleData(
+                                  icon: Icon(Icons.arrow_drop_down, color: Theme.of(context).hintColor),
+                                  iconSize: 24,
+                                ),
+                                dropdownStyleData: DropdownStyleData(
+                                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(5)),
+                                ),
+                                menuItemStyleData: const MenuItemStyleData(padding: EdgeInsets.symmetric(horizontal: 16)),
+                                decoration: InputDecoration(
+                                  labelText: getTranslated('city', context),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(5)),
+                                ),
+                                validator: (value) => value == null ? 'City is required' : null,
+                              ),
                             ),
                             const SizedBox(height: Dimensions.paddingSizeDefaultAddress),
-                            CustomTextFieldWidget(
-                              labelText: getTranslated('province', context) ?? 'Province ID',
-                              hintText: getTranslated('province', context) ?? 'Enter province ID',
-                              inputType: TextInputType.text,
-                              inputAction: TextInputAction.next,
-                              focusNode: _provinceIdNode,
-                              required: true,
-                              nextFocus: _districtNode,
-                              prefixIcon: Images.city,
-                              controller: _provinceIdController,
-                              validator: (value) => ValidateCheck.validateEmptyText(value, 'province_is_required'),
+                            // District Dropdown (labeled as Province)
+                            Text(
+                              getTranslated('province', context) ?? 'Province ID',
+                              style: textRegular.copyWith(
+                                color: Theme.of(context).hintColor,
+                                fontSize: Dimensions.fontSizeSmall,
+                              ),
+                            ),
+                            const SizedBox(height: Dimensions.paddingSizeExtraSmall),
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).cardColor,
+                                borderRadius: BorderRadius.circular(5),
+                                border: Border.all(width: .1, color: Theme.of(context).hintColor.withValues(alpha: 0.1)),
+                              ),
+                              child: _isLoadingDistricts
+                                  ? const Center(child: CircularProgressIndicator())
+                                  : DropdownButtonFormField2<District>(
+                                isExpanded: true,
+                                hint: Text(getTranslated('select_province', context) ?? 'Select Province'),
+                                value: _selectedDistrict,
+                                items: _districts.map((district) => DropdownMenuItem<District>(
+                                  value: district,
+                                  child: Text(district.name),
+                                )).toList(),
+                                onChanged: (District? value) {
+                                  setState(() {
+                                    _selectedDistrict = value;
+                                  });
+                                  if (value != null) {
+                                    _fetchWards(value.id);
+                                  }
+                                },
+                                buttonStyleData: const ButtonStyleData(padding: EdgeInsets.only(right: 8)),
+                                iconStyleData: IconStyleData(
+                                  icon: Icon(Icons.arrow_drop_down, color: Theme.of(context).hintColor),
+                                  iconSize: 24,
+                                ),
+                                dropdownStyleData: DropdownStyleData(
+                                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(5)),
+                                ),
+                                menuItemStyleData: const MenuItemStyleData(padding: EdgeInsets.symmetric(horizontal: 16)),
+                                decoration: InputDecoration(
+                                  labelText: getTranslated('province', context) ?? 'Province ID',
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(5)),
+                                ),
+                                validator: (value) => value == null ? 'Province is required' : null,
+                              ),
                             ),
                             const SizedBox(height: Dimensions.paddingSizeDefaultAddress),
-                            CustomTextFieldWidget(
-                              labelText: getTranslated('district', context) ?? 'District/Ward',
-                              hintText: getTranslated('district', context) ?? 'Enter district or ward',
-                              inputType: TextInputType.streetAddress,
-                              inputAction: TextInputAction.next,
-                              focusNode: _districtNode,
-                              required: true,
-                              nextFocus: _zipNode,
-                              prefixIcon: Images.city,
-                              controller: _districtController,
-                              validator: (value) => ValidateCheck.validateEmptyText(value, 'district_is_required'),
+                            // Ward Dropdown (labeled as District)
+                            Text(
+                              getTranslated('district', context) ?? 'District/Ward',
+                              style: textRegular.copyWith(
+                                color: Theme.of(context).hintColor,
+                                fontSize: Dimensions.fontSizeSmall,
+                              ),
+                            ),
+                            const SizedBox(height: Dimensions.paddingSizeExtraSmall),
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).cardColor,
+                                borderRadius: BorderRadius.circular(5),
+                                border: Border.all(width: .1, color: Theme.of(context).hintColor.withValues(alpha: 0.1)),
+                              ),
+                              child: _isLoadingWards
+                                  ? const Center(child: CircularProgressIndicator())
+                                  : DropdownButtonFormField2<Ward>(
+                                isExpanded: true,
+                                hint: Text(getTranslated('select_district', context) ?? 'Select District'),
+                                value: _selectedWard,
+                                items: _wards.map((ward) => DropdownMenuItem<Ward>(
+                                  value: ward,
+                                  child: Text(ward.name),
+                                )).toList(),
+                                onChanged: (Ward? value) {
+                                  setState(() {
+                                    _selectedWard = value;
+                                  });
+                                },
+                                buttonStyleData: const ButtonStyleData(padding: EdgeInsets.only(right: 8)),
+                                iconStyleData: IconStyleData(
+                                  icon: Icon(Icons.arrow_drop_down, color: Theme.of(context).hintColor),
+                                  iconSize: 24,
+                                ),
+                                dropdownStyleData: DropdownStyleData(
+                                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(5)),
+                                ),
+                                menuItemStyleData: const MenuItemStyleData(padding: EdgeInsets.symmetric(horizontal: 16)),
+                                decoration: InputDecoration(
+                                  labelText: getTranslated('district', context) ?? 'District/Ward',
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(5)),
+                                ),
+                                validator: (value) => value == null ? 'District is required' : null,
+                              ),
                             ),
                             const SizedBox(height: Dimensions.paddingSizeDefaultAddress),
                             Provider.of<SplashController>(context, listen: false).configModel!.deliveryZipCodeAreaRestriction == 0
@@ -626,14 +902,18 @@ class _AddNewAddressScreenState extends State<AddNewAddressScreen> {
                                     ? null
                                     : () {
                                   if (_addressFormKey.currentState?.validate() ?? false) {
+                                    if (_selectedProvince == null || _selectedDistrict == null || _selectedWard == null) {
+                                      showCustomSnackBar('Please select all address fields', context);
+                                      return;
+                                    }
                                     AddressModel addressModel = AddressModel(
                                       addressType: addressController.addressTypeList[addressController.selectAddressIndex].title,
                                       contactPersonName: _contactPersonNameController.text,
                                       phone: '${Provider.of<AuthController>(context, listen: false).countryDialCode}${_contactPersonNumberController.text.trim()}',
                                       email: _contactPersonEmailController.text.trim(),
-                                      city: _cityController.text,
-                                      district: _districtController.text,
-                                      province: _provinceIdController.text,
+                                      city: _selectedProvince!.name,
+                                      district: _selectedWard!.name,
+                                      province: _selectedDistrict!.name,
                                       zip: _zipCodeController.text,
                                       country: _countryCodeController.text,
                                       guestId: Provider.of<AuthController>(context, listen: false).getGuestToken(),
