@@ -106,11 +106,16 @@ class SocialController with ChangeNotifier {
     _updatePost(post.id, optimistic);
 
     try {
-      await service.reactToPost(postId: post.id, reaction: reaction);
+      final ok = await service.reactToPost(postId: post.id, reaction: reaction);
+      // (nếu service trả bool ok; hoặc kiểm tra resp theo cách bạn dùng)
     } catch (e) {
-      // rollback nếu lỗi
       _updatePost(post.id, post);
-      showCustomSnackBar('Không thể gửi phản ứng', Get.context!, isError: true);
+      final msg = e.toString();
+      if (msg.contains('server_key')) {
+        showCustomSnackBar('Thiếu server_key: kiểm tra API Settings > Server Key', Get.context!, isError: true);
+      } else {
+        showCustomSnackBar('Bày tỏ cảm xúc thất bại: $msg', Get.context!, isError: true);
+      }
     }
   }
 
