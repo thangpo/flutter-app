@@ -223,8 +223,9 @@ class _HomePageState extends State<HomePage> {
                   ],
                 ),
 
-                const FinancialCenterWidget(),
-                const SizedBox(height: 10),
+                // tiện ích
+                // const FinancialCenterWidget(),
+                // const SizedBox(height: 10),
 
 
                 const CategoryListWidget(isHomePage: true),
@@ -335,26 +336,27 @@ class _HomePageState extends State<HomePage> {
                 ),
 
                 singleVendor ? const SizedBox() :
-                Consumer<ShopController>(
-                  builder: (context, allSellerProvider, child) {
-                    return (allSellerProvider.allSellerModel != null &&
-                        allSellerProvider.allSellerModel!.sellers != null &&
-                        allSellerProvider.allSellerModel!.sellers!.isNotEmpty)
-                        ? Padding(
-                      padding: const EdgeInsets.only(bottom: Dimensions.paddingSizeDefault),
-                      child: SizedBox(
-                        height: ResponsiveHelper.isTab(context) ? 220 : 215,
-                        child: const AllSellerWidget(
-                          title: 'Tất cả cửa hàng',
-                        ),
-                      ),
-                    )
-                        : const SizedBox();
-                  },
-                ),
+                // Consumer<ShopController>(
+                //   builder: (context, allSellerProvider, child) {
+                //     return (allSellerProvider.allSellerModel != null &&
+                //         allSellerProvider.allSellerModel!.sellers != null &&
+                //         allSellerProvider.allSellerModel!.sellers!.isNotEmpty)
+                //         ? Padding(
+                //       padding: const EdgeInsets.only(bottom: Dimensions.paddingSizeDefault),
+                //       child: SizedBox(
+                //         height: ResponsiveHelper.isTab(context) ? 220 : 215,
+                //         child: const AllSellerWidget(
+                //           title: 'Tất cả cửa hàng',
+                //         ),
+                //       ),
+                //     )
+                //         : const SizedBox();
+                //   },
+                // ),
 
-                singleVendor ? const SizedBox(height: 0):const SizedBox(height: Dimensions.paddingSizeSmall),
+                // singleVendor ? const SizedBox(height: 0):const SizedBox(height: Dimensions.paddingSizeSmall),
 
+                // ưu đãi trong ngày
                 const Padding(padding: EdgeInsets.only(bottom: Dimensions.paddingSizeDefault),
                     child: RecommendedProductWidget()),
 
@@ -454,62 +456,70 @@ class NewFeaturesSection extends StatelessWidget {
           children: [
             Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Colors.blue.shade600, Colors.blue.shade400],
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.blue.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: const Duration(milliseconds: 600),
+                  builder: (context, value, child) {
+                    return Transform.scale(
+                      scale: value,
+                      child: Transform.rotate(
+                        angle: (1 - value) * 0.5,
+                        child: child,
                       ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.auto_awesome,
-                    color: Colors.white,
-                    size: 20,
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.blue.shade600, Colors.blue.shade400],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.blue.withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.auto_awesome,
+                      color: Colors.white,
+                      size: 20,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Chức năng mới',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF1565C0),
-                          letterSpacing: 0.3,
+                Expanded(
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0.0, end: 1.0),
+                    duration: const Duration(milliseconds: 500),
+                    curve: Curves.easeOut,
+                    builder: (context, value, child) {
+                      return Opacity(
+                        opacity: value,
+                        child: Transform.translate(
+                          offset: Offset(20 * (1 - value), 0),
+                          child: child,
                         ),
-                      ),
-                      SizedBox(height: 2),
-                      Text(
-                        'Trải nghiệm dịch vụ tiện ích',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
+                      );
+                    },
+                    child: const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Trải nghiệm dịch vụ tiện ích',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1565C0),
+                            letterSpacing: 0.3,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    Icons.arrow_forward_ios,
-                    size: 14,
-                    color: Colors.blue.shade700,
+                        SizedBox(height: 2),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -525,17 +535,16 @@ class NewFeaturesSection extends StatelessWidget {
   Widget _buildFeaturesGrid() {
     if (features.length <= 2) {
       return Row(
-        children: features.map((feature) {
+        children: features.asMap().entries.map((entry) {
           return Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: _buildFeatureCard(feature),
+              child: _buildFeatureCard(entry.value, entry.key),
             ),
           );
         }).toList(),
       );
-    }
-    else if (features.length <= 4) {
+    } else if (features.length <= 4) {
       return GridView.builder(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
@@ -547,11 +556,10 @@ class NewFeaturesSection extends StatelessWidget {
         ),
         itemCount: features.length,
         itemBuilder: (context, index) {
-          return _buildFeatureCard(features[index]);
+          return _buildFeatureCard(features[index], index);
         },
       );
-    }
-    else {
+    } else {
       return SizedBox(
         height: 140,
         child: ListView.builder(
@@ -563,7 +571,7 @@ class NewFeaturesSection extends StatelessWidget {
               margin: EdgeInsets.only(
                 right: index == features.length - 1 ? 0 : 12,
               ),
-              child: _buildFeatureCard(features[index]),
+              child: _buildFeatureCard(features[index], index),
             );
           },
         ),
@@ -571,98 +579,183 @@ class NewFeaturesSection extends StatelessWidget {
     }
   }
 
-  Widget _buildFeatureCard(FeatureItem feature) {
+  Widget _buildFeatureCard(FeatureItem feature, int index) {
     final Color featureColor = feature.color ?? Colors.blue;
 
-    return InkWell(
-      onTap: feature.onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: featureColor.withOpacity(0.2),
-            width: 1.5,
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: Duration(milliseconds: 400 + (index * 100)),
+      curve: Curves.easeOutBack,
+      builder: (context, value, child) {
+        return Transform.scale(
+          scale: value.clamp(0.0, 1.0),
+          child: Opacity(
+            opacity: value.clamp(0.0, 1.0),
+            child: child,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: featureColor.withOpacity(0.1),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 60,
-              height: 60,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    featureColor.withOpacity(0.15),
-                    featureColor.withOpacity(0.08),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: featureColor.withOpacity(0.3),
-                  width: 2,
-                ),
+        );
+      },
+      child: _AnimatedFeatureCard(
+        feature: feature,
+        featureColor: featureColor,
+      ),
+    );
+  }
+}
+
+class _AnimatedFeatureCard extends StatefulWidget {
+  final FeatureItem feature;
+  final Color featureColor;
+
+  const _AnimatedFeatureCard({
+    required this.feature,
+    required this.featureColor,
+  });
+
+  @override
+  State<_AnimatedFeatureCard> createState() => _AnimatedFeatureCardState();
+}
+
+class _AnimatedFeatureCardState extends State<_AnimatedFeatureCard>
+    with SingleTickerProviderStateMixin {
+  bool _isHovered = false;
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    )..repeat(reverse: true);
+
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: AnimatedScale(
+        scale: _isHovered ? 1.05 : 1.0,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        child: InkWell(
+          onTap: widget.feature.onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: _isHovered
+                    ? widget.featureColor.withOpacity(0.4)
+                    : widget.featureColor.withOpacity(0.2),
+                width: _isHovered ? 2.0 : 1.5,
               ),
-              child: feature.image != null
-                  ? ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: Image.asset(
-                  feature.image!,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Icon(
-                      feature.icon ?? Icons.star,
-                      color: featureColor,
-                      size: 30,
+              boxShadow: [
+                BoxShadow(
+                  color: widget.featureColor.withOpacity(_isHovered ? 0.2 : 0.1),
+                  blurRadius: _isHovered ? 12 : 8,
+                  offset: Offset(0, _isHovered ? 6 : 4),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                AnimatedBuilder(
+                  animation: _pulseAnimation,
+                  builder: (context, child) {
+                    return Transform.scale(
+                      scale: _isHovered ? _pulseAnimation.value : 1.0,
+                      child: child,
                     );
                   },
+                  child: Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          widget.featureColor.withOpacity(_isHovered ? 0.2 : 0.15),
+                          widget.featureColor.withOpacity(_isHovered ? 0.12 : 0.08),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: widget.featureColor.withOpacity(_isHovered ? 0.4 : 0.3),
+                        width: 2,
+                      ),
+                    ),
+                    child: widget.feature.image != null
+                        ? ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: Image.asset(
+                        widget.feature.image!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Icon(
+                            widget.feature.icon ?? Icons.star,
+                            color: widget.featureColor,
+                            size: 30,
+                          );
+                        },
+                      ),
+                    )
+                        : Icon(
+                      widget.feature.icon ?? Icons.star,
+                      color: widget.featureColor,
+                      size: 30,
+                    ),
+                  ),
                 ),
-              )
-                  : Icon(
-                feature.icon ?? Icons.star,
-                color: featureColor,
-                size: 30,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              feature.title,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade800,
-                height: 1.2,
-              ),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            if (feature.description != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                feature.description!,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: Colors.grey.shade600,
+                const SizedBox(height: 10),
+                AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 200),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: _isHovered ? FontWeight.w700 : FontWeight.w600,
+                    color: Colors.grey.shade800,
+                    height: 1.2,
+                  ),
+                  child: Text(
+                    widget.feature.title,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ],
+                if (widget.feature.description != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.feature.description!,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.grey.shade600,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );

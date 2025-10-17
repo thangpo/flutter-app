@@ -905,7 +905,9 @@
   "shop_available_message": "Xin lỗi! Hiện tại chúng tôi không có mặt. Chúng tôi sẽ sớm liên hệ lại với bạn. Cảm ơn vì sự kiên nhẫn của bạn..",
   "same_as_shipping_address": "Giống với địa chỉ giao hàng",
   "enter_valid_phone_number": "Nhập số điện thoại hợp lệ",
-  "grab_this_deal": "Chớp lấy ưu đãi này",
+  "grab_this_deal": "Lấy ưu đãi",
   "add_fund_is_not_configured": "Tính năng nạp tiền hiện không có sẵn. Vui lòng liên hệ quản trị viên.",
-  "all_sellers": "Tất cả cửa hàng"
+  "all_sellers": "Tất cả cửa hàng",
+  "province": "Tỉnh/Thành phố",
+  "district": "Quận/Huyện"
 }

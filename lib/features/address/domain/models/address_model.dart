@@ -4,6 +4,8 @@ class AddressModel {
   String? addressType;
   String? address;
   String? city;
+  String? district;
+  String? province;
   String? zip;
   String? phone;
   String? createdAt;
@@ -21,6 +23,8 @@ class AddressModel {
         this.addressType,
         this.address,
         this.city,
+        this.district,
+        this.province,
         this.zip,
         this.phone,
         this.createdAt,
@@ -40,6 +44,8 @@ class AddressModel {
     addressType = json['address_type'];
     address = json['address'];
     city = json['city'];
+    district = json['district'];
+    province = json['province'];
     zip = json['zip'];
     phone = json['phone'];
     createdAt = json['created_at'];
@@ -59,6 +65,8 @@ class AddressModel {
     data['address_type'] = addressType;
     data['address'] = address;
     data['city'] = city;
+    data['district'] = district;
+    data['province'] = province;
     data['zip'] = zip;
     data['phone'] = phone;
     data['created_at'] = createdAt;
