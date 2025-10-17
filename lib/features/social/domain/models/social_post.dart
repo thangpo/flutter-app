@@ -51,27 +51,48 @@ class SocialPost {
   });
 
   SocialPost copyWith({
+    String? id,
+    String? text,
+    String? userName,
+    String? userAvatar,
+    String? timeText,
+    List<String>? imageUrls,
+    String? imageUrl,
+    String? fileUrl,
+    String? fileName,
+    String? videoUrl,
+    String? audioUrl,
+    String? postType,
     int? reactionCount,
     String? myReaction,
-    // nếu bạn muốn copy các field khác, thêm vào tại đây
+    bool? hasProduct,
+    String? productTitle,
+    List<String>? productImages,
+    double? productPrice,
+    String? productCurrency,
+    List<Map<String, dynamic>>? pollOptions,
   }) {
     return SocialPost(
-      id: id,
-      text: text,
-      userName: userName,
-      userAvatar: userAvatar,
-      timeText: timeText,
-      imageUrls: imageUrls,
-      imageUrl: imageUrl,
-      fileUrl: fileUrl,
-      fileName: fileName,
-      videoUrl: videoUrl,
-      audioUrl: audioUrl,
-      postType: postType,
-      // Reactions
+      id: id ?? this.id,
+      text: text ?? this.text,
+      userName: userName ?? this.userName,
+      userAvatar: userAvatar ?? this.userAvatar,
+      timeText: timeText ?? this.timeText,
+      imageUrls: imageUrls ?? this.imageUrls,
+      imageUrl: imageUrl ?? this.imageUrl,
+      fileUrl: fileUrl ?? this.fileUrl,
+      fileName: fileName ?? this.fileName,
+      videoUrl: videoUrl ?? this.videoUrl,
+      audioUrl: audioUrl ?? this.audioUrl,
+      postType: postType ?? this.postType,
       reactionCount: reactionCount ?? this.reactionCount,
       myReaction: myReaction ?? this.myReaction,
-      // Product/Poll… nếu có các tham số bắt buộc khác trong constructor, truyền lại ở đây
+      hasProduct: hasProduct ?? this.hasProduct,
+      productTitle: productTitle ?? this.productTitle,
+      productImages: productImages ?? this.productImages,
+      productPrice: productPrice ?? this.productPrice,
+      productCurrency: productCurrency ?? this.productCurrency,
+      pollOptions: pollOptions ?? this.pollOptions,
     );
   }
 
