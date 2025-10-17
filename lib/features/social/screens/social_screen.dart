@@ -11,6 +11,7 @@ import 'package:video_player/video_player.dart';
 import 'package:intl/intl.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/price_converter.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class SocialFeedScreen extends StatefulWidget {
   const SocialFeedScreen({super.key});
@@ -19,7 +20,9 @@ class SocialFeedScreen extends StatefulWidget {
   State<SocialFeedScreen> createState() => _SocialFeedScreenState();
 }
 
-class _SocialFeedScreenState extends State<SocialFeedScreen> {
+class _SocialFeedScreenState extends State<SocialFeedScreen> with AutomaticKeepAliveClientMixin {
+  @override bool get wantKeepAlive => true;
+
   @override
   void initState() {
     super.initState();
@@ -244,18 +247,21 @@ class _StoriesSectionFromApi extends StatelessWidget {
           // chỉ bắt event của scroll ngang
           if (n.metrics.axis == Axis.horizontal &&
               n.metrics.pixels >= n.metrics.maxScrollExtent - 100) {
-            // gọi load thêm stories
-            Provider.of<SocialController>(context, listen: false)
-                .loadMoreStories();
+            final sc = context.read<SocialController>();
+            if (!sc.loading) sc.loadMoreStories();
           }
           return false;
         },
         child: ListView.builder(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-          itemCount: stories.length,
-          itemBuilder: (context, index) =>
-              _StoryCardFromApi(story: stories[index]),
+          itemCount: stories.length + 1,
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              return _CreateStoryCard(); // ô tạo tin
+            }
+            return _StoryCardFromApi(story: stories[index - 1]);
+          },
         ),
       ),
     );
@@ -284,10 +290,10 @@ class _StoryCardFromApi extends StatelessWidget {
           if (thumb != null && thumb.isNotEmpty)
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: Image.network(
-                thumb,
+              child: Image(
+                image: CachedNetworkImageProvider(thumb),
                 width: 110,
-                height: 200,
+                height: double.infinity,
                 fit: BoxFit.cover,
               ),
             ),
@@ -306,7 +312,7 @@ class _StoryCardFromApi extends StatelessWidget {
                 backgroundColor: cs.surfaceVariant,
                 backgroundImage:
                     (story.userAvatar != null && story.userAvatar!.isNotEmpty)
-                        ? NetworkImage(story.userAvatar!)
+                        ? CachedNetworkImageProvider(story.userAvatar!)
                         : null,
                 child: (story.userAvatar == null || story.userAvatar!.isEmpty)
                     ? Icon(Icons.person,
@@ -337,6 +343,64 @@ class _StoryCardFromApi extends StatelessWidget {
   }
 }
 
+class _CreateStoryCard extends StatelessWidget {
+  const _CreateStoryCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    // TODO: lấy avatar user hiện tại từ provider/config của app (nếu có)
+    final String? avatar = null;
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: SizedBox(
+        width: 110,
+        child: Stack(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                height: double.infinity,
+                decoration: BoxDecoration(
+                  color: cs.surfaceVariant,
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircleAvatar(
+                      radius: 26,
+                      backgroundColor: cs.surface,
+                      backgroundImage:
+                      (avatar != null && avatar.isNotEmpty)
+                          ? CachedNetworkImageProvider(avatar)
+                          : null,
+                      child: avatar == null ? Icon(Icons.person, color: cs.onSurface) : null,
+                    ),
+                    const SizedBox(height: 8),
+                    Text('Tạo tin', style: Theme.of(context).textTheme.bodySmall),
+                  ],
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 8, left: 8, right: 8,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  // TODO: điều hướng tới màn hình tạo tin
+                },
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Tạo'),
+                style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(32)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _StoryCard extends StatelessWidget {
   final _Story story;
   const _StoryCard({required this.story});
@@ -358,8 +422,8 @@ class _StoryCard extends StatelessWidget {
           if (!story.isCreateStory && story.imageUrl != null)
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: Image.network(
-                story.imageUrl!,
+              child: CachedNetworkImage(
+                imageUrl: story.imageUrl!,
                 width: 110,
                 height: 200,
                 fit: BoxFit.cover,
@@ -451,7 +515,7 @@ class _AutoRatioNetworkImageState extends State<_AutoRatioNetworkImage> {
   @override
   void initState() {
     super.initState();
-    final img = Image.network(widget.url);
+    final img = Image(image: CachedNetworkImageProvider(widget.url));
     img.image.resolve(const ImageConfiguration()).addListener(
       ImageStreamListener((info, _) {
         if (mounted && info.image.height != 0) {
@@ -467,7 +531,7 @@ class _AutoRatioNetworkImageState extends State<_AutoRatioNetworkImage> {
       builder: (ctx, c) => SizedBox(
         width: double.infinity,
         height: c.maxWidth / ratio,
-        child: Image.network(widget.url, fit: BoxFit.cover),
+        child: Image(image: CachedNetworkImageProvider(widget.url), fit: BoxFit.cover),
       ),
     );
   }
@@ -994,7 +1058,7 @@ class _PostCardFromApi extends StatelessWidget {
                   radius: 20,
                   backgroundColor: cs.surfaceVariant,
                   backgroundImage: (post.userAvatar != null && post.userAvatar!.isNotEmpty)
-                      ? NetworkImage(post.userAvatar!)
+                      ? CachedNetworkImageProvider(post.userAvatar!)
                       : null,
                   child: (post.userAvatar == null || post.userAvatar!.isEmpty)
                       ? Text(
@@ -1121,10 +1185,50 @@ class _PostCardFromApi extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: const [
-                _PostAction(icon: Icons.thumb_up_outlined, label: 'Thích'),
-                _PostAction(icon: Icons.mode_comment_outlined, label: 'Bình luận'),
-                _PostAction(icon: Icons.share_outlined, label: 'Chia sẻ'),
+              children: [
+                // Nút Reaction: tap = Like/UnLike; long-press = chọn reaction
+                Expanded(
+                  child: Builder(
+                    builder: (itemCtx) => InkWell(
+                      onTap: () {
+                        final now = (post.myReaction == 'Like') ? '' : 'Like';
+                        itemCtx.read<SocialController>().reactOnPost(post, now);
+                      },
+                      onLongPress: () {
+                        // Tính toạ độ trung tâm nút Like để hiện popup NGAY TRÊN nút
+                        final overlayBox = Overlay.of(itemCtx).context.findRenderObject() as RenderBox;
+                        final box = itemCtx.findRenderObject() as RenderBox?;
+                        final Offset centerGlobal = (box != null)
+                            ? box.localToGlobal(box.size.center(Offset.zero), ancestor: overlayBox)
+                            : overlayBox.size.center(Offset.zero);
+
+                        _showReactionsOverlay(
+                          itemCtx,
+                          centerGlobal,
+                          onSelect: (val) {
+                            itemCtx.read<SocialController>().reactOnPost(post, val);
+                          },
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _reactionIcon(post.myReaction),
+                            const SizedBox(width: 6),
+                            Text(
+                              post.reactionCount.toString(),
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const _PostAction(icon: Icons.mode_comment_outlined, label: 'Bình luận'),
+                const _PostAction(icon: Icons.share_outlined, label: 'Chia sẻ'),
               ],
             ),
           ),
@@ -1233,12 +1337,137 @@ class _ImageGrid extends StatelessWidget {
     child: _tile(u),
   );
 
-  Widget _tile(String u) => Image.network(
-    u,
+  Widget _tile(String u) => Image(
+    image: CachedNetworkImageProvider(u),
     fit: BoxFit.cover,
-    // tránh crash vì lỗi ảnh
     errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12),
   );
+}
+
+class _ReactionPicker extends StatelessWidget {
+  final String initial;
+  const _ReactionPicker({required this.initial});
+
+  @override
+  Widget build(BuildContext context) {
+    final items = const ['Like','Love','HaHa','Wow','Sad','Angry'];
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Wrap(
+          alignment: WrapAlignment.spaceEvenly,
+          children: items.map((e) => IconButton(
+            iconSize: 32,
+            onPressed: () => Navigator.pop(context, e),
+            icon: _reactionIcon(e),
+            tooltip: e,
+          )).toList(),
+        ),
+      ),
+    );
+  }
+}
+
+// PNG version
+Widget _reactionIcon(String r, {double size = 22}) {
+  final String path = _reactionPngPath(r);
+  return Image.asset(
+    path,
+    width: size,
+    height: size,
+    fit: BoxFit.contain,
+    filterQuality: FilterQuality.high,
+  );
+}
+
+String _reactionPngPath(String r) {
+  switch (r) {
+    case 'Love':  return 'assets/images/reactions/love.png';
+    case 'HaHa':  return 'assets/images/reactions/haha.png';
+    case 'Wow':   return 'assets/images/reactions/wow.png';
+    case 'Sad':   return 'assets/images/reactions/sad.png';
+    case 'Angry': return 'assets/images/reactions/angry.png';
+    case 'Like':  return 'assets/images/reactions/like.png';
+    default:      return 'assets/images/reactions/like_outline.png';
+  }
+}
+
+typedef _OnReactionSelect = void Function(String);
+
+void _showReactionsOverlay(
+    BuildContext context,
+    Offset globalPos, {
+      required _OnReactionSelect onSelect,
+    }) {
+  final overlay = Overlay.of(context);
+  late OverlayEntry entry;
+
+  entry = OverlayEntry(builder: (_) {
+    final RenderBox overlayBox = overlay.context.findRenderObject() as RenderBox;
+    final Offset local = overlayBox.globalToLocal(globalPos);
+
+    // Kích thước khung popup (ước lượng), để canh nằm ngay trên nút
+    const double popupWidth = 300;
+    const double popupHeight = 56;
+
+    return Stack(
+      children: [
+        // Tap ra ngoài để tắt
+        Positioned.fill(
+          child: GestureDetector(onTap: () => entry.remove()),
+        ),
+        Positioned(
+          left: (local.dx - popupWidth / 2).clamp(8.0, overlayBox.size.width - popupWidth - 8.0),
+          top: (local.dy - popupHeight - 12).clamp(8.0, overlayBox.size.height - popupHeight - 8.0),
+          width: popupWidth,
+          height: popupHeight,
+          child: _ReactionBar(
+            onPick: (v) {
+              onSelect(v);
+              entry.remove();
+            },
+          ),
+        ),
+      ],
+    );
+  });
+
+  overlay.insert(entry);
+}
+
+class _ReactionBar extends StatelessWidget {
+  final ValueChanged<String> onPick;
+  const _ReactionBar({required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    const items = ['Like','Love','HaHa','Wow','Sad','Angry'];
+    return Material(
+      color: Colors.transparent,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.85),
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: const [BoxShadow(blurRadius: 10, color: Colors.black26)],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: items.map((e) {
+              return GestureDetector(
+                onTap: () => onPick(e),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: _reactionIcon(e, size: 28),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _PostAction extends StatelessWidget {

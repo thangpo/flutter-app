@@ -29,6 +29,14 @@ class SocialService implements SocialServiceInterface {
     return [];
   }
 
+  @override
+  Future<void> reactToPost({required String postId, required String reaction}) async {
+    final resp = await socialRepository.reactToPost(postId: postId, reaction: reaction);
+    if (!(resp.isSuccess && resp.response?.statusCode == 200)) {
+      ApiChecker.checkApi(resp);
+    }
+  }
+
   //Stories
   @override
   Future<List<SocialStory>> getStories({int limit = 10, int offset = 0}) async {

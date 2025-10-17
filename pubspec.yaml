@@ -113,6 +113,7 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/images/reactions/
     - assets/language/
     - assets/svg/
 

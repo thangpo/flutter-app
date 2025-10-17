@@ -13,6 +13,10 @@ class SocialPost {
   final String? audioUrl;
   final String? postType;
 
+  // Reactions
+  final int reactionCount; // tổng số phản ứng
+  final String myReaction; // '', 'Like', 'Love', 'HaHa', 'Wow', 'Sad', 'Angry'
+
   // Product
   final bool hasProduct;
   final String? productTitle;// product.name
@@ -36,6 +40,8 @@ class SocialPost {
     this.videoUrl,
     this.audioUrl,
     this.postType,
+    required this.reactionCount,
+    required this.myReaction,
     this.hasProduct = false,
     this.productTitle,
     this.productImages,
@@ -44,7 +50,32 @@ class SocialPost {
     this.pollOptions,
   });
 
-  // factory SocialPost.fromJson(Map<String, dynamic> j) {
+  SocialPost copyWith({
+    int? reactionCount,
+    String? myReaction,
+    // nếu bạn muốn copy các field khác, thêm vào tại đây
+  }) {
+    return SocialPost(
+      id: id,
+      text: text,
+      userName: userName,
+      userAvatar: userAvatar,
+      timeText: timeText,
+      imageUrls: imageUrls,
+      imageUrl: imageUrl,
+      fileUrl: fileUrl,
+      fileName: fileName,
+      videoUrl: videoUrl,
+      audioUrl: audioUrl,
+      postType: postType,
+      // Reactions
+      reactionCount: reactionCount ?? this.reactionCount,
+      myReaction: myReaction ?? this.myReaction,
+      // Product/Poll… nếu có các tham số bắt buộc khác trong constructor, truyền lại ở đây
+    );
+  }
+
+// factory SocialPost.fromJson(Map<String, dynamic> j) {
   //   final publisher =
   //       (j['publisher'] is Map) ? (j['publisher'] as Map) : const {};
   //   return SocialPost(
