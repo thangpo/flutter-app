@@ -7,6 +7,7 @@ import 'package:flutter_sixvalley_ecommerce/data/model/api_response.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
+import 'package:http/http.dart' as http;
 
 bool _isImageUrl(String url) {
   final u = url.toLowerCase();
@@ -116,6 +117,11 @@ class SocialRepository {
             }
           }
 
+          // reaction
+          final Map rx = (m['reaction'] is Map) ? m['reaction'] as Map : const {};
+          final int reactionCount = int.tryParse('${rx['count'] ?? 0}') ?? 0;
+          final String myReaction = (rx['type'] ?? '').toString();
+
           // product
           final Map product = (m['product'] is Map) ? m['product'] as Map : const {};
           final bool hasProduct = product.isNotEmpty;
@@ -151,6 +157,8 @@ class SocialRepository {
               videoUrl: videoUrl,
               audioUrl: audioUrl,
               postType: postType,
+              reactionCount: reactionCount,
+              myReaction: myReaction,
               hasProduct: hasProduct,
               productTitle: productName.isNotEmpty ? productName : null,
               productImages: productImages.isNotEmpty ? productImages : null,
@@ -215,4 +223,30 @@ class SocialRepository {
     }
     return list;
   }
+
+  Future<ApiResponseModel<Response>> reactToPost({
+    required String postId,
+    required String reaction, // '' = unreact, hoặc: Like/Love/HaHa/Wow/Sad/Angry
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError('Missing Social access_token');
+      }
+
+      final String url = '${AppConstants.socialBaseUrl}${AppConstants.socialReactUri}?access_token=$token';
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'post_id': postId,
+        'action': reaction.isEmpty ? 'like' : 'reaction',
+        'reaction': reaction.isEmpty ? 'Like' : reaction,
+      });
+
+      final resp = await dioClient.post(url, data: form);
+      return ApiResponseModel.withSuccess(resp);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
 }

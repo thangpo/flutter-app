@@ -16,6 +16,11 @@ class SocialController with ChangeNotifier {
   final List<SocialPost> _posts = [];
   List<SocialPost> get posts => List.unmodifiable(_posts);
 
+  void _updatePost(String id, SocialPost newPost) {
+    final i = _posts.indexWhere((e) => e.id == id);
+    if (i != -1) { _posts[i] = newPost; notifyListeners(); }
+  }
+
   final List<SocialStory> _stories = [];
   List<SocialStory> get stories => List.unmodifiable(_stories);
   int _storiesOffset = 0;
@@ -34,10 +39,11 @@ class SocialController with ChangeNotifier {
       _afterId = list.isNotEmpty ? list.last.id : null;
 
       // load stories nếu bạn dùng
-      _stories.clear();
-      _storiesOffset = 0;
       final s = await service.getStories(limit: 10, offset: 0);
-      _stories.addAll(s);
+      _stories.clear();
+      final existing = _stories.map((e) => e.id).toSet();
+      final unique = s.where((e) => !existing.contains(e.id)).toList();
+      _stories.addAll(unique);
       _storiesOffset = _stories.length;
 
       // Gợi ý debug (có thể bỏ khi xong):
@@ -75,7 +81,9 @@ class SocialController with ChangeNotifier {
     try {
       final s = await service.getStories(limit: 10, offset: _storiesOffset);
       if (s.isNotEmpty) {
-        _stories.addAll(s);
+        final existing = _stories.map((e) => e.id).toSet();
+        final unique = s.where((e) => !existing.contains(e.id)).toList();
+        _stories.addAll(unique);
         _storiesOffset = _stories.length;
       }
     } finally {
@@ -83,4 +91,27 @@ class SocialController with ChangeNotifier {
       notifyListeners();
     }
   }
+
+  Future<void> reactOnPost(SocialPost post, String reaction) async {
+    // optimistic update
+    final was = post.myReaction;
+    final now = reaction;
+    int delta = 0;
+    if (was.isEmpty && now.isNotEmpty) delta = 1;
+    if (was.isNotEmpty && now.isEmpty) delta = -1;
+    final optimistic = post.copyWith(
+      myReaction: now,
+      reactionCount: (post.reactionCount + delta).clamp(0, 1<<31),
+    );
+    _updatePost(post.id, optimistic);
+
+    try {
+      await service.reactToPost(postId: post.id, reaction: reaction);
+    } catch (e) {
+      // rollback nếu lỗi
+      _updatePost(post.id, post);
+      showCustomSnackBar('Không thể gửi phản ứng', Get.context!, isError: true);
+    }
+  }
+
 }
