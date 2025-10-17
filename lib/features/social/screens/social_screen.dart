@@ -28,7 +28,10 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> with AutomaticKeepA
     super.initState();
     // Gọi refresh sau khi màn hình mount để chắc chắn lúc này đã có token
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<SocialController>().refresh();
+      final sc = context.read<SocialController>();
+      if (sc.posts.isEmpty) {
+        sc.refresh();
+      }
     });
   }
 

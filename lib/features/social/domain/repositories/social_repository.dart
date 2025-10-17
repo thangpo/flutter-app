@@ -120,7 +120,12 @@ class SocialRepository {
           // reaction
           final Map rx = (m['reaction'] is Map) ? m['reaction'] as Map : const {};
           final int reactionCount = int.tryParse('${rx['count'] ?? 0}') ?? 0;
-          final String myReaction = (rx['type'] ?? '').toString();
+          final String myReaction = (() {
+            final t = (rx['type'] ?? '').toString();
+            if (t.isNotEmpty) return t;
+            final isReacted = (rx['is_reacted'] == true) || (rx['is_reacted'] == 1) || (rx['is_reacted']?.toString() == '1');
+            return isReacted ? 'Like' : '';
+          })();
 
           // product
           final Map product = (m['product'] is Map) ? m['product'] as Map : const {};
@@ -242,7 +247,11 @@ class SocialRepository {
         'reaction': reaction.isEmpty ? 'Like' : reaction,
       });
 
-      final resp = await dioClient.post(url, data: form);
+      final resp = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
       return ApiResponseModel.withSuccess(resp);
     } catch (e) {
       return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
