@@ -59,14 +59,14 @@ class District {
 }
 
 class Ward {
-  final int id;
+  final String id;
   final String name;
 
   Ward({required this.id, required this.name});
 
   factory Ward.fromJson(Map<String, dynamic> json) {
     return Ward(
-      id: json['WardID'] ?? json['WardCode'], // Adjust based on actual API response
+      id: json['WardCode'],
       name: json['WardName'],
     );
   }
@@ -241,7 +241,7 @@ class _AddNewAddressScreenState extends State<AddNewAddressScreen> {
     try {
       final response = await http.get(Uri.parse('https://vnshop247.com/api/v1/shippingAPI/ghn/addressWard/$districtId'));
       if (response.statusCode == 200) {
-        final data = json.decode(response.body)['data'] as List;
+        final data = json.decode(response.body)['data']['original'] as List;
         setState(() {
           _wards = data.map((json) => Ward.fromJson(json)).toList();
           _isLoadingWards = false;
