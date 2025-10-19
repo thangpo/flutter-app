@@ -29,7 +29,8 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
   final TextEditingController wardController = TextEditingController();
   final TextEditingController postalController = TextEditingController();
   final TextEditingController countryController = TextEditingController();
-  final TextEditingController specialRequestController = TextEditingController();
+  final TextEditingController specialRequestController =
+      TextEditingController();
   final TextEditingController couponController = TextEditingController();
   final TextEditingController phoneController = TextEditingController();
 
@@ -83,7 +84,8 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
-        title: const Text('Xác nhận đặt tour', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Xác nhận đặt tour',
+            style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.teal.shade600,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -116,7 +118,8 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                         color: Colors.white.withOpacity(0.2),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.check_circle_outline, color: Colors.white, size: 48),
+                      child: const Icon(Icons.check_circle_outline,
+                          color: Colors.white, size: 48),
                     ),
                     const SizedBox(height: 12),
                     const Text(
@@ -139,7 +142,6 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                 ),
               ),
             ),
-
             Padding(
               padding: const EdgeInsets.all(16),
               child: Form(
@@ -150,12 +152,16 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                     Card(
                       elevation: 4,
                       shadowColor: Colors.teal.shade100,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
                       child: Container(
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(16),
                           gradient: LinearGradient(
-                            colors: [Colors.white, Colors.teal.shade50.withOpacity(0.3)],
+                            colors: [
+                              Colors.white,
+                              Colors.teal.shade50.withOpacity(0.3)
+                            ],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
@@ -183,14 +189,18 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                                     width: 100,
                                     height: 100,
                                     fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) => Container(
+                                    errorBuilder:
+                                        (context, error, stackTrace) =>
+                                            Container(
                                       width: 100,
                                       height: 100,
                                       decoration: BoxDecoration(
                                         color: Colors.teal.shade50,
                                         borderRadius: BorderRadius.circular(12),
                                       ),
-                                      child: Icon(Icons.image_not_supported, size: 40, color: Colors.teal.shade300),
+                                      child: Icon(Icons.image_not_supported,
+                                          size: 40,
+                                          color: Colors.teal.shade300),
                                     ),
                                   ),
                                 ),
@@ -213,28 +223,37 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                                     const SizedBox(height: 12),
                                     Row(
                                       children: [
-                                        Icon(Icons.calendar_today, size: 16, color: Colors.teal.shade600),
+                                        Icon(Icons.calendar_today,
+                                            size: 16,
+                                            color: Colors.teal.shade600),
                                         const SizedBox(width: 6),
                                         Text(
                                           '${booking.startDate.day}/${booking.startDate.month}/${booking.startDate.year}',
-                                          style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+                                          style: TextStyle(
+                                              fontSize: 14,
+                                              color: Colors.grey.shade700),
                                         ),
                                       ],
                                     ),
                                     const SizedBox(height: 6),
                                     Row(
                                       children: [
-                                        Icon(Icons.people, size: 16, color: Colors.teal.shade600),
+                                        Icon(Icons.people,
+                                            size: 16,
+                                            color: Colors.teal.shade600),
                                         const SizedBox(width: 6),
                                         Text(
                                           '${booking.numberOfPeople} người',
-                                          style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+                                          style: TextStyle(
+                                              fontSize: 14,
+                                              color: Colors.grey.shade700),
                                         ),
                                       ],
                                     ),
                                     const SizedBox(height: 8),
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 6),
                                       decoration: BoxDecoration(
                                         color: Colors.teal.shade600,
                                         borderRadius: BorderRadius.circular(8),
@@ -256,9 +275,7 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                         ),
                       ),
                     ),
-
                     const SizedBox(height: 24),
-
                     Row(
                       children: [
                         Container(
@@ -267,35 +284,39 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                             color: Colors.teal.shade50,
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Icon(Icons.person, color: Colors.teal.shade700, size: 24),
+                          child: Icon(Icons.person,
+                              color: Colors.teal.shade700, size: 24),
                         ),
                         const SizedBox(width: 12),
                         const Text(
                           'Thông tin người đặt',
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
                     const SizedBox(height: 16),
-
                     _buildTextField(
                       controller: firstNameController,
                       label: 'Họ',
                       icon: Icons.person_outline,
-                      validator: (v) => v?.isEmpty == true ? 'Vui lòng nhập họ' : null,
+                      validator: (v) =>
+                          v?.isEmpty == true ? 'Vui lòng nhập họ' : null,
                     ),
                     _buildTextField(
                       controller: lastNameController,
                       label: 'Tên',
                       icon: Icons.person,
-                      validator: (v) => v?.isEmpty == true ? 'Vui lòng nhập tên' : null,
+                      validator: (v) =>
+                          v?.isEmpty == true ? 'Vui lòng nhập tên' : null,
                     ),
                     _buildTextField(
                       controller: emailController,
                       label: 'Email',
                       icon: Icons.email_outlined,
                       keyboardType: TextInputType.emailAddress,
-                      validator: (v) => v?.isEmpty == true ? 'Vui lòng nhập email' : null,
+                      validator: (v) =>
+                          v?.isEmpty == true ? 'Vui lòng nhập email' : null,
                     ),
                     _buildTextField(
                       controller: phoneController,
@@ -308,7 +329,6 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                       label: 'Địa chỉ',
                       icon: Icons.home_outlined,
                     ),
-
                     Row(
                       children: [
                         Expanded(
@@ -328,7 +348,6 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                         ),
                       ],
                     ),
-
                     Row(
                       children: [
                         Expanded(
@@ -349,7 +368,6 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                         ),
                       ],
                     ),
-
                     _buildTextField(
                       controller: countryController,
                       label: 'Quốc gia',
@@ -361,9 +379,7 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                       icon: Icons.message_outlined,
                       maxLines: 3,
                     ),
-
                     const SizedBox(height: 24),
-
                     Row(
                       children: [
                         Container(
@@ -372,17 +388,18 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                             color: Colors.teal.shade50,
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Icon(Icons.payment, color: Colors.teal.shade700, size: 24),
+                          child: Icon(Icons.payment,
+                              color: Colors.teal.shade700, size: 24),
                         ),
                         const SizedBox(width: 12),
                         const Text(
                           'Phương thức thanh toán',
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
                     const SizedBox(height: 16),
-
                     Container(
                       decoration: BoxDecoration(
                         color: Colors.white,
@@ -399,9 +416,11 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                       child: DropdownButtonFormField<String>(
                         value: paymentMethod,
                         decoration: InputDecoration(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
                           border: InputBorder.none,
-                          prefixIcon: Icon(Icons.account_balance_wallet, color: Colors.teal.shade600),
+                          prefixIcon: Icon(Icons.account_balance_wallet,
+                              color: Colors.teal.shade600),
                         ),
                         items: const [
                           DropdownMenuItem(
@@ -420,23 +439,18 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                         onChanged: (v) => setState(() => paymentMethod = v!),
                       ),
                     ),
-
                     const SizedBox(height: 16),
-
                     _buildTextField(
                       controller: couponController,
                       label: 'Mã giảm giá (nếu có)',
                       icon: Icons.discount_outlined,
                       suffixIcon: IconButton(
-                        icon: Icon(Icons.check_circle, color: Colors.teal.shade600),
-                        onPressed: () {
-
-                        },
+                        icon: Icon(Icons.check_circle,
+                            color: Colors.teal.shade600),
+                        onPressed: () {},
                       ),
                     ),
-
                     const SizedBox(height: 32),
-
                     Container(
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(16),
@@ -459,49 +473,50 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                           backgroundColor: Colors.transparent,
                           shadowColor: Colors.transparent,
                           minimumSize: const Size.fromHeight(56),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
                         ),
                         child: _isLoading
                             ? const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 3,
-                              ),
-                            ),
-                            SizedBox(width: 12),
-                            Text(
-                              'Đang xử lý...',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        )
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 3,
+                                    ),
+                                  ),
+                                  SizedBox(width: 12),
+                                  Text(
+                                    'Đang xử lý...',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              )
                             : const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              'Hoàn tất đặt tour',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    'Hoàn tất đặt tour',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  SizedBox(width: 8),
+                                  Icon(Icons.arrow_forward,
+                                      color: Colors.white),
+                                ],
                               ),
-                            ),
-                            SizedBox(width: 8),
-                            Icon(Icons.arrow_forward, color: Colors.white),
-                          ],
-                        ),
                       ),
                     ),
-
                     const SizedBox(height: 32),
                   ],
                 ),
@@ -565,7 +580,8 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
             ),
             filled: true,
             fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           ),
         ),
       ),
@@ -586,7 +602,8 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
         "gateway": paymentMethod,
         "customer_notes": specialRequestController.text,
         "zip_code": postalController.text,
-        "coupon_code": couponController.text.isNotEmpty ? couponController.text : null,
+        "coupon_code":
+            couponController.text.isNotEmpty ? couponController.text : null,
         "amount": booking.total.toStringAsFixed(0),
         "contact_info": {
           "first_name": firstNameController.text,
@@ -619,7 +636,8 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(response.data['message'] ?? 'Không thể tạo QR thanh toán'),
+              content: Text(
+                  response.data['message'] ?? 'Không thể tạo QR thanh toán'),
               backgroundColor: Colors.red.shade600,
             ),
           );
@@ -641,13 +659,15 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => BookingSuccessPage(bookingInfo: bookingData),
+              builder: (context) =>
+                  BookingSuccessPage(bookingInfo: bookingData),
             ),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Lỗi: ${response.data['message'] ?? 'Không thể đặt tour'}'),
+              content: Text(
+                  'Lỗi: ${response.data['message'] ?? 'Không thể đặt tour'}'),
               backgroundColor: Colors.red.shade600,
             ),
           );

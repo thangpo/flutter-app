@@ -18,7 +18,10 @@ class SocialController with ChangeNotifier {
 
   void _updatePost(String id, SocialPost newPost) {
     final i = _posts.indexWhere((e) => e.id == id);
-    if (i != -1) { _posts[i] = newPost; notifyListeners(); }
+    if (i != -1) {
+      _posts[i] = newPost;
+      notifyListeners();
+    }
   }
 
   final List<SocialStory> _stories = [];
@@ -48,7 +51,9 @@ class SocialController with ChangeNotifier {
 
       // Gợi ý debug (có thể bỏ khi xong):
       if (_posts.isEmpty) {
-        showCustomSnackBar('Không có bài viết. Kiểm tra socialAccessToken / API response.', navigatorKey.currentContext!);
+        showCustomSnackBar(
+            'Không có bài viết. Kiểm tra socialAccessToken / API response.',
+            navigatorKey.currentContext!);
       }
     } finally {
       _loading = false;
@@ -95,28 +100,43 @@ class SocialController with ChangeNotifier {
   Future<void> reactOnPost(SocialPost post, String reaction) async {
     // optimistic update
     final was = post.myReaction;
+
+    // If already reacted and user taps again => dislike (remove reaction)
+    if (was.isNotEmpty && (reaction.isEmpty || reaction == 'Like')) {
+      final optimistic = post.copyWith(
+        myReaction: '',
+        reactionCount: (post.reactionCount - 1).clamp(0, 1 << 31),
+      );
+      _updatePost(post.id, optimistic);
+      try {
+        await service.reactToPost(postId: post.id, reaction: was, action: 'dislike');
+      } catch (e) {
+        _updatePost(post.id, post);
+        showCustomSnackBar(e.toString(), Get.context!, isError: true);
+      }
+      return;
+    }
     final now = reaction;
     int delta = 0;
     if (was.isEmpty && now.isNotEmpty) delta = 1;
     if (was.isNotEmpty && now.isEmpty) delta = -1;
     final optimistic = post.copyWith(
       myReaction: now,
-      reactionCount: (post.reactionCount + delta).clamp(0, 1<<31),
+      reactionCount: (post.reactionCount + delta).clamp(0, 1 << 31),
     );
     _updatePost(post.id, optimistic);
 
     try {
-      final ok = await service.reactToPost(postId: post.id, reaction: reaction);
-      // (nếu service trả bool ok; hoặc kiểm tra resp theo cách bạn dùng)
+      await service.reactToPost(postId: post.id, reaction: reaction, action: 'reaction');
+      // (Optional) Nếu muốn đồng bộ lại số liệu từ server:
+      // - có thể gọi get-post-data và cập nhật reactionCount/myReaction
     } catch (e) {
+      // rollback khi lỗi
       _updatePost(post.id, post);
+
+      // Ưu tiên thông điệp server (error_text)
       final msg = e.toString();
-      if (msg.contains('server_key')) {
-        showCustomSnackBar('Thiếu server_key: kiểm tra API Settings > Server Key', Get.context!, isError: true);
-      } else {
-        showCustomSnackBar('Bày tỏ cảm xúc thất bại: $msg', Get.context!, isError: true);
-      }
+      showCustomSnackBar(msg, Get.context!, isError: true);
     }
   }
-
 }

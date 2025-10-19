@@ -12,7 +12,8 @@ class FinancialCenterWidget extends StatefulWidget {
   State<FinancialCenterWidget> createState() => _FinancialCenterWidgetState();
 }
 
-class _FinancialCenterWidgetState extends State<FinancialCenterWidget> with TickerProviderStateMixin {
+class _FinancialCenterWidgetState extends State<FinancialCenterWidget>
+    with TickerProviderStateMixin {
   late List<AnimationController> _itemAnimations;
 
   @override
@@ -21,7 +22,7 @@ class _FinancialCenterWidgetState extends State<FinancialCenterWidget> with Tick
 
     _itemAnimations = List.generate(
       12,
-          (index) => AnimationController(
+      (index) => AnimationController(
         duration: const Duration(milliseconds: 600),
         vsync: this,
       ),
@@ -46,7 +47,8 @@ class _FinancialCenterWidgetState extends State<FinancialCenterWidget> with Tick
     super.dispose();
   }
 
-  void _showComingSoonDialog(BuildContext context, String featureName, Color color) {
+  void _showComingSoonDialog(
+      BuildContext context, String featureName, Color color) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -179,17 +181,57 @@ class _FinancialCenterWidgetState extends State<FinancialCenterWidget> with Tick
   Widget build(BuildContext context) {
     final items = [
       {'icon': Icons.send, 'label': 'Chuyển tiền', 'color': Colors.blue},
-      {'icon': Icons.account_balance, 'label': 'Chuyển tiền\nNgân hàng', 'color': Colors.indigo},
-      {'icon': Icons.receipt_long, 'label': 'Thanh toán\nhóa đơn', 'color': Colors.orange},
-      {'icon': Icons.phone_android, 'label': 'Nạp tiền\nđiện thoại', 'route': const TopUpScreen(), 'color': Colors.green},
-      {'icon': Icons.network_cell, 'label': 'Data 4G/5G', 'route': const DataScreen(), 'color': Colors.purple},
+      {
+        'icon': Icons.account_balance,
+        'label': 'Chuyển tiền\nNgân hàng',
+        'color': Colors.indigo
+      },
+      {
+        'icon': Icons.receipt_long,
+        'label': 'Thanh toán\nhóa đơn',
+        'color': Colors.orange
+      },
+      {
+        'icon': Icons.phone_android,
+        'label': 'Nạp tiền\nđiện thoại',
+        'route': const TopUpScreen(),
+        'color': Colors.green
+      },
+      {
+        'icon': Icons.network_cell,
+        'label': 'Data 4G/5G',
+        'route': const DataScreen(),
+        'color': Colors.purple
+      },
       {'icon': Icons.group, 'label': 'Cộng đồng', 'color': Colors.pink},
       {'icon': Icons.attach_money, 'label': 'Vay Nhanh', 'color': Colors.teal},
-      {'icon': Icons.account_balance_wallet, 'label': 'Ví Trả Sau', 'color': Colors.amber},
-      {'icon': Icons.payments, 'label': 'Thanh toán\nkhoản vay', 'color': Colors.deepOrange},
-      {'icon': Icons.movie, 'label': 'Mua vé xem\nphim', 'route': const MovieScreen(), 'color': Colors.red},
-      {'icon': Icons.flight, 'label': 'Du lịch - Đi lại', 'route': const TravelScreen(), 'color': Colors.cyan},
-      {'icon': Icons.restaurant_menu, 'label': 'Đặt đồ ăn', 'color': Colors.deepOrange},
+      {
+        'icon': Icons.account_balance_wallet,
+        'label': 'Ví Trả Sau',
+        'color': Colors.amber
+      },
+      {
+        'icon': Icons.payments,
+        'label': 'Thanh toán\nkhoản vay',
+        'color': Colors.deepOrange
+      },
+      {
+        'icon': Icons.movie,
+        'label': 'Mua vé xem\nphim',
+        'route': const MovieScreen(),
+        'color': Colors.red
+      },
+      {
+        'icon': Icons.flight,
+        'label': 'Du lịch - Đi lại',
+        'route': const TravelScreen(),
+        'color': Colors.cyan
+      },
+      {
+        'icon': Icons.restaurant_menu,
+        'label': 'Đặt đồ ăn',
+        'color': Colors.deepOrange
+      },
     ];
 
     return Container(
@@ -228,7 +270,10 @@ class _FinancialCenterWidgetState extends State<FinancialCenterWidget> with Tick
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
-                            colors: [Colors.blue.shade600, Colors.blue.shade400],
+                            colors: [
+                              Colors.blue.shade600,
+                              Colors.blue.shade400
+                            ],
                           ),
                           borderRadius: BorderRadius.circular(10),
                           boxShadow: [
@@ -285,11 +330,14 @@ class _FinancialCenterWidgetState extends State<FinancialCenterWidget> with Tick
               ),
               itemBuilder: (context, index) {
                 final item = items[index];
-                final hasRoute = item.containsKey('route') && item['route'] != null;
+                final hasRoute =
+                    item.containsKey('route') && item['route'] != null;
 
                 return ScaleTransition(
                   scale: Tween<double>(begin: 0, end: 1).animate(
-                    CurvedAnimation(parent: _itemAnimations[index], curve: Curves.elasticOut),
+                    CurvedAnimation(
+                        parent: _itemAnimations[index],
+                        curve: Curves.elasticOut),
                   ),
                   child: _buildServiceItem(
                     context: context,
@@ -346,13 +394,15 @@ class _FinancialCenterWidgetState extends State<FinancialCenterWidget> with Tick
                       colors: isActive
                           ? [color.withOpacity(0.2), color.withOpacity(0.1)]
                           : [
-                        color.withOpacity(0.1),
-                        color.withOpacity(0.05),
-                      ],
+                              color.withOpacity(0.1),
+                              color.withOpacity(0.05),
+                            ],
                     ),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: isActive ? color.withOpacity(0.3) : Colors.grey.shade300,
+                      color: isActive
+                          ? color.withOpacity(0.3)
+                          : Colors.grey.shade300,
                       width: 1.5,
                     ),
                   ),
@@ -369,7 +419,8 @@ class _FinancialCenterWidgetState extends State<FinancialCenterWidget> with Tick
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
-                    color: isActive ? Colors.grey.shade800 : Colors.grey.shade500,
+                    color:
+                        isActive ? Colors.grey.shade800 : Colors.grey.shade500,
                     height: 1.2,
                   ),
                   maxLines: 2,

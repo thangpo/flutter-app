@@ -26,7 +26,8 @@ class _BrandListWidgetState extends State<BrandListWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Provider.of<ThemeController>(context, listen: false).darkTheme;
+    final isDark =
+        Provider.of<ThemeController>(context, listen: false).darkTheme;
 
     return Consumer<BrandController>(
       builder: (context, brandProvider, child) {
@@ -50,7 +51,8 @@ class _BrandListWidgetState extends State<BrandListWidget> {
                   crossAxisCount: 4,
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 12,
-                  childAspectRatio: 0.75, // Tăng từ 0.9 lên để có thêm chiều cao
+                  childAspectRatio:
+                      0.75, // Tăng từ 0.9 lên để có thêm chiều cao
                 ),
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 itemCount: brandProvider.brandListSorted?.length ?? 0,
@@ -82,33 +84,37 @@ class _BrandListWidgetState extends State<BrandListWidget> {
                         duration: const Duration(milliseconds: 200),
                         curve: Curves.easeOut,
                         decoration: BoxDecoration(
-                          color: isDark
-                              ? Colors.grey[850]
-                              : Colors.white,
+                          color: isDark ? Colors.grey[850] : Colors.white,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: isHovered
-                                ? Theme.of(context).primaryColor.withOpacity(0.5)
-                                : (isDark ? Colors.grey[700]! : Colors.grey[200]!),
+                                ? Theme.of(context)
+                                    .primaryColor
+                                    .withOpacity(0.5)
+                                : (isDark
+                                    ? Colors.grey[700]!
+                                    : Colors.grey[200]!),
                             width: isHovered ? 2 : 1,
                           ),
                           boxShadow: isHovered
                               ? [
-                            BoxShadow(
-                              color: Theme.of(context).primaryColor.withOpacity(0.3),
-                              blurRadius: 12,
-                              offset: const Offset(0, 6),
-                            ),
-                          ]
+                                  BoxShadow(
+                                    color: Theme.of(context)
+                                        .primaryColor
+                                        .withOpacity(0.3),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ]
                               : [
-                            BoxShadow(
-                              color: isDark
-                                  ? Colors.black.withOpacity(0.2)
-                                  : Colors.grey.withOpacity(0.1),
-                              blurRadius: 6,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
+                                  BoxShadow(
+                                    color: isDark
+                                        ? Colors.black.withOpacity(0.2)
+                                        : Colors.grey.withOpacity(0.1),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
                         ),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
@@ -122,51 +128,63 @@ class _BrandListWidgetState extends State<BrandListWidget> {
                                 children: [
                                   Container(
                                     decoration: BoxDecoration(
-                                      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                                      color: isDark ? Colors.grey[850] : Colors.grey[100],
+                                      borderRadius: const BorderRadius.vertical(
+                                          top: Radius.circular(16)),
+                                      color: isDark
+                                          ? Colors.grey[850]
+                                          : Colors.grey[100],
                                     ),
                                     child: Padding(
                                       padding: const EdgeInsets.all(16),
                                       child: Center(
                                         child: CustomImageWidget(
-                                          image: '${brand.imageFullUrl?.path ?? ''}',
+                                          image:
+                                              '${brand.imageFullUrl?.path ?? ''}',
                                           fit: BoxFit.contain,
                                         ),
                                       ),
                                     ),
                                   ),
-
                                   if (isHovered)
                                     Positioned.fill(
                                       child: Container(
                                         decoration: BoxDecoration(
-                                          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                                          borderRadius:
+                                              const BorderRadius.vertical(
+                                                  top: Radius.circular(16)),
                                           gradient: LinearGradient(
                                             begin: Alignment.topCenter,
                                             end: Alignment.bottomCenter,
                                             colors: [
                                               Colors.transparent,
-                                              Theme.of(context).primaryColor.withOpacity(0.08),
+                                              Theme.of(context)
+                                                  .primaryColor
+                                                  .withOpacity(0.08),
                                             ],
                                           ),
                                         ),
                                       ),
                                     ),
-
                                   if (index < 3)
                                     Positioned(
                                       top: 8,
                                       right: 8,
                                       child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 6, vertical: 3),
                                         decoration: BoxDecoration(
                                           gradient: LinearGradient(
-                                            colors: [Colors.orange[400]!, Colors.orange[600]!],
+                                            colors: [
+                                              Colors.orange[400]!,
+                                              Colors.orange[600]!
+                                            ],
                                           ),
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: Colors.orange.withOpacity(0.3),
+                                              color: Colors.orange
+                                                  .withOpacity(0.3),
                                               blurRadius: 4,
                                               offset: const Offset(0, 2),
                                             ),
@@ -185,10 +203,12 @@ class _BrandListWidgetState extends State<BrandListWidget> {
 
                             // Phần text - có chiều cao cố định
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 10),
                               decoration: BoxDecoration(
                                 color: isDark ? Colors.grey[900] : Colors.white,
-                                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+                                borderRadius: const BorderRadius.vertical(
+                                    bottom: Radius.circular(16)),
                               ),
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
@@ -200,7 +220,10 @@ class _BrandListWidgetState extends State<BrandListWidget> {
                                     textAlign: TextAlign.center,
                                     style: textMedium.copyWith(
                                       fontSize: Dimensions.fontSizeSmall,
-                                      color: Theme.of(context).textTheme.bodyLarge?.color,
+                                      color: Theme.of(context)
+                                          .textTheme
+                                          .bodyLarge
+                                          ?.color,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -210,23 +233,29 @@ class _BrandListWidgetState extends State<BrandListWidget> {
                                     curve: Curves.easeOut,
                                     child: isHovered
                                         ? Padding(
-                                      padding: const EdgeInsets.only(top: 4),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Icon(Icons.arrow_forward_ios, size: 10, color: Theme.of(context).primaryColor),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            'Xem thêm',
-                                            style: textRegular.copyWith(
-                                              fontSize: 10,
-                                              color: Theme.of(context).primaryColor,
-                                              fontWeight: FontWeight.w500,
+                                            padding:
+                                                const EdgeInsets.only(top: 4),
+                                            child: Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                Icon(Icons.arrow_forward_ios,
+                                                    size: 10,
+                                                    color: Theme.of(context)
+                                                        .primaryColor),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  'Xem thêm',
+                                                  style: textRegular.copyWith(
+                                                    fontSize: 10,
+                                                    color: Theme.of(context)
+                                                        .primaryColor,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
-                                          ),
-                                        ],
-                                      ),
-                                    )
+                                          )
                                         : const SizedBox.shrink(),
                                   ),
                                 ],

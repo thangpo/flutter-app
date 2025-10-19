@@ -191,8 +191,6 @@ import 'features/loyaltyPoint/domain/repositories/loyalty_point_repository.dart'
 import 'features/search_product/domain/repositories/search_product_repository.dart';
 import 'package:get/get.dart';
 
-
-
 final sl = GetIt.instance;
 
 Future<void> init() async {
