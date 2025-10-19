@@ -47,47 +47,47 @@ class CategoryListWidget extends StatelessWidget {
             // --- Hiển thị danh mục dạng Grid
             categories.isNotEmpty
                 ? Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: Dimensions.paddingSizeSmall),
-              child: GridView.builder(
-                shrinkWrap: true,
-                physics:
-                const NeverScrollableScrollPhysics(), // để cuộn theo màn hình cha
-                gridDelegate:
-                const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 4, // 4 danh mục mỗi hàng
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 8,
-                  childAspectRatio:
-                  0.75, // tỉ lệ width/height, 0.7–0.8 là đẹp
-                ),
-                itemCount: categories.length,
-                itemBuilder: (context, index) {
-                  final category = categories[index];
-                  return InkWell(
-                    splashColor: Colors.transparent,
-                    highlightColor: Colors.transparent,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => BrandAndCategoryProductScreen(
-                            isBrand: false,
-                            id: category.id,
-                            name: category.name,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: Dimensions.paddingSizeSmall),
+                    child: GridView.builder(
+                      shrinkWrap: true,
+                      physics:
+                          const NeverScrollableScrollPhysics(), // để cuộn theo màn hình cha
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 4, // 4 danh mục mỗi hàng
+                        mainAxisSpacing: 12,
+                        crossAxisSpacing: 8,
+                        childAspectRatio:
+                            0.75, // tỉ lệ width/height, 0.7–0.8 là đẹp
+                      ),
+                      itemCount: categories.length,
+                      itemBuilder: (context, index) {
+                        final category = categories[index];
+                        return InkWell(
+                          splashColor: Colors.transparent,
+                          highlightColor: Colors.transparent,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => BrandAndCategoryProductScreen(
+                                  isBrand: false,
+                                  id: category.id,
+                                  name: category.name,
+                                ),
+                              ),
+                            );
+                          },
+                          child: CategoryWidget(
+                            category: category,
+                            index: index,
+                            length: categories.length,
                           ),
-                        ),
-                      );
-                    },
-                    child: CategoryWidget(
-                      category: category,
-                      index: index,
-                      length: categories.length,
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
-            )
+                  )
                 : const CategoryShimmerWidget(),
           ],
         );

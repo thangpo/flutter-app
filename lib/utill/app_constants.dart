@@ -24,6 +24,7 @@ class AppConstants {
   static const String socialGetUserStoriesUri = '/api/get-user-stories';
   static const String socialReactUri = '/api/post-actions';
   static const String socialGetPostDataUri = '/api/get-post-data';
+  static const String socialCommentsUri = '/api/comments';
 
   static const String googleServerClientId = 'client_id here';
   static const String userId = 'userId';
