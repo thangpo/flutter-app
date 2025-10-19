@@ -22,10 +22,13 @@ class RecommendedProductWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Size size = MediaQuery.sizeOf(context);
-    final bool isLtr = Provider.of<LocalizationController>(context, listen: false).isLtr;
+    final bool isLtr =
+        Provider.of<LocalizationController>(context, listen: false).isLtr;
 
     return Container(
-      padding: const EdgeInsets.only(top: Dimensions.paddingSizeSmall, bottom: Dimensions.paddingSizeDefault),
+      padding: const EdgeInsets.only(
+          top: Dimensions.paddingSizeSmall,
+          bottom: Dimensions.paddingSizeDefault),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
@@ -41,351 +44,541 @@ class RecommendedProductWidget extends StatelessWidget {
           Consumer<ProductController>(
             builder: (context, recommended, child) {
               String? ratting = recommended.recommendedProduct != null &&
-                  recommended.recommendedProduct!.rating != null &&
-                  recommended.recommendedProduct!.rating!.isNotEmpty
+                      recommended.recommendedProduct!.rating != null &&
+                      recommended.recommendedProduct!.rating!.isNotEmpty
                   ? recommended.recommendedProduct!.rating![0].average
                   : "0";
 
               return (recommended.recommendedProduct != null)
                   ? recommended.recommendedProduct?.id != -1
-                  ? InkWell(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    PageRouteBuilder(
-                      transitionDuration: const Duration(milliseconds: 1000),
-                      pageBuilder: (context, anim1, anim2) => ProductDetails(
-                        productId: recommended.recommendedProduct!.id,
-                        slug: recommended.recommendedProduct!.slug,
-                      ),
-                    ),
-                  );
-                },
-                child: Stack(
-                  children: [
-                    // Animated glow background
-                    const _AnimatedGlow(),
-
-                    Column(
-                      children: [
-                        // Header with fire icons
-                        fromAsterTheme
-                            ? Column(
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.symmetric(vertical: Dimensions.paddingSizeSmall),
-                              child: Text(
-                                getTranslated('dont_miss_the_chance', context) ?? '',
-                                style: textBold.copyWith(
-                                  fontSize: Dimensions.fontSizeSmall,
-                                  color: Provider.of<ThemeController>(context, listen: false).darkTheme
-                                      ? Theme.of(context).hintColor
-                                      : Theme.of(context).primaryColor,
+                      ? InkWell(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              PageRouteBuilder(
+                                transitionDuration:
+                                    const Duration(milliseconds: 1000),
+                                pageBuilder: (context, anim1, anim2) =>
+                                    ProductDetails(
+                                  productId: recommended.recommendedProduct!.id,
+                                  slug: recommended.recommendedProduct!.slug,
                                 ),
                               ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: Dimensions.paddingSizeSmall),
-                              child: Text(
-                                getTranslated('lets_shopping_today', context) ?? '',
-                                style: textBold.copyWith(
-                                  fontSize: Dimensions.fontSizeExtraLarge,
-                                  color: Provider.of<ThemeController>(context, listen: false).darkTheme
-                                      ? Theme.of(context).hintColor
-                                      : Theme.of(context).primaryColor,
-                                ),
-                              ),
-                            ),
-                          ],
-                        )
-                            : Padding(
-                          padding: const EdgeInsets.only(
-                            bottom: Dimensions.paddingSizeDefault,
-                            top: Dimensions.paddingSizeExtraSmall,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                            );
+                          },
+                          child: Stack(
                             children: [
-                              const _AnimatedFireIcon(reverse: false),
-                              const SizedBox(width: 12),
+                              // Animated glow background
+                              const _AnimatedGlow(),
 
-                              // Title with gradient
-                              ShaderMask(
-                                shaderCallback: (bounds) => const LinearGradient(
-                                  colors: [
-                                    Colors.orange,
-                                    Colors.red,
-                                    Colors.deepOrange,
-                                  ],
-                                ).createShader(bounds),
-                                child: Text(
-                                  getTranslated('deal_of_the_day', context) ?? '',
-                                  style: textBold.copyWith(
-                                    fontSize: Dimensions.fontSizeExtraLarge,
-                                    color: Colors.white,
+                              Column(
+                                children: [
+                                  // Header with fire icons
+                                  fromAsterTheme
+                                      ? Column(
+                                          children: [
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      vertical: Dimensions
+                                                          .paddingSizeSmall),
+                                              child: Text(
+                                                getTranslated(
+                                                        'dont_miss_the_chance',
+                                                        context) ??
+                                                    '',
+                                                style: textBold.copyWith(
+                                                  fontSize:
+                                                      Dimensions.fontSizeSmall,
+                                                  color:
+                                                      Provider.of<ThemeController>(
+                                                                  context,
+                                                                  listen: false)
+                                                              .darkTheme
+                                                          ? Theme.of(context)
+                                                              .hintColor
+                                                          : Theme.of(context)
+                                                              .primaryColor,
+                                                ),
+                                              ),
+                                            ),
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                  bottom: Dimensions
+                                                      .paddingSizeSmall),
+                                              child: Text(
+                                                getTranslated(
+                                                        'lets_shopping_today',
+                                                        context) ??
+                                                    '',
+                                                style: textBold.copyWith(
+                                                  fontSize: Dimensions
+                                                      .fontSizeExtraLarge,
+                                                  color:
+                                                      Provider.of<ThemeController>(
+                                                                  context,
+                                                                  listen: false)
+                                                              .darkTheme
+                                                          ? Theme.of(context)
+                                                              .hintColor
+                                                          : Theme.of(context)
+                                                              .primaryColor,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        )
+                                      : Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom:
+                                                Dimensions.paddingSizeDefault,
+                                            top: Dimensions
+                                                .paddingSizeExtraSmall,
+                                          ),
+                                          child: Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              const _AnimatedFireIcon(
+                                                  reverse: false),
+                                              const SizedBox(width: 12),
+
+                                              // Title with gradient
+                                              ShaderMask(
+                                                shaderCallback: (bounds) =>
+                                                    const LinearGradient(
+                                                  colors: [
+                                                    Colors.orange,
+                                                    Colors.red,
+                                                    Colors.deepOrange,
+                                                  ],
+                                                ).createShader(bounds),
+                                                child: Text(
+                                                  getTranslated(
+                                                          'deal_of_the_day',
+                                                          context) ??
+                                                      '',
+                                                  style: textBold.copyWith(
+                                                    fontSize: Dimensions
+                                                        .fontSizeExtraLarge,
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                              ),
+
+                                              const SizedBox(width: 12),
+                                              const _AnimatedFireIcon(
+                                                  reverse: true),
+                                            ],
+                                          ),
+                                        ),
+
+                                  // Product card with enhanced design
+                                  Stack(
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal:
+                                                Dimensions.homePagePadding),
+                                        child: _AnimatedProductCard(
+                                          child: Row(
+                                            children: [
+                                              // Product image
+                                              recommended.recommendedProduct !=
+                                                          null &&
+                                                      recommended
+                                                              .recommendedProduct!
+                                                              .thumbnail !=
+                                                          null
+                                                  ? Container(
+                                                      decoration: BoxDecoration(
+                                                        color: Theme.of(context)
+                                                            .highlightColor,
+                                                        border: Border.all(
+                                                          color:
+                                                              Theme.of(context)
+                                                                  .primaryColor,
+                                                          width: .5,
+                                                        ),
+                                                        borderRadius:
+                                                            const BorderRadius
+                                                                .all(
+                                                          Radius.circular(
+                                                              Dimensions
+                                                                  .radiusDefault),
+                                                        ),
+                                                        boxShadow: [
+                                                          BoxShadow(
+                                                            color: Colors.black
+                                                                .withOpacity(
+                                                                    0.1),
+                                                            blurRadius: 10,
+                                                            offset:
+                                                                const Offset(
+                                                                    0, 4),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      child: ClipRRect(
+                                                        borderRadius:
+                                                            const BorderRadius
+                                                                .all(
+                                                          Radius.circular(
+                                                              Dimensions
+                                                                  .radiusDefault),
+                                                        ),
+                                                        child: Stack(
+                                                          children: [
+                                                            CustomImageWidget(
+                                                              height: ResponsiveHelper
+                                                                      .isTab(
+                                                                          context)
+                                                                  ? 250
+                                                                  : size.width *
+                                                                      0.4,
+                                                              width: ResponsiveHelper
+                                                                      .isTab(
+                                                                          context)
+                                                                  ? 230
+                                                                  : size.width *
+                                                                      0.4,
+                                                              image:
+                                                                  '${recommended.recommendedProduct?.thumbnailFullUrl?.path}',
+                                                            ),
+                                                            if (recommended
+                                                                        .recommendedProduct!
+                                                                        .currentStock! ==
+                                                                    0 &&
+                                                                recommended
+                                                                        .recommendedProduct!
+                                                                        .productType ==
+                                                                    'physical')
+                                                              Positioned.fill(
+                                                                child: Align(
+                                                                  alignment:
+                                                                      Alignment
+                                                                          .bottomCenter,
+                                                                  child:
+                                                                      Container(
+                                                                    width: ResponsiveHelper.isTab(
+                                                                            context)
+                                                                        ? 230
+                                                                        : size.width *
+                                                                            0.4,
+                                                                    decoration:
+                                                                        BoxDecoration(
+                                                                      color: Theme.of(
+                                                                              context)
+                                                                          .colorScheme
+                                                                          .error
+                                                                          .withOpacity(
+                                                                              0.4),
+                                                                      borderRadius:
+                                                                          const BorderRadius
+                                                                              .only(
+                                                                        topLeft:
+                                                                            Radius.circular(Dimensions.radiusSmall),
+                                                                        topRight:
+                                                                            Radius.circular(Dimensions.radiusSmall),
+                                                                      ),
+                                                                    ),
+                                                                    child: Text(
+                                                                      getTranslated(
+                                                                              'out_of_stock',
+                                                                              context) ??
+                                                                          '',
+                                                                      style: textBold
+                                                                          .copyWith(
+                                                                        color: Colors
+                                                                            .white,
+                                                                        fontSize:
+                                                                            Dimensions.fontSizeSmall,
+                                                                      ),
+                                                                      textAlign:
+                                                                          TextAlign
+                                                                              .center,
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    )
+                                                  : const SizedBox(),
+                                              const SizedBox(
+                                                  width: Dimensions
+                                                      .paddingSizeDefault),
+
+                                              // Product details
+                                              Expanded(
+                                                child: Column(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    // Rating with gradient
+                                                    Container(
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 4,
+                                                      ),
+                                                      decoration: BoxDecoration(
+                                                        gradient:
+                                                            LinearGradient(
+                                                          colors: [
+                                                            Colors.orange
+                                                                .withOpacity(
+                                                                    0.2),
+                                                            Colors.amber
+                                                                .withOpacity(
+                                                                    0.2),
+                                                          ],
+                                                        ),
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(20),
+                                                      ),
+                                                      child: Row(
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
+                                                        children: [
+                                                          const Icon(
+                                                            Icons.star,
+                                                            color:
+                                                                Colors.orange,
+                                                            size: 16,
+                                                          ),
+                                                          const SizedBox(
+                                                              width: 4),
+                                                          Text(
+                                                            double.parse(
+                                                                    ratting!)
+                                                                .toStringAsFixed(
+                                                                    1),
+                                                            style: titilliumBold
+                                                                .copyWith(
+                                                              fontSize: Dimensions
+                                                                  .fontSizeDefault,
+                                                            ),
+                                                          ),
+                                                          Text(
+                                                            ' (${recommended.recommendedProduct?.reviewCount ?? '0'})',
+                                                            style: textRegular
+                                                                .copyWith(
+                                                              fontSize: Dimensions
+                                                                  .fontSizeSmall,
+                                                              color: Theme.of(
+                                                                      context)
+                                                                  .hintColor,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    const SizedBox(
+                                                        height: Dimensions
+                                                            .paddingSizeSmall),
+
+                                                    // Price section
+                                                    FittedBox(
+                                                      child: Row(
+                                                        children: [
+                                                          if (recommended.recommendedProduct != null &&
+                                                              recommended
+                                                                      .recommendedProduct!
+                                                                      .discount !=
+                                                                  null &&
+                                                              (recommended.recommendedProduct!
+                                                                          .discount! >
+                                                                      0 ||
+                                                                  (recommended
+                                                                              .recommendedProduct
+                                                                              ?.clearanceSale
+                                                                              ?.discountAmount ??
+                                                                          0) >
+                                                                      0))
+                                                            Text(
+                                                              PriceConverter
+                                                                  .convertPrice(
+                                                                context,
+                                                                recommended
+                                                                    .recommendedProduct!
+                                                                    .unitPrice,
+                                                              ),
+                                                              style: textRegular
+                                                                  .copyWith(
+                                                                color: Theme.of(
+                                                                        context)
+                                                                    .hintColor,
+                                                                decoration:
+                                                                    TextDecoration
+                                                                        .lineThrough,
+                                                                fontSize: Dimensions
+                                                                    .fontSizeSmall,
+                                                              ),
+                                                            ),
+                                                          const SizedBox(
+                                                              width: Dimensions
+                                                                  .paddingSizeExtraSmall),
+                                                          if (recommended
+                                                                      .recommendedProduct !=
+                                                                  null &&
+                                                              recommended
+                                                                      .recommendedProduct!
+                                                                      .unitPrice !=
+                                                                  null)
+                                                            ShaderMask(
+                                                              shaderCallback:
+                                                                  (bounds) =>
+                                                                      const LinearGradient(
+                                                                colors: [
+                                                                  Colors.red,
+                                                                  Colors.orange,
+                                                                ],
+                                                              ).createShader(
+                                                                          bounds),
+                                                              child: Text(
+                                                                PriceConverter
+                                                                    .convertPrice(
+                                                                  context,
+                                                                  recommended
+                                                                      .recommendedProduct!
+                                                                      .unitPrice,
+                                                                  discountType: (recommended.recommendedProduct?.clearanceSale?.discountAmount ??
+                                                                              0) >
+                                                                          0
+                                                                      ? recommended
+                                                                          .recommendedProduct
+                                                                          ?.clearanceSale
+                                                                          ?.discountType
+                                                                      : recommended
+                                                                          .recommendedProduct
+                                                                          ?.discountType,
+                                                                  discount: (recommended.recommendedProduct?.clearanceSale?.discountAmount ??
+                                                                              0) >
+                                                                          0
+                                                                      ? recommended
+                                                                          .recommendedProduct
+                                                                          ?.clearanceSale
+                                                                          ?.discountAmount
+                                                                      : recommended
+                                                                          .recommendedProduct
+                                                                          ?.discount,
+                                                                ),
+                                                                style: textBold
+                                                                    .copyWith(
+                                                                  color: Colors
+                                                                      .white,
+                                                                  fontSize:
+                                                                      Dimensions
+                                                                          .fontSizeExtraLarge,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    const SizedBox(
+                                                        height: Dimensions
+                                                            .paddingSizeSmall),
+
+                                                    // Product name
+                                                    SizedBox(
+                                                      width:
+                                                          MediaQuery.of(context)
+                                                                  .size
+                                                                  .width /
+                                                              2.5,
+                                                      child: Text(
+                                                        recommended
+                                                                .recommendedProduct!
+                                                                .name ??
+                                                            '',
+                                                        maxLines: 2,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style: textRegular
+                                                            .copyWith(
+                                                          fontSize: Dimensions
+                                                              .fontSizeLarge,
+                                                          color:
+                                                              Theme.of(context)
+                                                                  .textTheme
+                                                                  .bodyLarge
+                                                                  ?.color,
+                                                        ),
+                                                      ),
+                                                    ),
+
+                                                    // CTA button with fire animation
+                                                    Padding(
+                                                      padding: const EdgeInsets
+                                                          .only(
+                                                          top: Dimensions
+                                                              .paddingSizeDefault),
+                                                      child: _AnimatedButton(
+                                                        text: getTranslated(
+                                                            'grab_this_deal',
+                                                            context)!,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+
+                                      // Favourite button
+                                      Positioned(
+                                        top: 8,
+                                        right: isLtr ? 25 : null,
+                                        left: !isLtr ? 25 : null,
+                                        child: FavouriteButtonWidget(
+                                          backgroundColor: Provider.of<
+                                                      ThemeController>(context)
+                                                  .darkTheme
+                                              ? Theme.of(context).cardColor
+                                              : Theme.of(context).primaryColor,
+                                          productId: recommended
+                                              .recommendedProduct?.id,
+                                        ),
+                                      ),
+
+                                      // Discount tag
+                                      if (recommended.recommendedProduct !=
+                                              null &&
+                                          recommended.recommendedProduct!
+                                                  .discount !=
+                                              null &&
+                                          ((recommended.recommendedProduct!
+                                                      .discount! >
+                                                  0) ||
+                                              (recommended
+                                                          .recommendedProduct
+                                                          ?.clearanceSale
+                                                          ?.discountAmount ??
+                                                      0) >
+                                                  0))
+                                        DiscountTagWidget(
+                                          productModel:
+                                              recommended.recommendedProduct!,
+                                          positionedTop: 25,
+                                          positionedLeft: 32,
+                                          positionedRight: 32,
+                                        ),
+                                    ],
                                   ),
-                                ),
+                                ],
                               ),
-
-                              const SizedBox(width: 12),
-                              const _AnimatedFireIcon(reverse: true),
                             ],
                           ),
-                        ),
-
-                        // Product card with enhanced design
-                        Stack(
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: Dimensions.homePagePadding),
-                              child: _AnimatedProductCard(
-                                child: Row(
-                                  children: [
-                                    // Product image
-                                    recommended.recommendedProduct != null &&
-                                        recommended.recommendedProduct!.thumbnail != null
-                                        ? Container(
-                                      decoration: BoxDecoration(
-                                        color: Theme.of(context).highlightColor,
-                                        border: Border.all(
-                                          color: Theme.of(context).primaryColor,
-                                          width: .5,
-                                        ),
-                                        borderRadius: const BorderRadius.all(
-                                          Radius.circular(Dimensions.radiusDefault),
-                                        ),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black.withOpacity(0.1),
-                                            blurRadius: 10,
-                                            offset: const Offset(0, 4),
-                                          ),
-                                        ],
-                                      ),
-                                      child: ClipRRect(
-                                        borderRadius: const BorderRadius.all(
-                                          Radius.circular(Dimensions.radiusDefault),
-                                        ),
-                                        child: Stack(
-                                          children: [
-                                            CustomImageWidget(
-                                              height: ResponsiveHelper.isTab(context)
-                                                  ? 250
-                                                  : size.width * 0.4,
-                                              width: ResponsiveHelper.isTab(context)
-                                                  ? 230
-                                                  : size.width * 0.4,
-                                              image:
-                                              '${recommended.recommendedProduct?.thumbnailFullUrl?.path}',
-                                            ),
-                                            if (recommended.recommendedProduct!.currentStock! == 0 &&
-                                                recommended.recommendedProduct!.productType == 'physical')
-                                              Positioned.fill(
-                                                child: Align(
-                                                  alignment: Alignment.bottomCenter,
-                                                  child: Container(
-                                                    width: ResponsiveHelper.isTab(context)
-                                                        ? 230
-                                                        : size.width * 0.4,
-                                                    decoration: BoxDecoration(
-                                                      color: Theme.of(context)
-                                                          .colorScheme
-                                                          .error
-                                                          .withOpacity(0.4),
-                                                      borderRadius: const BorderRadius.only(
-                                                        topLeft: Radius.circular(Dimensions.radiusSmall),
-                                                        topRight: Radius.circular(Dimensions.radiusSmall),
-                                                      ),
-                                                    ),
-                                                    child: Text(
-                                                      getTranslated('out_of_stock', context) ?? '',
-                                                      style: textBold.copyWith(
-                                                        color: Colors.white,
-                                                        fontSize: Dimensions.fontSizeSmall,
-                                                      ),
-                                                      textAlign: TextAlign.center,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                          ],
-                                        ),
-                                      ),
-                                    )
-                                        : const SizedBox(),
-                                    const SizedBox(width: Dimensions.paddingSizeDefault),
-
-                                    // Product details
-                                    Expanded(
-                                      child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          // Rating with gradient
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 4,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              gradient: LinearGradient(
-                                                colors: [
-                                                  Colors.orange.withOpacity(0.2),
-                                                  Colors.amber.withOpacity(0.2),
-                                                ],
-                                              ),
-                                              borderRadius: BorderRadius.circular(20),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                const Icon(
-                                                  Icons.star,
-                                                  color: Colors.orange,
-                                                  size: 16,
-                                                ),
-                                                const SizedBox(width: 4),
-                                                Text(
-                                                  double.parse(ratting!).toStringAsFixed(1),
-                                                  style: titilliumBold.copyWith(
-                                                    fontSize: Dimensions.fontSizeDefault,
-                                                  ),
-                                                ),
-                                                Text(
-                                                  ' (${recommended.recommendedProduct?.reviewCount ?? '0'})',
-                                                  style: textRegular.copyWith(
-                                                    fontSize: Dimensions.fontSizeSmall,
-                                                    color: Theme.of(context).hintColor,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          const SizedBox(height: Dimensions.paddingSizeSmall),
-
-                                          // Price section
-                                          FittedBox(
-                                            child: Row(
-                                              children: [
-                                                if (recommended.recommendedProduct != null &&
-                                                    recommended.recommendedProduct!.discount != null &&
-                                                    (recommended.recommendedProduct!.discount! > 0 ||
-                                                        (recommended.recommendedProduct?.clearanceSale
-                                                            ?.discountAmount ??
-                                                            0) >
-                                                            0))
-                                                  Text(
-                                                    PriceConverter.convertPrice(
-                                                      context,
-                                                      recommended.recommendedProduct!.unitPrice,
-                                                    ),
-                                                    style: textRegular.copyWith(
-                                                      color: Theme.of(context).hintColor,
-                                                      decoration: TextDecoration.lineThrough,
-                                                      fontSize: Dimensions.fontSizeSmall,
-                                                    ),
-                                                  ),
-                                                const SizedBox(width: Dimensions.paddingSizeExtraSmall),
-                                                if (recommended.recommendedProduct != null &&
-                                                    recommended.recommendedProduct!.unitPrice != null)
-                                                  ShaderMask(
-                                                    shaderCallback: (bounds) => const LinearGradient(
-                                                      colors: [
-                                                        Colors.red,
-                                                        Colors.orange,
-                                                      ],
-                                                    ).createShader(bounds),
-                                                    child: Text(
-                                                      PriceConverter.convertPrice(
-                                                        context,
-                                                        recommended.recommendedProduct!.unitPrice,
-                                                        discountType: (recommended.recommendedProduct
-                                                            ?.clearanceSale?.discountAmount ??
-                                                            0) >
-                                                            0
-                                                            ? recommended
-                                                            .recommendedProduct?.clearanceSale?.discountType
-                                                            : recommended.recommendedProduct?.discountType,
-                                                        discount: (recommended.recommendedProduct?.clearanceSale
-                                                            ?.discountAmount ??
-                                                            0) >
-                                                            0
-                                                            ? recommended
-                                                            .recommendedProduct?.clearanceSale?.discountAmount
-                                                            : recommended.recommendedProduct?.discount,
-                                                      ),
-                                                      style: textBold.copyWith(
-                                                        color: Colors.white,
-                                                        fontSize: Dimensions.fontSizeExtraLarge,
-                                                      ),
-                                                    ),
-                                                  ),
-                                              ],
-                                            ),
-                                          ),
-                                          const SizedBox(height: Dimensions.paddingSizeSmall),
-
-                                          // Product name
-                                          SizedBox(
-                                            width: MediaQuery.of(context).size.width / 2.5,
-                                            child: Text(
-                                              recommended.recommendedProduct!.name ?? '',
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: textRegular.copyWith(
-                                                fontSize: Dimensions.fontSizeLarge,
-                                                color: Theme.of(context).textTheme.bodyLarge?.color,
-                                              ),
-                                            ),
-                                          ),
-
-                                          // CTA button with fire animation
-                                          Padding(
-                                            padding: const EdgeInsets.only(top: Dimensions.paddingSizeDefault),
-                                            child: _AnimatedButton(
-                                              text: getTranslated('grab_this_deal', context)!,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-
-                            // Favourite button
-                            Positioned(
-                              top: 8,
-                              right: isLtr ? 25 : null,
-                              left: !isLtr ? 25 : null,
-                              child: FavouriteButtonWidget(
-                                backgroundColor: Provider.of<ThemeController>(context).darkTheme
-                                    ? Theme.of(context).cardColor
-                                    : Theme.of(context).primaryColor,
-                                productId: recommended.recommendedProduct?.id,
-                              ),
-                            ),
-
-                            // Discount tag
-                            if (recommended.recommendedProduct != null &&
-                                recommended.recommendedProduct!.discount != null &&
-                                ((recommended.recommendedProduct!.discount! > 0) ||
-                                    (recommended.recommendedProduct?.clearanceSale?.discountAmount ?? 0) > 0))
-                              DiscountTagWidget(
-                                productModel: recommended.recommendedProduct!,
-                                positionedTop: 25,
-                                positionedLeft: 32,
-                                positionedRight: 32,
-                              ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              )
-                  : const SizedBox()
+                        )
+                      : const SizedBox()
                   : const RecommendedProductShimmer();
             },
           ),
@@ -403,7 +596,8 @@ class _AnimatedGlow extends StatefulWidget {
   State<_AnimatedGlow> createState() => _AnimatedGlowState();
 }
 
-class _AnimatedGlowState extends State<_AnimatedGlow> with SingleTickerProviderStateMixin {
+class _AnimatedGlowState extends State<_AnimatedGlow>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
 
   @override
@@ -458,7 +652,8 @@ class _AnimatedFireIcon extends StatefulWidget {
   State<_AnimatedFireIcon> createState() => _AnimatedFireIconState();
 }
 
-class _AnimatedFireIconState extends State<_AnimatedFireIcon> with SingleTickerProviderStateMixin {
+class _AnimatedFireIconState extends State<_AnimatedFireIcon>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
 
   @override
@@ -481,7 +676,8 @@ class _AnimatedFireIconState extends State<_AnimatedFireIcon> with SingleTickerP
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
-        final value = widget.reverse ? (1 - _controller.value) : _controller.value;
+        final value =
+            widget.reverse ? (1 - _controller.value) : _controller.value;
         return Transform.scale(
           scale: 1.0 + (value * 0.2),
           child: ShaderMask(
@@ -512,7 +708,8 @@ class _AnimatedProductCard extends StatefulWidget {
   State<_AnimatedProductCard> createState() => _AnimatedProductCardState();
 }
 
-class _AnimatedProductCardState extends State<_AnimatedProductCard> with SingleTickerProviderStateMixin {
+class _AnimatedProductCardState extends State<_AnimatedProductCard>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
 
   @override
@@ -583,7 +780,8 @@ class _AnimatedButton extends StatefulWidget {
   State<_AnimatedButton> createState() => _AnimatedButtonState();
 }
 
-class _AnimatedButtonState extends State<_AnimatedButton> with SingleTickerProviderStateMixin {
+class _AnimatedButtonState extends State<_AnimatedButton>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
 
   @override

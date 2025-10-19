@@ -10,6 +10,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:video_player/video_player.dart';
 import 'package:intl/intl.dart';
 import 'package:visibility_detector/visibility_detector.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_post_detail_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/price_converter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -20,8 +21,10 @@ class SocialFeedScreen extends StatefulWidget {
   State<SocialFeedScreen> createState() => _SocialFeedScreenState();
 }
 
-class _SocialFeedScreenState extends State<SocialFeedScreen> with AutomaticKeepAliveClientMixin {
-  @override bool get wantKeepAlive => true;
+class _SocialFeedScreenState extends State<SocialFeedScreen>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -64,7 +67,8 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> with AutomaticKeepA
                       },
                       child: ListView.builder(
                         padding: EdgeInsets.zero,
-                        itemCount: sc.posts.length + 2, // +1: What'sOnYourMind, +1: Stories
+                        itemCount: sc.posts.length +
+                            2, // +1: What'sOnYourMind, +1: Stories
                         itemBuilder: (ctx, i) {
                           if (i == 0) {
                             // Block "Bạn đang nghĩ gì?"
@@ -85,7 +89,8 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> with AutomaticKeepA
                                 }
                                 return Column(
                                   children: [
-                                    _StoriesSectionFromApi(stories: sc2.stories),
+                                    _StoriesSectionFromApi(
+                                        stories: sc2.stories),
                                     // const _SectionSeparator(), // <-- khoảng cách & Divider giống post
                                   ],
                                 );
@@ -117,9 +122,11 @@ class _FacebookHeader extends StatelessWidget {
     final onSurface = cs.onSurface;
     final theme = Theme.of(context);
 // Ưu tiên appBarTheme.backgroundColor; fallback sang highlightColor của app (Home cũng đang dùng highlightColor)
-    final Color appBarColor = theme.appBarTheme.backgroundColor ?? theme.highlightColor;
+    final Color appBarColor =
+        theme.appBarTheme.backgroundColor ?? theme.highlightColor;
 // Chọn màu chữ/icon tương phản trên nền appBarColor
-    final bool isDark = ThemeData.estimateBrightnessForColor(appBarColor) == Brightness.dark;
+    final bool isDark =
+        ThemeData.estimateBrightnessForColor(appBarColor) == Brightness.dark;
     final Color onAppBar = isDark ? Colors.white : Colors.black87;
 
     return Container(
@@ -143,9 +150,15 @@ class _FacebookHeader extends StatelessWidget {
           ),
           Row(
             children: [
-              _HeaderIcon(icon: Icons.search,  iconColor: onAppBar, bubbleColor: onAppBar.withOpacity(0.08)),
+              _HeaderIcon(
+                  icon: Icons.search,
+                  iconColor: onAppBar,
+                  bubbleColor: onAppBar.withOpacity(0.08)),
               const SizedBox(width: 12),
-              _HeaderIcon(icon: Icons.messenger_outline, iconColor: onAppBar, bubbleColor: onAppBar.withOpacity(0.08)),
+              _HeaderIcon(
+                  icon: Icons.messenger_outline,
+                  iconColor: onAppBar,
+                  bubbleColor: onAppBar.withOpacity(0.08)),
             ],
           ),
         ],
@@ -176,7 +189,8 @@ class _HeaderIcon extends StatelessWidget {
         color: bubbleColor ?? cs.surfaceVariant,
         shape: BoxShape.circle,
       ),
-      child: Icon(icon, color: iconColor ?? onSurface.withOpacity(.9), size: 24),
+      child:
+          Icon(icon, color: iconColor ?? onSurface.withOpacity(.9), size: 24),
     );
   }
 }
@@ -374,27 +388,32 @@ class _CreateStoryCard extends StatelessWidget {
                     CircleAvatar(
                       radius: 26,
                       backgroundColor: cs.surface,
-                      backgroundImage:
-                      (avatar != null && avatar.isNotEmpty)
+                      backgroundImage: (avatar != null && avatar.isNotEmpty)
                           ? CachedNetworkImageProvider(avatar)
                           : null,
-                      child: avatar == null ? Icon(Icons.person, color: cs.onSurface) : null,
+                      child: avatar == null
+                          ? Icon(Icons.person, color: cs.onSurface)
+                          : null,
                     ),
                     const SizedBox(height: 8),
-                    Text('Tạo tin', style: Theme.of(context).textTheme.bodySmall),
+                    Text('Tạo tin',
+                        style: Theme.of(context).textTheme.bodySmall),
                   ],
                 ),
               ),
             ),
             Positioned(
-              bottom: 8, left: 8, right: 8,
+              bottom: 8,
+              left: 8,
+              right: 8,
               child: ElevatedButton.icon(
                 onPressed: () {
                   // TODO: điều hướng tới màn hình tạo tin
                 },
                 icon: const Icon(Icons.add, size: 16),
                 label: const Text('Tạo'),
-                style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(32)),
+                style: ElevatedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(32)),
               ),
             ),
           ],
@@ -513,6 +532,7 @@ class _AutoRatioNetworkImage extends StatefulWidget {
   @override
   State<_AutoRatioNetworkImage> createState() => _AutoRatioNetworkImageState();
 }
+
 class _AutoRatioNetworkImageState extends State<_AutoRatioNetworkImage> {
   double? _ratio;
   @override
@@ -527,14 +547,16 @@ class _AutoRatioNetworkImageState extends State<_AutoRatioNetworkImage> {
       }),
     );
   }
+
   @override
   Widget build(BuildContext context) {
-    final ratio = _ratio ?? (16/9);
+    final ratio = _ratio ?? (16 / 9);
     return LayoutBuilder(
       builder: (ctx, c) => SizedBox(
         width: double.infinity,
         height: c.maxWidth / ratio,
-        child: Image(image: CachedNetworkImageProvider(widget.url), fit: BoxFit.cover),
+        child: Image(
+            image: CachedNetworkImageProvider(widget.url), fit: BoxFit.cover),
       ),
     );
   }
@@ -546,6 +568,7 @@ class _MediaCarousel extends StatefulWidget {
   @override
   State<_MediaCarousel> createState() => _MediaCarouselState();
 }
+
 class _MediaCarouselState extends State<_MediaCarousel> {
   final _pc = PageController();
   int _index = 0;
@@ -589,6 +612,7 @@ class _AudioTile extends StatefulWidget {
   @override
   State<_AudioTile> createState() => _AudioTileState();
 }
+
 class _AudioTileState extends State<_AudioTile> {
   final _player = AudioPlayer();
   bool _playing = false;
@@ -636,7 +660,8 @@ class _AudioTileState extends State<_AudioTile> {
 class _ImagesWithAutoAudio extends StatefulWidget {
   final List<String> images;
   final String audioUrl;
-  const _ImagesWithAutoAudio({required this.images, required this.audioUrl, super.key});
+  const _ImagesWithAutoAudio(
+      {required this.images, required this.audioUrl, super.key});
 
   @override
   State<_ImagesWithAutoAudio> createState() => _ImagesWithAutoAudioState();
@@ -668,14 +693,18 @@ class _ImagesWithAutoAudioState extends State<_ImagesWithAutoAudio> {
 
   void _onVisibilityChanged(VisibilityInfo info) {
     final nowVisible = info.visibleFraction > 0.6;
-    if (nowVisible == _visible) return;     // không làm gì nếu state không đổi
+    if (nowVisible == _visible) return; // không làm gì nếu state không đổi
     _visible = nowVisible;
 
     final state = _player.state;
     if (nowVisible) {
-      if (state != PlayerState.playing) { _player.resume(); }
+      if (state != PlayerState.playing) {
+        _player.resume();
+      }
     } else {
-      if (state == PlayerState.playing) { _player.pause(); }
+      if (state == PlayerState.playing) {
+        _player.pause();
+      }
     }
   }
 
@@ -694,7 +723,9 @@ class _ImagesWithAutoAudioState extends State<_ImagesWithAutoAudio> {
             height: height,
             child: PageView.builder(
               controller: _pc,
-              onPageChanged: (i){ setState(()=> _index = i); },
+              onPageChanged: (i) {
+                setState(() => _index = i);
+              },
               itemCount: widget.images.length,
               itemBuilder: (_, i) {
                 return Image.network(widget.images[i], fit: BoxFit.cover);
@@ -704,7 +735,7 @@ class _ImagesWithAutoAudioState extends State<_ImagesWithAutoAudio> {
           const SizedBox(height: 6),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(widget.images.length, (i){
+            children: List.generate(widget.images.length, (i) {
               final active = i == _index;
               return Container(
                 width: active ? 10 : 6,
@@ -729,6 +760,7 @@ class _VideoPlayerTile extends StatefulWidget {
   @override
   State<_VideoPlayerTile> createState() => _VideoPlayerTileState();
 }
+
 class _VideoPlayerTileState extends State<_VideoPlayerTile> {
   VideoPlayerController? _c;
   @override
@@ -739,17 +771,21 @@ class _VideoPlayerTileState extends State<_VideoPlayerTile> {
         if (mounted) setState(() {});
       });
   }
+
   @override
   void dispose() {
     _c?.dispose();
     super.dispose();
   }
+
   @override
   Widget build(BuildContext context) {
     if (!(_c?.value.isInitialized ?? false)) {
-      return const AspectRatio(aspectRatio: 16/9, child: Center(child: CircularProgressIndicator()));
+      return const AspectRatio(
+          aspectRatio: 16 / 9,
+          child: Center(child: CircularProgressIndicator()));
     }
-    final ratio = _c!.value.aspectRatio == 0 ? (16/9) : _c!.value.aspectRatio;
+    final ratio = _c!.value.aspectRatio == 0 ? (16 / 9) : _c!.value.aspectRatio;
     return AspectRatio(
       aspectRatio: ratio,
       child: Stack(
@@ -761,7 +797,8 @@ class _VideoPlayerTileState extends State<_VideoPlayerTile> {
             child: IconButton(
               iconSize: 48,
               color: Colors.white,
-              icon: Icon(_c!.value.isPlaying ? Icons.pause_circle : Icons.play_circle),
+              icon: Icon(
+                  _c!.value.isPlaying ? Icons.pause_circle : Icons.play_circle),
               onPressed: () {
                 _c!.value.isPlaying ? _c!.pause() : _c!.play();
                 setState(() {});
@@ -787,9 +824,15 @@ class _PostCardFromApi extends StatelessWidget {
     final hasSingle = images.length == 1 || (post.imageUrl ?? '').isNotEmpty;
     final fileUrl = post.fileUrl;
 
-    String _fmtCurrency(num v, String? code){
-      final name = (code==null||code.isEmpty)?null:code;
-      try { final f = NumberFormat.currency(name: name, decimalDigits: (name=='VND')?0:2); return f.format(v); } catch(_){ return '${v.toString()} ${code??''}'.trim(); }
+    String _fmtCurrency(num v, String? code) {
+      final name = (code == null || code.isEmpty) ? null : code;
+      try {
+        final f = NumberFormat.currency(
+            name: name, decimalDigits: (name == 'VND') ? 0 : 2);
+        return f.format(v);
+      } catch (_) {
+        return '${v.toString()} ${code ?? ''}'.trim();
+      }
     }
 
     // VIDEO: ưu tiên render trước ảnh
@@ -821,7 +864,8 @@ class _PostCardFromApi extends StatelessWidget {
       }
 
       // 1) PRODUCT
-      if (post.hasProduct == true && (post.productImages?.isNotEmpty ?? false)) {
+      if (post.hasProduct == true &&
+          (post.productImages?.isNotEmpty ?? false)) {
         final imgs = post.productImages!;
         return Container(
           width: double.infinity,
@@ -853,7 +897,9 @@ class _PostCardFromApi extends StatelessWidget {
                   (() {
                     final p = post.productPrice;
                     if (p == null) return '';
-                    final asDouble = (p is num) ? p.toDouble() : double.tryParse(p.toString()) ?? 0;
+                    final asDouble = (p is num)
+                        ? p.toDouble()
+                        : double.tryParse(p.toString()) ?? 0;
                     return PriceConverter.convertPrice(context, asDouble);
                   })(),
                   style: TextStyle(
@@ -924,31 +970,29 @@ class _PostCardFromApi extends StatelessWidget {
                         aspectRatio: 1,
                         child: (images.length > 3)
                             ? Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            Image.network(images[3], fit: BoxFit.cover),
-                            Container(
-                              alignment: Alignment.center,
-                              color: Colors.black45,
-                              child: Text(
-                                '+${images.length - 4}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
-                        )
+                                fit: StackFit.expand,
+                                children: [
+                                  Image.network(images[3], fit: BoxFit.cover),
+                                  Container(
+                                    alignment: Alignment.center,
+                                    color: Colors.black45,
+                                    child: Text(
+                                      '+${images.length - 4}',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              )
                             : const SizedBox.shrink(),
                       ),
                     ),
                   ],
                 ),
-
             ],
-
           ),
         );
       }
@@ -1009,7 +1053,8 @@ class _PostCardFromApi extends StatelessWidget {
                   onPressed: () async {
                     final uri = Uri.parse(fileUrl);
                     if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      await launchUrl(uri,
+                          mode: LaunchMode.externalApplication);
                     }
                   },
                 ),
@@ -1060,14 +1105,18 @@ class _PostCardFromApi extends StatelessWidget {
                 CircleAvatar(
                   radius: 20,
                   backgroundColor: cs.surfaceVariant,
-                  backgroundImage: (post.userAvatar != null && post.userAvatar!.isNotEmpty)
-                      ? CachedNetworkImageProvider(post.userAvatar!)
-                      : null,
+                  backgroundImage:
+                      (post.userAvatar != null && post.userAvatar!.isNotEmpty)
+                          ? CachedNetworkImageProvider(post.userAvatar!)
+                          : null,
                   child: (post.userAvatar == null || post.userAvatar!.isEmpty)
                       ? Text(
-                    (post.userName?.isNotEmpty ?? false) ? post.userName![0].toUpperCase() : '?',
-                    style: TextStyle(fontWeight: FontWeight.bold, color: onSurface),
-                  )
+                          (post.userName?.isNotEmpty ?? false)
+                              ? post.userName![0].toUpperCase()
+                              : '?',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, color: onSurface),
+                        )
                       : null,
                 ),
                 const SizedBox(width: 10),
@@ -1081,7 +1130,9 @@ class _PostCardFromApi extends StatelessWidget {
                           Flexible(
                             child: Text(
                               post.userName ?? '—',
-                              style: TextStyle(fontWeight: FontWeight.w600, color: onSurface),
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: onSurface),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -1091,8 +1142,8 @@ class _PostCardFromApi extends StatelessWidget {
                               post.postType == 'profile_picture'
                                   ? Icons.person_outline
                                   : post.postType == 'profile_cover_picture'
-                                  ? Icons.collections
-                                  : Icons.article_outlined,
+                                      ? Icons.collections
+                                      : Icons.article_outlined,
                               size: 16,
                               color: onSurface.withOpacity(.6),
                             ),
@@ -1102,8 +1153,8 @@ class _PostCardFromApi extends StatelessWidget {
                                 post.postType == 'profile_picture'
                                     ? 'đã cập nhật ảnh đại diện'
                                     : post.postType == 'profile_cover_picture'
-                                    ? 'đã cập nhật ảnh bìa'
-                                    : post.postType!,
+                                        ? 'đã cập nhật ảnh bìa'
+                                        : post.postType!,
                                 style: TextStyle(
                                   color: onSurface.withOpacity(.7),
                                   fontStyle: FontStyle.italic,
@@ -1116,13 +1167,15 @@ class _PostCardFromApi extends StatelessWidget {
                       ),
                       Text(
                         post.timeText ?? '',
-                        style: TextStyle(color: onSurface.withOpacity(.6), fontSize: 13),
+                        style: TextStyle(
+                            color: onSurface.withOpacity(.6), fontSize: 13),
                       ),
                     ],
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.more_horiz, color: onSurface.withOpacity(.7)),
+                  icon:
+                      Icon(Icons.more_horiz, color: onSurface.withOpacity(.7)),
                   onPressed: () {},
                 ),
               ],
@@ -1166,7 +1219,11 @@ class _PostCardFromApi extends StatelessWidget {
                     ClipRRect(
                       borderRadius: BorderRadius.circular(8),
                       child: LinearProgressIndicator(
-                        value: (((double.tryParse((opt['percentage_num'] ?? '0').toString()) ?? 0.0) / 100.0)).clamp(0, 1),
+                        value: (((double.tryParse((opt['percentage_num'] ?? '0')
+                                        .toString()) ??
+                                    0.0) /
+                                100.0))
+                            .clamp(0, 1),
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -1199,17 +1256,22 @@ class _PostCardFromApi extends StatelessWidget {
                       },
                       onLongPress: () {
                         // Tính toạ độ trung tâm nút Like để hiện popup NGAY TRÊN nút
-                        final overlayBox = Overlay.of(itemCtx).context.findRenderObject() as RenderBox;
+                        final overlayBox = Overlay.of(itemCtx)
+                            .context
+                            .findRenderObject() as RenderBox;
                         final box = itemCtx.findRenderObject() as RenderBox?;
                         final Offset centerGlobal = (box != null)
-                            ? box.localToGlobal(box.size.center(Offset.zero), ancestor: overlayBox)
+                            ? box.localToGlobal(box.size.center(Offset.zero),
+                                ancestor: overlayBox)
                             : overlayBox.size.center(Offset.zero);
 
                         _showReactionsOverlay(
                           itemCtx,
                           centerGlobal,
                           onSelect: (val) {
-                            itemCtx.read<SocialController>().reactOnPost(post, val);
+                            itemCtx
+                                .read<SocialController>()
+                                .reactOnPost(post, val);
                           },
                         );
                       },
@@ -1230,7 +1292,17 @@ class _PostCardFromApi extends StatelessWidget {
                     ),
                   ),
                 ),
-                const _PostAction(icon: Icons.mode_comment_outlined, label: 'Bình luận'),
+                _PostAction(
+                  icon: Icons.mode_comment_outlined,
+                  label: 'Bình luận',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => SocialPostDetailScreen(post: post),
+                      ),
+                    );
+                  },
+                ),
                 const _PostAction(icon: Icons.share_outlined, label: 'Chia sẻ'),
               ],
             ),
@@ -1248,7 +1320,9 @@ class _ImageGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Ép kích thước tổng thể để con bên trong có ràng buộc (không bị MISSING size)
-    final double aspect = urls.length == 1 ? (16 / 9) : (16 / 9); // có thể đổi 1.0 nếu muốn ô vuông
+    final double aspect = urls.length == 1
+        ? (16 / 9)
+        : (16 / 9); // có thể đổi 1.0 nếu muốn ô vuông
     return AspectRatio(
       aspectRatio: aspect,
       child: ClipRRect(
@@ -1307,7 +1381,8 @@ class _ImageGrid extends StatelessWidget {
                 const SizedBox(width: 4),
                 Expanded(
                   child: Stack(
-                    fit: StackFit.expand, // BÂY GIỜ đã có ràng buộc từ Expanded cha
+                    fit: StackFit
+                        .expand, // BÂY GIỜ đã có ràng buộc từ Expanded cha
                     children: [
                       _square(urls[3]),
                       if (remain > 0)
@@ -1336,15 +1411,15 @@ class _ImageGrid extends StatelessWidget {
 
   // Ảnh vuông dùng bên trong grid
   Widget _square(String u) => AspectRatio(
-    aspectRatio: 1,
-    child: _tile(u),
-  );
+        aspectRatio: 1,
+        child: _tile(u),
+      );
 
   Widget _tile(String u) => Image(
-    image: CachedNetworkImageProvider(u),
-    fit: BoxFit.cover,
-    errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12),
-  );
+        image: CachedNetworkImageProvider(u),
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12),
+      );
 }
 
 class _ReactionPicker extends StatelessWidget {
@@ -1353,18 +1428,20 @@ class _ReactionPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = const ['Like','Love','HaHa','Wow','Sad','Angry'];
+    final items = const ['Like', 'Love', 'HaHa', 'Wow', 'Sad', 'Angry'];
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Wrap(
           alignment: WrapAlignment.spaceEvenly,
-          children: items.map((e) => IconButton(
-            iconSize: 32,
-            onPressed: () => Navigator.pop(context, e),
-            icon: _reactionIcon(e),
-            tooltip: e,
-          )).toList(),
+          children: items
+              .map((e) => IconButton(
+                    iconSize: 32,
+                    onPressed: () => Navigator.pop(context, e),
+                    icon: _reactionIcon(e),
+                    tooltip: e,
+                  ))
+              .toList(),
         ),
       ),
     );
@@ -1385,28 +1462,36 @@ Widget _reactionIcon(String r, {double size = 22}) {
 
 String _reactionPngPath(String r) {
   switch (r) {
-    case 'Love':  return 'assets/images/reactions/love.png';
-    case 'HaHa':  return 'assets/images/reactions/haha.png';
-    case 'Wow':   return 'assets/images/reactions/wow.png';
-    case 'Sad':   return 'assets/images/reactions/sad.png';
-    case 'Angry': return 'assets/images/reactions/angry.png';
-    case 'Like':  return 'assets/images/reactions/like.png';
-    default:      return 'assets/images/reactions/like_outline.png';
+    case 'Love':
+      return 'assets/images/reactions/love.png';
+    case 'HaHa':
+      return 'assets/images/reactions/haha.png';
+    case 'Wow':
+      return 'assets/images/reactions/wow.png';
+    case 'Sad':
+      return 'assets/images/reactions/sad.png';
+    case 'Angry':
+      return 'assets/images/reactions/angry.png';
+    case 'Like':
+      return 'assets/images/reactions/like.png';
+    default:
+      return 'assets/images/reactions/like_outline.png';
   }
 }
 
 typedef _OnReactionSelect = void Function(String);
 
 void _showReactionsOverlay(
-    BuildContext context,
-    Offset globalPos, {
-      required _OnReactionSelect onSelect,
-    }) {
+  BuildContext context,
+  Offset globalPos, {
+  required _OnReactionSelect onSelect,
+}) {
   final overlay = Overlay.of(context);
   late OverlayEntry entry;
 
   entry = OverlayEntry(builder: (_) {
-    final RenderBox overlayBox = overlay.context.findRenderObject() as RenderBox;
+    final RenderBox overlayBox =
+        overlay.context.findRenderObject() as RenderBox;
     final Offset local = overlayBox.globalToLocal(globalPos);
 
     // Kích thước khung popup (ước lượng), để canh nằm ngay trên nút
@@ -1420,8 +1505,10 @@ void _showReactionsOverlay(
           child: GestureDetector(onTap: () => entry.remove()),
         ),
         Positioned(
-          left: (local.dx - popupWidth / 2).clamp(8.0, overlayBox.size.width - popupWidth - 8.0),
-          top: (local.dy - popupHeight - 12).clamp(8.0, overlayBox.size.height - popupHeight - 8.0),
+          left: (local.dx - popupWidth / 2)
+              .clamp(8.0, overlayBox.size.width - popupWidth - 8.0),
+          top: (local.dy - popupHeight - 12)
+              .clamp(8.0, overlayBox.size.height - popupHeight - 8.0),
           width: popupWidth,
           height: popupHeight,
           child: _ReactionBar(
@@ -1444,7 +1531,7 @@ class _ReactionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const items = ['Like','Love','HaHa','Wow','Sad','Angry'];
+    const items = ['Like', 'Love', 'HaHa', 'Wow', 'Sad', 'Angry'];
     return Material(
       color: Colors.transparent,
       child: DecoratedBox(
@@ -1476,7 +1563,8 @@ class _ReactionBar extends StatelessWidget {
 class _PostAction extends StatelessWidget {
   final IconData icon;
   final String label;
-  const _PostAction({required this.icon, required this.label});
+  final VoidCallback? onTap;
+  const _PostAction({required this.icon, required this.label, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1485,7 +1573,7 @@ class _PostAction extends StatelessWidget {
 
     return Expanded(
       child: InkWell(
-        onTap: () {},
+        onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Row(

@@ -65,3 +65,5 @@ macos/Pods/
 macos/build/
 
 *.zip
+wowonder.postman_collection.json
+response.json
