@@ -1,7 +1,6 @@
 import java.util.Properties
 import java.io.FileInputStream
 
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -9,15 +8,15 @@ plugins {
     id("com.google.gms.google-services")
 }
 
+// Đọc file key.properties
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
-
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
 android {
-    namespace = "com.sixamtech.sixvalley"
+    namespace = "com.vnsshop.ecommerce"
     compileSdk = 36
 
     compileOptions {
@@ -30,16 +29,16 @@ android {
         jvmTarget = JavaVersion.VERSION_11.toString()
     }
 
-
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        multiDexEnabled = true
-        applicationId = "com.sixamtech.sixvalley"
+        applicationId = "com.vnsshop.ecommerce"
         minSdk = flutter.minSdkVersion
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        multiDexEnabled = true
     }
+
+    // 🔐 Cấu hình ký app với keystore thật
     signingConfigs {
         create("release") {
             keyAlias = keystoreProperties["keyAlias"] as String?
@@ -51,7 +50,19 @@ android {
 
     buildTypes {
         getByName("release") {
-            signingConfig = signingConfigs.getByName("debug") // or "release" if you have real keystore
+            // Dùng keystore thật để ký bản release
+            signingConfig = signingConfigs.getByName("release")
+
+            // ⚙️ Tuỳ chọn tối ưu hoá (bật nếu bạn muốn giảm kích thước app)
+            isMinifyEnabled = false
+            isShrinkResources = false
+
+            // Nếu có file proguard thì bật dòng sau
+            // proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("release") // để test bằng cùng keystore (không bắt buộc)
         }
     }
 }
