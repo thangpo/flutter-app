@@ -24,6 +24,7 @@ abstract class SocialServiceInterface {
     required String commentId,
     required String text,
     String? imagePath,
+    String? audioPath,
+    String? imageUrl,
   });
 }
-
