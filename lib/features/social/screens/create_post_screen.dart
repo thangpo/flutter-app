@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -9,6 +9,7 @@ import 'package:flutter_sixvalley_ecommerce/features/profile/controllers/profile
 import 'package:flutter_sixvalley_ecommerce/features/profile/domain/models/profile_model.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
 
 class SocialCreatePostScreen extends StatefulWidget {
   const SocialCreatePostScreen({super.key});
@@ -26,6 +27,15 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
   bool _submitting = false;
 
   final ImagePicker _picker = ImagePicker();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final sc = context.read<SocialController>();
+      sc.loadCurrentUser();
+    });
+  }
 
   @override
   void dispose() {
@@ -167,6 +177,8 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
     final theme = Theme.of(context);
     final ProfileModel? profile =
         context.watch<ProfileController>().userInfoModel;
+    final social = context.watch<SocialController>();
+    final socialUser = social.currentUser;
     final _PrivacyOption selectedPrivacy = _privacyOptions.firstWhere(
       (opt) => opt.value == _privacy,
       orElse: () => _privacyOptions.first,
@@ -250,7 +262,8 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildComposerHeader(profile, selectedPrivacy, theme),
+                    _buildComposerHeader(
+                        socialUser, profile, selectedPrivacy, theme),
                     const SizedBox(height: 16),
                     _buildTextField(theme),
                     if (_images.isNotEmpty) ...[
@@ -273,24 +286,31 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
   }
 
   Widget _buildComposerHeader(
+    SocialUser? user,
     ProfileModel? profile,
     _PrivacyOption selectedPrivacy,
     ThemeData theme,
   ) {
     final ColorScheme cs = theme.colorScheme;
-    final String avatarUrl = profile?.imageFullUrl?.path?.trim().isNotEmpty ==
-            true
-        ? profile!.imageFullUrl!.path!
-        : (profile?.image?.trim().isNotEmpty == true ? profile!.image! : '');
+    final String? avatarUrl = () {
+      final candidates = [
+        user?.avatarUrl?.trim(),
+        profile?.imageFullUrl?.path?.trim(),
+        profile?.image?.trim(),
+      ];
+      for (final value in candidates) {
+        if (value != null && value.isNotEmpty) return value;
+      }
+      return null;
+    }();
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         CircleAvatar(
           radius: 24,
           backgroundColor: cs.surfaceVariant,
-          backgroundImage:
-              avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
-          child: avatarUrl.isEmpty
+          backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
+          child: avatarUrl == null
               ? Icon(Icons.person, color: cs.onSurface.withOpacity(.6))
               : null,
         ),
@@ -300,7 +320,7 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                _displayName(profile),
+                _displayName(user, profile),
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
@@ -526,15 +546,24 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
         isError: false);
   }
 
-  String _displayName(ProfileModel? profile) {
-    if (profile == null) return 'Người dùng';
-    final String first = profile.fName?.trim() ?? '';
-    final String last = profile.lName?.trim() ?? '';
-    final String combined =
-        [first, last].where((part) => part.isNotEmpty).join(' ').trim();
-    if (combined.isNotEmpty) return combined;
-    final String name = profile.name?.trim() ?? '';
-    if (name.isNotEmpty) return name;
+  String _displayName(SocialUser? user, ProfileModel? profile) {
+    final String? socialName = user?.displayName?.trim();
+    if (socialName != null && socialName.isNotEmpty) {
+      return socialName;
+    }
+    final String? socialUsername = user?.userName?.trim();
+    if (socialUsername != null && socialUsername.isNotEmpty) {
+      return socialUsername;
+    }
+    if (profile != null) {
+      final String first = profile.fName?.trim() ?? '';
+      final String last = profile.lName?.trim() ?? '';
+      final String combined =
+          [first, last].where((part) => part.isNotEmpty).join(' ').trim();
+      if (combined.isNotEmpty) return combined;
+      final String name = profile.name?.trim() ?? '';
+      if (name.isNotEmpty) return name;
+    }
     return 'Người dùng';
   }
 }
@@ -570,3 +599,4 @@ class _ComposeAction {
     required this.onTap,
   });
 }
+

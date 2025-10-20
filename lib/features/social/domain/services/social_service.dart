@@ -2,6 +2,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_comment.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
 
 import 'social_service_interface.dart';
@@ -40,6 +41,65 @@ class SocialService implements SocialServiceInterface {
     }
     ApiChecker.checkApi(resp);
     return [];
+  }
+
+  @override
+  Future<SocialStory?> createStory({
+    required String fileType,
+    required String filePath,
+    String? coverPath,
+    String? storyTitle,
+    String? storyDescription,
+    String? highlightHash,
+  }) async {
+    final resp = await socialRepository.createStory(
+      filePath: filePath,
+      fileType: fileType,
+      coverPath: coverPath,
+      storyTitle: storyTitle,
+      storyDescription: storyDescription,
+      highlightHash: highlightHash,
+    );
+
+    if (resp.isSuccess && resp.response != null) {
+      final data = resp.response!.data;
+      final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
+
+      if (status == 200) {
+        final dynamic storyIdRaw = data?['story_id'] ?? data?['id'];
+        if (storyIdRaw != null && '$storyIdRaw'.isNotEmpty) {
+          final detailResp = await socialRepository.fetchStoryById(
+            id: '$storyIdRaw',
+          );
+          if (detailResp.isSuccess && detailResp.response != null) {
+            final detailData = detailResp.response!.data;
+            final detailStatus =
+                int.tryParse('${detailData?['api_status'] ?? 200}') ?? 200;
+            if (detailStatus == 200) {
+              final SocialStory? story =
+                  socialRepository.parseStoryDetail(detailResp.response!);
+              if (story != null) {
+                return story;
+              }
+            }
+          }
+        }
+        // Fallback: attempt to parse story data from create response (some
+        // servers include story payload inline).
+        final SocialStory? inline =
+            socialRepository.parseStoryDetail(resp.response!);
+        return inline;
+      }
+
+      final msg = (data?['errors']?['error_text'] ??
+              data?['message'] ??
+              'Create story failed')
+          .toString();
+      throw Exception(msg);
+    }
+
+    ApiChecker.checkApi(resp);
+    throw Exception('Create story failed');
   }
 
   @override
@@ -113,6 +173,23 @@ class SocialService implements SocialServiceInterface {
 
     ApiChecker.checkApi(resp);
     throw Exception('Reaction failed');
+  }
+
+  @override
+  Future<SocialUser?> getCurrentUser() async {
+    final resp = await socialRepository.fetchCurrentUserProfile();
+    if (resp.isSuccess && resp.response != null) {
+      final data = resp.response!.data;
+      final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
+      if (status == 200) {
+        return socialRepository.parseCurrentUser(resp.response!);
+      }
+      final msg =
+          (data?['errors']?['error_text'] ?? 'Load profile failed').toString();
+      throw Exception(msg);
+    }
+    ApiChecker.checkApi(resp);
+    return null;
   }
 
   @override

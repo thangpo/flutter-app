@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
-import 'package:flutter_sixvalley_ecommerce/features/profile/controllers/profile_contrroller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -13,8 +13,10 @@ import 'package:intl/intl.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_post_detail_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_post_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_story_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/price_converter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_sixvalley_ecommerce/features/profile/controllers/profile_contrroller.dart';
 
 class SocialFeedScreen extends StatefulWidget {
   const SocialFeedScreen({super.key});
@@ -34,6 +36,7 @@ class _SocialFeedScreenState extends State<SocialFeedScreen>
     // Gọi refresh sau khi màn hình mount để chắc chắn lúc này đã có token
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final sc = context.read<SocialController>();
+      sc.loadCurrentUser();
       if (sc.posts.isEmpty) {
         sc.refresh();
       }
@@ -42,8 +45,7 @@ class _SocialFeedScreenState extends State<SocialFeedScreen>
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+    final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
       backgroundColor: cs.background,
@@ -202,11 +204,23 @@ class _WhatsOnYourMind extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final profile = context.watch<ProfileController>().userInfoModel;
-    final String avatarUrl = profile?.imageFullUrl?.path?.trim().isNotEmpty ==
-            true
-        ? profile!.imageFullUrl!.path!
-        : (profile?.image?.trim().isNotEmpty == true ? profile!.image! : '');
+    final social = context.watch<SocialController>();
+    final user = social.currentUser;
+    final profileCtrl = context.watch<ProfileController>();
+    final fallbackProfile = profileCtrl.userInfoModel;
+    final String? avatarUrl = () {
+      final candidates = [
+        user?.avatarUrl?.trim(),
+        fallbackProfile?.imageFullUrl?.path?.trim(),
+        fallbackProfile?.image?.trim(),
+      ];
+      for (final value in candidates) {
+        if (value != null && value.isNotEmpty) {
+          return value;
+        }
+      }
+      return null;
+    }();
 
     return Material(
       color: cs.surface,
@@ -227,8 +241,8 @@ class _WhatsOnYourMind extends StatelessWidget {
                 radius: 20,
                 backgroundColor: cs.surfaceVariant,
                 backgroundImage:
-                    avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
-                child: avatarUrl.isEmpty
+                    avatarUrl != null ? NetworkImage(avatarUrl) : null,
+                child: avatarUrl == null
                     ? Icon(Icons.person, color: cs.onSurface.withOpacity(.6))
                     : null,
               ),
@@ -389,8 +403,23 @@ class _CreateStoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    // TODO: lấy avatar user hiện tại từ provider/config của app (nếu có)
-    final String? avatar = null;
+    final social = context.watch<SocialController>();
+    final profileCtrl = context.watch<ProfileController>();
+    final fallbackProfile = profileCtrl.userInfoModel;
+    final SocialUser? user = social.currentUser;
+    final String? avatar = () {
+      final candidates = [
+        user?.avatarUrl?.trim(),
+        fallbackProfile?.imageFullUrl?.path?.trim(),
+        fallbackProfile?.image?.trim(),
+      ];
+      for (final value in candidates) {
+        if (value != null && value.isNotEmpty) {
+          return value;
+        }
+      }
+      return null;
+    }();
 
     return Padding(
       padding: const EdgeInsets.only(right: 8),
@@ -431,7 +460,12 @@ class _CreateStoryCard extends StatelessWidget {
               right: 8,
               child: ElevatedButton.icon(
                 onPressed: () {
-                  // TODO: điều hướng tới màn hình tạo tin
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const SocialCreateStoryScreen(),
+                      fullscreenDialog: true,
+                    ),
+                  );
                 },
                 icon: const Icon(Icons.add, size: 16),
                 label: const Text('Tạo'),
@@ -575,12 +609,27 @@ class _AutoRatioNetworkImageState extends State<_AutoRatioNetworkImage> {
   Widget build(BuildContext context) {
     final ratio = _ratio ?? (16 / 9);
     return LayoutBuilder(
-      builder: (ctx, c) => SizedBox(
-        width: double.infinity,
-        height: c.maxWidth / ratio,
-        child: Image(
-            image: CachedNetworkImageProvider(widget.url), fit: BoxFit.cover),
-      ),
+      builder: (ctx, c) {
+        final maxHeight = MediaQuery.of(ctx).size.height * 0.8;
+        final width = c.maxWidth;
+        double targetHeight = width / ratio;
+        double targetWidth = width;
+        if (targetHeight > maxHeight) {
+          targetHeight = maxHeight;
+          targetWidth = targetHeight * ratio;
+        }
+        return Align(
+          alignment: Alignment.center,
+          child: SizedBox(
+            width: targetWidth,
+            height: targetHeight,
+            child: Image(
+              image: CachedNetworkImageProvider(widget.url),
+              fit: BoxFit.cover,
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -809,27 +858,44 @@ class _VideoPlayerTileState extends State<_VideoPlayerTile> {
           child: Center(child: CircularProgressIndicator()));
     }
     final ratio = _c!.value.aspectRatio == 0 ? (16 / 9) : _c!.value.aspectRatio;
-    return AspectRatio(
-      aspectRatio: ratio,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          VideoPlayer(_c!),
-          Align(
-            alignment: Alignment.center,
-            child: IconButton(
-              iconSize: 48,
-              color: Colors.white,
-              icon: Icon(
-                  _c!.value.isPlaying ? Icons.pause_circle : Icons.play_circle),
-              onPressed: () {
-                _c!.value.isPlaying ? _c!.pause() : _c!.play();
-                setState(() {});
-              },
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxHeight = MediaQuery.of(context).size.height * 0.6;
+        final width = constraints.maxWidth;
+        double targetHeight = width / ratio;
+        double targetWidth = width;
+        if (targetHeight > maxHeight) {
+          targetHeight = maxHeight;
+          targetWidth = targetHeight * ratio;
+        }
+        return Align(
+          alignment: Alignment.center,
+          child: SizedBox(
+            width: targetWidth,
+            height: targetHeight,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                VideoPlayer(_c!),
+                Align(
+                  alignment: Alignment.center,
+                  child: IconButton(
+                    iconSize: 48,
+                    color: Colors.white,
+                    icon: Icon(_c!.value.isPlaying
+                        ? Icons.pause_circle
+                        : Icons.play_circle),
+                    onPressed: () {
+                      _c!.value.isPlaying ? _c!.pause() : _c!.play();
+                      setState(() {});
+                    },
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -1652,3 +1718,5 @@ class _Story {
 class EdgeBox {
   static const zero = EdgeInsets.zero;
 }
+
+
