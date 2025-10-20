@@ -61,29 +61,29 @@ class HomePage extends StatefulWidget {
 
   static Future<void> loadData(bool reload) async {
     final flashDealController =
-        Provider.of<FlashDealController>(Get.context!, listen: false);
+    Provider.of<FlashDealController>(Get.context!, listen: false);
     final shopController =
-        Provider.of<ShopController>(Get.context!, listen: false);
+    Provider.of<ShopController>(Get.context!, listen: false);
     final categoryController =
-        Provider.of<CategoryController>(Get.context!, listen: false);
+    Provider.of<CategoryController>(Get.context!, listen: false);
     final bannerController =
-        Provider.of<BannerController>(Get.context!, listen: false);
+    Provider.of<BannerController>(Get.context!, listen: false);
     final addressController =
-        Provider.of<AddressController>(Get.context!, listen: false);
+    Provider.of<AddressController>(Get.context!, listen: false);
     final productController =
-        Provider.of<ProductController>(Get.context!, listen: false);
+    Provider.of<ProductController>(Get.context!, listen: false);
     final brandController =
-        Provider.of<BrandController>(Get.context!, listen: false);
+    Provider.of<BrandController>(Get.context!, listen: false);
     final featuredDealController =
-        Provider.of<FeaturedDealController>(Get.context!, listen: false);
+    Provider.of<FeaturedDealController>(Get.context!, listen: false);
     final notificationController =
-        Provider.of<NotificationController>(Get.context!, listen: false);
+    Provider.of<NotificationController>(Get.context!, listen: false);
     final cartController =
-        Provider.of<CartController>(Get.context!, listen: false);
+    Provider.of<CartController>(Get.context!, listen: false);
     final profileController =
-        Provider.of<ProfileController>(Get.context!, listen: false);
+    Provider.of<ProfileController>(Get.context!, listen: false);
     final splashController =
-        Provider.of<SplashController>(Get.context!, listen: false);
+    Provider.of<SplashController>(Get.context!, listen: false);
 
     if (flashDealController.flashDealList.isEmpty || reload) {
       // await flashDealController.getFlashDealList(reload, false);
@@ -112,8 +112,6 @@ class HomePage extends StatefulWidget {
     brandController.getBrandList(offset: 1, isUpdate: reload);
 
     featuredDealController.getFeaturedDealList();
-
-    // productController.getLProductList('1', reload: reload);
 
     productController.getLatestProductList(1, isUpdate: reload);
     productController.getSelectedProductModel(1, isUpdate: reload);
@@ -159,8 +157,8 @@ class _HomePageState extends State<HomePage> {
     super.initState();
 
     singleVendor = Provider.of<SplashController>(context, listen: false)
-            .configModel!
-            .businessMode ==
+        .configModel!
+        .businessMode ==
         "single";
   }
 
@@ -189,21 +187,21 @@ class _HomePageState extends State<HomePage> {
               ),
               SliverToBoxAdapter(
                   child: Provider.of<SplashController>(context, listen: false)
-                              .configModel!
-                              .announcement!
-                              .status ==
-                          '1'
+                      .configModel!
+                      .announcement!
+                      .status ==
+                      '1'
                       ? Consumer<SplashController>(
-                          builder: (context, announcement, _) {
-                          return (announcement.configModel!.announcement!
-                                          .announcement !=
-                                      null &&
-                                  announcement.onOff)
-                              ? AnnouncementWidget(
-                                  announcement:
-                                      announcement.configModel!.announcement)
-                              : const SizedBox();
-                        })
+                      builder: (context, announcement, _) {
+                        return (announcement.configModel!.announcement!
+                            .announcement !=
+                            null &&
+                            announcement.onOff)
+                            ? AnnouncementWidget(
+                            announcement:
+                            announcement.configModel!.announcement)
+                            : const SizedBox();
+                      })
                       : const SizedBox()),
               SliverPersistentHeader(
                   pinned: true,
@@ -228,7 +226,8 @@ class _HomePageState extends State<HomePage> {
                       NewFeaturesSection(
                         features: [
                           FeatureItem(
-                            title: 'Đặt vé máy bay',
+                            title: getTranslated('flight_booking', context) ??
+                                'Đặt vé máy bay',
                             image: 'assets/images/plane.png',
                             icon: Icons.flight,
                             onTap: () {
@@ -236,12 +235,13 @@ class _HomePageState extends State<HomePage> {
                                 context,
                                 MaterialPageRoute(
                                     builder: (_) =>
-                                        const FlightBookingScreen()),
+                                    const FlightBookingScreen()),
                               );
                             },
                           ),
                           FeatureItem(
-                            title: 'Du lịch',
+                            title: getTranslated('tour_booking', context) ??
+                                'Du lịch',
                             image: 'assets/images/travel.png',
                             icon: Icons.travel_explore,
                             onTap: () {
@@ -249,17 +249,12 @@ class _HomePageState extends State<HomePage> {
                                 context,
                                 MaterialPageRoute(
                                     builder: (context) =>
-                                        const TourListScreen()),
+                                    const TourListScreen()),
                               );
                             },
                           ),
-                          // Nếu muốn thêm chức năng thứ 3, 4... chỉ cần thêm vào đây
                         ],
                       ),
-
-                      // tiện ích
-                      // const FinancialCenterWidget(),
-                      // const SizedBox(height: 10),
 
                       const CategoryListWidget(isHomePage: true),
                       const SizedBox(height: Dimensions.paddingSizeDefault),
@@ -269,129 +264,129 @@ class _HomePageState extends State<HomePage> {
 
                       Consumer<FlashDealController>(
                           builder: (context, megaDeal, child) {
-                        return megaDeal.flashDeal == null
-                            ? const FlashDealShimmer()
-                            : megaDeal.flashDealList.isNotEmpty
+                            return megaDeal.flashDeal == null
+                                ? const FlashDealShimmer()
+                                : megaDeal.flashDealList.isNotEmpty
                                 ? Column(children: [
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal:
-                                              Dimensions.paddingSizeDefault),
-                                      child: TitleRowWidget(
-                                        title:
-                                            getTranslated('flash_deal', context)
-                                                ?.toUpperCase(),
-                                        eventDuration:
-                                            megaDeal.flashDeal != null
-                                                ? megaDeal.duration
-                                                : null,
-                                        onTap: () {
-                                          Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                  builder: (_) =>
-                                                      const FlashDealScreenView()));
-                                        },
-                                        isFlash: true,
-                                      ),
-                                    ),
-                                    const SizedBox(
-                                        height: Dimensions.paddingSizeSmall),
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal:
-                                              Dimensions.paddingSizeDefault),
-                                      child: Text(
-                                        getTranslated(
-                                                'hurry_up_the_offer_is_limited_grab_while_it_lasts',
-                                                context) ??
-                                            '',
-                                        style: textRegular.copyWith(
-                                            color: Provider.of<ThemeController>(
-                                                        context,
-                                                        listen: false)
-                                                    .darkTheme
-                                                ? Theme.of(context).hintColor
-                                                : Theme.of(context)
-                                                    .primaryColor,
-                                            fontSize:
-                                                Dimensions.fontSizeDefault),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ),
-                                    const SizedBox(
-                                        height: Dimensions.paddingSizeSmall),
-                                    const FlashDealsListWidget()
-                                  ])
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal:
+                                    Dimensions.paddingSizeDefault),
+                                child: TitleRowWidget(
+                                  title:
+                                  getTranslated('flash_deal', context)
+                                      ?.toUpperCase(),
+                                  eventDuration:
+                                  megaDeal.flashDeal != null
+                                      ? megaDeal.duration
+                                      : null,
+                                  onTap: () {
+                                    Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                            builder: (_) =>
+                                            const FlashDealScreenView()));
+                                  },
+                                  isFlash: true,
+                                ),
+                              ),
+                              const SizedBox(
+                                  height: Dimensions.paddingSizeSmall),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal:
+                                    Dimensions.paddingSizeDefault),
+                                child: Text(
+                                  getTranslated(
+                                      'hurry_up_the_offer_is_limited_grab_while_it_lasts',
+                                      context) ??
+                                      '',
+                                  style: textRegular.copyWith(
+                                      color: Provider.of<ThemeController>(
+                                          context,
+                                          listen: false)
+                                          .darkTheme
+                                          ? Theme.of(context).hintColor
+                                          : Theme.of(context)
+                                          .primaryColor,
+                                      fontSize:
+                                      Dimensions.fontSizeDefault),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                              const SizedBox(
+                                  height: Dimensions.paddingSizeSmall),
+                              const FlashDealsListWidget()
+                            ])
                                 : const SizedBox.shrink();
-                      }),
+                          }),
                       const SizedBox(height: Dimensions.paddingSizeExtraSmall),
 
                       Consumer<FeaturedDealController>(
                           builder: (context, featuredDealProvider, child) {
-                        return featuredDealProvider.featuredDealProductList !=
+                            return featuredDealProvider.featuredDealProductList !=
                                 null
-                            ? featuredDealProvider
-                                    .featuredDealProductList!.isNotEmpty
+                                ? featuredDealProvider
+                                .featuredDealProductList!.isNotEmpty
                                 ? Column(
-                                    children: [
-                                      Stack(children: [
-                                        Container(
-                                          width:
-                                              MediaQuery.of(context).size.width,
-                                          height: 150,
-                                          color: Provider.of<ThemeController>(
-                                                      context,
-                                                      listen: false)
-                                                  .darkTheme
-                                              ? Theme.of(context).highlightColor
-                                              : Theme.of(context)
-                                                  .colorScheme
-                                                  .onTertiary,
-                                        ),
-                                        Column(children: [
-                                          Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                                vertical: Dimensions
-                                                    .paddingSizeDefault),
-                                            child: TitleRowWidget(
-                                              title:
-                                                  '${getTranslated('featured_deals', context)}',
-                                              onTap: () => Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                      builder: (_) =>
-                                                          const FeaturedDealScreenView())),
-                                            ),
-                                          ),
-                                          const FeaturedDealsListWidget(),
-                                        ]),
-                                      ]),
-                                      const SizedBox(
-                                          height:
-                                              Dimensions.paddingSizeDefault),
-                                    ],
-                                  )
+                              children: [
+                                Stack(children: [
+                                  Container(
+                                    width:
+                                    MediaQuery.of(context).size.width,
+                                    height: 150,
+                                    color: Provider.of<ThemeController>(
+                                        context,
+                                        listen: false)
+                                        .darkTheme
+                                        ? Theme.of(context).highlightColor
+                                        : Theme.of(context)
+                                        .colorScheme
+                                        .onTertiary,
+                                  ),
+                                  Column(children: [
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: Dimensions
+                                              .paddingSizeDefault),
+                                      child: TitleRowWidget(
+                                        title:
+                                        '${getTranslated('featured_deals', context)}',
+                                        onTap: () => Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                                builder: (_) =>
+                                                const FeaturedDealScreenView())),
+                                      ),
+                                    ),
+                                    const FeaturedDealsListWidget(),
+                                  ]),
+                                ]),
+                                const SizedBox(
+                                    height:
+                                    Dimensions.paddingSizeDefault),
+                              ],
+                            )
                                 : const SizedBox.shrink()
-                            : const FindWhatYouNeedShimmer();
-                      }),
+                                : const FindWhatYouNeedShimmer();
+                          }),
 
                       const ClearanceListWidget(),
                       const SizedBox(height: Dimensions.paddingSizeDefault),
 
                       Consumer<BannerController>(
                           builder: (context, footerBannerProvider, child) {
-                        return footerBannerProvider.footerBannerList != null &&
+                            return footerBannerProvider.footerBannerList != null &&
                                 footerBannerProvider
                                     .footerBannerList!.isNotEmpty
-                            ? Padding(
+                                ? Padding(
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: Dimensions.paddingSizeDefault),
                                 child: SingleBannersWidget(
                                     bannerModel: footerBannerProvider
                                         .footerBannerList?[0]))
-                            : const SizedBox();
-                      }),
+                                : const SizedBox();
+                          }),
                       const SizedBox(height: Dimensions.paddingSizeDefault),
 
                       const FeaturedProductWidget(),
@@ -400,26 +395,26 @@ class _HomePageState extends State<HomePage> {
                       singleVendor
                           ? const SizedBox()
                           : Consumer<ShopController>(
-                              builder: (context, topSellerProvider, child) {
-                              return (topSellerProvider.topSellerModel !=
-                                          null &&
-                                      (topSellerProvider
-                                                  .topSellerModel!.sellers !=
-                                              null &&
-                                          topSellerProvider.topSellerModel!
-                                              .sellers!.isNotEmpty))
-                                  ? TitleRowWidget(
-                                      title:
-                                          getTranslated('top_seller', context),
-                                      onTap: () => Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                              builder: (_) =>
-                                                  const AllTopSellerScreen(
-                                                    title: 'top_stores',
-                                                  ))))
-                                  : const SizedBox();
-                            }),
+                          builder: (context, topSellerProvider, child) {
+                            return (topSellerProvider.topSellerModel !=
+                                null &&
+                                (topSellerProvider
+                                    .topSellerModel!.sellers !=
+                                    null &&
+                                    topSellerProvider.topSellerModel!
+                                        .sellers!.isNotEmpty))
+                                ? TitleRowWidget(
+                                title:
+                                getTranslated('top_seller', context),
+                                onTap: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (_) =>
+                                        const AllTopSellerScreen(
+                                          title: 'top_stores',
+                                        ))))
+                                : const SizedBox();
+                          }),
                       singleVendor
                           ? const SizedBox(height: 0)
                           : const SizedBox(height: Dimensions.paddingSizeSmall),
@@ -427,55 +422,31 @@ class _HomePageState extends State<HomePage> {
                       singleVendor
                           ? const SizedBox()
                           : Consumer<ShopController>(
-                              builder: (context, topSellerProvider, child) {
-                              return (topSellerProvider.topSellerModel !=
-                                          null &&
-                                      (topSellerProvider
-                                                  .topSellerModel!.sellers !=
-                                              null &&
-                                          topSellerProvider.topSellerModel!
-                                              .sellers!.isNotEmpty))
-                                  ? Padding(
-                                      padding: const EdgeInsets.only(
-                                          bottom:
-                                              Dimensions.paddingSizeDefault),
-                                      child: SizedBox(
-                                          height:
-                                              ResponsiveHelper.isTab(context)
-                                                  ? 170
-                                                  : 165,
-                                          child: const TopSellerWidget()))
-                                  : const SizedBox();
-                            }),
+                          builder: (context, topSellerProvider, child) {
+                            return (topSellerProvider.topSellerModel !=
+                                null &&
+                                (topSellerProvider
+                                    .topSellerModel!.sellers !=
+                                    null &&
+                                    topSellerProvider.topSellerModel!
+                                        .sellers!.isNotEmpty))
+                                ? Padding(
+                                padding: const EdgeInsets.only(
+                                    bottom:
+                                    Dimensions.paddingSizeDefault),
+                                child: SizedBox(
+                                    height:
+                                    ResponsiveHelper.isTab(context)
+                                        ? 170
+                                        : 165,
+                                    child: const TopSellerWidget()))
+                                : const SizedBox();
+                          }),
 
-                      singleVendor
-                          ? const SizedBox()
-                          :
-                          // Consumer<ShopController>(
-                          //   builder: (context, allSellerProvider, child) {
-                          //     return (allSellerProvider.allSellerModel != null &&
-                          //         allSellerProvider.allSellerModel!.sellers != null &&
-                          //         allSellerProvider.allSellerModel!.sellers!.isNotEmpty)
-                          //         ? Padding(
-                          //       padding: const EdgeInsets.only(bottom: Dimensions.paddingSizeDefault),
-                          //       child: SizedBox(
-                          //         height: ResponsiveHelper.isTab(context) ? 220 : 215,
-                          //         child: const AllSellerWidget(
-                          //           title: 'Tất cả cửa hàng',
-                          //         ),
-                          //       ),
-                          //     )
-                          //         : const SizedBox();
-                          //   },
-                          // ),
-
-                          // singleVendor ? const SizedBox(height: 0):const SizedBox(height: Dimensions.paddingSizeSmall),
-
-                          // ưu đãi trong ngày
-                          const Padding(
-                              padding: EdgeInsets.only(
-                                  bottom: Dimensions.paddingSizeDefault),
-                              child: RecommendedProductWidget()),
+                      const Padding(
+                          padding: EdgeInsets.only(
+                              bottom: Dimensions.paddingSizeDefault),
+                          child: RecommendedProductWidget()),
 
                       const Padding(
                           padding: EdgeInsets.only(
@@ -521,7 +492,6 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
       ),
-      // ),
     );
   }
 }
@@ -554,13 +524,19 @@ class NewFeaturesSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Provider.of<ThemeController>(context).darkTheme;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
+          colors: isDarkMode
+              ? [
+            Theme.of(context).cardColor,
+            Theme.of(context).cardColor.withOpacity(0.8),
+          ]
+              : [
             Colors.white,
             Colors.blue.shade50.withOpacity(0.5),
           ],
@@ -568,7 +544,9 @@ class NewFeaturesSection extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.blue.withOpacity(0.08),
+            color: isDarkMode
+                ? Colors.black.withOpacity(0.2)
+                : Colors.blue.withOpacity(0.08),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -597,20 +575,30 @@ class NewFeaturesSection extends StatelessWidget {
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [Colors.blue.shade600, Colors.blue.shade400],
+                        colors: isDarkMode
+                            ? [
+                          Theme.of(context).primaryColorDark,
+                          Theme.of(context).primaryColorDark.withOpacity(0.8),
+                        ]
+                            : [
+                          Colors.blue.shade600,
+                          Colors.blue.shade400,
+                        ],
                       ),
                       borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.blue.withOpacity(0.3),
+                          color: isDarkMode
+                              ? Colors.black.withOpacity(0.3)
+                              : Colors.blue.withOpacity(0.3),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),
                       ],
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.auto_awesome,
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.onPrimary,
                       size: 20,
                     ),
                   ),
@@ -630,19 +618,22 @@ class NewFeaturesSection extends StatelessWidget {
                         ),
                       );
                     },
-                    child: const Column(
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Trải nghiệm dịch vụ tiện ích',
+                          getTranslated('experience_services', context) ??
+                              'Trải nghiệm dịch vụ tiện ích',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF1565C0),
+                            color: isDarkMode
+                                ? Theme.of(context).colorScheme.onPrimary
+                                : Colors.blue.shade900,
                             letterSpacing: 0.3,
                           ),
                         ),
-                        SizedBox(height: 2),
+                        const SizedBox(height: 2),
                       ],
                     ),
                   ),
@@ -768,6 +759,7 @@ class _AnimatedFeatureCardState extends State<_AnimatedFeatureCard>
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Provider.of<ThemeController>(context).darkTheme;
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
@@ -782,7 +774,7 @@ class _AnimatedFeatureCardState extends State<_AnimatedFeatureCard>
             duration: const Duration(milliseconds: 200),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: isDarkMode ? Theme.of(context).cardColor : Colors.white,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: _isHovered
@@ -792,8 +784,9 @@ class _AnimatedFeatureCardState extends State<_AnimatedFeatureCard>
               ),
               boxShadow: [
                 BoxShadow(
-                  color:
-                      widget.featureColor.withOpacity(_isHovered ? 0.2 : 0.1),
+                  color: isDarkMode
+                      ? Colors.black.withOpacity(0.2)
+                      : widget.featureColor.withOpacity(_isHovered ? 0.2 : 0.1),
                   blurRadius: _isHovered ? 12 : 8,
                   offset: Offset(0, _isHovered ? 6 : 4),
                 ),
@@ -817,7 +810,12 @@ class _AnimatedFeatureCardState extends State<_AnimatedFeatureCard>
                       gradient: LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
-                        colors: [
+                        colors: isDarkMode
+                            ? [
+                          Theme.of(context).primaryColorDark.withOpacity(_isHovered ? 0.3 : 0.2),
+                          Theme.of(context).primaryColorDark.withOpacity(_isHovered ? 0.2 : 0.15),
+                        ]
+                            : [
                           widget.featureColor
                               .withOpacity(_isHovered ? 0.2 : 0.15),
                           widget.featureColor
@@ -826,31 +824,37 @@ class _AnimatedFeatureCardState extends State<_AnimatedFeatureCard>
                       ),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: widget.featureColor
+                        color: isDarkMode
+                            ? Theme.of(context).primaryColorDark.withOpacity(_isHovered ? 0.5 : 0.4)
+                            : widget.featureColor
                             .withOpacity(_isHovered ? 0.4 : 0.3),
                         width: 2,
                       ),
                     ),
                     child: widget.feature.image != null
                         ? ClipRRect(
-                            borderRadius: BorderRadius.circular(14),
-                            child: Image.asset(
-                              widget.feature.image!,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Icon(
-                                  widget.feature.icon ?? Icons.star,
-                                  color: widget.featureColor,
-                                  size: 30,
-                                );
-                              },
-                            ),
-                          )
-                        : Icon(
+                      borderRadius: BorderRadius.circular(14),
+                      child: Image.asset(
+                        widget.feature.image!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Icon(
                             widget.feature.icon ?? Icons.star,
-                            color: widget.featureColor,
+                            color: isDarkMode
+                                ? Theme.of(context).colorScheme.onPrimary
+                                : widget.featureColor,
                             size: 30,
-                          ),
+                          );
+                        },
+                      ),
+                    )
+                        : Icon(
+                      widget.feature.icon ?? Icons.star,
+                      color: isDarkMode
+                          ? Theme.of(context).colorScheme.onPrimary
+                          : widget.featureColor,
+                      size: 30,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -859,7 +863,9 @@ class _AnimatedFeatureCardState extends State<_AnimatedFeatureCard>
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: _isHovered ? FontWeight.w700 : FontWeight.w600,
-                    color: Colors.grey.shade800,
+                    color: isDarkMode
+                        ? Theme.of(context).colorScheme.onPrimary
+                        : Colors.grey.shade800,
                     height: 1.2,
                   ),
                   child: Text(
@@ -875,7 +881,9 @@ class _AnimatedFeatureCardState extends State<_AnimatedFeatureCard>
                     widget.feature.description!,
                     style: TextStyle(
                       fontSize: 10,
-                      color: Colors.grey.shade600,
+                      color: isDarkMode
+                          ? Theme.of(context).hintColor
+                          : Colors.grey.shade600,
                     ),
                     textAlign: TextAlign.center,
                     maxLines: 2,

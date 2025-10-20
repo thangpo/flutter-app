@@ -909,5 +909,18 @@
   "add_fund_is_not_configured": "Tính năng nạp tiền hiện không có sẵn. Vui lòng liên hệ quản trị viên.",
   "all_sellers": "Tất cả cửa hàng",
   "province": "Tỉnh/Thành phố",
-  "district": "Quận/Huyện"
+  "district": "Quận/Huyện",
+  "flight_booking": "Đặt vé máy bay",
+  "tour_booking": "Đặt tour",
+  "experience_services": "Trải nghiệm dịch vụ tiện ích",
+  "tour": "Du lịch",
+  "ecommerce": "Thương mại điện tử",
+  "flight": "Vé máy bay",
+
+  "loading_products": "đang tải sản phẩm",
+  "error_loading_products": "lỗi tải sản phẩm",
+  "no_products_found": "không tìm thấy sản phẩm nào",
+  "explore_more": "khám phá thêm",
+  "more_choices": "thêm lựa chọn",
+  "special_offers": "khuyến mãi đặc biệt"
 }

@@ -30,7 +30,7 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
   final TextEditingController postalController = TextEditingController();
   final TextEditingController countryController = TextEditingController();
   final TextEditingController specialRequestController =
-      TextEditingController();
+  TextEditingController();
   final TextEditingController couponController = TextEditingController();
   final TextEditingController phoneController = TextEditingController();
 
@@ -41,6 +41,7 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
   void initState() {
     super.initState();
     _initProfileRepo();
+    fetchProvinces();
   }
 
   Future<void> _initProfileRepo() async {
@@ -77,6 +78,57 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
     }
   }
 
+  String selectedCountry = 'Việt Nam';
+
+  final List<String> countries = [
+    'Việt Nam',
+    'Thái Lan',
+    'Lào',
+    'Campuchia',
+    'Mỹ',
+    'Nhật Bản',
+    'Hàn Quốc',
+  ];
+
+  String? selectedProvince;
+  String? selectedDistrict;
+  String? selectedWard;
+
+  List<dynamic> provinces = [];
+  List<dynamic> districts = [];
+  List<dynamic> wards = [];
+
+  Future<void> fetchProvinces() async {
+    final response = await Dio().get('https://vnshop247.com/api/v1/shippingAPI/ghn/addressProvinceAPI');
+    if (response.statusCode == 200) {
+      setState(() {
+        provinces = response.data['data'];
+      });
+    }
+  }
+
+  Future<void> fetchDistricts(String provinceId) async {
+    final response = await Dio().get('https://vnshop247.com/api/v1/shippingAPI/ghn/addressDistrict/$provinceId');
+    if (response.statusCode == 200) {
+      setState(() {
+        districts = response.data['data']['original'] ?? [];
+        wards = [];
+        selectedDistrict = null;
+        selectedWard = null;
+      });
+    }
+  }
+
+  Future<void> fetchWards(String districtId) async {
+    final response = await Dio().get('https://vnshop247.com/api/v1/shippingAPI/ghn/addressWard/$districtId');
+    if (response.statusCode == 200) {
+      setState(() {
+        wards = response.data['data']['original'] ?? [];
+        selectedWard = null;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final booking = ModalRoute.of(context)!.settings.arguments as BookingData;
@@ -86,7 +138,7 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
       appBar: AppBar(
         title: const Text('Xác nhận đặt tour',
             style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.teal.shade600,
+        backgroundColor: Colors.blue.shade600,
         foregroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
@@ -99,7 +151,7 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
               padding: const EdgeInsets.only(bottom: 24),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Colors.teal.shade600, Colors.cyan.shade500],
+                  colors: [Colors.blue.shade600, Colors.blue.shade400],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -151,7 +203,7 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                   children: [
                     Card(
                       elevation: 4,
-                      shadowColor: Colors.teal.shade100,
+                      shadowColor: Colors.blue.shade100,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16)),
                       child: Container(
@@ -160,7 +212,7 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                           gradient: LinearGradient(
                             colors: [
                               Colors.white,
-                              Colors.teal.shade50.withOpacity(0.3)
+                              Colors.blue.shade50.withOpacity(0.3)
                             ],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
@@ -191,17 +243,17 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                                     fit: BoxFit.cover,
                                     errorBuilder:
                                         (context, error, stackTrace) =>
-                                            Container(
-                                      width: 100,
-                                      height: 100,
-                                      decoration: BoxDecoration(
-                                        color: Colors.teal.shade50,
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Icon(Icons.image_not_supported,
-                                          size: 40,
-                                          color: Colors.teal.shade300),
-                                    ),
+                                        Container(
+                                          width: 100,
+                                          height: 100,
+                                          decoration: BoxDecoration(
+                                            color: Colors.blue.shade50,
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: Icon(Icons.image_not_supported,
+                                              size: 40,
+                                              color: Colors.blue.shade300),
+                                        ),
                                   ),
                                 ),
                               ),
@@ -215,7 +267,7 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                                       style: TextStyle(
                                         fontSize: 18,
                                         fontWeight: FontWeight.bold,
-                                        color: Colors.teal.shade900,
+                                        color: Colors.blue.shade900,
                                       ),
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
@@ -225,7 +277,7 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                                       children: [
                                         Icon(Icons.calendar_today,
                                             size: 16,
-                                            color: Colors.teal.shade600),
+                                            color: Colors.blue.shade600),
                                         const SizedBox(width: 6),
                                         Text(
                                           '${booking.startDate.day}/${booking.startDate.month}/${booking.startDate.year}',
@@ -240,7 +292,7 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                                       children: [
                                         Icon(Icons.people,
                                             size: 16,
-                                            color: Colors.teal.shade600),
+                                            color: Colors.blue.shade600),
                                         const SizedBox(width: 6),
                                         Text(
                                           '${booking.numberOfPeople} người',
@@ -255,7 +307,7 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 12, vertical: 6),
                                       decoration: BoxDecoration(
-                                        color: Colors.teal.shade600,
+                                        color: Colors.blue.shade600,
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: Text(
@@ -281,11 +333,11 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.teal.shade50,
+                            color: Colors.blue.shade50,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Icon(Icons.person,
-                              color: Colors.teal.shade700, size: 24),
+                              color: Colors.blue.shade700, size: 24),
                         ),
                         const SizedBox(width: 12),
                         const Text(
@@ -301,14 +353,14 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                       label: 'Họ',
                       icon: Icons.person_outline,
                       validator: (v) =>
-                          v?.isEmpty == true ? 'Vui lòng nhập họ' : null,
+                      v?.isEmpty == true ? 'Vui lòng nhập họ' : null,
                     ),
                     _buildTextField(
                       controller: lastNameController,
                       label: 'Tên',
                       icon: Icons.person,
                       validator: (v) =>
-                          v?.isEmpty == true ? 'Vui lòng nhập tên' : null,
+                      v?.isEmpty == true ? 'Vui lòng nhập tên' : null,
                     ),
                     _buildTextField(
                       controller: emailController,
@@ -316,7 +368,7 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                       icon: Icons.email_outlined,
                       keyboardType: TextInputType.emailAddress,
                       validator: (v) =>
-                          v?.isEmpty == true ? 'Vui lòng nhập email' : null,
+                      v?.isEmpty == true ? 'Vui lòng nhập email' : null,
                     ),
                     _buildTextField(
                       controller: phoneController,
@@ -324,54 +376,119 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                       icon: Icons.phone_outlined,
                       keyboardType: TextInputType.phone,
                     ),
+                    DropdownButtonFormField<String>(
+                      value: selectedCountry,
+                      decoration: InputDecoration(
+                        labelText: 'Quốc gia',
+                        prefixIcon: const Icon(Icons.flag_outlined),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      items: countries.map((country) {
+                        return DropdownMenuItem<String>(
+                          value: country,
+                          child: Text(country),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          selectedCountry = value!;
+                          countryController.text = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    Column(
+                      children: [
+                        DropdownButtonFormField<String>(
+                          value: selectedProvince,
+                          decoration: const InputDecoration(
+                            labelText: 'Tỉnh/Thành phố',
+                            prefixIcon: Icon(Icons.location_city),
+                            border: OutlineInputBorder(),
+                          ),
+                          items: provinces.map((item) {
+                            return DropdownMenuItem<String>(
+                              value: item['ProvinceID'].toString(),
+                              child: Text(item['ProvinceName']),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              selectedProvince = value;
+                              cityController.text = provinces
+                                  .firstWhere((p) => p['ProvinceID'].toString() == value)['ProvinceName'];
+                            });
+                            fetchDistricts(value!);
+                          },
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        DropdownButtonFormField<String>(
+                          value: selectedDistrict,
+                          decoration: const InputDecoration(
+                            labelText: 'Quận/Huyện',
+                            prefixIcon: Icon(Icons.map_outlined),
+                            border: OutlineInputBorder(),
+                          ),
+                          items: districts.map((item) {
+                            return DropdownMenuItem<String>(
+                              value: item['DistrictID'].toString(),
+                              child: Text(item['DistrictName']),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              selectedDistrict = value;
+                              districtController.text = districts
+                                  .firstWhere((d) => d['DistrictID'].toString() == value)['DistrictName'];
+                            });
+                            fetchWards(value!);
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Column(
+                      children: [
+                        DropdownButtonFormField<String>(
+                          value: selectedWard,
+                          decoration: const InputDecoration(
+                            labelText: 'Xã/Phường',
+                            prefixIcon: Icon(Icons.place_outlined),
+                            border: OutlineInputBorder(),
+                          ),
+                          items: wards.map((item) {
+                            return DropdownMenuItem<String>(
+                              value: item['WardCode'].toString(),
+                              child: Text(item['WardName']),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              selectedWard = value;
+                              wardController.text = wards
+                                  .firstWhere((w) => w['WardCode'].toString() == value)['WardName'];
+                            });
+                          },
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        _buildTextField(
+                          controller: postalController,
+                          label: 'Mã bưu điện',
+                          icon: Icons.markunread_mailbox_outlined,
+                          keyboardType: TextInputType.number,
+                        ),
+                      ],
+                    ),
                     _buildTextField(
                       controller: addressController,
                       label: 'Địa chỉ',
                       icon: Icons.home_outlined,
-                    ),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildTextField(
-                            controller: cityController,
-                            label: 'Thành phố',
-                            icon: Icons.location_city,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildTextField(
-                            controller: districtController,
-                            label: 'Quận/Huyện',
-                            icon: Icons.map_outlined,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildTextField(
-                            controller: wardController,
-                            label: 'Xã/Phường',
-                            icon: Icons.place_outlined,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildTextField(
-                            controller: postalController,
-                            label: 'Mã bưu điện',
-                            icon: Icons.markunread_mailbox_outlined,
-                            keyboardType: TextInputType.number,
-                          ),
-                        ),
-                      ],
-                    ),
-                    _buildTextField(
-                      controller: countryController,
-                      label: 'Quốc gia',
-                      icon: Icons.flag_outlined,
                     ),
                     _buildTextField(
                       controller: specialRequestController,
@@ -385,11 +502,11 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.teal.shade50,
+                            color: Colors.blue.shade50,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Icon(Icons.payment,
-                              color: Colors.teal.shade700, size: 24),
+                              color: Colors.blue.shade700, size: 24),
                         ),
                         const SizedBox(width: 12),
                         const Text(
@@ -404,10 +521,10 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.teal.shade200),
+                        border: Border.all(color: Colors.blue.shade200),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.teal.shade100.withOpacity(0.3),
+                            color: Colors.blue.shade100.withOpacity(0.3),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),
@@ -420,16 +537,12 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                               horizontal: 16, vertical: 12),
                           border: InputBorder.none,
                           prefixIcon: Icon(Icons.account_balance_wallet,
-                              color: Colors.teal.shade600),
+                              color: Colors.blue.shade600),
                         ),
                         items: const [
                           DropdownMenuItem(
                             value: 'offline_payment',
                             child: Text('Thanh toán khi nhận tour'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'ONLINE',
-                            child: Text('Thanh toán online'),
                           ),
                           DropdownMenuItem(
                             value: 'sepay',
@@ -446,7 +559,7 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                       icon: Icons.discount_outlined,
                       suffixIcon: IconButton(
                         icon: Icon(Icons.check_circle,
-                            color: Colors.teal.shade600),
+                            color: Colors.blue.shade600),
                         onPressed: () {},
                       ),
                     ),
@@ -455,13 +568,13 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(16),
                         gradient: LinearGradient(
-                          colors: [Colors.teal.shade600, Colors.cyan.shade500],
+                          colors: [Colors.blue.shade600, Colors.blue.shade400],
                           begin: Alignment.centerLeft,
                           end: Alignment.centerRight,
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.teal.shade300.withOpacity(0.5),
+                            color: Colors.blue.shade300.withOpacity(0.5),
                             blurRadius: 12,
                             offset: const Offset(0, 6),
                           ),
@@ -478,43 +591,43 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
                         ),
                         child: _isLoading
                             ? const Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 3,
-                                    ),
-                                  ),
-                                  SizedBox(width: 12),
-                                  Text(
-                                    'Đang xử lý...',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              )
-                            : const Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    'Hoàn tất đặt tour',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  SizedBox(width: 8),
-                                  Icon(Icons.arrow_forward,
-                                      color: Colors.white),
-                                ],
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 3,
                               ),
+                            ),
+                            SizedBox(width: 12),
+                            Text(
+                              'Đang xử lý...',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        )
+                            : const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'Hoàn tất đặt tour',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Icon(Icons.arrow_forward,
+                                color: Colors.white),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 32),
@@ -545,7 +658,7 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: Colors.teal.shade100.withOpacity(0.3),
+              color: Colors.blue.shade100.withOpacity(0.3),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -560,7 +673,7 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
           decoration: InputDecoration(
             labelText: label,
             labelStyle: TextStyle(color: Colors.grey.shade600),
-            prefixIcon: Icon(icon, color: Colors.teal.shade600),
+            prefixIcon: Icon(icon, color: Colors.blue.shade600),
             suffixIcon: suffixIcon,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -568,11 +681,11 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.teal.shade100, width: 1),
+              borderSide: BorderSide(color: Colors.blue.shade100, width: 1),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.teal.shade600, width: 2),
+              borderSide: BorderSide(color: Colors.blue.shade600, width: 2),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -581,7 +694,7 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
             filled: true,
             fillColor: Colors.white,
             contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           ),
         ),
       ),
@@ -603,7 +716,7 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
         "customer_notes": specialRequestController.text,
         "zip_code": postalController.text,
         "coupon_code":
-            couponController.text.isNotEmpty ? couponController.text : null,
+        couponController.text.isNotEmpty ? couponController.text : null,
         "amount": booking.total.toStringAsFixed(0),
         "contact_info": {
           "first_name": firstNameController.text,

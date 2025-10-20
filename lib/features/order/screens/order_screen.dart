@@ -31,7 +31,6 @@ class _OrderScreenState extends State<OrderScreen> {
   @override
   void initState() {
     super.initState();
-    // Reset về ecommerce mỗi khi khởi tạo
     selectedMenu = 'ecommerce';
 
     scrollController = ScrollController();
@@ -53,7 +52,6 @@ class _OrderScreenState extends State<OrderScreen> {
 
       body: Column(
         children: [
-          // ======== MENU NGANG ========
           Container(
             color: Theme.of(context).cardColor,
             padding: const EdgeInsets.symmetric(vertical: 8),
@@ -61,7 +59,7 @@ class _OrderScreenState extends State<OrderScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 _buildMenuItem(
-                  title: 'Du lịch',
+                  title: getTranslated('tour', context) ?? 'Du lịch',
                   keyName: 'tour',
                   icon: Icons.travel_explore,
                   onTap: () {
@@ -74,7 +72,7 @@ class _OrderScreenState extends State<OrderScreen> {
                   },
                 ),
                 _buildMenuItem(
-                  title: 'Thương mại điện tử',
+                  title: getTranslated('ecommerce', context) ?? 'Thương mại điện tử',
                   keyName: 'ecommerce',
                   icon: Icons.shopping_cart,
                   onTap: () {
@@ -82,7 +80,7 @@ class _OrderScreenState extends State<OrderScreen> {
                   },
                 ),
                 _buildMenuItem(
-                  title: 'Vé máy bay',
+                  title: getTranslated('flight', context) ?? 'Vé máy bay',
                   keyName: 'flight',
                   icon: Icons.flight,
                   onTap: () {
@@ -107,7 +105,7 @@ class _OrderScreenState extends State<OrderScreen> {
   Widget _buildEcommerceOrderList() {
     if (isGuestMode) {
       return NotLoggedInWidget(
-        message: getTranslated('to_view_the_order_history', context),
+        message: getTranslated('to_view_the_order_history', context) ?? 'To view the order history, please log in',
       );
     }
 
@@ -119,11 +117,11 @@ class _OrderScreenState extends State<OrderScreen> {
               padding: const EdgeInsets.all(Dimensions.paddingSizeLarge),
               child: Row(
                 children: [
-                  OrderTypeButton(text: getTranslated('RUNNING', context), index: 0),
+                  OrderTypeButton(text: getTranslated('RUNNING', context) ?? 'Running', index: 0),
                   const SizedBox(width: Dimensions.paddingSizeSmall),
-                  OrderTypeButton(text: getTranslated('DELIVERED', context), index: 1),
+                  OrderTypeButton(text: getTranslated('DELIVERED', context) ?? 'Delivered', index: 1),
                   const SizedBox(width: Dimensions.paddingSizeSmall),
-                  OrderTypeButton(text: getTranslated('CANCELED', context), index: 2),
+                  OrderTypeButton(text: getTranslated('CANCELED', context) ?? 'Canceled', index: 2),
                 ],
               ),
             ),
@@ -155,10 +153,10 @@ class _OrderScreenState extends State<OrderScreen> {
                   ),
                 ),
               )
-                  : const NoInternetOrDataScreenWidget(
+                  : NoInternetOrDataScreenWidget(
                 isNoInternet: false,
                 icon: Images.noOrder,
-                message: 'no_order_found',
+                message: getTranslated('no_order_found', context) ?? 'No order found',
               )
                   : const OrderShimmerWidget(),
             ),

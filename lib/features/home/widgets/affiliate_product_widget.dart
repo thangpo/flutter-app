@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_sixvalley_ecommerce/features/home/services/api_service.dart';
 import 'package:flutter_sixvalley_ecommerce/features/home/screens/product_detail_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
+import 'package:provider/provider.dart';
 
 class AffiliateProductWidget extends StatefulWidget {
   const AffiliateProductWidget({super.key});
@@ -81,6 +84,7 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Provider.of<ThemeController>(context).darkTheme;
     return FutureBuilder<List<dynamic>>(
       future: _products,
       builder: (context, snapshot) {
@@ -90,12 +94,13 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.blue.shade700),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                      isDarkMode ? Theme.of(context).primaryColorLight : Colors.blue.shade700),
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Đang tải sản phẩm...',
-                  style: TextStyle(color: Colors.grey.shade600),
+                  getTranslated('loading_products', context) ?? 'Đang tải sản phẩm...',
+                  style: TextStyle(color: isDarkMode ? Theme.of(context).hintColor : Colors.grey.shade600),
                 ),
               ],
             ),
@@ -108,8 +113,8 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
                 Icon(Icons.error_outline, size: 64, color: Colors.red.shade300),
                 const SizedBox(height: 16),
                 Text(
-                  "Lỗi: ${snapshot.error}",
-                  style: const TextStyle(color: Colors.red),
+                  getTranslated('error_loading_products', context) ?? "Lỗi: ${snapshot.error}",
+                  style: TextStyle(color: isDarkMode ? Theme.of(context).colorScheme.error : Colors.red),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -120,24 +125,24 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.shopping_bag_outlined, size: 64, color: Colors.grey.shade400),
+                Icon(Icons.shopping_bag_outlined,
+                    size: 64, color: isDarkMode ? Theme.of(context).hintColor : Colors.grey.shade400),
                 const SizedBox(height: 16),
                 Text(
-                  "Không có sản phẩm",
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
+                  getTranslated('no_products_found', context) ?? "Không có sản phẩm",
+                  style: TextStyle(
+                      color: isDarkMode ? Theme.of(context).hintColor : Colors.grey.shade600,
+                      fontSize: 16),
                 ),
               ],
             ),
           );
         } else {
           final items = snapshot.data!;
-
-          // Chia nhóm sản phẩm
-          final vip1 = items.take(8).toList(); // Lấy 8 sản phẩm cho featured
+          final vip1 = items.take(8).toList();
           final vip2 = items.length > 8 ? items.skip(8).take(8).toList() : [];
           final vip3 = items.length > 16 ? items.skip(16).toList() : [];
 
-          // Khởi động auto-scroll
           if (vip2.isNotEmpty) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               final totalPages = (vip2.length / 2).ceil();
@@ -157,7 +162,9 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Colors.grey.shade50, Colors.white],
+                colors: isDarkMode
+                    ? [Theme.of(context).cardColor, Theme.of(context).scaffoldBackgroundColor]
+                    : [Colors.grey.shade50, Colors.white],
               ),
             ),
             child: SingleChildScrollView(
@@ -165,21 +172,22 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (vip2.isNotEmpty) ...[
-                    _buildPromotionalBanner(vip2),
+                    _buildPromotionalBanner(vip2, isDarkMode),
                     const SizedBox(height: 16),
                   ],
 
                   if (vip1.isNotEmpty) ...[
-                    _buildFeaturedBanner(vip1),
+                    _buildFeaturedBanner(vip1, isDarkMode),
                     const SizedBox(height: 24),
                   ],
 
                   if (vip3.isNotEmpty) ...[
                     _buildSectionHeader(
-                      title: "Khám phá thêm",
-                      subtitle: "Nhiều lựa chọn hơn",
+                      title: getTranslated('explore_more', context) ?? "Khám phá thêm",
+                      subtitle: getTranslated('more_choices', context) ?? "Nhiều lựa chọn hơn",
                       icon: Icons.explore,
                       color: Colors.green,
+                      isDarkMode: isDarkMode,
                     ),
                     GridView.builder(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -193,7 +201,7 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
                       ),
                       itemCount: vip3.length,
                       itemBuilder: (context, index) {
-                        return _buildExploreCard(context, vip3[index]);
+                        return _buildExploreCard(context, vip3[index], isDarkMode);
                       },
                     ),
                     const SizedBox(height: 16),
@@ -207,7 +215,7 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
     );
   }
 
-  Widget _buildPromotionalBanner(List<dynamic> products) {
+  Widget _buildPromotionalBanner(List<dynamic> products, bool isDarkMode) {
     final totalPages = (products.length / 2).ceil();
 
     return Container(
@@ -217,7 +225,12 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
+          colors: isDarkMode
+              ? [
+            Theme.of(context).primaryColorDark,
+            Theme.of(context).primaryColorDark.withOpacity(0.8),
+          ]
+              : [
             Colors.purple.shade600,
             Colors.purple.shade800,
           ],
@@ -225,7 +238,9 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.purple.shade300.withOpacity(0.4),
+            color: isDarkMode
+                ? Colors.black.withOpacity(0.3)
+                : Colors.purple.shade300.withOpacity(0.4),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -242,7 +257,9 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
                 width: 100,
                 height: 100,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
+                  color: isDarkMode
+                      ? Theme.of(context).cardColor.withOpacity(0.2)
+                      : Colors.white.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -254,7 +271,9 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
                 width: 120,
                 height: 100,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.08),
+                  color: isDarkMode
+                      ? Theme.of(context).cardColor.withOpacity(0.15)
+                      : Colors.white.withOpacity(0.08),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -269,17 +288,23 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: isDarkMode ? Theme.of(context).cardColor : Colors.white,
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.flash_on, color: Colors.orange.shade600, size: 18),
+                            Icon(Icons.flash_on,
+                                color: isDarkMode
+                                    ? Theme.of(context).colorScheme.onPrimary
+                                    : Colors.orange.shade600,
+                                size: 18),
                             const SizedBox(width: 4),
                             Text(
-                              'Ưu đãi đặc biệt',
+                              getTranslated('special_offers', context) ?? 'Ưu đãi đặc biệt',
                               style: TextStyle(
-                                color: Colors.purple.shade700,
+                                color: isDarkMode
+                                    ? Theme.of(context).colorScheme.onPrimary
+                                    : Colors.purple.shade700,
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -311,7 +336,7 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
                         child: Row(
                           children: pageProducts.map((product) {
                             return Expanded(
-                              child: _buildBannerProductCard(product),
+                              child: _buildBannerProductCard(product, isDarkMode),
                             );
                           }).toList(),
                         ),
@@ -330,8 +355,12 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
                         height: 6,
                         decoration: BoxDecoration(
                           color: _currentBannerPage == index
-                              ? Colors.white
-                              : Colors.white.withOpacity(0.4),
+                              ? (isDarkMode
+                              ? Theme.of(context).colorScheme.onPrimary
+                              : Colors.white)
+                              : (isDarkMode
+                              ? Theme.of(context).colorScheme.onPrimary.withOpacity(0.4)
+                              : Colors.white.withOpacity(0.4)),
                           borderRadius: BorderRadius.circular(3),
                         ),
                       );
@@ -346,7 +375,7 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
     );
   }
 
-  Widget _buildFeaturedBanner(List<dynamic> products) {
+  Widget _buildFeaturedBanner(List<dynamic> products, bool isDarkMode) {
     final totalPages = (products.length / 4).ceil();
 
     return Container(
@@ -356,7 +385,12 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
+          colors: isDarkMode
+              ? [
+            Theme.of(context).primaryColorDark,
+            Theme.of(context).primaryColorDark.withOpacity(0.8),
+          ]
+              : [
             Colors.blue.shade600,
             Colors.blue.shade800,
           ],
@@ -364,7 +398,9 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.blue.shade300.withOpacity(0.4),
+            color: isDarkMode
+                ? Colors.black.withOpacity(0.3)
+                : Colors.blue.shade300.withOpacity(0.4),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -381,7 +417,9 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
                 width: 100,
                 height: 100,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
+                  color: isDarkMode
+                      ? Theme.of(context).cardColor.withOpacity(0.2)
+                      : Colors.white.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -393,16 +431,16 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
                 width: 120,
                 height: 120,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.08),
+                  color: isDarkMode
+                      ? Theme.of(context).cardColor.withOpacity(0.15)
+                      : Colors.white.withOpacity(0.08),
                   shape: BoxShape.circle,
                 ),
               ),
             ),
 
-            // Content
             Column(
               children: [
-                // Header
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: Row(
@@ -410,17 +448,23 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: isDarkMode ? Theme.of(context).cardColor : Colors.white,
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.star, color: Colors.amber.shade600, size: 18),
+                            Icon(Icons.star,
+                                color: isDarkMode
+                                    ? Theme.of(context).colorScheme.onPrimary
+                                    : Colors.amber.shade600,
+                                size: 18),
                             const SizedBox(width: 4),
                             Text(
-                              'Sản phẩm nổi bật',
+                              getTranslated('featured_products', context) ?? 'Sản phẩm nổi bật',
                               style: TextStyle(
-                                color: Colors.blue.shade700,
+                                color: isDarkMode
+                                    ? Theme.of(context).colorScheme.onPrimary
+                                    : Colors.blue.shade700,
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -432,8 +476,6 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
                     ],
                   ),
                 ),
-
-                // Products PageView - 4 sản phẩm
                 Expanded(
                   child: PageView.builder(
                     controller: _featuredController,
@@ -460,15 +502,13 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
                           ),
                           itemCount: pageProducts.length,
                           itemBuilder: (context, index) {
-                            return _buildFeaturedProductCard(pageProducts[index]);
+                            return _buildFeaturedProductCard(pageProducts[index], isDarkMode);
                           },
                         ),
                       );
                     },
                   ),
                 ),
-
-                // Page Indicator
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: Row(
@@ -480,8 +520,12 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
                         height: 6,
                         decoration: BoxDecoration(
                           color: _currentFeaturedPage == index
-                              ? Colors.white
-                              : Colors.white.withOpacity(0.4),
+                              ? (isDarkMode
+                              ? Theme.of(context).colorScheme.onPrimary
+                              : Colors.white)
+                              : (isDarkMode
+                              ? Theme.of(context).colorScheme.onPrimary.withOpacity(0.4)
+                              : Colors.white.withOpacity(0.4)),
                           borderRadius: BorderRadius.circular(3),
                         ),
                       );
@@ -496,7 +540,7 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
     );
   }
 
-  Widget _buildBannerProductCard(dynamic product) {
+  Widget _buildBannerProductCard(dynamic product, bool isDarkMode) {
     final imageUrl = product["image"] ?? "";
     final name = product["name"] ?? "";
     final price = (product["price"] ?? 0).toDouble();
@@ -506,11 +550,11 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 4),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDarkMode ? Theme.of(context).cardColor : Colors.white,
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: isDarkMode ? Colors.black.withOpacity(0.2) : Colors.black.withOpacity(0.1),
               blurRadius: 6,
               offset: const Offset(0, 2),
             ),
@@ -520,7 +564,6 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Product Image
             ClipRRect(
               borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
               child: Image.network(
@@ -530,13 +573,12 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) => Container(
                   height: 70,
-                  color: Colors.grey.shade200,
-                  child: Icon(Icons.image_outlined, size: 28, color: Colors.grey.shade400),
+                  color: isDarkMode ? Theme.of(context).scaffoldBackgroundColor : Colors.grey.shade200,
+                  child: Icon(Icons.image_outlined,
+                      size: 28, color: isDarkMode ? Theme.of(context).hintColor : Colors.grey.shade400),
                 ),
               ),
             ),
-
-            // Product Info
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(8),
@@ -551,20 +593,24 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade800,
+                        color: isDarkMode ? Theme.of(context).colorScheme.onPrimary : Colors.grey.shade800,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                       decoration: BoxDecoration(
-                        color: Colors.red.shade50,
+                        color: isDarkMode
+                            ? Colors.red.withOpacity(0.2)
+                            : Colors.red.shade50,
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         formatter.format(price),
                         style: TextStyle(
-                          color: Colors.red.shade600,
+                          color: isDarkMode
+                              ? Theme.of(context).colorScheme.error
+                              : Colors.red.shade600,
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
                         ),
@@ -580,7 +626,7 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
     );
   }
 
-  Widget _buildFeaturedProductCard(dynamic product) {
+  Widget _buildFeaturedProductCard(dynamic product, bool isDarkMode) {
     final imageUrl = product["image"] ?? "";
     final name = product["name"] ?? "";
     final price = (product["price"] ?? 0).toDouble();
@@ -589,11 +635,11 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
       onTap: () => _navigateToDetail(context, product),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDarkMode ? Theme.of(context).cardColor : Colors.white,
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: isDarkMode ? Colors.black.withOpacity(0.2) : Colors.black.withOpacity(0.1),
               blurRadius: 6,
               offset: const Offset(0, 2),
             ),
@@ -603,7 +649,6 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Product Image
             Expanded(
               child: ClipRRect(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
@@ -612,14 +657,13 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
                   width: double.infinity,
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) => Container(
-                    color: Colors.grey.shade200,
-                    child: Icon(Icons.image_outlined, size: 32, color: Colors.grey.shade400),
+                    color: isDarkMode ? Theme.of(context).scaffoldBackgroundColor : Colors.grey.shade200,
+                    child: Icon(Icons.image_outlined,
+                        size: 32, color: isDarkMode ? Theme.of(context).hintColor : Colors.grey.shade400),
                   ),
                 ),
               ),
             ),
-
-            // Product Info
             Padding(
               padding: const EdgeInsets.all(8),
               child: Column(
@@ -633,20 +677,24 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade800,
+                      color: isDarkMode ? Theme.of(context).colorScheme.onPrimary : Colors.grey.shade800,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                     decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
+                      color: isDarkMode
+                          ? Colors.blue.withOpacity(0.2)
+                          : Colors.blue.shade50,
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
                       formatter.format(price),
                       style: TextStyle(
-                        color: Colors.blue.shade700,
+                        color: isDarkMode
+                            ? Theme.of(context).primaryColorLight
+                            : Colors.blue.shade700,
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
                       ),
@@ -666,28 +714,32 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
     required String subtitle,
     required IconData icon,
     required Color color,
+    required bool isDarkMode,
   }) {
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [color.withOpacity(0.1), color.withOpacity(0.05)],
+          colors: isDarkMode
+              ? [color.withOpacity(0.2), color.withOpacity(0.1)]
+              : [color.withOpacity(0.1), color.withOpacity(0.05)],
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.3), width: 1),
+        border: Border.all(
+            color: isDarkMode ? color.withOpacity(0.4) : color.withOpacity(0.3), width: 1),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.2),
+              color: isDarkMode ? color.withOpacity(0.3) : color.withOpacity(0.2),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: color, size: 24),
+            child: Icon(icon, color: isDarkMode ? Theme.of(context).colorScheme.onPrimary : color, size: 24),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -699,7 +751,7 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: Colors.grey.shade800,
+                    color: isDarkMode ? Theme.of(context).colorScheme.onPrimary : Colors.grey.shade800,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -707,7 +759,7 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
                   subtitle,
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.grey.shade600,
+                    color: isDarkMode ? Theme.of(context).hintColor : Colors.grey.shade600,
                   ),
                 ),
               ],
@@ -718,7 +770,7 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
     );
   }
 
-  Widget _buildExploreCard(BuildContext context, dynamic p) {
+  Widget _buildExploreCard(BuildContext context, dynamic p, bool isDarkMode) {
     final imageUrl = p["image"] ?? "";
     final name = p["name"] ?? "";
     final price = (p["price"] ?? 0).toDouble();
@@ -727,11 +779,11 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
       onTap: () => _navigateToDetail(context, p),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDarkMode ? Theme.of(context).cardColor : Colors.white,
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: isDarkMode ? Colors.black.withOpacity(0.15) : Colors.black.withOpacity(0.08),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -749,8 +801,9 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
                   width: double.infinity,
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) => Container(
-                    color: Colors.grey.shade200,
-                    child: Icon(Icons.image_outlined, size: 40, color: Colors.grey.shade400),
+                    color: isDarkMode ? Theme.of(context).scaffoldBackgroundColor : Colors.grey.shade200,
+                    child: Icon(Icons.image_outlined,
+                        size: 40, color: isDarkMode ? Theme.of(context).hintColor : Colors.grey.shade400),
                   ),
                 ),
               ),
@@ -770,20 +823,24 @@ class _AffiliateProductWidgetState extends State<AffiliateProductWidget> {
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade800,
+                        color: isDarkMode ? Theme.of(context).colorScheme.onPrimary : Colors.grey.shade800,
                         height: 1.2,
                       ),
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.green.shade50,
+                        color: isDarkMode
+                            ? Colors.green.withOpacity(0.2)
+                            : Colors.green.shade50,
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         formatter.format(price),
                         style: TextStyle(
-                          color: Colors.green.shade700,
+                          color: isDarkMode
+                              ? Theme.of(context).primaryColorLight
+                              : Colors.green.shade700,
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
                         ),

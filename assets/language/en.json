@@ -918,6 +918,19 @@
   "enter_valid_phone_number": "Enter valid phone number",
   "grab_this_deal": "Grab this deal",
   "add_fund_is_not_configured": "Add fund is currently unavailable. Please contact the admin.",
-  "all_sellers": "All Sellers"
+  "all_sellers": "All Sellers",
+  "flight_booking": "flight booking",
+  "tour_booking": "tour booking",
+  "experience_services": "experience services",
+  "tour": "tour",
+  "ecommerce": "ecommerce",
+  "flight": "flight",
+
+  "loading_products": "loading products",
+  "error_loading_products": "error loading products",
+  "no_products_found": "no products found",
+  "explore_more": "explore more",
+  "more_choices": "more choices",
+  "special_offers": "special offers"
 
 }
