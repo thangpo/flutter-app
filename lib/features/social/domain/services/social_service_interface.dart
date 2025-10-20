@@ -10,8 +10,17 @@ abstract class SocialServiceInterface {
     required String reaction,
     String action = 'reaction',
   });
+  Future<void> reactToComment({
+    required String commentId,
+    required String reaction,
+  });
+  Future<void> reactToReply({
+    required String replyId,
+    required String reaction,
+  });
   Future<SocialPost?> getPostById({required String postId});
-  Future<List<SocialComment>> getPostComments({required String postId, int? limit, int? offset});
+  Future<List<SocialComment>> getPostComments(
+      {required String postId, int? limit, int? offset});
   Future<List<SocialComment>> getCommentReplies({required String commentId});
   Future<void> createComment({
     required String postId,
@@ -26,5 +35,13 @@ abstract class SocialServiceInterface {
     String? imagePath,
     String? audioPath,
     String? imageUrl,
+  });
+  Future<SocialPost> createPost({
+    String? text,
+    List<String>? imagePaths,
+    String? videoPath,
+    String? videoThumbnailPath,
+    int privacy = 0,
+    String? backgroundColorId,
   });
 }
