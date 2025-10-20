@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
+import 'package:flutter_sixvalley_ecommerce/features/profile/controllers/profile_contrroller.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -11,6 +12,7 @@ import 'package:video_player/video_player.dart';
 import 'package:intl/intl.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_post_detail_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_post_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/price_converter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -198,38 +200,59 @@ class _HeaderIcon extends StatelessWidget {
 class _WhatsOnYourMind extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final onSurface = cs.onSurface;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final profile = context.watch<ProfileController>().userInfoModel;
+    final String avatarUrl = profile?.imageFullUrl?.path?.trim().isNotEmpty ==
+            true
+        ? profile!.imageFullUrl!.path!
+        : (profile?.image?.trim().isNotEmpty == true ? profile!.image! : '');
 
-    return Container(
+    return Material(
       color: cs.surface,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 20,
-            backgroundColor: cs.surfaceVariant,
-            child: Icon(Icons.person, color: onSurface.withOpacity(.6)),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'Bạn đang nghĩ gì?',
-              style: TextStyle(
-                color: onSurface.withOpacity(.7),
-                fontSize: 16,
+      child: InkWell(
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const SocialCreatePostScreen(),
+              fullscreenDialog: true,
+            ),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: cs.surfaceVariant,
+                backgroundImage:
+                    avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+                child: avatarUrl.isEmpty
+                    ? Icon(Icons.person, color: cs.onSurface.withOpacity(.6))
+                    : null,
               ),
-            ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Bạn đang nghĩ gì?',
+                  style: TextStyle(
+                    color: cs.onSurface.withOpacity(.7),
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: cs.surfaceVariant,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.add, color: cs.onSurface, size: 20),
+              ),
+            ],
           ),
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: cs.surfaceVariant,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.add, color: onSurface, size: 20),
-          ),
-        ],
+        ),
       ),
     );
   }

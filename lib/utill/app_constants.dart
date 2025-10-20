@@ -20,6 +20,7 @@ class AppConstants {
   static const String socialCreateAccountUri = '/api/create-account';
   static const String socialDeleteAccessTokenUri = '/api/delete-access-token';
   static const String socialPostsUri = '/api/posts';
+  static const String socialCreatePostUri = '/api/new_post';
   static const String socialGetStoriesUri = '/api/get-stories';
   static const String socialGetUserStoriesUri = '/api/get-user-stories';
   static const String socialReactUri = '/api/post-actions';

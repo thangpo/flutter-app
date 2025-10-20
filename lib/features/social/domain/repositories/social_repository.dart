@@ -135,24 +135,23 @@ class SocialRepository {
           }
 
           // reaction
-          // --- REACTION PARSING (đảm bảo có số và type) ---
           final Map rx = (m['reaction'] is Map)
               ? m['reaction'] as Map
               : (m['reactions'] is Map ? m['reactions'] as Map : const {});
 
           int _rxCount(Map rx) {
-            // Nếu có 'count' dùng luôn
             if (rx['count'] != null) {
               return int.tryParse('${rx['count']}') ?? 0;
             }
-            // WoWonder hay trả từng loại: Like/Love/HaHa/Wow/Sad/Angry
             const keys = ['Like', 'Love', 'HaHa', 'Wow', 'Sad', 'Angry'];
             int sum = 0;
             for (final k in keys) {
               final v = rx[k];
-              if (v is int)
+              if (v is int) {
                 sum += v;
-              else if (v != null) sum += int.tryParse('$v') ?? 0;
+              } else if (v != null) {
+                sum += int.tryParse('$v') ?? 0;
+              }
             }
             return sum;
           }
@@ -160,7 +159,6 @@ class SocialRepository {
           String _rxMine(Map rx) {
             final t = (rx['type'] ?? '').toString();
             if (t.isNotEmpty) return t;
-            // Fallback nếu server chỉ trả is_reacted (1/0)
             final isReacted = rx['is_reacted'] == true ||
                 rx['is_reacted'] == 1 ||
                 rx['is_reacted']?.toString() == '1';
@@ -169,7 +167,6 @@ class SocialRepository {
 
           final int reactionCount = _rxCount(rx);
           String myReaction = _rxMine(rx);
-          // Normalize WoWonder numeric reaction codes to labels
           switch (myReaction) {
             case '1':
               myReaction = 'Like';
@@ -288,7 +285,6 @@ class SocialRepository {
     final list = <SocialStory>[];
 
     if (data is Map) {
-      // Theo collection: có thể là data.stories hoặc data.data
       final stories = (data['stories'] ?? data['data']);
       if (stories is List) {
         for (final it in stories) {
@@ -337,9 +333,7 @@ class SocialRepository {
       final form = FormData.fromMap({
         'server_key': AppConstants.socialServerKey,
         'post_id': postId,
-        // Per API: always use action=reaction
         'action': 'reaction',
-        // Reaction must be numeric string (1..6). Default to 1 if empty.
         'reaction': reaction.isEmpty ? '1' : _mapReactionToId(reaction),
       });
 
@@ -382,6 +376,69 @@ class SocialRepository {
     }
   }
 
+  Future<ApiResponseModel<Response>> createPost({
+    String? text,
+    List<String>? imagePaths,
+    String? videoPath,
+    String? videoThumbnailPath,
+    int privacy = 0,
+    String? backgroundColorId,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError('Missing Social access_token');
+      }
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialCreatePostUri}?access_token=$token';
+
+      final Map<String, dynamic> fields = {
+        'server_key': AppConstants.socialServerKey,
+        'postPrivacy': '$privacy',
+      };
+
+      final String? trimmedText = text?.trim();
+      if (trimmedText != null && trimmedText.isNotEmpty) {
+        fields['postText'] = trimmedText;
+      }
+
+      if (backgroundColorId != null && backgroundColorId.isNotEmpty) {
+        fields['post_color'] = backgroundColorId;
+      }
+
+      final List<String> images = imagePaths ?? const [];
+      if (images.isNotEmpty) {
+        final List<MultipartFile> files = [];
+        for (final path in images) {
+          final p = path.trim();
+          if (p.isEmpty) continue;
+          files.add(await MultipartFile.fromFile(p));
+        }
+        if (files.isNotEmpty) {
+          fields['postPhotos[]'] = files;
+        }
+      }
+
+      if (videoPath != null && videoPath.isNotEmpty) {
+        fields['postVideo'] = await MultipartFile.fromFile(videoPath);
+        if (videoThumbnailPath != null && videoThumbnailPath.isNotEmpty) {
+          fields['video_thumb'] =
+              await MultipartFile.fromFile(videoThumbnailPath);
+        }
+      }
+
+      final form = FormData.fromMap(fields);
+      final res = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
   SocialPost? parsePostData(Response res) {
     final data = res.data;
     Map? m;
@@ -401,14 +458,18 @@ class SocialRepository {
 
     final String id = (map['post_id'] ?? map['id'] ?? '').toString();
     if (id.isEmpty) return null;
-    final String text = (map['postText_API'] ?? map['postText'] ?? '').toString();
-    final String timeText = (map['post_time'] ?? map['time_text'] ?? '').toString();
+    final String text =
+        (map['postText_API'] ?? map['postText'] ?? '').toString();
+    final String timeText =
+        (map['post_time'] ?? map['time_text'] ?? '').toString();
 
-    final Map pub = (map['publisher'] is Map) ? map['publisher'] as Map : const {};
+    final Map pub =
+        (map['publisher'] is Map) ? map['publisher'] as Map : const {};
     final String userName = (pub['name'] ?? pub['username'] ?? '').toString();
     final String userAvatar = (pub['avatar'] ?? '').toString();
 
-    final List pm = (map['photo_multi'] is List) ? map['photo_multi'] as List : const [];
+    final List pm =
+        (map['photo_multi'] is List) ? map['photo_multi'] as List : const [];
     final List<String> multiImages = [
       ...pm
           .whereType<Map>()
@@ -422,7 +483,8 @@ class SocialRepository {
                 ? [singleFull]
                 : <String>[]);
 
-    final String fileUrl = (map['postFile'] ?? map['postFile_full'] ?? '').toString();
+    final String fileUrl =
+        (map['postFile'] ?? map['postFile_full'] ?? '').toString();
     final String fileName = (map['postFileName'] ?? '').toString();
 
     String? videoUrl, audioUrl;
@@ -445,7 +507,11 @@ class SocialRepository {
       int sum = 0;
       for (final k in keys) {
         final v = rx[k];
-        if (v is int) sum += v; else if (v != null) sum += int.tryParse('$v') ?? 0;
+        if (v is int) {
+          sum += v;
+        } else if (v != null) {
+          sum += int.tryParse('$v') ?? 0;
+        }
       }
       return sum;
     }
@@ -453,7 +519,9 @@ class SocialRepository {
     String _rxMine(Map rx) {
       final t = (rx['type'] ?? '').toString();
       if (t.isNotEmpty) return t;
-      final isReacted = rx['is_reacted'] == true || rx['is_reacted'] == 1 || rx['is_reacted']?.toString() == '1';
+      final isReacted = rx['is_reacted'] == true ||
+          rx['is_reacted'] == 1 ||
+          rx['is_reacted']?.toString() == '1';
       return isReacted ? 'Like' : '';
     }
 
@@ -480,10 +548,12 @@ class SocialRepository {
         break;
     }
 
-    final Map product = (map['product'] is Map) ? map['product'] as Map : const {};
+    final Map product =
+        (map['product'] is Map) ? map['product'] as Map : const {};
     final bool hasProduct = product.isNotEmpty;
     final String productName = (product['name'] ?? '').toString();
-    final List pImgsRaw = (product['images'] is List) ? product['images'] as List : const [];
+    final List pImgsRaw =
+        (product['images'] is List) ? product['images'] as List : const [];
     final List<String> productImages = [
       ...pImgsRaw
           .whereType<Map>()
@@ -494,7 +564,9 @@ class SocialRepository {
         ? (product['price'] as num).toDouble()
         : double.tryParse((product['price'] ?? '').toString());
     final String? productCurrency =
-        (product['currency'] ?? '').toString().isNotEmpty ? product['currency'].toString() : null;
+        (product['currency'] ?? '').toString().isNotEmpty
+            ? product['currency'].toString()
+            : null;
 
     final String? postType = (map['postType']?.toString().isNotEmpty ?? false)
         ? map['postType'].toString()
@@ -548,15 +620,45 @@ class SocialRepository {
           final m = Map<String, dynamic>.from(c);
           final String id = (m['id'] ?? m['comment_id'] ?? '').toString();
           final String text = (m['text'] ?? m['comment'] ?? '').toString();
-          final Map pub = (m['publisher'] is Map) ? m['publisher'] as Map : const {};
-          final String userName = (pub['name'] ?? pub['username'] ?? '').toString();
+          final Map pub =
+              (m['publisher'] is Map) ? m['publisher'] as Map : const {};
+          final String userName =
+              (pub['name'] ?? pub['username'] ?? '').toString();
           final String userAvatar = (pub['avatar'] ?? '').toString();
-          final String timeText = (m['time_text'] ?? m['time'] ?? '').toString();
-          final String cFile = (m['c_file'] ?? m['file'] ?? m['image'] ?? m['image_url'] ?? '').toString();
+          final String timeText =
+              (m['time_text'] ?? m['time'] ?? '').toString();
+          final String cFile =
+              (m['c_file'] ?? m['file'] ?? m['image'] ?? m['image_url'] ?? '')
+                  .toString();
           final String record = (m['record'] ?? m['audio'] ?? '').toString();
+          // createdAt: KHAI BÁO DUY NHẤT (đã bỏ bản trùng)
+          final DateTime? createdAt =
+              _parseCommentDate(m['time'] ?? m['comment_time'] ?? '');
           final int? repliesCount = (m['replies_count'] != null)
               ? int.tryParse('${m['replies_count']}')
               : null;
+
+          final Map<String, dynamic> reactionMap = _extractReactionMap(
+            m['reaction'] ?? m['comment_reaction'] ?? m['reactions'],
+          );
+          int reactionCount = _reactionCountFromMap(reactionMap);
+          if (reactionCount == 0) {
+            final likes =
+                int.tryParse('${m['comment_likes'] ?? m['likes'] ?? ''}') ?? 0;
+            final wonders =
+                int.tryParse('${m['comment_wonders'] ?? m['wonders'] ?? ''}') ??
+                    0;
+            reactionCount = likes + wonders;
+          }
+          String myReaction = _reactionLabelFromMap(reactionMap);
+          if (myReaction.isEmpty) {
+            if (_isTruthy(m['is_comment_liked'])) {
+              myReaction = 'Like';
+            } else if (_isTruthy(m['is_comment_wondered'])) {
+              myReaction = 'Wow';
+            }
+          }
+
           if (id.isEmpty) continue;
           list.add(SocialComment(
             id: id,
@@ -567,6 +669,9 @@ class SocialRepository {
             repliesCount: repliesCount,
             imageUrl: cFile.isNotEmpty ? cFile : null,
             audioUrl: record.isNotEmpty ? record : null,
+            reactionCount: reactionCount,
+            myReaction: myReaction,
+            createdAt: createdAt,
           ));
         }
       }
@@ -591,12 +696,39 @@ class SocialRepository {
           final m = Map<String, dynamic>.from(c);
           final String id = (m['id'] ?? m['comment_id'] ?? '').toString();
           final String text = (m['text'] ?? m['comment'] ?? '').toString();
-          final Map pub = (m['publisher'] is Map) ? m['publisher'] as Map : const {};
-          final String userName = (pub['name'] ?? pub['username'] ?? '').toString();
+          final Map pub =
+              (m['publisher'] is Map) ? m['publisher'] as Map : const {};
+          final String userName =
+              (pub['name'] ?? pub['username'] ?? '').toString();
           final String userAvatar = (pub['avatar'] ?? '').toString();
-          final String timeText = (m['time_text'] ?? m['time'] ?? '').toString();
-          final String cFile = (m['c_file'] ?? m['file'] ?? m['image'] ?? m['image_url'] ?? '').toString();
+          final String timeText =
+              (m['time_text'] ?? m['time'] ?? '').toString();
+          final String cFile =
+              (m['c_file'] ?? m['file'] ?? m['image'] ?? m['image_url'] ?? '')
+                  .toString();
           final String record = (m['record'] ?? m['audio'] ?? '').toString();
+
+          // BỔ SUNG createdAt CHO REPLIES (trước đây thiếu)
+          final DateTime? createdAt =
+              _parseCommentDate(m['time'] ?? m['comment_time'] ?? '');
+
+          final Map<String, dynamic> reactionMap = _extractReactionMap(
+            m['reaction'] ?? m['comment_reaction'] ?? m['reactions'],
+          );
+          int reactionCount = _reactionCountFromMap(reactionMap);
+          if (reactionCount == 0) {
+            final likes =
+                int.tryParse('${m['comment_likes'] ?? m['likes'] ?? ''}') ?? 0;
+            final wonders =
+                int.tryParse('${m['comment_wonders'] ?? m['wonders'] ?? ''}') ??
+                    0;
+            reactionCount = likes + wonders;
+          }
+          String myReaction = _reactionLabelFromMap(reactionMap);
+          if (myReaction.isEmpty && _isTruthy(m['is_comment_liked'])) {
+            myReaction = 'Like';
+          }
+
           if (id.isEmpty) continue;
           list.add(SocialComment(
             id: id,
@@ -606,6 +738,9 @@ class SocialRepository {
             timeText: timeText.isNotEmpty ? timeText : null,
             imageUrl: cFile.isNotEmpty ? cFile : null,
             audioUrl: record.isNotEmpty ? record : null,
+            reactionCount: reactionCount,
+            myReaction: myReaction,
+            createdAt: createdAt, // giờ đã có biến
           ));
         }
       }
@@ -668,7 +803,7 @@ class SocialRepository {
       return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
     }
   }
-  
+
   Future<ApiResponseModel<Response>> createComment({
     required String postId,
     required String text,
@@ -714,6 +849,8 @@ class SocialRepository {
     required String commentId,
     required String text,
     String? imagePath,
+    String? audioPath,
+    String? imageUrl,
   }) async {
     try {
       final token = _getSocialAccessToken();
@@ -731,6 +868,12 @@ class SocialRepository {
       if (imagePath != null && imagePath.isNotEmpty) {
         fields['image'] = await MultipartFile.fromFile(imagePath);
       }
+      if (audioPath != null && audioPath.isNotEmpty) {
+        fields['audio'] = await MultipartFile.fromFile(audioPath);
+      }
+      if (imageUrl != null && imageUrl.isNotEmpty) {
+        fields['image_url'] = imageUrl;
+      }
       final form = FormData.fromMap(fields);
       final res = await dioClient.post(
         url,
@@ -742,6 +885,63 @@ class SocialRepository {
       return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
     }
   }
+
+  Future<ApiResponseModel<Response>> reactToComment({
+    required String commentId,
+    required String reaction,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError('Missing Social access_token');
+      }
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialCommentsUri}?access_token=$token';
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'type': 'reaction_comment',
+        'comment_id': commentId,
+        'reaction': reaction.isEmpty ? '0' : _mapReactionLabelToId(reaction),
+      });
+      final resp = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      return ApiResponseModel.withSuccess(resp);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+  Future<ApiResponseModel<Response>> reactToReply({
+    required String replyId,
+    required String reaction,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError('Missing Social access_token');
+      }
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialCommentsUri}?access_token=$token';
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'type': 'reaction_reply',
+        'reply_id': replyId,
+        'reaction': reaction.isEmpty ? '0' : _mapReactionLabelToId(reaction),
+      });
+      final resp = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      return ApiResponseModel.withSuccess(resp);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
   Future<ApiResponseModel<Response>> reactToPostWithAction({
     required String postId,
     required String reaction,
@@ -756,30 +956,11 @@ class SocialRepository {
       final String url =
           '${AppConstants.socialBaseUrl}${AppConstants.socialReactUri}?access_token=$token';
 
-      String _mapReactionToId(String r) {
-        switch (r) {
-          case 'Like':
-            return '1';
-          case 'Love':
-            return '2';
-          case 'HaHa':
-            return '3';
-          case 'Wow':
-            return '4';
-          case 'Sad':
-            return '5';
-          case 'Angry':
-            return '6';
-          default:
-            return '1';
-        }
-      }
-
       final form = FormData.fromMap({
         'server_key': AppConstants.socialServerKey,
         'post_id': postId,
         'action': action,
-        'reaction': reaction.isEmpty ? '1' : _mapReactionToId(reaction),
+        'reaction': reaction.isEmpty ? '1' : _mapReactionLabelToId(reaction),
       });
 
       final resp = await dioClient.post(
@@ -791,5 +972,121 @@ class SocialRepository {
     } catch (e) {
       return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
     }
+  }
+
+  DateTime? _parseCommentDate(dynamic raw) {
+    if (raw == null) return null;
+    final String str = raw.toString().trim();
+    if (str.isEmpty) return null;
+    final int? numeric = int.tryParse(str);
+    if (numeric != null) {
+      if (numeric > 1000000000000) {
+        return DateTime.fromMillisecondsSinceEpoch(numeric, isUtc: true)
+            .toLocal();
+      }
+      return DateTime.fromMillisecondsSinceEpoch(numeric * 1000, isUtc: true)
+          .toLocal();
+    }
+    return DateTime.tryParse(str)?.toLocal();
+  }
+
+  Map<String, dynamic> _extractReactionMap(dynamic raw) {
+    if (raw is Map) {
+      return Map<String, dynamic>.from(raw);
+    }
+    return <String, dynamic>{};
+  }
+
+  int _reactionCountFromMap(Map<String, dynamic> rx) {
+    if (rx.isEmpty) return 0;
+    if (rx['count'] != null) {
+      return int.tryParse('${rx['count']}') ?? 0;
+    }
+    const keys = ['Like', 'Love', 'HaHa', 'Wow', 'Sad', 'Angry'];
+    int sum = 0;
+    for (final k in keys) {
+      final v = rx[k];
+      if (v is int) {
+        sum += v;
+      } else if (v != null) {
+        sum += int.tryParse('$v') ?? 0;
+      }
+    }
+    return sum;
+  }
+
+  String _reactionLabelFromMap(Map<String, dynamic> rx) {
+    if (rx.isEmpty) return '';
+    String? label;
+    final type = rx['type'] ?? rx['my_reaction'] ?? rx['current_user_reaction'];
+    if (type != null && '$type'.isNotEmpty) {
+      label = '$type';
+    } else {
+      final reacted = rx['is_reacted'];
+      if (_isTruthy(reacted)) {
+        label = 'Like';
+      }
+    }
+    return _normalizeReactionLabel(label ?? '');
+  }
+
+  String _normalizeReactionLabel(String reaction) {
+    final trimmed = reaction.trim();
+    if (trimmed.isEmpty) return '';
+    switch (trimmed) {
+      case '1':
+      case 'like':
+      case 'LIKE':
+        return 'Like';
+      case '2':
+      case 'love':
+      case 'LOVE':
+        return 'Love';
+      case '3':
+      case 'haha':
+      case 'HAHA':
+        return 'HaHa';
+      case '4':
+      case 'wow':
+      case 'WOW':
+        return 'Wow';
+      case '5':
+      case 'sad':
+      case 'SAD':
+        return 'Sad';
+      case '6':
+      case 'angry':
+      case 'ANGRY':
+        return 'Angry';
+      default:
+        return trimmed;
+    }
+  }
+
+  String _mapReactionLabelToId(String reaction) {
+    switch (reaction) {
+      case 'Like':
+        return '1';
+      case 'Love':
+        return '2';
+      case 'HaHa':
+        return '3';
+      case 'Wow':
+        return '4';
+      case 'Sad':
+        return '5';
+      case 'Angry':
+        return '6';
+      default:
+        return '1';
+    }
+  }
+
+  bool _isTruthy(dynamic value) {
+    if (value == null) return false;
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    final s = value.toString().toLowerCase();
+    return s == '1' || s == 'true' || s == 'yes';
   }
 }
