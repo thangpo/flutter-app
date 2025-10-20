@@ -922,5 +922,11 @@
   "no_products_found": "không tìm thấy sản phẩm nào",
   "explore_more": "khám phá thêm",
   "more_choices": "thêm lựa chọn",
-  "special_offers": "khuyến mãi đặc biệt"
+  "special_offers": "khuyến mãi đặc biệt",
+
+  "draft": "Bản nháp",
+  "unpaid": "Chưa thanh toán",
+  "completed": "Hoàn thành",
+  "partial_payment": "Đã thanh toán một phần",
+  "cancelled": "Đã hủy"
 }

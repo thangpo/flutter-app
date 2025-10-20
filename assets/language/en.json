@@ -931,6 +931,12 @@
   "no_products_found": "no products found",
   "explore_more": "explore more",
   "more_choices": "more choices",
-  "special_offers": "special offers"
+  "special_offers": "special offers",
+
+  "draft": "Draft",
+  "unpaid": "Unpaid",
+  "completed": "Completed",
+  "partial_payment": "Partial Payment",
+  "cancelled": "Cancelled"
 
 }
