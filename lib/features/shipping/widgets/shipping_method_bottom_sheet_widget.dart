@@ -83,8 +83,9 @@ class ShippingMethodBottomSheetWidgetState extends State<ShippingMethodBottomShe
                                     ),
                                     const SizedBox(width: Dimensions.paddingSizeSmall),
 
-                                    Text(' ${PriceConverter.convertPrice(context, shippingController.shippingList![widget.sellerIndex].shippingMethodList![index].cost)}',
-                                      style: textBold.copyWith(fontSize: Dimensions.fontSizeLarge))])))
+                                    // Text(' ${PriceConverter.convertPrice(context, shippingController.shippingList![widget.sellerIndex].shippingMethodList![index].cost)}',
+                                    //   style: textBold.copyWith(fontSize: Dimensions.fontSizeLarge))
+                                  ])))
                             ),
                           );
                         },

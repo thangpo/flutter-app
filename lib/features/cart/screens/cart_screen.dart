@@ -548,23 +548,23 @@ class CartScreenState extends State<CartScreen> {
                                         && shippingController.shippingList![index].shippingIndex != -1) &&
                                         shippingController.chosenShippingList.isNotEmpty) ?
                                       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                        Row(children: [
-                                            Text((shippingController.shippingList == null ||
-                                                shippingController.shippingList![index].shippingMethodList == null ||
-                                                shippingController.chosenShippingList.isEmpty ||
-                                                shippingController.shippingList![index].shippingIndex == -1) ? '':
-                                            '${getTranslated('shipping_cost', context)??''} : ', style: textRegular.copyWith(color: Theme.of(context).textTheme.bodyLarge?.color),),
-
-                                          Text((shippingController.shippingList == null ||
-                                              shippingController.shippingList![index].shippingMethodList == null ||
-                                              shippingController.chosenShippingList.isEmpty ||
-                                              shippingController.shippingList![index].shippingIndex == -1) ? ''
-                                              : PriceConverter.convertPrice(context,
-                                              shippingController.shippingList![index].shippingMethodList![shippingController.shippingList![index].shippingIndex!].cost),
-                                              style: textBold.copyWith(color: Theme.of(context).textTheme.bodyLarge?.color),
-                                              maxLines: 1, overflow: TextOverflow.ellipsis,textAlign: TextAlign.end),
-                                          ],
-                                        ),
+                                        // Row(children: [
+                                        //     Text((shippingController.shippingList == null ||
+                                        //         shippingController.shippingList![index].shippingMethodList == null ||
+                                        //         shippingController.chosenShippingList.isEmpty ||
+                                        //         shippingController.shippingList![index].shippingIndex == -1) ? '':
+                                        //     '${getTranslated('shipping_cost', context)??''} : ', style: textRegular.copyWith(color: Theme.of(context).textTheme.bodyLarge?.color),),
+                                        //
+                                        //   Text((shippingController.shippingList == null ||
+                                        //       shippingController.shippingList![index].shippingMethodList == null ||
+                                        //       shippingController.chosenShippingList.isEmpty ||
+                                        //       shippingController.shippingList![index].shippingIndex == -1) ? ''
+                                        //       : PriceConverter.convertPrice(context,
+                                        //       shippingController.shippingList![index].shippingMethodList![shippingController.shippingList![index].shippingIndex!].cost),
+                                        //       style: textBold.copyWith(color: Theme.of(context).textTheme.bodyLarge?.color),
+                                        //       maxLines: 1, overflow: TextOverflow.ellipsis,textAlign: TextAlign.end),
+                                        //   ],
+                                        // ),
                                         const SizedBox(height: Dimensions.paddingSizeExtraSmall),
                                         Row(children: [
                                             Text((shippingController.shippingList == null ||
