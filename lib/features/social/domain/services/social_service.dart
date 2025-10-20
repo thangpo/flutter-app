@@ -12,12 +12,15 @@ class SocialService implements SocialServiceInterface {
 
   // Feeds
   @override
-  Future<List<SocialPost>> getNewsFeed({int limit = 10, String? afterPostId}) async {
+  Future<List<SocialPost>> getNewsFeed(
+      {int limit = 10, String? afterPostId}) async {
     final resp = await socialRepository.fetchNewsFeed(
       limit: limit,
       afterPostId: afterPostId,
     );
-    if (resp.isSuccess && resp.response != null && resp.response!.statusCode == 200) {
+    if (resp.isSuccess &&
+        resp.response != null &&
+        resp.response!.statusCode == 200) {
       final page = socialRepository.parseNewsFeed(resp.response!);
       return page.posts;
     }
@@ -28,8 +31,11 @@ class SocialService implements SocialServiceInterface {
   // Stories
   @override
   Future<List<SocialStory>> getStories({int limit = 10, int offset = 0}) async {
-    final resp = await socialRepository.fetchStories(limit: limit, offset: offset);
-    if (resp.isSuccess && resp.response != null && resp.response!.statusCode == 200) {
+    final resp =
+        await socialRepository.fetchStories(limit: limit, offset: offset);
+    if (resp.isSuccess &&
+        resp.response != null &&
+        resp.response!.statusCode == 200) {
       return socialRepository.parseStories(resp.response!);
     }
     ApiChecker.checkApi(resp);
@@ -52,10 +58,57 @@ class SocialService implements SocialServiceInterface {
       final data = resp.response!.data;
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status != 200) {
-        final msg = (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
+        final msg =
+            (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
         throw Exception(msg);
       }
       return;
+    }
+
+    ApiChecker.checkApi(resp);
+    throw Exception('Reaction failed');
+  }
+
+  @override
+  Future<void> reactToComment({
+    required String commentId,
+    required String reaction,
+  }) async {
+    final resp = await socialRepository.reactToComment(
+      commentId: commentId,
+      reaction: reaction,
+    );
+
+    if (resp.isSuccess && resp.response != null) {
+      final data = resp.response!.data;
+      final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
+      if (status == 200) return;
+      final msg =
+          (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
+      throw Exception(msg);
+    }
+
+    ApiChecker.checkApi(resp);
+    throw Exception('Reaction failed');
+  }
+
+  @override
+  Future<void> reactToReply({
+    required String replyId,
+    required String reaction,
+  }) async {
+    final resp = await socialRepository.reactToReply(
+      replyId: replyId,
+      reaction: reaction,
+    );
+
+    if (resp.isSuccess && resp.response != null) {
+      final data = resp.response!.data;
+      final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
+      if (status == 200) return;
+      final msg =
+          (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
+      throw Exception(msg);
     }
 
     ApiChecker.checkApi(resp);
@@ -71,7 +124,8 @@ class SocialService implements SocialServiceInterface {
       if (status == 200) {
         return socialRepository.parsePostData(resp.response!);
       }
-      final msg = (data?['errors']?['error_text'] ?? 'Load post failed').toString();
+      final msg =
+          (data?['errors']?['error_text'] ?? 'Load post failed').toString();
       throw Exception(msg);
     }
     ApiChecker.checkApi(resp);
@@ -79,15 +133,18 @@ class SocialService implements SocialServiceInterface {
   }
 
   @override
-  Future<List<SocialComment>> getPostComments({required String postId, int? limit, int? offset}) async {
-    final resp = await socialRepository.fetchComments(postId: postId, limit: limit, offset: offset);
+  Future<List<SocialComment>> getPostComments(
+      {required String postId, int? limit, int? offset}) async {
+    final resp = await socialRepository.fetchComments(
+        postId: postId, limit: limit, offset: offset);
     if (resp.isSuccess && resp.response != null) {
       final data = resp.response!.data;
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status == 200) {
         return socialRepository.parsePostComments(resp.response!);
       }
-      final msg = (data?['errors']?['error_text'] ?? 'Load comments failed').toString();
+      final msg =
+          (data?['errors']?['error_text'] ?? 'Load comments failed').toString();
       throw Exception(msg);
     }
     ApiChecker.checkApi(resp);
@@ -95,15 +152,18 @@ class SocialService implements SocialServiceInterface {
   }
 
   @override
-  Future<List<SocialComment>> getCommentReplies({required String commentId}) async {
-    final resp = await socialRepository.fetchCommentReplies(commentId: commentId);
+  Future<List<SocialComment>> getCommentReplies(
+      {required String commentId}) async {
+    final resp =
+        await socialRepository.fetchCommentReplies(commentId: commentId);
     if (resp.isSuccess && resp.response != null) {
       final data = resp.response!.data;
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status == 200) {
         return socialRepository.parseCommentReplies(resp.response!);
       }
-      final msg = (data?['errors']?['error_text'] ?? 'Load replies failed').toString();
+      final msg =
+          (data?['errors']?['error_text'] ?? 'Load replies failed').toString();
       throw Exception(msg);
     }
     ApiChecker.checkApi(resp);
@@ -129,7 +189,8 @@ class SocialService implements SocialServiceInterface {
       final data = resp.response!.data;
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status == 200) return;
-      final msg = (data?['errors']?['error_text'] ?? 'Create comment failed').toString();
+      final msg = (data?['errors']?['error_text'] ?? 'Create comment failed')
+          .toString();
       throw Exception(msg);
     }
     ApiChecker.checkApi(resp);
@@ -155,12 +216,46 @@ class SocialService implements SocialServiceInterface {
       final data = resp.response!.data;
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status == 200) return;
-      final msg = (data?['errors']?['error_text'] ?? 'Create reply failed').toString();
+      final msg =
+          (data?['errors']?['error_text'] ?? 'Create reply failed').toString();
       throw Exception(msg);
     }
     ApiChecker.checkApi(resp);
     throw Exception('Create reply failed');
   }
+
+  @override
+  Future<SocialPost> createPost({
+    String? text,
+    List<String>? imagePaths,
+    String? videoPath,
+    String? videoThumbnailPath,
+    int privacy = 0,
+    String? backgroundColorId,
+  }) async {
+    final resp = await socialRepository.createPost(
+      text: text,
+      imagePaths: imagePaths,
+      videoPath: videoPath,
+      videoThumbnailPath: videoThumbnailPath,
+      privacy: privacy,
+      backgroundColorId: backgroundColorId,
+    );
+    if (resp.isSuccess && resp.response != null) {
+      final data = resp.response!.data;
+      final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
+      if (status == 200) {
+        final SocialPost? post = socialRepository.parsePostData(resp.response!);
+        if (post != null) return post;
+        throw Exception('Create post failed: Missing post data.');
+      }
+      final msg = (data?['errors']?['error_text'] ??
+              data?['message'] ??
+              'Create post failed')
+          .toString();
+      throw Exception(msg);
+    }
+    ApiChecker.checkApi(resp);
+    throw Exception('Create post failed');
+  }
 }
-
-

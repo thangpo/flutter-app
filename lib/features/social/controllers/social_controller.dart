@@ -13,6 +13,9 @@ class SocialController with ChangeNotifier {
   bool _loading = false;
   bool get loading => _loading;
 
+  bool _creatingPost = false;
+  bool get creatingPost => _creatingPost;
+
   final List<SocialPost> _posts = [];
   List<SocialPost> get posts => List.unmodifiable(_posts);
 
@@ -20,6 +23,37 @@ class SocialController with ChangeNotifier {
     final i = _posts.indexWhere((e) => e.id == id);
     if (i != -1) {
       _posts[i] = newPost;
+      notifyListeners();
+    }
+  }
+
+  Future<SocialPost?> createPost({
+    String? text,
+    List<String>? imagePaths,
+    String? videoPath,
+    String? videoThumbnailPath,
+    int privacy = 0,
+    String? backgroundColorId,
+  }) async {
+    if (_creatingPost) return null;
+    _creatingPost = true;
+    notifyListeners();
+    try {
+      final SocialPost post = await service.createPost(
+        text: text,
+        imagePaths: imagePaths,
+        videoPath: videoPath,
+        videoThumbnailPath: videoThumbnailPath,
+        privacy: privacy,
+        backgroundColorId: backgroundColorId,
+      );
+      _posts.insert(0, post);
+      return post;
+    } catch (e) {
+      showCustomSnackBar(e.toString(), Get.context!, isError: true);
+      rethrow;
+    } finally {
+      _creatingPost = false;
       notifyListeners();
     }
   }
@@ -109,7 +143,8 @@ class SocialController with ChangeNotifier {
       );
       _updatePost(post.id, optimistic);
       try {
-        await service.reactToPost(postId: post.id, reaction: was, action: 'dislike');
+        await service.reactToPost(
+            postId: post.id, reaction: was, action: 'dislike');
       } catch (e) {
         _updatePost(post.id, post);
         showCustomSnackBar(e.toString(), Get.context!, isError: true);
@@ -127,7 +162,8 @@ class SocialController with ChangeNotifier {
     _updatePost(post.id, optimistic);
 
     try {
-      await service.reactToPost(postId: post.id, reaction: reaction, action: 'reaction');
+      await service.reactToPost(
+          postId: post.id, reaction: reaction, action: 'reaction');
       // (Optional) Nếu muốn đồng bộ lại số liệu từ server:
       // - có thể gọi get-post-data và cập nhật reactionCount/myReaction
     } catch (e) {

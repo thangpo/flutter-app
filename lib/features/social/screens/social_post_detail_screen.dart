@@ -13,6 +13,8 @@ import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakba
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 
+enum CommentSortOrder { newest, oldest }
+
 class SocialPostDetailScreen extends StatefulWidget {
   final SocialPost post;
   const SocialPostDetailScreen({super.key, required this.post});
@@ -37,6 +39,8 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
   bool _loadingComments = false;
   bool _hasMore = true;
   final int _pageSize = 10;
+  final Set<String> _commentReactionLoading = <String>{};
+  CommentSortOrder _sortOrder = CommentSortOrder.newest;
 
   @override
   void initState() {
@@ -70,9 +74,74 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
       final existing = _comments.map((e) => e.id).toSet();
       setState(() {
         _comments.addAll(list.where((e) => !existing.contains(e.id)));
+        _sortComments();
       });
     } finally {
       _loadingComments = false;
+    }
+  }
+
+  Future<void> _reactOnComment(SocialComment comment, String reaction) async {
+    final idx = _comments.indexWhere((e) => e.id == comment.id);
+    if (idx == -1) return;
+    if (_commentReactionLoading.contains(comment.id)) return;
+    final previous = _comments[idx];
+    final was = previous.myReaction;
+    final now = reaction;
+    int delta = 0;
+    if (was.isEmpty && now.isNotEmpty) {
+      delta = 1;
+    } else if (was.isNotEmpty && now.isEmpty) {
+      delta = -1;
+    }
+    final optimistic = previous.copyWith(
+      myReaction: now,
+      reactionCount: (previous.reactionCount + delta).clamp(0, 1 << 31).toInt(),
+    );
+    setState(() {
+      _comments[idx] = optimistic;
+    });
+    _commentReactionLoading.add(comment.id);
+    try {
+      final svc = sl<SocialServiceInterface>();
+      await svc.reactToComment(commentId: comment.id, reaction: now);
+    } catch (e) {
+      setState(() {
+        _comments[idx] = previous;
+      });
+      showCustomSnackBar(e.toString(), context, isError: true);
+    } finally {
+      _commentReactionLoading.remove(comment.id);
+    }
+  }
+
+  void _sortComments() {
+    int comparison(SocialComment a, SocialComment b) {
+      final DateTime? aTime = a.createdAt;
+      final DateTime? bTime = b.createdAt;
+      if (aTime != null && bTime != null) {
+        final cmp = aTime.compareTo(bTime);
+        if (cmp != 0) return cmp;
+      } else if (aTime != null) {
+        return -1;
+      } else if (bTime != null) {
+        return 1;
+      }
+      final int aId = int.tryParse(a.id) ?? 0;
+      final int bId = int.tryParse(b.id) ?? 0;
+      return aId.compareTo(bId);
+    }
+
+    final multiplier = _sortOrder == CommentSortOrder.newest ? -1 : 1;
+    _comments.sort((a, b) => multiplier * comparison(a, b));
+  }
+
+  String _sortOrderLabel(CommentSortOrder order) {
+    switch (order) {
+      case CommentSortOrder.newest:
+        return 'Moi nhat';
+      case CommentSortOrder.oldest:
+        return 'Cu nhat';
     }
   }
 
@@ -258,10 +327,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                 ),
                                 const SizedBox(height: 12),
                                 if ((post.text ?? '').isNotEmpty)
-                                  const SizedBox(height: 4),
-                                if ((post.text ?? '').isNotEmpty)
-                                  Html(data: post.text!),
-                                const SizedBox(height: 8),
+                                  const SizedBox(height: 8),
                                 _DetailMedia(post: post),
                                 if (post.hasProduct)
                                   Padding(
@@ -375,9 +441,44 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                         const SizedBox(height: 12),
                         Divider(color: onSurface.withOpacity(.12)),
                         const SizedBox(height: 8),
-                        Text(
-                          'Bình luận (${_comments.length}${_hasMore ? '+' : ''})',
-                          style: Theme.of(context).textTheme.titleMedium,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Binh luan (${_comments.length}${_hasMore ? '+' : ''})',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                            ),
+                            PopupMenuButton<CommentSortOrder>(
+                              tooltip: 'Sap xep binh luan',
+                              onSelected: (value) {
+                                if (_sortOrder != value) {
+                                  setState(() {
+                                    _sortOrder = value;
+                                    _sortComments();
+                                  });
+                                }
+                              },
+                              itemBuilder: (context) => const [
+                                PopupMenuItem(
+                                  value: CommentSortOrder.newest,
+                                  child: Text('Moi nhat'),
+                                ),
+                                PopupMenuItem(
+                                  value: CommentSortOrder.oldest,
+                                  child: Text('Cu nhat'),
+                                ),
+                              ],
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(_sortOrderLabel(_sortOrder)),
+                                  const SizedBox(width: 4),
+                                  const Icon(Icons.sort, size: 18),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 8),
                         Builder(
@@ -400,6 +501,10 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                               );
                             }
                             final svc = sl<SocialServiceInterface>();
+                            final replyActionStyle = Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(color: onSurface.withOpacity(.6));
                             return Column(
                               children: [
                                 for (final c in _comments)
@@ -485,6 +590,125 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                     autoplay: false,
                                                   ),
                                                 ),
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                    top: 6),
+                                                child: Row(
+                                                  children: [
+                                                    Builder(
+                                                      builder: (reactCtx) {
+                                                        final reacted = c
+                                                            .myReaction
+                                                            .isNotEmpty;
+                                                        final style =
+                                                            Theme.of(context)
+                                                                .textTheme
+                                                                .bodySmall
+                                                                ?.copyWith(
+                                                                  color: reacted
+                                                                      ? Theme.of(
+                                                                              context)
+                                                                          .colorScheme
+                                                                          .primary
+                                                                      : onSurface
+                                                                          .withOpacity(
+                                                                              .6),
+                                                                  fontWeight: reacted
+                                                                      ? FontWeight
+                                                                          .w600
+                                                                      : null,
+                                                                );
+                                                        return GestureDetector(
+                                                          behavior:
+                                                              HitTestBehavior
+                                                                  .opaque,
+                                                          onTap: () {
+                                                            final next =
+                                                                c.myReaction ==
+                                                                        'Like'
+                                                                    ? ''
+                                                                    : 'Like';
+                                                            _reactOnComment(
+                                                                c, next);
+                                                          },
+                                                          onLongPress: () {
+                                                            final overlay =
+                                                                Overlay.of(
+                                                                    reactCtx);
+                                                            if (overlay == null)
+                                                              return;
+                                                            final overlayBox =
+                                                                overlay.context
+                                                                        .findRenderObject()
+                                                                    as RenderBox;
+                                                            final box = reactCtx
+                                                                    .findRenderObject()
+                                                                as RenderBox?;
+                                                            final Offset centerGlobal = box !=
+                                                                    null
+                                                                ? box.localToGlobal(
+                                                                    box.size.center(
+                                                                        Offset
+                                                                            .zero),
+                                                                    ancestor:
+                                                                        overlayBox)
+                                                                : overlayBox
+                                                                    .size
+                                                                    .center(Offset
+                                                                        .zero);
+                                                            _showReactionsOverlay(
+                                                              reactCtx,
+                                                              centerGlobal,
+                                                              onSelect: (val) =>
+                                                                  _reactOnComment(
+                                                                      c, val),
+                                                            );
+                                                          },
+                                                          child: Row(
+                                                            mainAxisSize:
+                                                                MainAxisSize
+                                                                    .min,
+                                                            children: [
+                                                              _reactionIcon(
+                                                                  c.myReaction,
+                                                                  size: 20),
+                                                              const SizedBox(
+                                                                  width: 4),
+                                                              Text(
+                                                                c.reactionCount
+                                                                    .toString(),
+                                                                style: style,
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        );
+                                                      },
+                                                    ),
+                                                    const SizedBox(width: 12),
+                                                    TextButton(
+                                                      onPressed: () {
+                                                        setState(() {
+                                                          _replyingTo = c;
+                                                          _showInput = true;
+                                                          _commentImagePath =
+                                                              null;
+                                                          _commentImageUrl =
+                                                              null;
+                                                          _commentAudioPath =
+                                                              null;
+                                                        });
+                                                        FocusScope.of(context)
+                                                            .requestFocus(
+                                                                _commentFocus);
+                                                      },
+                                                      child: Text(
+                                                        'Tra loi',
+                                                        style: replyActionStyle,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
                                               _RepliesLazy(
                                                 comment: c,
                                                 service: svc,
@@ -1000,10 +1224,31 @@ class _RepliesLazyState extends State<_RepliesLazy> {
   bool _expanded = false;
   bool _loading = false;
   List<SocialComment> _replies = const [];
+  final Set<String> _replyReactionLoading = <String>{};
 
   // Giữ lại biến để không ảnh hưởng logic cũ (đã tắt UI gửi nhanh)
   final TextEditingController _replyController = TextEditingController();
   bool _sending = false;
+
+  void _sortReplies() {
+    int comparison(SocialComment a, SocialComment b) {
+      final DateTime? aTime = a.createdAt;
+      final DateTime? bTime = b.createdAt;
+      if (aTime != null && bTime != null) {
+        final cmp = aTime.compareTo(bTime);
+        if (cmp != 0) return -cmp;
+      } else if (aTime != null) {
+        return -1;
+      } else if (bTime != null) {
+        return 1;
+      }
+      final int aId = int.tryParse(a.id) ?? 0;
+      final int bId = int.tryParse(b.id) ?? 0;
+      return bId.compareTo(aId);
+    }
+
+    _replies = [..._replies]..sort(comparison);
+  }
 
   Future<void> _load() async {
     if (_loading) return;
@@ -1014,6 +1259,7 @@ class _RepliesLazyState extends State<_RepliesLazy> {
       setState(() {
         _replies = list;
         _expanded = true;
+        _sortReplies();
       });
     } finally {
       setState(() => _loading = false);
@@ -1026,6 +1272,50 @@ class _RepliesLazyState extends State<_RepliesLazy> {
     super.dispose();
   }
 
+  Future<void> _reactOnReply(SocialComment reply, String reaction) async {
+    final idx = _replies.indexWhere((e) => e.id == reply.id);
+    if (idx == -1) return;
+    if (_replyReactionLoading.contains(reply.id)) return;
+    final previous = _replies[idx];
+    final was = previous.myReaction;
+    final now = reaction;
+    int delta = 0;
+    if (was.isEmpty && now.isNotEmpty) {
+      delta = 1;
+    } else if (was.isNotEmpty && now.isEmpty) {
+      delta = -1;
+    }
+    final optimistic = previous.copyWith(
+      myReaction: now,
+      reactionCount: (previous.reactionCount + delta).clamp(0, 1 << 31).toInt(),
+    );
+    setState(() {
+      _replies = [
+        ..._replies.sublist(0, idx),
+        optimistic,
+        ..._replies.sublist(idx + 1),
+      ];
+    });
+    _replyReactionLoading.add(reply.id);
+    try {
+      await widget.service.reactToReply(
+        replyId: reply.id,
+        reaction: now,
+      );
+    } catch (e) {
+      setState(() {
+        _replies = [
+          ..._replies.sublist(0, idx),
+          previous,
+          ..._replies.sublist(idx + 1),
+        ];
+      });
+      showCustomSnackBar(e.toString(), context, isError: true);
+    } finally {
+      _replyReactionLoading.remove(reply.id);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final onSurface = Theme.of(context).colorScheme.onSurface;
@@ -1035,36 +1325,21 @@ class _RepliesLazyState extends State<_RepliesLazy> {
         ?.copyWith(color: onSurface.withOpacity(.6));
 
     if (!_expanded) {
-      if ((widget.comment.repliesCount ?? 0) == 0) {
-        return Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton(
-            onPressed: () => widget.onRequestReply(widget.comment),
-            child: Text('Trả lời', style: replyActionStyle),
-          ),
-        );
+      final repliesCount = widget.comment.repliesCount ?? 0;
+      if (repliesCount == 0) {
+        return const SizedBox.shrink();
       }
       return Align(
         alignment: Alignment.centerLeft,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextButton(
-              onPressed: _load,
-              child: Text(
-                'Xem phản hồi (${widget.comment.repliesCount ?? 0})',
-                style: replyActionStyle,
-              ),
-            ),
-            TextButton(
-              onPressed: () => widget.onRequestReply(widget.comment),
-              child: Text('Trả lời', style: replyActionStyle),
-            ),
-          ],
+        child: TextButton(
+          onPressed: _load,
+          child: Text(
+            'Xem phan hoi ($repliesCount)',
+            style: replyActionStyle,
+          ),
         ),
       );
     }
-
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.only(top: 6),
@@ -1134,6 +1409,67 @@ class _RepliesLazyState extends State<_RepliesLazy> {
                           child: _AudioPlayerBox(
                               url: r.audioUrl!, autoplay: false),
                         ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Row(
+                          children: [
+                            Builder(
+                              builder: (reactCtx) {
+                                final reacted = r.myReaction.isNotEmpty;
+                                final style = Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: reacted
+                                          ? Theme.of(context)
+                                              .colorScheme
+                                              .primary
+                                          : onSurface.withOpacity(.6),
+                                      fontWeight:
+                                          reacted ? FontWeight.w600 : null,
+                                    );
+                                return GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: () {
+                                    final next =
+                                        r.myReaction == 'Like' ? '' : 'Like';
+                                    _reactOnReply(r, next);
+                                  },
+                                  onLongPress: () {
+                                    final overlay = Overlay.of(reactCtx);
+                                    if (overlay == null) return;
+                                    final overlayBox = overlay.context
+                                        .findRenderObject() as RenderBox;
+                                    final box = reactCtx.findRenderObject()
+                                        as RenderBox?;
+                                    final Offset centerGlobal = box != null
+                                        ? box.localToGlobal(
+                                            box.size.center(Offset.zero),
+                                            ancestor: overlayBox)
+                                        : overlayBox.size.center(Offset.zero);
+                                    _showReactionsOverlay(
+                                      reactCtx,
+                                      centerGlobal,
+                                      onSelect: (val) => _reactOnReply(r, val),
+                                    );
+                                  },
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      _reactionIcon(r.myReaction, size: 18),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        r.reactionCount.toString(),
+                                        style: style,
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
