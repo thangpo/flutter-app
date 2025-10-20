@@ -29,6 +29,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
   final FocusNode _commentFocus = FocusNode();
   bool _sendingComment = false;
   String? _commentImagePath;
+  String? _commentImageUrl;
   String? _commentAudioPath;
   SocialComment? _replyingTo;
 
@@ -73,6 +74,99 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
     } finally {
       _loadingComments = false;
     }
+  }
+
+  Future<void> _handleImageAttachment() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetCtx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Chọn ảnh từ thư viện'),
+              onTap: () => Navigator.of(sheetCtx).pop('photo'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.gif_box_outlined),
+              title: const Text('Chọn GIF từ tệp'),
+              onTap: () => Navigator.of(sheetCtx).pop('gif'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.link_outlined),
+              title: const Text('Dán GIF từ đường dẫn'),
+              onTap: () => Navigator.of(sheetCtx).pop('url'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+
+    if (choice == 'photo') {
+      final img = await ImagePicker()
+          .pickImage(source: ImageSource.gallery, imageQuality: 80);
+      if (!mounted || img == null) return;
+      setState(() {
+        _commentImagePath = img.path;
+        _commentImageUrl = null;
+      });
+      return;
+    }
+
+    if (choice == 'gif') {
+      final res = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['gif', 'webp', 'GIF', 'WEBP'],
+      );
+      if (!mounted || res == null || res.files.isEmpty) return;
+      final file = res.files.first;
+      if (file.path == null) return;
+      setState(() {
+        _commentImagePath = file.path;
+        _commentImageUrl = null;
+      });
+      return;
+    }
+
+    if (choice == 'url') {
+      final url = await _askGifUrl();
+      if (!mounted || url == null || url.isEmpty) return;
+      setState(() {
+        _commentImageUrl = url;
+        _commentImagePath = null;
+      });
+    }
+  }
+
+  Future<String?> _askGifUrl() async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Dán GIF URL'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(hintText: 'https://...gif'),
+          keyboardType: TextInputType.url,
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Hủy'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            child: const Text('Chọn'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
   }
 
   @override
@@ -268,8 +362,9 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                         },
                                       ),
                                       const _PostAction(
-                                          icon: Icons.share_outlined,
-                                          label: 'Chia sẻ'),
+                                        icon: Icons.share_outlined,
+                                        label: 'Chia sẻ',
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -376,14 +471,8 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                   padding:
                                                       const EdgeInsets.only(
                                                           top: 6),
-                                                  child: ClipRRect(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            8),
-                                                    child: CachedNetworkImage(
-                                                      imageUrl: c.imageUrl!,
-                                                      fit: BoxFit.cover,
-                                                    ),
+                                                  child: _CommentImagePreview(
+                                                    url: c.imageUrl!,
                                                   ),
                                                 ),
                                               if ((c.audioUrl ?? '').isNotEmpty)
@@ -403,6 +492,9 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                   setState(() {
                                                     _replyingTo = target;
                                                     _showInput = true;
+                                                    _commentImagePath = null;
+                                                    _commentImageUrl = null;
+                                                    _commentAudioPath = null;
                                                   });
                                                   FocusScope.of(context)
                                                       .requestFocus(
@@ -440,7 +532,8 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
               ),
             ),
           ),
-          // ===== FIXED: nhánh nhập bình luận, đúng cấu trúc child =====
+
+          // ==== Ô nhập bình luận (đã đóng đủ ngoặc) ====
           _showInput
               ? SafeArea(
                   top: false,
@@ -473,15 +566,16 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                               children: [
                                 Expanded(
                                   child: Text(
-                                    'Đang trả lời \'${_replyingTo!.userName ?? ''}\'',
+                                    'Đang trả lời "${_replyingTo!.userName ?? ''}"',
                                     style: Theme.of(context)
                                         .textTheme
                                         .bodySmall
                                         ?.copyWith(
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .primary,
-                                            fontWeight: FontWeight.w600),
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .primary,
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
@@ -510,18 +604,12 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                             ),
                             const SizedBox(width: 8),
                             IconButton(
-                              tooltip: 'Attach image',
-                              onPressed: () async {
-                                final img = await ImagePicker().pickImage(
-                                    source: ImageSource.gallery,
-                                    imageQuality: 80);
-                                if (img != null)
-                                  setState(() => _commentImagePath = img.path);
-                              },
+                              tooltip: 'Đính ảnh',
+                              onPressed: _handleImageAttachment,
                               icon: const Icon(Icons.image_outlined),
                             ),
                             IconButton(
-                              tooltip: 'Attach audio',
+                              tooltip: 'Đính audio',
                               onPressed: () async {
                                 final res = await FilePicker.platform
                                     .pickFiles(type: FileType.audio);
@@ -541,6 +629,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                           _commentController.text.trim();
                                       if (txt.isEmpty &&
                                           _commentImagePath == null &&
+                                          _commentImageUrl == null &&
                                           _commentAudioPath == null) return;
                                       setState(() => _sendingComment = true);
                                       try {
@@ -552,29 +641,36 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                             text: txt,
                                             imagePath: _commentImagePath,
                                             audioPath: _commentAudioPath,
+                                            imageUrl: _commentImageUrl,
                                           );
                                         } else {
                                           await svc.createReply(
                                             commentId: _replyingTo!.id,
                                             text: txt,
                                             imagePath: _commentImagePath,
+                                            audioPath: _commentAudioPath,
+                                            imageUrl: _commentImageUrl,
                                           );
                                         }
                                         _commentController.clear();
                                         setState(() {
                                           _commentImagePath = null;
+                                          _commentImageUrl = null;
                                           _commentAudioPath = null;
                                           _replyingTo = null;
                                         });
                                         await _refreshAll();
                                       } catch (e) {
                                         showCustomSnackBar(
-                                            e.toString(), context,
-                                            isError: true);
+                                          e.toString(),
+                                          context,
+                                          isError: true,
+                                        );
                                       } finally {
-                                        if (mounted)
+                                        if (mounted) {
                                           setState(
                                               () => _sendingComment = false);
+                                        }
                                       }
                                     },
                               icon: const Icon(Icons.send),
@@ -588,7 +684,8 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                           ],
                         ),
                         if (_commentImagePath != null ||
-                            (_commentAudioPath != null && _replyingTo == null))
+                            _commentImageUrl != null ||
+                            _commentAudioPath != null)
                           Padding(
                             padding: const EdgeInsets.only(top: 6),
                             child: Wrap(
@@ -598,14 +695,28 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                               children: [
                                 if (_commentImagePath != null)
                                   InputChip(
-                                    label: const Text('Ảnh đính kèm'),
+                                    label: Text(
+                                      'File: ${_basename(_commentImagePath!)}',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                     onDeleted: () => setState(
                                         () => _commentImagePath = null),
                                   ),
-                                if (_commentAudioPath != null &&
-                                    _replyingTo == null)
+                                if (_commentImageUrl != null)
                                   InputChip(
-                                    label: const Text('Âm thanh đính kèm'),
+                                    label: Text(
+                                      'GIF URL: ${_commentImageUrl!}',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    onDeleted: () =>
+                                        setState(() => _commentImageUrl = null),
+                                  ),
+                                if (_commentAudioPath != null)
+                                  InputChip(
+                                    label: Text(
+                                      'Audio: ${_basename(_commentAudioPath!)}',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                     onDeleted: () => setState(
                                         () => _commentAudioPath = null),
                                   ),
@@ -694,13 +805,19 @@ class _DetailMedia extends StatelessWidget {
           _ImagesCarousel(urls: post.imageUrls),
           const SizedBox(height: 8),
           _AudioPlayerBox(
-              url: post.audioUrl!, autoplay: true, title: post.fileName),
+            url: post.audioUrl!,
+            autoplay: true,
+            title: post.fileName,
+          ),
         ],
       );
     }
     if ((post.audioUrl ?? '').isNotEmpty) {
       return _AudioPlayerBox(
-          url: post.audioUrl!, autoplay: false, title: post.fileName);
+        url: post.audioUrl!,
+        autoplay: false,
+        title: post.fileName,
+      );
     }
     final imgs = post.imageUrls;
     if (imgs.isEmpty) return const SizedBox.shrink();
@@ -779,63 +896,6 @@ class _ProductBlock extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _ReactionSummary extends StatelessWidget {
-  final String myReaction;
-  final int count;
-  const _ReactionSummary({required this.myReaction, required this.count});
-
-  String _reactionAsset(String r) {
-    switch (r) {
-      case 'Love':
-        return 'assets/images/reactions/love.png';
-      case 'HaHa':
-        return 'assets/images/reactions/haha.png';
-      case 'Wow':
-        return 'assets/images/reactions/wow.png';
-      case 'Sad':
-        return 'assets/images/reactions/sad.png';
-      case 'Angry':
-        return 'assets/images/reactions/angry.png';
-      case 'Like':
-        return 'assets/images/reactions/like.png';
-      default:
-        return '';
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final onSurface = Theme.of(context).colorScheme.onSurface;
-    if (myReaction.isEmpty) {
-      return Row(
-        children: [
-          Icon(Icons.thumb_up_outlined,
-              size: 18, color: onSurface.withOpacity(.6)),
-          const SizedBox(width: 6),
-          Text('$count'),
-        ],
-      );
-    }
-    final asset = _reactionAsset(myReaction);
-    if (asset.isEmpty) {
-      return Row(
-        children: [
-          const Icon(Icons.thumb_up, size: 18),
-          const SizedBox(width: 6),
-          Text('$count'),
-        ],
-      );
-    }
-    return Row(
-      children: [
-        Image.asset(asset, width: 18, height: 18),
-        const SizedBox(width: 6),
-        Text('$count'),
-      ],
     );
   }
 }
@@ -940,7 +1000,8 @@ class _RepliesLazyState extends State<_RepliesLazy> {
   bool _expanded = false;
   bool _loading = false;
   List<SocialComment> _replies = const [];
-  // Giữ lại các biến cũ để tránh lỗi biên dịch trong khối UI đã vô hiệu hóa
+
+  // Giữ lại biến để không ảnh hưởng logic cũ (đã tắt UI gửi nhanh)
   final TextEditingController _replyController = TextEditingController();
   bool _sending = false;
 
@@ -968,19 +1029,18 @@ class _RepliesLazyState extends State<_RepliesLazy> {
   @override
   Widget build(BuildContext context) {
     final onSurface = Theme.of(context).colorScheme.onSurface;
+    final replyActionStyle = Theme.of(context)
+        .textTheme
+        .bodySmall
+        ?.copyWith(color: onSurface.withOpacity(.6));
+
     if (!_expanded) {
       if ((widget.comment.repliesCount ?? 0) == 0) {
         return Align(
           alignment: Alignment.centerLeft,
           child: TextButton(
             onPressed: () => widget.onRequestReply(widget.comment),
-            child: Text(
-              'Trả lời',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: onSurface.withOpacity(.6)),
-            ),
+            child: Text('Trả lời', style: replyActionStyle),
           ),
         );
       }
@@ -993,32 +1053,25 @@ class _RepliesLazyState extends State<_RepliesLazy> {
               onPressed: _load,
               child: Text(
                 'Xem phản hồi (${widget.comment.repliesCount ?? 0})',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: onSurface.withOpacity(.6)),
+                style: replyActionStyle,
               ),
             ),
             TextButton(
               onPressed: () => widget.onRequestReply(widget.comment),
-              child: Text(
-                'Trả lời',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: onSurface.withOpacity(.6)),
-              ),
+              child: Text('Trả lời', style: replyActionStyle),
             ),
           ],
         ),
       );
     }
+
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.only(top: 6),
         child: CircularProgressIndicator(),
       );
     }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1073,21 +1126,13 @@ class _RepliesLazyState extends State<_RepliesLazy> {
                       if ((r.imageUrl ?? '').isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 6),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: CachedNetworkImage(
-                              imageUrl: r.imageUrl!,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
+                          child: _CommentImagePreview(url: r.imageUrl!),
                         ),
                       if ((r.audioUrl ?? '').isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 6),
                           child: _AudioPlayerBox(
-                            url: r.audioUrl!,
-                            autoplay: false,
-                          ),
+                              url: r.audioUrl!, autoplay: false),
                         ),
                     ],
                   ),
@@ -1096,6 +1141,24 @@ class _RepliesLazyState extends State<_RepliesLazy> {
             ),
           ),
         const SizedBox(height: 6),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Wrap(
+            spacing: 4,
+            children: [
+              TextButton(
+                onPressed: () => setState(() => _expanded = false),
+                child: Text('Ẩn phản hồi', style: replyActionStyle),
+              ),
+              TextButton(
+                onPressed: () => widget.onRequestReply(widget.comment),
+                child: Text('Trả lời', style: replyActionStyle),
+              ),
+            ],
+          ),
+        ),
+
+        // Khối gửi nhanh (để false) — giữ nguyên để dễ bật lại sau
         if (false)
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1142,6 +1205,83 @@ class _RepliesLazyState extends State<_RepliesLazy> {
   }
 }
 
+class _CommentImagePreview extends StatelessWidget {
+  final String url;
+  const _CommentImagePreview({required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => _showImageViewer(context, url),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: SizedBox(
+          height: 140,
+          width: 140,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              CachedNetworkImage(imageUrl: url, fit: BoxFit.cover),
+              Positioned(
+                bottom: 8,
+                right: 8,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.black45,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.open_in_full,
+                      size: 16, color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+void _showImageViewer(BuildContext context, String url) {
+  showGeneralDialog(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: 'close',
+    barrierColor: Colors.black87,
+    transitionDuration: const Duration(milliseconds: 150),
+    pageBuilder: (ctx, animation, secondaryAnimation) {
+      return SafeArea(
+        child: Material(
+          color: Colors.transparent,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: () => Navigator.of(ctx).pop(),
+                  child: Container(color: Colors.transparent),
+                ),
+              ),
+              Center(
+                  child: InteractiveViewer(
+                      child: CachedNetworkImage(imageUrl: url))),
+              Positioned(
+                top: 16,
+                right: 16,
+                child: IconButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
 class _VideoPlayerBox extends StatefulWidget {
   final String url;
   const _VideoPlayerBox({required this.url});
@@ -1184,15 +1324,13 @@ class _VideoPlayerBoxState extends State<_VideoPlayerBox> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        AspectRatio(
-          aspectRatio: ar,
-          child: VideoPlayer(_controller),
-        ),
+        AspectRatio(aspectRatio: ar, child: VideoPlayer(_controller)),
         Row(
           children: [
             IconButton(
               icon: Icon(
-                  _controller.value.isPlaying ? Icons.pause : Icons.play_arrow),
+                _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
+              ),
               onPressed: () {
                 setState(() {
                   _controller.value.isPlaying
@@ -1338,6 +1476,11 @@ String _reactionPngPath(String r) {
   }
 }
 
+String _basename(String path) {
+  final parts = path.split(RegExp(r'[\\/]'));
+  return parts.isNotEmpty ? parts.last : path;
+}
+
 String _formatTimeText(String? raw) {
   if (raw == null) return '';
   final s = raw.trim();
@@ -1409,9 +1552,9 @@ class _AudioPlayerBoxState extends State<_AudioPlayerBox> {
         Row(
           children: [
             IconButton(
-              icon: Icon(_playing
-                  ? Icons.pause_circle_filled
-                  : Icons.play_circle_fill),
+              icon: Icon(
+                _playing ? Icons.pause_circle_filled : Icons.play_circle_fill,
+              ),
               onPressed: () async {
                 if (_playing) {
                   await _player.pause();

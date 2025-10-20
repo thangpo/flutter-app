@@ -714,6 +714,8 @@ class SocialRepository {
     required String commentId,
     required String text,
     String? imagePath,
+    String? audioPath,
+    String? imageUrl,
   }) async {
     try {
       final token = _getSocialAccessToken();
@@ -730,6 +732,12 @@ class SocialRepository {
       };
       if (imagePath != null && imagePath.isNotEmpty) {
         fields['image'] = await MultipartFile.fromFile(imagePath);
+      }
+      if (audioPath != null && audioPath.isNotEmpty) {
+        fields['audio'] = await MultipartFile.fromFile(audioPath);
+      }
+      if (imageUrl != null && imageUrl.isNotEmpty) {
+        fields['image_url'] = imageUrl;
       }
       final form = FormData.fromMap(fields);
       final res = await dioClient.post(

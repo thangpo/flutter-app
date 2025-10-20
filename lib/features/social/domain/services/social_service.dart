@@ -141,8 +141,16 @@ class SocialService implements SocialServiceInterface {
     required String commentId,
     required String text,
     String? imagePath,
+    String? audioPath,
+    String? imageUrl,
   }) async {
-    final resp = await socialRepository.createReply(commentId: commentId, text: text, imagePath: imagePath);
+    final resp = await socialRepository.createReply(
+      commentId: commentId,
+      text: text,
+      imagePath: imagePath,
+      audioPath: audioPath,
+      imageUrl: imageUrl,
+    );
     if (resp.isSuccess && resp.response != null) {
       final data = resp.response!.data;
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
