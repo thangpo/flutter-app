@@ -1164,45 +1164,61 @@ class _ImagesCarouselState extends State<_ImagesCarousel> {
   @override
   Widget build(BuildContext context) {
     final aspect = _aspect ?? 1.0;
-    return Column(
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: AspectRatio(
-            aspectRatio: aspect,
-            child: PageView.builder(
-              controller: _pc,
-              onPageChanged: (i) => setState(() => _index = i),
-              itemCount: widget.urls.length,
-              itemBuilder: (ctx, i) => CachedNetworkImage(
-                imageUrl: widget.urls[i],
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
-        ),
-        if (widget.urls.length > 1)
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                for (int i = 0; i < widget.urls.length; i++)
-                  Container(
-                    width: 6,
-                    height: 6,
-                    margin: const EdgeInsets.symmetric(horizontal: 3),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: i == _index
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.grey.shade400,
+    final maxHeight = MediaQuery.of(context).size.height * 0.6;
+    return LayoutBuilder(
+      builder: (ctx, constraints) {
+        final width = constraints.maxWidth;
+        double targetHeight = width / aspect;
+        double targetWidth = width;
+        if (targetHeight > maxHeight) {
+          targetHeight = maxHeight;
+          targetWidth = targetHeight * aspect;
+        }
+        return Column(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Align(
+                alignment: Alignment.center,
+                child: SizedBox(
+                  width: targetWidth,
+                  height: targetHeight,
+                  child: PageView.builder(
+                    controller: _pc,
+                    onPageChanged: (i) => setState(() => _index = i),
+                    itemCount: widget.urls.length,
+                    itemBuilder: (ctx, i) => CachedNetworkImage(
+                      imageUrl: widget.urls[i],
+                      fit: BoxFit.cover,
                     ),
                   ),
-              ],
+                ),
+              ),
             ),
-          ),
-      ],
+            if (widget.urls.length > 1)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    for (int i = 0; i < widget.urls.length; i++)
+                      Container(
+                        width: 6,
+                        height: 6,
+                        margin: const EdgeInsets.symmetric(horizontal: 3),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: i == _index
+                              ? Theme.of(context).colorScheme.primary
+                              : Colors.grey.shade400,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }
@@ -1657,48 +1673,70 @@ class _VideoPlayerBoxState extends State<_VideoPlayerBox> {
     final ar = _controller.value.aspectRatio == 0
         ? 16 / 9
         : _controller.value.aspectRatio;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        AspectRatio(aspectRatio: ar, child: VideoPlayer(_controller)),
-        Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final maxHeight = MediaQuery.of(context).size.height * 0.6;
+        double targetHeight = width / ar;
+        double targetWidth = width;
+        if (targetHeight > maxHeight) {
+          targetHeight = maxHeight;
+          targetWidth = targetHeight * ar;
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            IconButton(
-              icon: Icon(
-                _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
+            Align(
+              alignment: Alignment.center,
+              child: SizedBox(
+                width: targetWidth,
+                height: targetHeight,
+                child: VideoPlayer(_controller),
               ),
-              onPressed: () {
-                setState(() {
-                  _controller.value.isPlaying
-                      ? _controller.pause()
-                      : _controller.play();
-                });
-              },
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Builder(
-                builder: (context) {
-                  final totalMs = _controller.value.duration.inMilliseconds;
-                  final posMs = _controller.value.position.inMilliseconds;
-                  final maxVal = totalMs <= 0 ? 1.0 : totalMs.toDouble();
-                  final curVal =
-                      (posMs.clamp(0, totalMs <= 0 ? 1 : totalMs)).toDouble();
-                  return Slider(
-                    min: 0,
-                    max: maxVal,
-                    value: curVal,
-                    onChanged: (v) async {
-                      await _controller
-                          .seekTo(Duration(milliseconds: v.toInt()));
+            Row(
+              children: [
+                IconButton(
+                  icon: Icon(
+                    _controller.value.isPlaying
+                        ? Icons.pause
+                        : Icons.play_arrow,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _controller.value.isPlaying
+                          ? _controller.pause()
+                          : _controller.play();
+                    });
+                  },
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Builder(
+                    builder: (context) {
+                      final totalMs = _controller.value.duration.inMilliseconds;
+                      final posMs = _controller.value.position.inMilliseconds;
+                      final maxVal = totalMs <= 0 ? 1.0 : totalMs.toDouble();
+                      final curVal =
+                          (posMs.clamp(0, totalMs <= 0 ? 1 : totalMs))
+                              .toDouble();
+                      return Slider(
+                        min: 0,
+                        max: maxVal,
+                        value: curVal,
+                        onChanged: (v) async {
+                          await _controller
+                              .seekTo(Duration(milliseconds: v.toInt()));
+                        },
+                      );
                     },
-                  );
-                },
-              ),
+                  ),
+                ),
+              ],
             ),
           ],
-        ),
-      ],
+        );
+      },
     );
   }
 }

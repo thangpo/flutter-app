@@ -22,7 +22,10 @@ class AppConstants {
   static const String socialPostsUri = '/api/posts';
   static const String socialCreatePostUri = '/api/new_post';
   static const String socialGetStoriesUri = '/api/get-stories';
+  static const String socialCreateStoryUri = '/api/create-story';
+  static const String socialGetStoryByIdUri = '/api/get_story_by_id';
   static const String socialGetUserStoriesUri = '/api/get-user-stories';
+  static const String socialGetUserDataUri = '/api/get-user-data';
   static const String socialReactUri = '/api/post-actions';
   static const String socialGetPostDataUri = '/api/get-post-data';
   static const String socialCommentsUri = '/api/comments';

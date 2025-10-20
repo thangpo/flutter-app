@@ -1,10 +1,19 @@
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_comment.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
 
 abstract class SocialServiceInterface {
   Future<List<SocialPost>> getNewsFeed({int limit, String? afterPostId});
   Future<List<SocialStory>> getStories({int limit, int offset});
+  Future<SocialStory?> createStory({
+    required String fileType,
+    required String filePath,
+    String? coverPath,
+    String? storyTitle,
+    String? storyDescription,
+    String? highlightHash,
+  });
   Future<void> reactToPost({
     required String postId,
     required String reaction,
@@ -18,6 +27,7 @@ abstract class SocialServiceInterface {
     required String replyId,
     required String reaction,
   });
+  Future<SocialUser?> getCurrentUser();
   Future<SocialPost?> getPostById({required String postId});
   Future<List<SocialComment>> getPostComments(
       {required String postId, int? limit, int? offset});
