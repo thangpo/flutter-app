@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_service_interface.dart';
-import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/main.dart';
 
@@ -15,6 +15,13 @@ class SocialController with ChangeNotifier {
 
   bool _creatingPost = false;
   bool get creatingPost => _creatingPost;
+
+  bool _creatingStory = false;
+  bool get creatingStory => _creatingStory;
+
+  bool _loadingUser = false;
+  SocialUser? _currentUser;
+  SocialUser? get currentUser => _currentUser;
 
   final List<SocialPost> _posts = [];
   List<SocialPost> get posts => List.unmodifiable(_posts);
@@ -55,6 +62,57 @@ class SocialController with ChangeNotifier {
     } finally {
       _creatingPost = false;
       notifyListeners();
+    }
+  }
+
+  Future<SocialStory?> createStory({
+    required String fileType,
+    required String filePath,
+    String? coverPath,
+    String? storyTitle,
+    String? storyDescription,
+    String? highlightHash,
+  }) async {
+    if (_creatingStory) return null;
+    _creatingStory = true;
+    notifyListeners();
+    try {
+      final SocialStory? story = await service.createStory(
+        fileType: fileType,
+        filePath: filePath,
+        coverPath: coverPath,
+        storyTitle: storyTitle,
+        storyDescription: storyDescription,
+        highlightHash: highlightHash,
+      );
+      if (story != null) {
+        _stories.removeWhere((element) => element.id == story.id);
+        _stories.insert(0, story);
+      }
+      return story;
+    } catch (e) {
+      showCustomSnackBar(e.toString(), Get.context!, isError: true);
+      rethrow;
+    } finally {
+      _creatingStory = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadCurrentUser({bool force = false}) async {
+    if (_loadingUser) return;
+    if (!force && _currentUser != null) return;
+    _loadingUser = true;
+    try {
+      final user = await service.getCurrentUser();
+      if (user != null) {
+        _currentUser = user;
+        notifyListeners();
+      }
+    } catch (e) {
+      showCustomSnackBar(e.toString(), Get.context!, isError: true);
+    } finally {
+      _loadingUser = false;
     }
   }
 

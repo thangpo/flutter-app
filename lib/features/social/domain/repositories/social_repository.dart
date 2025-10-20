@@ -8,6 +8,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_comment.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
 import 'package:http/http.dart' as http;
 
 bool _isImageUrl(String url) {
@@ -35,6 +36,28 @@ class SocialRepository {
 
   String? _getSocialAccessToken() {
     return sharedPreferences.getString(AppConstants.socialAccessToken);
+  }
+
+  String? _getSocialUserId() {
+    return sharedPreferences.getString(AppConstants.socialUserId);
+  }
+
+  String? _absoluteUrl(String? raw) {
+    if (raw == null) return null;
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return null;
+    final lower = trimmed.toLowerCase();
+    if (lower.startsWith('http://') || lower.startsWith('https://')) {
+      return trimmed;
+    }
+    final base = AppConstants.socialBaseUrl.endsWith('/')
+        ? AppConstants.socialBaseUrl
+            .substring(0, AppConstants.socialBaseUrl.length - 1)
+        : AppConstants.socialBaseUrl;
+    if (trimmed.startsWith('/')) {
+      return '$base$trimmed';
+    }
+    return '$base/$trimmed';
   }
 
   //Feeds
@@ -297,6 +320,101 @@ class SocialRepository {
     return list;
   }
 
+  Future<ApiResponseModel<Response>> createStory({
+    required String filePath,
+    required String fileType,
+    String? coverPath,
+    String? storyTitle,
+    String? storyDescription,
+    String? highlightHash,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError('Missing Social access_token');
+      }
+
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialCreateStoryUri}?access_token=$token';
+
+      final Map<String, dynamic> formMap = {
+        'server_key': AppConstants.socialServerKey,
+        'file_type': fileType,
+        'file': await MultipartFile.fromFile(
+          filePath,
+          filename: _fileNameFromPath(filePath),
+        ),
+        if (coverPath != null && coverPath.isNotEmpty)
+          'cover': await MultipartFile.fromFile(
+            coverPath,
+            filename: _fileNameFromPath(coverPath),
+          ),
+        if (storyTitle != null && storyTitle.trim().isNotEmpty)
+          'story_title': storyTitle.trim(),
+        if (storyDescription != null && storyDescription.trim().isNotEmpty)
+          'story_description': storyDescription.trim(),
+        if (highlightHash != null && highlightHash.trim().isNotEmpty)
+          'highlight_hash': highlightHash.trim(),
+      };
+
+      final Response res = await dioClient.post(
+        url,
+        data: FormData.fromMap(formMap),
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+  Future<ApiResponseModel<Response>> fetchStoryById({
+    required String id,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError('Missing Social access_token');
+      }
+
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialGetStoryByIdUri}?access_token=$token';
+
+      final Response res = await dioClient.post(
+        url,
+        data: FormData.fromMap({
+          'server_key': AppConstants.socialServerKey,
+          'id': id,
+        }),
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+  SocialStory? parseStoryDetail(Response res) {
+    final data = res.data;
+    if (data is Map) {
+      final dynamic storyData =
+          data['story'] ?? data['story_data'] ?? data['data'];
+      if (storyData is Map) {
+        final map = Map<String, dynamic>.from(storyData as Map);
+        return SocialStory.fromJson(map);
+      }
+      if (storyData is List && storyData.isNotEmpty) {
+        final first = storyData.first;
+        if (first is Map) {
+          return SocialStory.fromJson(Map<String, dynamic>.from(first));
+        }
+      }
+    }
+    return null;
+  }
+
   Future<ApiResponseModel<Response>> reactToPost({
     required String postId,
     required String
@@ -428,6 +546,37 @@ class SocialRepository {
       }
 
       final form = FormData.fromMap(fields);
+      final res = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+  Future<ApiResponseModel<Response>> fetchCurrentUserProfile() async {
+    try {
+      final token = _getSocialAccessToken();
+      final userId = _getSocialUserId();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError('Missing Social access_token');
+      }
+      if (userId == null || userId.isEmpty) {
+        return ApiResponseModel.withError('Missing social user_id');
+      }
+
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialGetUserDataUri}?access_token=$token';
+
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'fetch': 'user_data',
+        'user_id': userId,
+      });
+
       final res = await dioClient.post(
         url,
         data: form,
@@ -974,6 +1123,74 @@ class SocialRepository {
     }
   }
 
+  SocialUser? parseCurrentUser(Response res) {
+    final data = res.data;
+    Map? raw;
+    if (data is Map) {
+      if (data['user_data'] is Map) {
+        raw = data['user_data'] as Map;
+      } else if (data['data'] is Map) {
+        raw = data['data'] as Map;
+      } else if (data['data'] is List) {
+        final list = data['data'] as List;
+        if (list.isNotEmpty && list.first is Map) {
+          raw = list.first as Map;
+        }
+      }
+    }
+    if (raw == null) return null;
+
+    final map = Map<String, dynamic>.from(raw);
+    final String id = (map['user_id'] ?? map['id'] ?? '').toString();
+    if (id.isEmpty) return null;
+
+    String? firstName =
+        (map['first_name'] ?? map['fname'] ?? '').toString().trim();
+    if (firstName.isEmpty) firstName = null;
+    String? lastName =
+        (map['last_name'] ?? map['lname'] ?? '').toString().trim();
+    if (lastName.isEmpty) lastName = null;
+
+    String? displayName = (map['name'] ?? '').toString().trim();
+    if (displayName.isEmpty) displayName = null;
+    final String? userName =
+        (map['username'] ?? map['user_name'] ?? '').toString().trim().isEmpty
+            ? null
+            : (map['username'] ?? map['user_name']).toString();
+
+    if (displayName == null) {
+      final buffer = [
+        if (firstName != null) firstName,
+        if (lastName != null) lastName,
+      ];
+      final joined = buffer.join(' ').trim();
+      if (joined.isNotEmpty) {
+        displayName = joined;
+      } else if (userName != null && userName.isNotEmpty) {
+        displayName = userName;
+      }
+    }
+
+    final avatarRaw =
+        (map['avatar_full'] ?? map['avatar_original'] ?? map['avatar'] ?? '')
+            .toString();
+    final coverRaw =
+        (map['cover_full'] ?? map['cover_original'] ?? map['cover'] ?? '')
+            .toString();
+    final String? avatar = _absoluteUrl(avatarRaw);
+    final String? cover = _absoluteUrl(coverRaw);
+
+    return SocialUser(
+      id: id,
+      displayName: displayName,
+      firstName: firstName,
+      lastName: lastName,
+      userName: userName,
+      avatarUrl: avatar,
+      coverUrl: cover,
+    );
+  }
+
   DateTime? _parseCommentDate(dynamic raw) {
     if (raw == null) return null;
     final String str = raw.toString().trim();
@@ -1080,6 +1297,22 @@ class SocialRepository {
       default:
         return '1';
     }
+  }
+
+  String _fileNameFromPath(String path) {
+    if (path.isEmpty) {
+      return 'story_${DateTime.now().millisecondsSinceEpoch}';
+    }
+    final segments = path.split(RegExp(r'[\\/]'));
+    if (segments.isEmpty) {
+      return 'story_${DateTime.now().millisecondsSinceEpoch}';
+    }
+    final last =
+        segments.lastWhere((element) => element.isNotEmpty, orElse: () => '');
+    if (last.isEmpty) {
+      return 'story_${DateTime.now().millisecondsSinceEpoch}';
+    }
+    return last;
   }
 
   bool _isTruthy(dynamic value) {
