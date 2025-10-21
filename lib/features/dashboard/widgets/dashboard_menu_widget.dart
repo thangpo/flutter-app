@@ -14,9 +14,12 @@ class CustomMenuWidget extends StatelessWidget {
   final VoidCallback onTap;
 
   const CustomMenuWidget({
-    super.key, required this.isSelected,
-    required this.name, required this.icon,
-    required this.onTap, this.showCartCount = false,
+    super.key,
+    required this.isSelected,
+    required this.name,
+    required this.icon,
+    required this.onTap,
+    this.showCartCount = false,
   });
 
   @override
@@ -25,49 +28,84 @@ class CustomMenuWidget extends StatelessWidget {
       highlightColor: Colors.transparent,
       hoverColor: Colors.transparent,
       onTap: onTap,
-      child: Padding(padding: const EdgeInsets.all(8),
-        child: SizedBox(width: isSelected ? 90 : 50, child: Column(crossAxisAlignment: CrossAxisAlignment.center,
-          mainAxisAlignment: MainAxisAlignment.center, mainAxisSize: MainAxisSize.min, children: [
-
-            Stack(children: [
-              Image.asset(
-                icon, color: isSelected? Theme.of(context).primaryColor : Theme.of(context).hintColor,
-                width: Dimensions.menuIconSize, height: Dimensions.menuIconSize,
-              ),
-
-              if(showCartCount) Positioned.fill(child: Container(
-                transform: Matrix4.translationValues(5, -3, 0),
-                child: Align(
-                  alignment: Alignment.topRight,
-                  child: Consumer<CartController>(builder: (context, cart, child) {
-                    return CircleAvatar(
-                        radius: ResponsiveHelper.isTab(context)? 10 :  7,
-                        backgroundColor: Theme.of(context).colorScheme.error,
-                        child: Text(cart.cartList.length.toString(), style: titilliumSemiBold.copyWith(
-                          color:  Theme.of(context).colorScheme.secondaryContainer,
-                          fontSize: Dimensions.fontSizeExtraSmall,
-                        )));
-                  }),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        padding: EdgeInsets.symmetric(
+          horizontal: isSelected ? 16 : 12,
+          vertical: 6,
+        ),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Theme.of(context).primaryColor.withOpacity(0.15)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Stack(
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  child: Image.asset(
+                    icon,
+                    color: isSelected
+                        ? Theme.of(context).primaryColor
+                        : Theme.of(context).hintColor.withOpacity(0.6),
+                    width: Dimensions.menuIconSize,
+                    height: Dimensions.menuIconSize,
+                  ),
                 ),
-              )),
-
-            ]),
-
-            isSelected ?
-            Text(getTranslated(name, context)!, maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: textBold.copyWith(color:  Theme.of(context).primaryColor)) :
-
-            Text(getTranslated(name, context)!, maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: textRegular.copyWith(color: Theme.of(context).hintColor)),
-
-            if(isSelected)
-              Container(width: 5,height: 3,
-                decoration: BoxDecoration(color: Theme.of(context).primaryColor,
-                    borderRadius: BorderRadius.circular(Dimensions.paddingSizeDefault)))
+                if (showCartCount)
+                  Positioned.fill(
+                    child: Container(
+                      transform: Matrix4.translationValues(5, -3, 0),
+                      child: Align(
+                        alignment: Alignment.topRight,
+                        child: Consumer<CartController>(
+                          builder: (context, cart, child) {
+                            return CircleAvatar(
+                              radius: ResponsiveHelper.isTab(context) ? 10 : 7,
+                              backgroundColor: Theme.of(context).colorScheme.error,
+                              child: Text(
+                                cart.cartList.length.toString(),
+                                style: titilliumSemiBold.copyWith(
+                                  color: Theme.of(context).colorScheme.secondaryContainer,
+                                  fontSize: Dimensions.fontSizeExtraSmall,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 2),
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+              style: textRegular.copyWith(
+                color: isSelected
+                    ? Theme.of(context).primaryColor
+                    : Theme.of(context).hintColor.withOpacity(0.6),
+                fontSize: Dimensions.fontSizeSmall,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              ),
+              child: Text(
+                getTranslated(name, context)!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
-        )),
+        ),
       ),
     );
   }
-
 }

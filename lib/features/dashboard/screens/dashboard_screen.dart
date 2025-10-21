@@ -31,7 +31,7 @@ class DashBoardScreen extends StatefulWidget {
 }
 
 class DashBoardScreenState extends State<DashBoardScreen> {
-  int _pageIndex = 0;
+  int _pageIndex = 2;
   late List<NavigationModel> _screens;
   final GlobalKey<ScaffoldMessengerState> _scaffoldKey = GlobalKey();
   final PageStorageBucket bucket = PageStorageBucket();
@@ -80,13 +80,10 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         icon: Images.homeImage,
         screen: const SocialFeedScreen(),
       ),
+
       NavigationModel(
           name: 'reels',
           icon: Images.ReelsImage,
-          screen: const InboxScreen(isBackButtonExist: false)),
-      NavigationModel(
-          name: 'friends',
-          icon: Images.friendImage,
           screen: const InboxScreen(isBackButtonExist: false)),
 
       NavigationModel(
@@ -95,14 +92,20 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         screen: (splashController.configModel!.activeTheme == "default")
             ? const HomePage()
             : (splashController.configModel!.activeTheme == "theme_aster")
-                ? const AsterThemeHomeScreen()
-                : const FashionThemeHomePage(),
+            ? const AsterThemeHomeScreen()
+            : const FashionThemeHomePage(),
       ),
 
       NavigationModel(
-          name: 'notifications',
-          icon: Images.notification,
+          name: 'friends',
+          icon: Images.friendImage,
           screen: const InboxScreen(isBackButtonExist: false)),
+
+
+      // NavigationModel(
+      //     name: 'notifications',
+      //     icon: Images.notification,
+      //     screen: const InboxScreen(isBackButtonExist: false)),
 
       // NavigationModel(name: 'inbox', icon: Images.messageImage, screen: const InboxScreen(isBackButtonExist: false)),
       // NavigationModel(name: 'cart', icon: Images.cartArrowDownImage, screen: const CartScreen(showBackButton: false), showCartIcon: true),

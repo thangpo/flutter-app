@@ -52,6 +52,25 @@ import 'package:flutter_sixvalley_ecommerce/common/basewidget/financial_center_w
 import 'package:flutter_sixvalley_ecommerce/features/home/widgets/all_seller_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/flight_booking_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/tour_list_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/home/widgets/menu_widget.dart';
+
+class FeatureItem {
+  final String title;
+  final String? description;
+  final String? image;
+  final IconData? icon;
+  final Color? color;
+  final VoidCallback onTap;
+
+  FeatureItem({
+    required this.title,
+    this.description,
+    this.image,
+    this.icon,
+    this.color,
+    required this.onTap,
+  });
+}
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -152,6 +171,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   bool singleVendor = false;
+
   @override
   void initState() {
     super.initState();
@@ -183,7 +203,13 @@ class _HomePageState extends State<HomePage> {
                 centerTitle: false,
                 automaticallyImplyLeading: false,
                 backgroundColor: Theme.of(context).highlightColor,
-                title: Image.asset(Images.logoWithNameImage, height: 35),
+                title: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Image.asset(Images.logoWithNameImage, height: 35),
+                    const MenuWidget(), // Thêm MenuWidget cạnh logo
+                  ],
+                ),
               ),
               SliverToBoxAdapter(
                   child: Provider.of<SplashController>(context, listen: false)
@@ -494,24 +520,6 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
-}
-
-class FeatureItem {
-  final String title;
-  final String? description;
-  final String? image;
-  final IconData? icon;
-  final Color? color;
-  final VoidCallback onTap;
-
-  FeatureItem({
-    required this.title,
-    this.description,
-    this.image,
-    this.icon,
-    this.color,
-    required this.onTap,
-  });
 }
 
 class NewFeaturesSection extends StatelessWidget {
