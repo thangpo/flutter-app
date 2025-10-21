@@ -4,6 +4,7 @@ import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dar
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
 import 'tour_detail_screen.dart';
 import 'package:provider/provider.dart';
+import 'qr_page.dart';
 
 class TourOrderScreen extends StatefulWidget {
   const TourOrderScreen({super.key});
@@ -148,10 +149,17 @@ class _TourOrderScreenState extends State<TourOrderScreen> {
                     color: isDarkMode ? oceanBlue.withOpacity(0.3) : paleOceanBlue,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(Icons.filter_list_rounded,
-                      color: isDarkMode ? Theme.of(context).colorScheme.onPrimary : oceanBlue, size: 24),
+                  child: Icon(
+                    Icons.filter_list_rounded,
+                    color: isDarkMode
+                        ? Theme.of(context).colorScheme.onPrimary
+                        : oceanBlue,
+                    size: 24,
+                  ),
                 ),
+
                 const SizedBox(width: 12),
+
                 Expanded(
                   child: DropdownButtonFormField<String>(
                     value: _selectedStatus ?? "",
@@ -162,27 +170,38 @@ class _TourOrderScreenState extends State<TourOrderScreen> {
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: lightOceanBlue.withOpacity(isDarkMode ? 0.3 : 0.5)),
+                        borderSide: BorderSide(
+                            color: lightOceanBlue.withOpacity(isDarkMode ? 0.3 : 0.5)),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide(color: oceanBlue, width: 2),
                       ),
-                      labelText: getTranslated('filter_by_status', context) ?? "Lọc theo trạng thái",
-                      labelStyle: TextStyle(color: isDarkMode ? Theme.of(context).hintColor : oceanBlue),
+                      labelText:
+                      getTranslated('filter_by_status', context) ?? "Lọc theo trạng thái",
+                      labelStyle: TextStyle(
+                        color: isDarkMode
+                            ? Theme.of(context).hintColor
+                            : oceanBlue,
+                      ),
                       isDense: true,
                       filled: true,
-                      fillColor: paleOceanBlue.withOpacity(isDarkMode ? 0.5 : 0.3),
+                      fillColor:
+                      paleOceanBlue.withOpacity(isDarkMode ? 0.5 : 0.3),
                     ),
-                    dropdownColor: isDarkMode ? Theme.of(context).cardColor : Colors.white,
+                    dropdownColor:
+                    isDarkMode ? Theme.of(context).cardColor : Colors.white,
                     items: _statuses.map((status) {
                       return DropdownMenuItem<String>(
                         value: status["value"]!,
                         child: Text(
                           getTranslated(status["label"]!, context) ?? status["label"]!,
                           style: TextStyle(
-                              fontSize: 14,
-                              color: isDarkMode ? Theme.of(context).colorScheme.onPrimary : Colors.black),
+                            fontSize: 14,
+                            color: isDarkMode
+                                ? Theme.of(context).colorScheme.onPrimary
+                                : Colors.black,
+                          ),
                         ),
                       );
                     }).toList(),
@@ -190,6 +209,34 @@ class _TourOrderScreenState extends State<TourOrderScreen> {
                       setState(() => _selectedStatus = value ?? "");
                       _initAndFetchData(status: value);
                     },
+                  ),
+                ),
+
+                const SizedBox(width: 12),
+
+                InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const QrPage(),
+                      ),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: isDarkMode ? oceanBlue.withOpacity(0.3) : paleOceanBlue,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.qr_code_2_rounded,
+                      color: isDarkMode
+                          ? Theme.of(context).colorScheme.onPrimary
+                          : oceanBlue,
+                      size: 26,
+                    ),
                   ),
                 ),
               ],
@@ -375,7 +422,6 @@ class _TourOrderScreenState extends State<TourOrderScreen> {
                               ),
                             ),
 
-                            // Status badge
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                               decoration: BoxDecoration(

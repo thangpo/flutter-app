@@ -928,5 +928,30 @@
   "unpaid": "Chưa thanh toán",
   "completed": "Hoàn thành",
   "partial_payment": "Đã thanh toán một phần",
-  "cancelled": "Đã hủy"
+  "cancelled": "Đã hủy",
+
+  "already_scanned": "Đã được quét",
+  "scan_success": "Quét thành công",
+  "invalid_qr_code": "Mã QR không hợp lệ",
+  "booking_not_found": "Không tìm thấy đặt chỗ",
+  "api_error": "Lỗi API",
+  "network_error": "Lỗi mạng",
+  "confirm": "Xác nhận",
+  "clear_all_bookings": "Xóa tất cả đặt chỗ",
+  "scan_qr_code": "Quét mã QR",
+  "disable_camera": "Tắt camera",
+  "enable_camera": "Bật camera",
+  "scanned_bookings": "Các đặt chỗ đã quét",
+  "no_scanned_bookings": "Không có đặt chỗ nào được quét",
+  "start_date": "Ngày bắt đầu",
+  "status": "Trạng thái",
+
+  "tour_details": "Chi tiết tour",
+  "tour_information": "Thông tin tour",
+  "tour_name": "Tên tour",
+  "end_date": "Ngày kết thúc",
+  "total_amount": "Tổng số tiền",
+  "customer_information": "Thông tin khách hàng",
+  "notes_special_requests": "Ghi chú/Yêu cầu đặc biệt",
+  "no_notes": "Không có ghi chú nào"
 }

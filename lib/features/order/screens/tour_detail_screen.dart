@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
+import 'package:provider/provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 class TourDetailScreen extends StatelessWidget {
   final Map<String, dynamic> tour;
 
   const TourDetailScreen({super.key, required this.tour});
-
-  // Ocean blue color scheme
-  static const Color oceanBlue = Color(0xFF006D9C);
-  static const Color lightOceanBlue = Color(0xFF4DA8DA);
-  static const Color paleOceanBlue = Color(0xFFE3F2FD);
-  static const Color accentOcean = Color(0xFF0097D3);
 
   String _formatMoney(String amount) {
     try {
@@ -29,52 +27,59 @@ class TourDetailScreen extends StatelessWidget {
     }
   }
 
-  String _getStatusLabel(String status) {
+  String _getStatusLabel(BuildContext context, String status) {
     final statusMap = {
-      'draft': 'Nháp',
-      'unpaid': 'Chưa thanh toán',
-      'processing': 'Đang xử lý',
-      'confirmed': 'Đã xác nhận',
-      'completed': 'Hoàn thành',
-      'paid': 'Đã thanh toán',
-      'partial_payment': 'Thanh toán một phần',
-      'cancelled': 'Đã hủy',
+      'draft': getTranslated('draft', context) ?? 'Nháp',
+      'unpaid': getTranslated('unpaid', context) ?? 'Chưa thanh toán',
+      'processing': getTranslated('processing', context) ?? 'Đang xử lý',
+      'confirmed': getTranslated('confirmed', context) ?? 'Đã xác nhận',
+      'completed': getTranslated('completed', context) ?? 'Hoàn thành',
+      'paid': getTranslated('paid', context) ?? 'Đã thanh toán',
+      'partial_payment': getTranslated('partial_payment', context) ?? 'Thanh toán một phần',
+      'cancelled': getTranslated('cancelled', context) ?? 'Đã hủy',
     };
     return statusMap[status] ?? status;
   }
 
-  Color _getStatusColor(String status) {
+  Color _getStatusColor(String status, bool isDarkMode) {
     final colorMap = {
-      'draft': Colors.grey.shade600,
-      'unpaid': Colors.orange.shade700,
-      'processing': lightOceanBlue,
-      'confirmed': Colors.teal.shade600,
-      'completed': Colors.green.shade600,
-      'paid': Colors.green.shade700,
-      'partial_payment': Colors.purple.shade600,
-      'cancelled': Colors.red.shade600,
+      'draft': isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+      'unpaid': isDarkMode ? Colors.orange.shade300 : Colors.orange.shade700,
+      'processing': isDarkMode ? Colors.blue.shade300 : const Color(0xFF2196F3),
+      'confirmed': isDarkMode ? Colors.teal.shade300 : Colors.teal.shade600,
+      'completed': isDarkMode ? Colors.green.shade300 : Colors.green.shade600,
+      'paid': isDarkMode ? Colors.green.shade300 : Colors.green.shade700,
+      'partial_payment': isDarkMode ? Colors.purple.shade300 : Colors.purple.shade600,
+      'cancelled': isDarkMode ? Colors.red.shade300 : Colors.red.shade600,
     };
     return colorMap[status] ?? Colors.grey;
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Provider.of<ThemeController>(context).darkTheme;
+    final primaryBlue = isDarkMode ? Theme.of(context).primaryColorDark : const Color(0xFF1976D2);
+    final lightBlue = isDarkMode ? Theme.of(context).primaryColorLight : const Color(0xFF2196F3);
+    final paleBlue = isDarkMode ? Theme.of(context).scaffoldBackgroundColor : const Color(0xFFE3F2FD);
+    final accentBlue = isDarkMode ? Theme.of(context).primaryColor : const Color(0xFF1E88E5);
+
     final service = tour['service'] ?? {};
     final status = tour['status'] ?? 'unknown';
-    final statusColor = _getStatusColor(status);
+    final statusColor = _getStatusColor(status, isDarkMode);
 
     return Scaffold(
-      backgroundColor: paleOceanBlue,
+      backgroundColor: paleBlue,
       appBar: AppBar(
         title: Text(
-          service['title'] ?? 'Chi tiết tour',
-          style: const TextStyle(
+          service['title'] ?? getTranslated('tour_details', context) ?? 'Chi tiết tour',
+          style: TextStyle(
             fontWeight: FontWeight.w600,
             fontSize: 20,
+            color: isDarkMode ? Theme.of(context).colorScheme.onPrimary : Colors.white,
           ),
         ),
-        backgroundColor: oceanBlue,
-        foregroundColor: Colors.white,
+        backgroundColor: primaryBlue,
+        foregroundColor: isDarkMode ? Theme.of(context).colorScheme.onPrimary : Colors.white,
         centerTitle: true,
         elevation: 0,
         flexibleSpace: Container(
@@ -82,7 +87,7 @@ class TourDetailScreen extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [oceanBlue, lightOceanBlue],
+              colors: [primaryBlue, lightBlue],
             ),
           ),
         ),
@@ -97,11 +102,11 @@ class TourDetailScreen extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [oceanBlue, lightOceanBlue],
+                  colors: [primaryBlue, lightBlue],
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: oceanBlue.withOpacity(0.3),
+                    color: primaryBlue.withOpacity(isDarkMode ? 0.4 : 0.3),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
@@ -112,22 +117,33 @@ class TourDetailScreen extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: isDarkMode
+                          ? Theme.of(context).cardColor.withOpacity(0.3)
+                          : Colors.white.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: Icon(
-                      Icons.confirmation_number_outlined,
-                      size: 48,
-                      color: Colors.white,
+                    child: QrImageView(
+                      data: tour['code'] ?? 'N/A',
+                      version: QrVersions.auto,
+                      size: 100.0,
+                      backgroundColor: isDarkMode ? Theme.of(context).cardColor : Colors.white,
+                      eyeStyle: QrEyeStyle(
+                        eyeShape: QrEyeShape.square,
+                        color: isDarkMode ? Theme.of(context).colorScheme.onSurface : Colors.black,
+                      ),
+                      dataModuleStyle: QrDataModuleStyle(
+                        dataModuleShape: QrDataModuleShape.square,
+                        color: isDarkMode ? Theme.of(context).colorScheme.onSurface : Colors.black,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
                   Text(
                     tour['code'] ?? 'N/A',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: isDarkMode ? Theme.of(context).colorScheme.onPrimary : Colors.white,
                       letterSpacing: 1.5,
                     ),
                   ),
@@ -135,11 +151,11 @@ class TourDetailScreen extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: isDarkMode ? Theme.of(context).cardColor : Colors.white,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      _getStatusLabel(status),
+                      _getStatusLabel(context, status),
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
@@ -158,33 +174,49 @@ class TourDetailScreen extends StatelessWidget {
                   _buildSectionCard(
                     context,
                     icon: Icons.explore_outlined,
-                    title: 'Thông tin tour',
-                    iconColor: oceanBlue,
+                    title: getTranslated('tour_information', context) ?? 'Thông tin tour',
+                    iconColor: primaryBlue,
+                    isDarkMode: isDarkMode,
+                    paleBlue: paleBlue,
+                    primaryBlue: primaryBlue,
+                    lightBlue: lightBlue,
                     children: [
                       _buildInfoRow(
+                        context: context,
                         icon: Icons.badge_outlined,
-                        label: 'Tên tour',
+                        label: getTranslated('tour_name', context) ?? 'Tên tour',
                         value: service['title'],
+                        isDarkMode: isDarkMode,
+                        primaryBlue: primaryBlue,
                       ),
                       _buildInfoRow(
+                        context: context,
                         icon: Icons.calendar_today_outlined,
-                        label: 'Ngày bắt đầu',
+                        label: getTranslated('start_date', context) ?? 'Ngày bắt đầu',
                         value: _formatDate(tour['start_date'] ?? ''),
+                        isDarkMode: isDarkMode,
+                        primaryBlue: primaryBlue,
                       ),
                       _buildInfoRow(
+                        context: context,
                         icon: Icons.event_outlined,
-                        label: 'Ngày kết thúc',
+                        label: getTranslated('end_date', context) ?? 'Ngày kết thúc',
                         value: _formatDate(tour['end_date'] ?? ''),
+                        isDarkMode: isDarkMode,
+                        primaryBlue: primaryBlue,
                       ),
                       _buildInfoRow(
+                        context: context,
                         icon: Icons.payments_outlined,
-                        label: 'Tổng tiền',
+                        label: getTranslated('total_amount', context) ?? 'Tổng tiền',
                         value: _formatMoney(tour['total']?.toString() ?? '0'),
                         valueStyle: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: oceanBlue,
+                          color: isDarkMode ? Theme.of(context).colorScheme.onPrimary : primaryBlue,
                         ),
+                        isDarkMode: isDarkMode,
+                        primaryBlue: primaryBlue,
                       ),
                     ],
                   ),
@@ -194,33 +226,52 @@ class TourDetailScreen extends StatelessWidget {
                   _buildSectionCard(
                     context,
                     icon: Icons.person_outline,
-                    title: 'Thông tin khách hàng',
-                    iconColor: accentOcean,
+                    title: getTranslated('customer_information', context) ?? 'Thông tin khách hàng',
+                    iconColor: accentBlue,
+                    isDarkMode: isDarkMode,
+                    paleBlue: paleBlue,
+                    primaryBlue: primaryBlue,
+                    lightBlue: lightBlue,
                     children: [
                       _buildInfoRow(
+                        context: context,
                         icon: Icons.person,
-                        label: 'Họ và tên',
+                        label: getTranslated('full_name', context) ?? 'Họ và tên',
                         value: '${tour['first_name'] ?? ''} ${tour['last_name'] ?? ''}'.trim(),
+                        isDarkMode: isDarkMode,
+                        primaryBlue: primaryBlue,
                       ),
                       _buildInfoRow(
+                        context: context,
                         icon: Icons.email_outlined,
-                        label: 'Email',
+                        label: getTranslated('email', context) ?? 'Email',
                         value: tour['email'],
+                        isDarkMode: isDarkMode,
+                        primaryBlue: primaryBlue,
                       ),
                       _buildInfoRow(
+                        context: context,
                         icon: Icons.phone_outlined,
-                        label: 'Điện thoại',
+                        label: getTranslated('phone', context) ?? 'Điện thoại',
                         value: tour['phone'],
+                        isDarkMode: isDarkMode,
+                        primaryBlue: primaryBlue,
                       ),
                       _buildInfoRow(
+                        context: context,
                         icon: Icons.location_on_outlined,
-                        label: 'Địa chỉ',
+                        label: getTranslated('address', context) ?? 'Địa chỉ',
                         value: '${tour['address'] ?? ''}, ${tour['city'] ?? ''}'.trim(),
+                        isDarkMode: isDarkMode,
+                        primaryBlue: primaryBlue,
                       ),
                       _buildInfoRow(
+                        context: context,
                         icon: Icons.public_outlined,
-                        label: 'Quốc gia',
+                        label: getTranslated('country', context) ?? 'Quốc gia',
                         value: tour['country'],
+                        isDarkMode: isDarkMode,
+                        primaryBlue: primaryBlue,
                       ),
                     ],
                   ),
@@ -230,28 +281,36 @@ class TourDetailScreen extends StatelessWidget {
                   _buildSectionCard(
                     context,
                     icon: Icons.note_outlined,
-                    title: 'Ghi chú / Yêu cầu đặc biệt',
-                    iconColor: Colors.teal.shade600,
+                    title: getTranslated('notes_special_requests', context) ?? 'Ghi chú / Yêu cầu đặc biệt',
+                    iconColor: isDarkMode ? Colors.teal.shade300 : Colors.teal.shade600,
+                    isDarkMode: isDarkMode,
+                    paleBlue: paleBlue,
+                    primaryBlue: primaryBlue,
+                    lightBlue: lightBlue,
                     children: [
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: paleOceanBlue.withOpacity(0.5),
+                          color: isDarkMode
+                              ? Theme.of(context).cardColor.withOpacity(0.7)
+                              : paleBlue.withOpacity(0.5),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: lightOceanBlue.withOpacity(0.3),
+                            color: isDarkMode
+                                ? lightBlue.withOpacity(0.5)
+                                : lightBlue.withOpacity(0.3),
                           ),
                         ),
                         child: Text(
                           tour['customer_notes']?.toString().isNotEmpty == true
                               ? tour['customer_notes']
-                              : 'Không có ghi chú',
+                              : getTranslated('no_notes', context) ?? 'Không có ghi chú',
                           style: TextStyle(
                             fontSize: 15,
                             color: tour['customer_notes']?.toString().isNotEmpty == true
-                                ? Colors.grey.shade800
-                                : Colors.grey.shade500,
+                                ? (isDarkMode ? Theme.of(context).colorScheme.onPrimary : Colors.grey.shade800)
+                                : (isDarkMode ? Theme.of(context).hintColor : Colors.grey.shade500),
                             fontStyle: tour['customer_notes']?.toString().isNotEmpty == true
                                 ? FontStyle.normal
                                 : FontStyle.italic,
@@ -277,14 +336,20 @@ class TourDetailScreen extends StatelessWidget {
         required String title,
         required List<Widget> children,
         required Color iconColor,
+        required bool isDarkMode,
+        required Color paleBlue,
+        required Color primaryBlue,
+        required Color lightBlue,
       }) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDarkMode ? Theme.of(context).cardColor : Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: oceanBlue.withOpacity(0.08),
+            color: isDarkMode
+                ? Theme.of(context).primaryColorDark.withOpacity(0.2)
+                : primaryBlue.withOpacity(0.08),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
@@ -296,7 +361,9 @@ class TourDetailScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: paleOceanBlue.withOpacity(0.5),
+              color: isDarkMode
+                  ? Theme.of(context).primaryColorDark.withOpacity(0.3)
+                  : paleBlue.withOpacity(0.5),
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(16),
                 topRight: Radius.circular(16),
@@ -307,7 +374,7 @@ class TourDetailScreen extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: iconColor.withOpacity(0.15),
+                    color: iconColor.withOpacity(isDarkMode ? 0.3 : 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(icon, color: iconColor, size: 24),
@@ -318,7 +385,7 @@ class TourDetailScreen extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: oceanBlue,
+                    color: isDarkMode ? Theme.of(context).colorScheme.onPrimary : primaryBlue,
                   ),
                 ),
               ],
@@ -336,17 +403,20 @@ class TourDetailScreen extends StatelessWidget {
   }
 
   Widget _buildInfoRow({
+    required BuildContext context,
     required IconData icon,
     required String label,
     dynamic value,
     TextStyle? valueStyle,
+    required bool isDarkMode,
+    required Color primaryBlue,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 20, color: Colors.grey.shade600),
+          Icon(icon, size: 20, color: isDarkMode ? Theme.of(context).hintColor : Colors.grey.shade600),
           const SizedBox(width: 12),
           Expanded(
             flex: 2,
@@ -354,7 +424,7 @@ class TourDetailScreen extends StatelessWidget {
               label,
               style: TextStyle(
                 fontSize: 14,
-                color: Colors.grey.shade700,
+                color: isDarkMode ? Theme.of(context).hintColor : Colors.grey.shade700,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -364,10 +434,10 @@ class TourDetailScreen extends StatelessWidget {
             child: Text(
               value?.toString() ?? '-',
               style: valueStyle ??
-                  const TextStyle(
+                  TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
-                    color: Colors.black87,
+                    color: isDarkMode ? Theme.of(context).colorScheme.onPrimary : Colors.black87,
                   ),
               textAlign: TextAlign.right,
             ),

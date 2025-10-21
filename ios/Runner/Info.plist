@@ -58,6 +58,8 @@
 	<string>This app needs location access to manage delivery addresses.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app needs photo gallery access for uploading user profile picture.</string>
+	<key>NSCameraUsageDescription</key>
+    <string>Camera permission is required for QR scanning.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>

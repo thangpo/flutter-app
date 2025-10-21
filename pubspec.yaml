@@ -12,6 +12,8 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
+  mobile_scanner: ^5.1.1
+  qr_flutter: ^4.1.0
   get: ^4.6.6
   google_fonts: ^6.2.1
   cupertino_icons: ^1.0.8
