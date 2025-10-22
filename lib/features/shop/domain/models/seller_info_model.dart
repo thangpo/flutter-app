@@ -152,26 +152,29 @@ class Shop {
   VacationDurationType? _vacationDurationType;
   bool? _vacationStatus;
   ImageFullUrl? _bannerFullUrl;
+  int? _fromDistrictId; // Thêm trường
+  String? _fromWardId; // Thêm trường
 
-  Shop(
-      {int? id,
-        int? sellerId,
-        String? name,
-        String? address,
-        String? contact,
-        String? image,
-        ImageFullUrl? imageFullUrl,
-        String? createdAt,
-        String? updatedAt,
-        String? banner,
-        bool? temporaryClose,
-        DateTime? vacationEndDate,
-        DateTime? vacationStartDate,
-        VacationDurationType? vacationDurationType,
-        bool? vacationStatus,
-        ImageFullUrl? bannerFullUrl,
-
-      }) {
+  Shop({
+    int? id,
+    int? sellerId,
+    String? name,
+    String? address,
+    String? contact,
+    String? image,
+    ImageFullUrl? imageFullUrl,
+    String? createdAt,
+    String? updatedAt,
+    String? banner,
+    bool? temporaryClose,
+    DateTime? vacationEndDate,
+    DateTime? vacationStartDate,
+    VacationDurationType? vacationDurationType,
+    bool? vacationStatus,
+    ImageFullUrl? bannerFullUrl,
+    int? fromDistrictId, // Thêm tham số
+    String? fromWardId, // Thêm tham số
+  }) {
     if (id != null) {
       _id = id;
     }
@@ -206,6 +209,12 @@ class Shop {
     _vacationStatus = vacationStatus;
     _imageFullUrl = imageFullUrl;
     _bannerFullUrl = bannerFullUrl;
+    if (fromDistrictId != null) {
+      _fromDistrictId = fromDistrictId; // Thêm
+    }
+    if (fromWardId != null) {
+      _fromWardId = fromWardId; // Thêm
+    }
   }
 
   int? get id => _id;
@@ -224,7 +233,8 @@ class Shop {
   VacationDurationType? get vacationDurationType => _vacationDurationType;
   bool? get vacationStatus => _vacationStatus;
   ImageFullUrl? get bannerFullUrl => _bannerFullUrl;
-
+  int? get fromDistrictId => _fromDistrictId;
+  String? get fromWardId => _fromWardId;
 
   Shop.fromJson(Map<String, dynamic> json) {
     _id = json['id'];
@@ -236,10 +246,12 @@ class Shop {
     _createdAt = json['created_at'];
     _updatedAt = json['updated_at'];
     _banner = json['banner'];
-    _temporaryClose = json['temporary_close']??false;
+    _temporaryClose = json['temporary_close'] ?? false;
     _vacationEndDate = DateTime.tryParse(json['vacation_end_date'].toString());
     _vacationStartDate = DateTime.tryParse(json['vacation_start_date'].toString());
-    _vacationDurationType = json['vacation_duration_type'] != null ?  VacationDurationType.fromJson(json['vacation_duration_type']) : null;
+    _vacationDurationType = json['vacation_duration_type'] != null
+        ? VacationDurationType.fromJson(json['vacation_duration_type'])
+        : null;
     _vacationStatus = '${json['vacation_status']}'.contains('1') || json['vacation_status'] == true;
     _imageFullUrl = json['image_full_url'] != null
         ? ImageFullUrl.fromJson(json['image_full_url'])
@@ -247,6 +259,10 @@ class Shop {
     _bannerFullUrl = json['banner_full_url'] != null
         ? ImageFullUrl.fromJson(json['banner_full_url'])
         : null;
+    _fromDistrictId = json['from_district_id'] != null
+        ? int.tryParse(json['from_district_id'].toString())
+        : null; // Thêm parse
+    _fromWardId = json['from_ward_id']?.toString(); // Thêm parse
   }
 
   Map<String, dynamic> toJson() {
@@ -261,10 +277,11 @@ class Shop {
     data['updated_at'] = _updatedAt;
     data['banner'] = _banner;
     data['temporary_close'] = _temporaryClose;
-    data['vacation_end_date'] = _vacationEndDate;
-    data['vacation_start_date'] = _vacationEndDate;
+    data['vacation_end_date'] = _vacationEndDate?.toIso8601String();
+    data['vacation_start_date'] = _vacationStartDate?.toIso8601String();
     data['vacation_status'] = _vacationStatus;
-
+    data['from_district_id'] = _fromDistrictId;
+    data['from_ward_id'] = _fromWardId;
     return data;
   }
 }

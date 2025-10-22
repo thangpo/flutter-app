@@ -44,10 +44,13 @@ class CheckoutScreen extends StatefulWidget {
   final bool onlyDigital;
   final bool hasPhysical;
   final int quantity;
+  final List<int?> fromDistrictIds;
+  final List<String?> fromWardIds;
 
   const CheckoutScreen({super.key, required this.cartList, this.fromProductDetails = false,
     required this.discount, required this.tax, required this.totalOrderAmount, required this.shippingFee,
-    this.sellerId, this.onlyDigital = false, required this.quantity, required this.hasPhysical});
+    this.sellerId, this.onlyDigital = false, required this.quantity, required this.hasPhysical,
+    required this.fromDistrictIds,required this.fromWardIds,});
 
 
   @override

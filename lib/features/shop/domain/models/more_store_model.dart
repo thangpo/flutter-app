@@ -538,8 +538,6 @@ class ThumbnailFullUrl {
   }
 }
 
-
-
 class Storage {
   int? id;
   String? dataType;

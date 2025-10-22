@@ -26,6 +26,7 @@ class SellerModel {
 
 
 }
+
 class Seller {
   int? id;
   String? fName;
@@ -115,8 +116,6 @@ class Seller {
 
 }
 
-
-
 class Shop {
   int? id;
   int? sellerId;
@@ -137,28 +136,32 @@ class Shop {
   String? updatedAt;
   String? banner;
   ImageFullUrl? bannerFullUrl;
+  int? fromDistrictId; // Thêm trường
+  String? fromWardId; // Thêm trường
 
-  Shop(
-      {this.id,
-        this.sellerId,
-        this.name,
-        this.address,
-        this.contact,
-        this.image,
-        this.imageFullUrl,
-        this.bottomBanner,
-        this.offerBanner,
-        this.vacationStartDate,
-        this.vacationEndDate,
-        this.vacationNote,
-        this.vacationStatus,
-        this.temporaryClose,
-        this.createdAt,
-        this.updatedAt,
-        this.banner,
-        this.bannerFullUrl,
-        this.vacationDurationType,
-      });
+  Shop({
+    this.id,
+    this.sellerId,
+    this.name,
+    this.address,
+    this.contact,
+    this.image,
+    this.imageFullUrl,
+    this.bottomBanner,
+    this.offerBanner,
+    this.vacationStartDate,
+    this.vacationEndDate,
+    this.vacationNote,
+    this.vacationStatus,
+    this.temporaryClose,
+    this.createdAt,
+    this.updatedAt,
+    this.banner,
+    this.bannerFullUrl,
+    this.vacationDurationType,
+    this.fromDistrictId, // Thêm vào constructor
+    this.fromWardId, // Thêm vào constructor
+  });
 
   Shop.fromJson(Map<String, dynamic> json, {bool isAdminProduct = false}) {
     id = isAdminProduct ? 0 : json['id'];
@@ -169,7 +172,8 @@ class Shop {
     image = json['image'];
     bottomBanner = json['bottom_banner'];
     offerBanner = json['offer_banner'];
-    if(isAdminProduct) {
+
+    if (isAdminProduct) {
       final inHouseVacationAdd = Provider.of<SplashController>(Get.context!, listen: false).configModel?.inhouseVacationAdd;
 
       vacationStartDate = inHouseVacationAdd?.vacationStartDate;
@@ -177,32 +181,29 @@ class Shop {
       vacationNote = inHouseVacationAdd?.vacationNote;
       vacationStatus = inHouseVacationAdd?.status;
       vacationDurationType = inHouseVacationAdd?.vacationDurationType;
-
-    }else {
+    } else {
       vacationStartDate = DateTime.tryParse('${json['vacation_start_date']}');
       vacationEndDate = DateTime.tryParse('${json['vacation_end_date']}');
       vacationNote = json['vacation_note'];
       vacationStatus = '${json['vacation_status']}'.contains('1') || json['vacation_status'] == true;
-      if(json['vacation_duration_type'] != null) {
-        vacationDurationType =  VacationDurationType.fromJson(json['vacation_duration_type']);
+      if (json['vacation_duration_type'] != null) {
+        vacationDurationType = VacationDurationType.fromJson(json['vacation_duration_type']);
       }
-
     }
 
-
-    if(isAdminProduct) {
+    if (isAdminProduct) {
       temporaryClose = (Provider.of<SplashController>(Get.context!, listen: false).configModel?.inhouseTemporaryClose?.status ?? false);
-    }else if(json['temporary_close'] != null){
-      try{
-        temporaryClose = json['temporary_close']??false;
-      }catch(e){
-        temporaryClose = json['temporary_close']== 1?true : false;
+    } else if (json['temporary_close'] != null) {
+      try {
+        temporaryClose = json['temporary_close'] ?? false;
+      } catch (e) {
+        temporaryClose = json['temporary_close'] == 1 ? true : false;
       }
     }
 
     imageFullUrl = json['image_full_url'] != null
-      ? ImageFullUrl.fromJson(json['image_full_url'])
-      : null;
+        ? ImageFullUrl.fromJson(json['image_full_url'])
+        : null;
 
     bannerFullUrl = json['banner_full_url'] != null
         ? ImageFullUrl.fromJson(json['banner_full_url'])
@@ -212,7 +213,9 @@ class Shop {
     updatedAt = json['updated_at'];
     banner = json['banner'];
 
-
+    fromDistrictId = json['from_district_id'] != null
+        ? int.tryParse(json['from_district_id'].toString())
+        : null; // Thêm parse
+    fromWardId = json['from_ward_id']?.toString(); // Thêm parse
   }
-
 }

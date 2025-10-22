@@ -47,7 +47,7 @@ class CartScreenState extends State<CartScreen> {
       }
   }
 
-  Color _currentColor = Theme.of(Get.context!).cardColor; // Initial color
+  Color _currentColor = Theme.of(Get.context!).cardColor;
   final Duration duration = const Duration(milliseconds: 500);
   void changeColor() {
     setState(() {
@@ -219,139 +219,171 @@ class CartScreenState extends State<CartScreen> {
 
 
 
-                        InkWell(onTap: () {
-                              bool hasNull = false;
-                              bool minimum = false;
-                              bool stockOutProduct = false;
-                              bool closeShop = false;
-                              double total = 0;
+                        InkWell(
+                          onTap: () {
+                            bool hasNull = false;
+                            bool minimum = false;
+                            bool stockOutProduct = false;
+                            bool closeShop = false;
+                            double total = 0;
 
-
-
-                              //  if(configProvider.configModel!.shippingMethod =='sellerwise_shipping'){
-                              //   for(int index = 0; index < cartProductList.length; index++) {
-                              //     for(CartModel cart in cartProductList[index]) {
-                              //       if(cart.productType == 'physical' && sellerGroupList[index].shippingType == 'order_wise'  &&
-                              //           Provider.of<ShippingController>(context, listen: false).shippingList![index].shippingIndex == -1) {
-                              //         hasNull = true;
-                              //         break;
-                              //       }
-                              //     }
-                              //   }
-                              // }
-
-                               if (configProvider.configModel!.shippingMethod =='sellerwise_shipping') {
-                                 for (int index = 0; index < sellerGroupList.length; index++) {
-                                   bool hasPhysical = false;
-                                   for(CartModel cart in cartProductList[index]) {
-                                     if(cart.productType == 'physical') {
-                                       hasPhysical = true;
-                                       break;
-                                     }
-                                   }
-
-                                   if(hasPhysical && sellerGroupList[index].isGroupItemChecked! && sellerGroupList[index].shippingType == 'order_wise'  &&
-                                       Provider.of<ShippingController>(context, listen: false).shippingList![index].shippingIndex == -1 && sellerGroupList[index].isGroupItemChecked!){
-                                     hasNull = true;
-                                     break;
-                                   }
-                                 }
-                               }
-
-                                for(int index = 0; index < sellerGroupList.length; index++) {
-                                  total = 0;
-                                  for(CartModel cart in cartProductList[index]) {
-                                    total += (cart.price! - cart.discount!) * cart.quantity! ;
-
-                                  }
-                                  log("===Here===>$total======${sellerGroupList[index].minimumOrderAmountInfo!}>");
-                                  if(total< sellerGroupList[index].minimumOrderAmountInfo!) {
-                                    minimum = true;
-                                  }
-
-                                }
-
-                              for(int index = 0; index < sellerGroupList.length; index++) {
-                                for(CartModel cart in cartProductList[index]) {
-                                  if(cart.isChecked == true && cart.quantity! > cart.productInfo!.totalCurrentStock! && cart.productType =="physical") {
-                                    stockOutProduct = true;
+                            // Kiểm tra các điều kiện hiện có
+                            if (configProvider.configModel!.shippingMethod == 'sellerwise_shipping') {
+                              for (int index = 0; index < sellerGroupList.length; index++) {
+                                bool hasPhysical = false;
+                                for (CartModel cart in cartProductList[index]) {
+                                  if (cart.productType == 'physical') {
+                                    hasPhysical = true;
                                     break;
                                   }
                                 }
+
+                                if (hasPhysical &&
+                                    sellerGroupList[index].isGroupItemChecked! &&
+                                    sellerGroupList[index].shippingType == 'order_wise' &&
+                                    Provider.of<ShippingController>(context, listen: false)
+                                        .shippingList![index].shippingIndex ==
+                                        -1 &&
+                                    sellerGroupList[index].isGroupItemChecked!) {
+                                  hasNull = true;
+                                  break;
+                                }
                               }
+                            }
 
+                            for (int index = 0; index < sellerGroupList.length; index++) {
+                              total = 0;
+                              for (CartModel cart in cartProductList[index]) {
+                                total += (cart.price! - cart.discount!) * cart.quantity!;
+                              }
+                              log("===Here===>$total======${sellerGroupList[index].minimumOrderAmountInfo!}>");
+                              if (total < sellerGroupList[index].minimumOrderAmountInfo!) {
+                                minimum = true;
+                              }
+                            }
 
+                            for (int index = 0; index < sellerGroupList.length; index++) {
+                              for (CartModel cart in cartProductList[index]) {
+                                if (cart.isChecked == true &&
+                                    cart.quantity! > cart.productInfo!.totalCurrentStock! &&
+                                    cart.productType == "physical") {
+                                  stockOutProduct = true;
+                                  break;
+                                }
+                              }
+                            }
 
-                              for(int index = 0; index < sellerGroupList.length; index++) {
-                                if (sellerGroupList[index].shop?.vacationEndDate != null) {
-                                  bool vacationIsOn = ShopHelper.isVacationActive(
-                                    context,
-                                    startDate: sellerGroupList[index].shop?.vacationStartDate,
-                                    endDate: sellerGroupList[index].shop?.vacationEndDate,
-                                    vacationDurationType: sellerGroupList[index].shop?.vacationDurationType,
-                                    vacationStatus: sellerGroupList[index].shop?.vacationStatus,
-                                    isInHouseSeller: sellerGroupList[index].shop?.id == 0,
-                                  );
+                            for (int index = 0; index < sellerGroupList.length; index++) {
+                              if (sellerGroupList[index].shop?.vacationEndDate != null) {
+                                bool vacationIsOn = ShopHelper.isVacationActive(
+                                  context,
+                                  startDate: sellerGroupList[index].shop?.vacationStartDate,
+                                  endDate: sellerGroupList[index].shop?.vacationEndDate,
+                                  vacationDurationType: sellerGroupList[index].shop?.vacationDurationType,
+                                  vacationStatus: sellerGroupList[index].shop?.vacationStatus,
+                                  isInHouseSeller: sellerGroupList[index].shop?.id == 0,
+                                );
 
-                                  if ((vacationIsOn || (sellerGroupList[index].shop?.temporaryClose ?? false)) && (sellerGroupList[index].isGroupItemChecked ?? false)) {
-                                    closeShop = true;
-                                    break;
-                                  }
+                                if ((vacationIsOn ||
+                                    (sellerGroupList[index].shop?.temporaryClose ?? false)) &&
+                                    (sellerGroupList[index].isGroupItemChecked ?? false)) {
+                                  closeShop = true;
+                                  break;
+                                }
+                              }
+                            }
+
+                            if (configProvider.configModel?.guestCheckOut == 0 &&
+                                !Provider.of<AuthController>(context, listen: false).isLoggedIn()) {
+                              showModalBottomSheet(
+                                  backgroundColor: Colors.transparent,
+                                  context: context,
+                                  builder: (_) => const NotLoggedInBottomSheetWidget());
+                            } else if (cart.cartList.isEmpty) {
+                              showCustomSnackBar(
+                                  getTranslated('select_at_least_one_product', context), context);
+                            } else if (stockOutProduct) {
+                              showCustomSnackBar(
+                                  getTranslated('stock_out_product_in_your_cart', context), context);
+                            } else if (closeShop) {
+                              showCustomSnackBar(
+                                  getTranslated('unavailable_shop_product_in_your_cart', context),
+                                  context);
+                            } else if (hasNull &&
+                                configProvider.configModel!.shippingMethod == 'sellerwise_shipping' &&
+                                !onlyDigital) {
+                              changeColor();
+                              showCustomSnackBar(
+                                  getTranslated('select_all_shipping_method', context), context);
+                            } else if (shippingController.chosenShippingList.isEmpty &&
+                                configProvider.configModel!.shippingMethod != 'sellerwise_shipping' &&
+                                configProvider.configModel!.inhouseSelectedShippingType == 'order_wise' &&
+                                !onlyDigital) {
+                              showCustomSnackBar(
+                                  getTranslated('select_all_shipping_method', context), context);
+                            } else if (minimum) {
+                              changeColor();
+                              showCustomSnackBar(
+                                  getTranslated('some_shop_not_full_fill_minimum_order_amount', context),
+                                  context);
+                            } else if (!isItemChecked) {
+                              showCustomSnackBar(getTranslated('please_select_items', context), context);
+                            } else if (requiredMinOrderQtyCart != null) {
+                              changeColor();
+                              showCustomSnackBar(
+                                  '${getTranslated('to_order', context)} ${requiredMinOrderQtyCart.productCart.name} ${getTranslated('min_order_quantity_is', context)} ${requiredMinOrderQtyCart.productCart.productInfo?.minimumOrderQty}',
+                                  context);
+                            } else {
+                              int sellerGroupLenght = 0;
+                              // Thu thập from_district_id và from_ward_id
+                              List<int?> fromDistrictIds = [];
+                              List<String?> fromWardIds = [];
+
+                              for (CartModel seller in sellerGroupList) {
+                                if (seller.isGroupItemChecked!) {
+                                  sellerGroupLenght += 1;
+                                  fromDistrictIds.add(seller.shop?.fromDistrictId);
+                                  fromWardIds.add(seller.shop?.fromWardId);
                                 }
                               }
 
-
-                              if(configProvider.configModel?.guestCheckOut == 0 && !Provider.of<AuthController>(context, listen: false).isLoggedIn()){
-                                showModalBottomSheet(backgroundColor: Colors.transparent,context:context, builder: (_)=> const NotLoggedInBottomSheetWidget());
-                              }
-                              else if (cart.cartList.isEmpty) {
-                                showCustomSnackBar(getTranslated('select_at_least_one_product', context), context);
-                              } else if (stockOutProduct) {
-                                showCustomSnackBar(getTranslated('stock_out_product_in_your_cart', context), context);
-                              }
-                              else if (closeShop) {
-                                showCustomSnackBar(getTranslated('unavailable_shop_product_in_your_cart', context), context);
-                              }
-                              else if(hasNull && configProvider.configModel!.shippingMethod =='sellerwise_shipping' && !onlyDigital){
-                                changeColor();
-                                showCustomSnackBar(getTranslated('select_all_shipping_method', context), context);
-                              }
-
-                              else if(shippingController.chosenShippingList.isEmpty &&
-                                  configProvider.configModel!.shippingMethod !='sellerwise_shipping' &&
-                                  configProvider.configModel!.inhouseSelectedShippingType =='order_wise' && !onlyDigital){
-
-                                showCustomSnackBar(getTranslated('select_all_shipping_method', context), context);
-                              }else if(minimum){
-                                changeColor();
-                                showCustomSnackBar(getTranslated('some_shop_not_full_fill_minimum_order_amount', context), context);
-                              }else if (!isItemChecked){
-                                showCustomSnackBar(getTranslated('please_select_items', context), context);
-                              }else if(requiredMinOrderQtyCart != null) {
-                                changeColor();
-                                showCustomSnackBar('${getTranslated('to_order', context)} ${requiredMinOrderQtyCart.productCart.name} ${getTranslated('min_order_quantity_is', context)} ${requiredMinOrderQtyCart.productCart.productInfo?.minimumOrderQty}', context);
-                              } else {
-
-                                int sellerGroupLenght = 0;
-
-                                for(CartModel seller in sellerGroupList) {
-                                  if(seller.isGroupItemChecked!) {
-                                    sellerGroupLenght += 1;
-                                  }
-                                }
-
-                                Navigator.push(context, MaterialPageRoute(builder: (_) => CheckoutScreen(quantity: totalQuantity,
-                                  cartList: cartList,totalOrderAmount: amount, shippingFee: shippingAmount-freeDeliveryAmountDiscount, discount: discount,
-                                  tax: tax, onlyDigital: sellerGroupLenght != totalPhysical, hasPhysical: totalPhysical > 0)));
-                              }
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => CheckoutScreen(
+                                    quantity: totalQuantity,
+                                    cartList: cartList,
+                                    totalOrderAmount: amount,
+                                    shippingFee: shippingAmount - freeDeliveryAmountDiscount,
+                                    discount: discount,
+                                    tax: tax,
+                                    onlyDigital: sellerGroupLenght != totalPhysical,
+                                    hasPhysical: totalPhysical > 0,
+                                    fromDistrictIds: fromDistrictIds, // Truyền danh sách from_district_id
+                                    fromWardIds: fromWardIds, // Truyền danh sách from_ward_id
+                                  ),
+                                ),
+                              );
+                            }
                           },
-                          child: Container(decoration: BoxDecoration(color: Theme.of(context).primaryColor,
-                                borderRadius: BorderRadius.circular(Dimensions.paddingSizeSmall)),
-
-                            child: Center(child: Padding(padding: EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeSmall,
-                                  vertical: Dimensions.fontSizeSmall),
-                                child: Text(getTranslated('checkout', context)!,
-                                    style: titilliumSemiBold.copyWith(fontSize: Dimensions.fontSizeDefault, color: Colors.white)),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).primaryColor,
+                              borderRadius: BorderRadius.circular(Dimensions.paddingSizeSmall),
+                            ),
+                            child: Center(
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: Dimensions.paddingSizeSmall,
+                                  vertical: Dimensions.fontSizeSmall,
+                                ),
+                                child: Text(
+                                  getTranslated('checkout', context)!,
+                                  style: titilliumSemiBold.copyWith(
+                                    fontSize: Dimensions.fontSizeDefault,
+                                    color: Colors.white,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -483,8 +515,16 @@ class CartScreenState extends State<CartScreen> {
                                                           child: SizedBox(width: 30, child: Image.asset(Images.warning, color: Theme.of(context).colorScheme.error,)),
                                                         ),
                                                       ),
-                                                    )
+                                                    ),
 
+                                                      Text(
+                                                        'District ID: ${sellerGroupList[index].shop?.fromDistrictId ?? "N/A"}',
+                                                        style: textRegular.copyWith(fontSize: Dimensions.fontSizeSmall),
+                                                      ),
+                                                      Text(
+                                                        'Ward ID: ${sellerGroupList[index].shop?.fromWardId ?? "N/A"}',
+                                                        style: textRegular.copyWith(fontSize: Dimensions.fontSizeSmall),
+                                                      ),
 
                                                   ]
                                               ))

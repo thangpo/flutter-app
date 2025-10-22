@@ -640,19 +640,19 @@ class CartBottomSheetWidgetState extends State<CartBottomSheetWidget> {
       shippingAmount = shippingAmount - cart.freeDeliveryOrderAmount!.shippingCostSaved!;
     }
 
-    Navigator.of(Get.context!).push(MaterialPageRoute(
-        builder: (context) => CheckoutScreen(
-            cartList: [cart],
-            discount: discount,
-            tax: tax,
-            totalOrderAmount: amount,
-            shippingFee: shippingAmount,
-            quantity: totalQuantity,
-            onlyDigital: !hasPhysical,
-            hasPhysical: hasPhysical
-        )
-    )
-    );
+    // Navigator.of(Get.context!).push(MaterialPageRoute(
+    //     builder: (context) => CheckoutScreen(
+    //         cartList: [cart],
+    //         discount: discount,
+    //         tax: tax,
+    //         totalOrderAmount: amount,
+    //         shippingFee: shippingAmount,
+    //         quantity: totalQuantity,
+    //         onlyDigital: !hasPhysical,
+    //         hasPhysical: hasPhysical
+    //     )
+    // )
+    // );
   }
 
 
