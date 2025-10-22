@@ -53,6 +53,8 @@ import 'package:flutter_sixvalley_ecommerce/features/home/widgets/all_seller_wid
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/flight_booking_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/tour_list_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/home/widgets/menu_widget.dart';
+import '../widgets/location_list_widget.dart';
+
 
 class FeatureItem {
   final String title;
@@ -285,6 +287,7 @@ class _HomePageState extends State<HomePage> {
                       const CategoryListWidget(isHomePage: true),
                       const SizedBox(height: Dimensions.paddingSizeDefault),
 
+
                       const AffiliateProductWidget(),
                       const SizedBox(height: Dimensions.paddingSizeDefault),
 
@@ -468,7 +471,7 @@ class _HomePageState extends State<HomePage> {
                                     child: const TopSellerWidget()))
                                 : const SizedBox();
                           }),
-
+                      LocationListWidget(),
                       const Padding(
                           padding: EdgeInsets.only(
                               bottom: Dimensions.paddingSizeDefault),
@@ -487,7 +490,6 @@ class _HomePageState extends State<HomePage> {
                               MaterialPageRoute(
                                   builder: (_) => const BrandsView())),
                         ),
-
                       SizedBox(
                           height: configModel?.brandSetting == "1"
                               ? Dimensions.paddingSizeSmall

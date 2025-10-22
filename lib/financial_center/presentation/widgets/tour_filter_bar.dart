@@ -38,10 +38,13 @@ class _TourFilterBarState extends State<TourFilterBar> {
   }
 
   Future<void> fetchLocations() async {
+    List<LocationModel> locations = [];
     setState(() => isLoadingLocations = true);
     try {
       final data = await LocationService.fetchLocations();
-      setState(() => locations = data);
+      setState(() {
+        locations = data;
+      });
     } catch (e) {
       debugPrint('Lỗi khi tải danh sách địa chỉ: $e');
     } finally {

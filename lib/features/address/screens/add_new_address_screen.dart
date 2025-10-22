@@ -361,12 +361,12 @@ class _AddNewAddressScreenState extends State<AddNewAddressScreen> {
             Consumer<AddressController>(
               builder: (context, addressController, child) {
                 if (Provider.of<SplashController>(context, listen: false)
-                            .configModel!
-                            .deliveryCountryRestriction ==
-                        1 &&
+                    .configModel!
+                    .deliveryCountryRestriction ==
+                    1 &&
                     addressController.restrictedCountryList.isNotEmpty) {
                   _countryCodeController.text =
-                      addressController.restrictedCountryList[0];
+                  addressController.restrictedCountryList[0];
                 }
                 return Consumer<LocationController>(
                   builder: (context, locationController, _) {
@@ -415,7 +415,7 @@ class _AddNewAddressScreenState extends State<AddNewAddressScreen> {
                                   countryDialCode: authProvider.countryDialCode,
                                   onCountryChanged: (CountryCode countryCode) {
                                     authProvider.countryDialCode =
-                                        countryCode.dialCode!;
+                                    countryCode.dialCode!;
                                     authProvider
                                         .setCountryCode(countryCode.dialCode!);
                                   },
@@ -431,7 +431,7 @@ class _AddNewAddressScreenState extends State<AddNewAddressScreen> {
                             const SizedBox(
                                 height: Dimensions.paddingSizeDefaultAddress),
                             if (!Provider.of<AuthController>(context,
-                                    listen: false)
+                                listen: false)
                                 .isLoggedIn())
                               CustomTextFieldWidget(
                                 required: true,
@@ -451,154 +451,154 @@ class _AddNewAddressScreenState extends State<AddNewAddressScreen> {
                             const SizedBox(
                                 height: Dimensions.paddingSizeDefaultAddress),
                             Provider.of<SplashController>(context,
-                                            listen: false)
-                                        .configModel!
-                                        .mapApiStatus ==
-                                    1
+                                listen: false)
+                                .configModel!
+                                .mapApiStatus ==
+                                1
                                 ? SizedBox(
-                                    height:
-                                        MediaQuery.of(context).size.width / 2,
-                                    width: MediaQuery.of(context).size.width,
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(
-                                          Dimensions.paddingSizeSmall),
-                                      child: Stack(
-                                        clipBehavior: Clip.none,
-                                        children: [
-                                          GoogleMap(
-                                            mapType: MapType.normal,
-                                            initialCameraPosition:
-                                                CameraPosition(
-                                              target: widget.isEnableUpdate
-                                                  ? LatLng(
-                                                      (widget.address!.latitude !=
-                                                                  null &&
-                                                              widget.address!
-                                                                      .latitude !=
-                                                                  '0' &&
-                                                              widget.address!
-                                                                      .latitude !=
-                                                                  '')
-                                                          ? double.parse(widget
-                                                              .address!
-                                                              .latitude!)
-                                                          : _defaut.latitude,
-                                                      (widget.address!.longitude !=
-                                                                  null &&
-                                                              widget.address!
-                                                                      .longitude !=
-                                                                  '0' &&
-                                                              widget.address!
-                                                                      .longitude !=
-                                                                  '')
-                                                          ? double.parse(widget
-                                                              .address!
-                                                              .longitude!)
-                                                          : _defaut.longitude,
-                                                    )
-                                                  : LatLng(
-                                                      locationController
-                                                          .position.latitude,
-                                                      locationController
-                                                          .position.longitude),
-                                              zoom: 16,
-                                            ),
-                                            onTap: (latLng) {
-                                              Navigator.of(context).push(
-                                                  MaterialPageRoute(
-                                                      builder: (BuildContext
-                                                              context) =>
-                                                          SelectLocationScreen(
-                                                              googleMapController:
-                                                                  _controller)));
-                                            },
-                                            zoomControlsEnabled: false,
-                                            compassEnabled: false,
-                                            indoorViewEnabled: true,
-                                            mapToolbarEnabled: false,
-                                            onCameraIdle: () {
-                                              if (_updateAddress) {
-                                                locationController
-                                                    .updateMapPosition(
-                                                        _cameraPosition,
-                                                        true,
-                                                        null,
-                                                        context);
-                                              } else {
-                                                _updateAddress = true;
-                                              }
-                                            },
-                                            onCameraMove: ((position) =>
-                                                _cameraPosition = position),
-                                            onMapCreated: (GoogleMapController
-                                                controller) {
-                                              _controller = controller;
-                                              if (!widget.isEnableUpdate &&
-                                                  _controller != null) {
-                                                locationController
-                                                    .getCurrentLocation(
-                                                        context, true,
-                                                        mapController:
-                                                            _controller);
-                                              }
-                                            },
+                              height:
+                              MediaQuery.of(context).size.width / 2,
+                              width: MediaQuery.of(context).size.width,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(
+                                    Dimensions.paddingSizeSmall),
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    GoogleMap(
+                                      mapType: MapType.normal,
+                                      initialCameraPosition:
+                                      CameraPosition(
+                                        target: widget.isEnableUpdate
+                                            ? LatLng(
+                                          (widget.address!.latitude !=
+                                              null &&
+                                              widget.address!
+                                                  .latitude !=
+                                                  '0' &&
+                                              widget.address!
+                                                  .latitude !=
+                                                  '')
+                                              ? double.parse(widget
+                                              .address!
+                                              .latitude!)
+                                              : _defaut.latitude,
+                                          (widget.address!.longitude !=
+                                              null &&
+                                              widget.address!
+                                                  .longitude !=
+                                                  '0' &&
+                                              widget.address!
+                                                  .longitude !=
+                                                  '')
+                                              ? double.parse(widget
+                                              .address!
+                                              .longitude!)
+                                              : _defaut.longitude,
+                                        )
+                                            : LatLng(
+                                            locationController
+                                                .position.latitude,
+                                            locationController
+                                                .position.longitude),
+                                        zoom: 16,
+                                      ),
+                                      onTap: (latLng) {
+                                        Navigator.of(context).push(
+                                            MaterialPageRoute(
+                                                builder: (BuildContext
+                                                context) =>
+                                                    SelectLocationScreen(
+                                                        googleMapController:
+                                                        _controller)));
+                                      },
+                                      zoomControlsEnabled: false,
+                                      compassEnabled: false,
+                                      indoorViewEnabled: true,
+                                      mapToolbarEnabled: false,
+                                      onCameraIdle: () {
+                                        if (_updateAddress) {
+                                          locationController
+                                              .updateMapPosition(
+                                              _cameraPosition,
+                                              true,
+                                              null,
+                                              context);
+                                        } else {
+                                          _updateAddress = true;
+                                        }
+                                      },
+                                      onCameraMove: ((position) =>
+                                      _cameraPosition = position),
+                                      onMapCreated: (GoogleMapController
+                                      controller) {
+                                        _controller = controller;
+                                        if (!widget.isEnableUpdate &&
+                                            _controller != null) {
+                                          locationController
+                                              .getCurrentLocation(
+                                              context, true,
+                                              mapController:
+                                              _controller);
+                                        }
+                                      },
+                                    ),
+                                    locationController.loading
+                                        ? Center(
+                                        child: CircularProgressIndicator(
+                                            valueColor:
+                                            AlwaysStoppedAnimation<
+                                                Color>(Theme.of(
+                                                context)
+                                                .primaryColor)))
+                                        : const SizedBox(),
+                                    Container(
+                                      width: MediaQuery.of(context)
+                                          .size
+                                          .width,
+                                      alignment: Alignment.center,
+                                      height: MediaQuery.of(context)
+                                          .size
+                                          .height,
+                                      child: Icon(Icons.location_on,
+                                          size: 40,
+                                          color: Theme.of(context)
+                                              .primaryColor),
+                                    ),
+                                    Positioned(
+                                      top: 10,
+                                      right: 0,
+                                      child: InkWell(
+                                        onTap: () => Navigator.of(context)
+                                            .push(MaterialPageRoute(
+                                            builder: (BuildContext
+                                            context) =>
+                                                SelectLocationScreen(
+                                                    googleMapController:
+                                                    _controller))),
+                                        child: Container(
+                                          width: 30,
+                                          height: 30,
+                                          margin: const EdgeInsets.only(
+                                              right: Dimensions
+                                                  .paddingSizeLarge),
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius
+                                                .circular(Dimensions
+                                                .paddingSizeSmall),
+                                            color: Colors.white,
                                           ),
-                                          locationController.loading
-                                              ? Center(
-                                                  child: CircularProgressIndicator(
-                                                      valueColor:
-                                                          AlwaysStoppedAnimation<
-                                                              Color>(Theme.of(
-                                                                  context)
-                                                              .primaryColor)))
-                                              : const SizedBox(),
-                                          Container(
-                                            width: MediaQuery.of(context)
-                                                .size
-                                                .width,
-                                            alignment: Alignment.center,
-                                            height: MediaQuery.of(context)
-                                                .size
-                                                .height,
-                                            child: Icon(Icons.location_on,
-                                                size: 40,
-                                                color: Theme.of(context)
-                                                    .primaryColor),
-                                          ),
-                                          Positioned(
-                                            top: 10,
-                                            right: 0,
-                                            child: InkWell(
-                                              onTap: () => Navigator.of(context)
-                                                  .push(MaterialPageRoute(
-                                                      builder: (BuildContext
-                                                              context) =>
-                                                          SelectLocationScreen(
-                                                              googleMapController:
-                                                                  _controller))),
-                                              child: Container(
-                                                width: 30,
-                                                height: 30,
-                                                margin: const EdgeInsets.only(
-                                                    right: Dimensions
-                                                        .paddingSizeLarge),
-                                                decoration: BoxDecoration(
-                                                  borderRadius: BorderRadius
-                                                      .circular(Dimensions
-                                                          .paddingSizeSmall),
-                                                  color: Colors.white,
-                                                ),
-                                                child: Icon(Icons.fullscreen,
-                                                    color: Theme.of(context)
-                                                        .primaryColor,
-                                                    size: 20),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
+                                          child: Icon(Icons.fullscreen,
+                                              color: Theme.of(context)
+                                                  .primaryColor,
+                                              size: 20),
+                                        ),
                                       ),
                                     ),
-                                  )
+                                  ],
+                                ),
+                              ),
+                            )
                                 : const SizedBox(),
                             Padding(
                               padding: const EdgeInsets.symmetric(
@@ -619,33 +619,33 @@ class _AddNewAddressScreenState extends State<AddNewAddressScreen> {
                                   scrollDirection: Axis.horizontal,
                                   physics: const BouncingScrollPhysics(),
                                   itemCount:
-                                      addressController.addressTypeList.length,
+                                  addressController.addressTypeList.length,
                                   itemBuilder: (context, index) => InkWell(
                                     onTap: () => addressController
                                         .updateAddressIndex(index, true),
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(
                                           vertical:
-                                              Dimensions.paddingSizeDefault,
+                                          Dimensions.paddingSizeDefault,
                                           horizontal:
-                                              Dimensions.paddingSizeLarge),
+                                          Dimensions.paddingSizeLarge),
                                       margin: const EdgeInsets.only(right: 17),
                                       decoration: BoxDecoration(
                                         borderRadius: BorderRadius.circular(
                                             Dimensions.paddingSizeSmall),
                                         border: Border.all(
                                           color: addressController
-                                                      .selectAddressIndex ==
-                                                  index
+                                              .selectAddressIndex ==
+                                              index
                                               ? Theme.of(context).primaryColor
                                               : Theme.of(context)
-                                                  .primaryColor
-                                                  .withValues(alpha: .125),
+                                              .primaryColor
+                                              .withValues(alpha: .125),
                                         ),
                                       ),
                                       child: Row(
                                         mainAxisAlignment:
-                                            MainAxisAlignment.center,
+                                        MainAxisAlignment.center,
                                         children: [
                                           SizedBox(
                                             width: 20,
@@ -653,18 +653,18 @@ class _AddNewAddressScreenState extends State<AddNewAddressScreen> {
                                               addressController
                                                   .addressTypeList[index].icon,
                                               color: addressController
-                                                          .selectAddressIndex ==
-                                                      index
+                                                  .selectAddressIndex ==
+                                                  index
                                                   ? Theme.of(context)
-                                                      .primaryColor
+                                                  .primaryColor
                                                   : Theme.of(context)
-                                                      .primaryColor
-                                                      .withValues(alpha: .35),
+                                                  .primaryColor
+                                                  .withValues(alpha: .35),
                                             ),
                                           ),
                                           const SizedBox(
                                               width:
-                                                  Dimensions.paddingSizeSmall),
+                                              Dimensions.paddingSizeSmall),
                                           Text(
                                             getTranslated(
                                                 addressController
@@ -700,7 +700,7 @@ class _AddNewAddressScreenState extends State<AddNewAddressScreen> {
                                         ),
                                         Text(
                                           getTranslated('shipping_address',
-                                                  context) ??
+                                              context) ??
                                               '',
                                           style: textRegular.copyWith(
                                             fontSize: Dimensions.fontSizeLarge,
@@ -725,7 +725,7 @@ class _AddNewAddressScreenState extends State<AddNewAddressScreen> {
                                         ),
                                         Text(
                                           getTranslated(
-                                                  'billing_address', context) ??
+                                              'billing_address', context) ??
                                               '',
                                           style: textRegular.copyWith(
                                             fontSize: Dimensions.fontSizeLarge,
@@ -741,22 +741,6 @@ class _AddNewAddressScreenState extends State<AddNewAddressScreen> {
                                 ),
                               ),
                             ),
-                            CustomTextFieldWidget(
-                              labelText:
-                                  getTranslated('delivery_address', context),
-                              hintText: getTranslated('usa', context),
-                              inputType: TextInputType.streetAddress,
-                              inputAction: TextInputAction.next,
-                              focusNode: _addressNode,
-                              prefixIcon: Images.address,
-                              required: true,
-                              controller: locationController.locationController,
-                              validator: (value) =>
-                                  ValidateCheck.validateEmptyText(
-                                      value, "address_is_required"),
-                            ),
-                            const SizedBox(
-                                height: Dimensions.paddingSizeDefaultAddress),
                             Text(
                               getTranslated('country', context)!,
                               style: textRegular.copyWith(
@@ -772,174 +756,54 @@ class _AddNewAddressScreenState extends State<AddNewAddressScreen> {
                                 builder: (context, addressController, _) {
                                   return Column(
                                     crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                    CrossAxisAlignment.start,
                                     children: [
                                       Provider.of<SplashController>(context,
-                                                      listen: false)
-                                                  .configModel!
-                                                  .deliveryCountryRestriction ==
-                                              1
+                                          listen: false)
+                                          .configModel!
+                                          .deliveryCountryRestriction ==
+                                          1
                                           ? Container(
-                                              width: MediaQuery.of(context)
-                                                  .size
-                                                  .width,
-                                              decoration: BoxDecoration(
-                                                color:
-                                                    Theme.of(context).cardColor,
+                                        width: MediaQuery.of(context)
+                                            .size
+                                            .width,
+                                        decoration: BoxDecoration(
+                                          color:
+                                          Theme.of(context).cardColor,
+                                          borderRadius:
+                                          BorderRadius.circular(5),
+                                          border: Border.all(
+                                              width: .1,
+                                              color: Theme.of(context)
+                                                  .hintColor
+                                                  .withValues(
+                                                  alpha: 0.1)),
+                                        ),
+                                        child: DropdownButtonFormField2<
+                                            String>(
+                                          isExpanded: true,
+                                          isDense: true,
+                                          decoration: InputDecoration(
+                                            contentPadding:
+                                            const EdgeInsets
+                                                .symmetric(
+                                                vertical: 0),
+                                            border: OutlineInputBorder(
                                                 borderRadius:
-                                                    BorderRadius.circular(5),
-                                                border: Border.all(
-                                                    width: .1,
-                                                    color: Theme.of(context)
-                                                        .hintColor
-                                                        .withValues(
-                                                            alpha: 0.1)),
-                                              ),
-                                              child: DropdownButtonFormField2<
-                                                  String>(
-                                                isExpanded: true,
-                                                isDense: true,
-                                                decoration: InputDecoration(
-                                                  contentPadding:
-                                                      const EdgeInsets
-                                                          .symmetric(
-                                                          vertical: 0),
-                                                  border: OutlineInputBorder(
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              5)),
-                                                ),
-                                                hint: Row(
-                                                  children: [
-                                                    Image.asset(Images.country),
-                                                    const SizedBox(
-                                                        width: Dimensions
-                                                            .paddingSizeSmall),
-                                                    Text(
-                                                      _countryCodeController
-                                                          .text,
-                                                      style:
-                                                          textRegular.copyWith(
-                                                        fontSize: Dimensions
-                                                            .fontSizeDefault,
-                                                        color: Theme.of(context)
-                                                            .textTheme
-                                                            .bodyLarge!
-                                                            .color,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                                items: addressController
-                                                    .restrictedCountryList
-                                                    .map((item) =>
-                                                        DropdownMenuItem<
-                                                            String>(
-                                                          value: item,
-                                                          child: Text(
-                                                            item,
-                                                            style: textRegular
-                                                                .copyWith(
-                                                              fontSize: Dimensions
-                                                                  .fontSizeSmall,
-                                                              color: Theme.of(
-                                                                      context)
-                                                                  .textTheme
-                                                                  .bodyLarge
-                                                                  ?.color,
-                                                            ),
-                                                          ),
-                                                        ))
-                                                    .toList(),
-                                                onChanged: (value) {
-                                                  _countryCodeController.text =
-                                                      value!;
-                                                },
-                                                buttonStyleData:
-                                                    const ButtonStyleData(
-                                                        padding:
-                                                            EdgeInsets.only(
-                                                                right: 8)),
-                                                iconStyleData: IconStyleData(
-                                                  icon: Icon(
-                                                      Icons.arrow_drop_down,
-                                                      color: Theme.of(context)
-                                                          .hintColor),
-                                                  iconSize: 24,
-                                                ),
-                                                dropdownStyleData:
-                                                    DropdownStyleData(
-                                                  decoration: BoxDecoration(
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              5)),
-                                                ),
-                                                menuItemStyleData:
-                                                    const MenuItemStyleData(
-                                                        padding: EdgeInsets
-                                                            .symmetric(
-                                                                horizontal:
-                                                                    16)),
-                                              ),
-                                            )
-                                          : Container(
-                                              width: MediaQuery.of(context)
-                                                  .size
-                                                  .width,
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      vertical: Dimensions
-                                                          .paddingSizeSmall),
-                                              decoration: BoxDecoration(
-                                                borderRadius:
-                                                    BorderRadius.circular(
-                                                        Dimensions
-                                                            .paddingSizeSmall),
-                                                color:
-                                                    Theme.of(context).cardColor,
-                                                border: Border.all(
-                                                    color: Theme.of(context)
-                                                        .hintColor
-                                                        .withValues(alpha: .5)),
-                                              ),
-                                              child: CodePickerWidget(
-                                                fromCountryList: true,
-                                                padding: const EdgeInsets.only(
-                                                    left: Dimensions
-                                                        .paddingSizeSmall),
-                                                flagWidth: 25,
-                                                onChanged: (val) {
-                                                  _countryCodeController.text =
-                                                      val.name!;
-                                                },
-                                                initialSelection:
-                                                    _countryCodeController.text,
-                                                showDropDownButton: true,
-                                                showCountryOnly: true,
-                                                showOnlyCountryWhenClosed: true,
-                                                showFlagDialog: true,
-                                                hideMainText: false,
-                                                showFlagMain: false,
-                                                dialogBackgroundColor:
-                                                    Theme.of(context).cardColor,
-                                                barrierColor:
-                                                    Provider.of<ThemeController>(
-                                                                context)
-                                                            .darkTheme
-                                                        ? Colors.black
-                                                            .withValues(
-                                                                alpha: 0.4)
-                                                        : null,
-                                                textStyle: textRegular.copyWith(
-                                                  fontSize:
-                                                      Dimensions.fontSizeLarge,
-                                                  color: Theme.of(context)
-                                                      .textTheme
-                                                      .bodyLarge!
-                                                      .color,
-                                                ),
-                                                dialogTextStyle:
-                                                    textRegular.copyWith(
+                                                BorderRadius.circular(
+                                                    5)),
+                                          ),
+                                          hint: Row(
+                                            children: [
+                                              Image.asset(Images.country),
+                                              const SizedBox(
+                                                  width: Dimensions
+                                                      .paddingSizeSmall),
+                                              Text(
+                                                _countryCodeController
+                                                    .text,
+                                                style:
+                                                textRegular.copyWith(
                                                   fontSize: Dimensions
                                                       .fontSizeDefault,
                                                   color: Theme.of(context)
@@ -948,13 +812,132 @@ class _AddNewAddressScreenState extends State<AddNewAddressScreen> {
                                                       .color,
                                                 ),
                                               ),
-                                            ),
+                                            ],
+                                          ),
+                                          items: addressController
+                                              .restrictedCountryList
+                                              .map((item) =>
+                                              DropdownMenuItem<
+                                                  String>(
+                                                value: item,
+                                                child: Text(
+                                                  item,
+                                                  style: textRegular
+                                                      .copyWith(
+                                                    fontSize: Dimensions
+                                                        .fontSizeSmall,
+                                                    color: Theme.of(
+                                                        context)
+                                                        .textTheme
+                                                        .bodyLarge
+                                                        ?.color,
+                                                  ),
+                                                ),
+                                              ))
+                                              .toList(),
+                                          onChanged: (value) {
+                                            _countryCodeController.text =
+                                            value!;
+                                          },
+                                          buttonStyleData:
+                                          const ButtonStyleData(
+                                              padding:
+                                              EdgeInsets.only(
+                                                  right: 8)),
+                                          iconStyleData: IconStyleData(
+                                            icon: Icon(
+                                                Icons.arrow_drop_down,
+                                                color: Theme.of(context)
+                                                    .hintColor),
+                                            iconSize: 24,
+                                          ),
+                                          dropdownStyleData:
+                                          DropdownStyleData(
+                                            decoration: BoxDecoration(
+                                                borderRadius:
+                                                BorderRadius.circular(
+                                                    5)),
+                                          ),
+                                          menuItemStyleData:
+                                          const MenuItemStyleData(
+                                              padding: EdgeInsets
+                                                  .symmetric(
+                                                  horizontal:
+                                                  16)),
+                                        ),
+                                      )
+                                          : Container(
+                                        width: MediaQuery.of(context)
+                                            .size
+                                            .width,
+                                        padding:
+                                        const EdgeInsets.symmetric(
+                                            vertical: Dimensions
+                                                .paddingSizeSmall),
+                                        decoration: BoxDecoration(
+                                          borderRadius:
+                                          BorderRadius.circular(
+                                              Dimensions
+                                                  .paddingSizeSmall),
+                                          color:
+                                          Theme.of(context).cardColor,
+                                          border: Border.all(
+                                              color: Theme.of(context)
+                                                  .hintColor
+                                                  .withValues(alpha: .5)),
+                                        ),
+                                        child: CodePickerWidget(
+                                          fromCountryList: true,
+                                          padding: const EdgeInsets.only(
+                                              left: Dimensions
+                                                  .paddingSizeSmall),
+                                          flagWidth: 25,
+                                          onChanged: (val) {
+                                            _countryCodeController.text =
+                                            val.name!;
+                                          },
+                                          initialSelection:
+                                          _countryCodeController.text,
+                                          showDropDownButton: true,
+                                          showCountryOnly: true,
+                                          showOnlyCountryWhenClosed: true,
+                                          showFlagDialog: true,
+                                          hideMainText: false,
+                                          showFlagMain: false,
+                                          dialogBackgroundColor:
+                                          Theme.of(context).cardColor,
+                                          barrierColor:
+                                          Provider.of<ThemeController>(
+                                              context)
+                                              .darkTheme
+                                              ? Colors.black
+                                              .withValues(
+                                              alpha: 0.4)
+                                              : null,
+                                          textStyle: textRegular.copyWith(
+                                            fontSize:
+                                            Dimensions.fontSizeLarge,
+                                            color: Theme.of(context)
+                                                .textTheme
+                                                .bodyLarge!
+                                                .color,
+                                          ),
+                                          dialogTextStyle:
+                                          textRegular.copyWith(
+                                            fontSize: Dimensions
+                                                .fontSizeDefault,
+                                            color: Theme.of(context)
+                                                .textTheme
+                                                .bodyLarge!
+                                                .color,
+                                          ),
+                                        ),
+                                      ),
                                     ],
                                   );
                                 },
                               ),
                             ),
-
                             const SizedBox(height: Dimensions.paddingSizeDefaultAddress),
                             // Province Dropdown (labeled as City)
                             Text(
@@ -1104,97 +1087,20 @@ class _AddNewAddressScreenState extends State<AddNewAddressScreen> {
                             ),
                             const SizedBox(
                                 height: Dimensions.paddingSizeDefaultAddress),
-                            Provider.of<SplashController>(context,
-                                            listen: false)
-                                        .configModel!
-                                        .deliveryZipCodeAreaRestriction ==
-                                    0
-                                ? CustomTextFieldWidget(
-                                    labelText: getTranslated('zip', context),
-                                    hintText: getTranslated('zip', context),
-                                    inputAction: TextInputAction.done,
-                                    focusNode: _zipNode,
-                                    required: true,
-                                    prefixIcon: Images.city,
-                                    controller: _zipCodeController,
-                                    validator: (value) =>
-                                        ValidateCheck.validateEmptyText(
-                                            value, 'zip_code_is_required'),
-                                  )
-                                : Container(
-                                    width: MediaQuery.of(context).size.width,
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(context).cardColor,
-                                      borderRadius: BorderRadius.circular(5),
-                                      border: Border.all(
-                                          width: .1,
-                                          color: Theme.of(context)
-                                              .hintColor
-                                              .withValues(alpha: 0.1)),
-                                    ),
-                                    child: DropdownButtonFormField2<String>(
-                                      isExpanded: true,
-                                      isDense: true,
-                                      decoration: InputDecoration(
-                                        contentPadding:
-                                            const EdgeInsets.symmetric(
-                                                vertical: 0),
-                                        border: OutlineInputBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(5)),
-                                      ),
-                                      hint: Row(
-                                        children: [
-                                          Image.asset(Images.city),
-                                          const SizedBox(
-                                              width:
-                                                  Dimensions.paddingSizeSmall),
-                                          Text(
-                                            getTranslated('zip', context)!,
-                                            style: textRegular.copyWith(
-                                              fontSize:
-                                                  Dimensions.fontSizeDefault,
-                                              color: Theme.of(context)
-                                                  .textTheme
-                                                  .bodyLarge!
-                                                  .color,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      items: addressController.restrictedZipList
-                                          .map((item) =>
-                                              DropdownMenuItem<String>(
-                                                value: item.zipcode,
-                                                child: Text(
-                                                  item.zipcode!,
-                                                  style: textRegular.copyWith(
-                                                      fontSize: Dimensions
-                                                          .fontSizeSmall),
-                                                ),
-                                              ))
-                                          .toList(),
-                                      onChanged: (value) {
-                                        _zipCodeController.text = value!;
-                                      },
-                                      buttonStyleData: const ButtonStyleData(
-                                          padding: EdgeInsets.only(right: 8)),
-                                      iconStyleData: IconStyleData(
-                                        icon: Icon(Icons.arrow_drop_down,
-                                            color: Theme.of(context).hintColor),
-                                        iconSize: 24,
-                                      ),
-                                      dropdownStyleData: DropdownStyleData(
-                                        decoration: BoxDecoration(
-                                            borderRadius:
-                                                BorderRadius.circular(5)),
-                                      ),
-                                      menuItemStyleData:
-                                          const MenuItemStyleData(
-                                              padding: EdgeInsets.symmetric(
-                                                  horizontal: 16)),
-                                    ),
-                                  ),
+                            CustomTextFieldWidget(
+                              labelText:
+                              getTranslated('delivery_address', context),
+                              hintText: getTranslated('usa', context),
+                              inputType: TextInputType.streetAddress,
+                              inputAction: TextInputAction.next,
+                              focusNode: _addressNode,
+                              prefixIcon: Images.address,
+                              required: true,
+                              controller: locationController.locationController,
+                              validator: (value) =>
+                                  ValidateCheck.validateEmptyText(
+                                      value, "address_is_required"),
+                            ),
                             const SizedBox(
                                 height: Dimensions.paddingSizeDefaultAddress),
                             Container(
@@ -1222,7 +1128,6 @@ class _AddNewAddressScreenState extends State<AddNewAddressScreen> {
                                       city: _selectedProvince!.name,
                                       district: _selectedWard!.name,
                                       province: _selectedDistrict!.name,
-                                      zip: _zipCodeController.text,
                                       country: _countryCodeController.text,
                                       guestId: Provider.of<AuthController>(context, listen: false).getGuestToken(),
                                       isBilling: _address == Address.billing,
@@ -1231,41 +1136,41 @@ class _AddNewAddressScreenState extends State<AddNewAddressScreen> {
                                       longitude: widget.isEnableUpdate ? locationController.position.longitude.toString() : locationController.position.longitude.toString(),
                                     );
 
-                                          if (widget.isEnableUpdate) {
-                                            addressModel.id =
-                                                widget.address!.id;
-                                            addressController.updateAddress(
-                                                context,
-                                                addressModel: addressModel,
-                                                addressId: addressModel.id);
-                                          } else if (_countryCodeController.text
-                                              .trim()
-                                              .isEmpty) {
-                                            showCustomSnackBar(
-                                                '${getTranslated('country_is_required', context)}',
-                                                context);
-                                          } else {
-                                            addressController
-                                                .addAddress(addressModel)
-                                                .then((value) {
-                                              if (value.response?.statusCode ==
-                                                  200) {
-                                                if (context.mounted) {
-                                                  Navigator.pop(context);
-                                                }
-                                                if (widget.fromCheckout) {
-                                                  if (context.mounted) {
-                                                    Provider.of<CheckoutController>(
-                                                            context,
-                                                            listen: false)
-                                                        .setAddressIndex(0);
-                                                  }
-                                                }
-                                              }
-                                            });
+                                    if (widget.isEnableUpdate) {
+                                      addressModel.id =
+                                          widget.address!.id;
+                                      addressController.updateAddress(
+                                          context,
+                                          addressModel: addressModel,
+                                          addressId: addressModel.id);
+                                    } else if (_countryCodeController.text
+                                        .trim()
+                                        .isEmpty) {
+                                      showCustomSnackBar(
+                                          '${getTranslated('country_is_required', context)}',
+                                          context);
+                                    } else {
+                                      addressController
+                                          .addAddress(addressModel)
+                                          .then((value) {
+                                        if (value.response?.statusCode ==
+                                            200) {
+                                          if (context.mounted) {
+                                            Navigator.pop(context);
+                                          }
+                                          if (widget.fromCheckout) {
+                                            if (context.mounted) {
+                                              Provider.of<CheckoutController>(
+                                                  context,
+                                                  listen: false)
+                                                  .setAddressIndex(0);
+                                            }
                                           }
                                         }
-                                      },
+                                      });
+                                    }
+                                  }
+                                },
                               ),
                             ),
                           ],

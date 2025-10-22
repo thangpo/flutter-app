@@ -21,6 +21,7 @@ import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/custom_image_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/not_logged_in_bottom_sheet_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/features/product_details/widgets/favourite_button_widget.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/internal_share_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -136,7 +137,49 @@ class ProductImageWidget extends StatelessWidget {
                                   child: Container(width: 40, height: 40,
                                       decoration: BoxDecoration(color: Theme.of(context).cardColor, shape: BoxShape.circle),
                                       child: Padding(padding: const EdgeInsets.all(Dimensions.paddingSizeSmall),
-                                          child: Image.asset(Images.share, color: Theme.of(context).primaryColor)))))
+                                          child: Image.asset(Images.share, color: Theme.of(context).primaryColor))))),
+
+                          // Nút chia sẻ nội bộ trong ứng dụng - chỉ hiện khi đăng nhập
+                          if (Provider.of<AuthController>(context, listen: false).isLoggedIn())
+                            Padding(
+                              padding: const EdgeInsets.only(top: Dimensions.paddingSizeSmall),
+                              child: InkWell(
+                                onTap: () {
+                                  final productData = {
+                                    'product_title': productModel?.name,
+                                    'product_category': productModel?.categoryIds?.isNotEmpty == true
+                                        ? productModel!.categoryIds!.first.id
+                                        : null,
+                                    'product_price': productModel?.unitPrice,
+                                    'product_location': 'Chưa biết',
+                                    'images': productModel?.imagesFullUrl
+                                        ?.map((e) => e.path)
+                                        .toList(),
+                                  };
+
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => InternalShareScreen(productData: productData),
+                                    ),
+                                  );
+                                },
+                                child: Card(
+                                  elevation: 2,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
+                                  child: Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).cardColor,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.share_rounded, color: Colors.green),
+                                  ),
+                                ),
+                              ),
+                            ),
+
                         ])),
 
                     (productModel?.productType == 'digital' && productModel?.previewFileFullUrl != null && productModel?.previewFileFullUrl?.path != '') ?
