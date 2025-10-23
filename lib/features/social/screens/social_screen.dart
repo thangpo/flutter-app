@@ -14,6 +14,7 @@ import 'package:visibility_detector/visibility_detector.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_post_detail_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_post_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_story_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_story_viewer_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/price_converter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_sixvalley_ecommerce/features/profile/controllers/profile_contrroller.dart';
@@ -87,10 +88,6 @@ class _SocialFeedScreenState extends State<SocialFeedScreen>
                             // Block Stories + separator
                             return Consumer<SocialController>(
                               builder: (context, sc2, __) {
-                                if (sc2.stories.isEmpty) {
-                                  // Nếu chưa có stories, có thể trả spacer mỏng cho đều layout
-                                  return const SizedBox.shrink();
-                                }
                                 return Column(
                                   children: [
                                     _StoriesSectionFromApi(
@@ -293,14 +290,72 @@ class _StoriesSectionFromApi extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final SocialUser? currentUser =
+        context.select<SocialController, SocialUser?>((c) => c.currentUser);
+    final SocialStory? myStory =
+        context.select<SocialController, SocialStory?>((c) => c.currentUserStory);
+
+    String storyKey(SocialStory story) {
+      final userId = story.userId;
+      if (userId != null && userId.isNotEmpty) {
+        return 'user:' + userId;
+      }
+      return 'story:' + story.id;
+    }
+
+    bool isCurrentUserStory(SocialStory story) {
+      if (currentUser == null) return false;
+      if (story.userId != null && story.userId == currentUser.id) {
+        return true;
+      }
+      final storyName =
+          story.userName != null ? story.userName!.trim().toLowerCase() : '';
+      if (storyName.isEmpty) return false;
+      final firstName = (currentUser.firstName ?? '').trim();
+      final lastName = (currentUser.lastName ?? '').trim();
+      final possibleNames = <String>{
+        (currentUser.displayName ?? '').trim().toLowerCase(),
+        (currentUser.userName ?? '').trim().toLowerCase(),
+        ('$firstName $lastName').trim().toLowerCase(),
+      }..removeWhere((value) => value.isEmpty);
+      return possibleNames.contains(storyName);
+    }
+
+    final seenKeys = <String>{};
+    final dedupedStories = <SocialStory>[];
+    for (final story in stories) {
+      final key = storyKey(story);
+      if (seenKeys.add(key)) {
+        dedupedStories.add(story);
+      }
+    }
+
+    dedupedStories.removeWhere((story) => !story.hasItems);
+
+    final List<SocialStory> orderedStories = <SocialStory>[];
+    if (myStory != null) {
+      final key = storyKey(myStory);
+      dedupedStories
+          .removeWhere((story) => storyKey(story) == key);
+      orderedStories.add(myStory);
+    } else if (currentUser != null) {
+      final idx = dedupedStories.indexWhere(isCurrentUserStory);
+      if (idx >= 0) {
+        orderedStories.add(dedupedStories.removeAt(idx));
+      }
+    }
+
+    orderedStories.addAll(dedupedStories);
+
     return Container(
       height: 200,
       color: cs.surface,
       child: NotificationListener<ScrollNotification>(
-        onNotification: (n) {
-          // chỉ bắt event của scroll ngang
-          if (n.metrics.axis == Axis.horizontal &&
-              n.metrics.pixels >= n.metrics.maxScrollExtent - 100) {
+        onNotification: (notification) {
+          // intercept horizontal scroll events
+          if (notification.metrics.axis == Axis.horizontal &&
+              notification.metrics.pixels >=
+                  notification.metrics.maxScrollExtent - 100) {
             final sc = context.read<SocialController>();
             if (!sc.loading) sc.loadMoreStories();
           }
@@ -309,12 +364,28 @@ class _StoriesSectionFromApi extends StatelessWidget {
         child: ListView.builder(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-          itemCount: stories.length + 1,
+          itemCount: orderedStories.length + 1,
           itemBuilder: (context, index) {
             if (index == 0) {
-              return _CreateStoryCard(); // ô tạo tin
+              return _CreateStoryCard();
             }
-            return _StoryCardFromApi(story: stories[index - 1]);
+            final storyIndex = index - 1;
+            final story = orderedStories[storyIndex];
+            return _StoryCardFromApi(
+              story: story,
+              onTap: story.items.isEmpty
+                  ? null
+                  : () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => SocialStoryViewerScreen(
+                            stories: List<SocialStory>.from(orderedStories),
+                            initialStoryIndex: storyIndex,
+                          ),
+                        ),
+                      );
+                    },
+            );
           },
         ),
       ),
@@ -324,7 +395,8 @@ class _StoriesSectionFromApi extends StatelessWidget {
 
 class _StoryCardFromApi extends StatelessWidget {
   final SocialStory story;
-  const _StoryCardFromApi({required this.story});
+  final VoidCallback? onTap;
+  const _StoryCardFromApi({required this.story, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -332,66 +404,69 @@ class _StoryCardFromApi extends StatelessWidget {
     final onSurface = cs.onSurface;
     final thumb = story.thumbUrl ?? story.mediaUrl;
 
-    return Container(
-      width: 110,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: cs.surfaceVariant,
-      ),
-      child: Stack(
-        children: [
-          if (thumb != null && thumb.isNotEmpty)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image(
-                image: CachedNetworkImageProvider(thumb),
-                width: 110,
-                height: double.infinity,
-                fit: BoxFit.cover,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 110,
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          color: cs.surfaceVariant,
+        ),
+        child: Stack(
+          children: [
+            if (thumb != null && thumb.isNotEmpty)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image(
+                  image: CachedNetworkImageProvider(thumb),
+                  width: 110,
+                  height: double.infinity,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            Positioned(
+              top: 8,
+              left: 8,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: cs.primary,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: cs.surface, width: 3),
+                ),
+                child: CircleAvatar(
+                  radius: 18,
+                  backgroundColor: cs.surfaceVariant,
+                  backgroundImage:
+                      (story.userAvatar != null && story.userAvatar!.isNotEmpty)
+                          ? CachedNetworkImageProvider(story.userAvatar!)
+                          : null,
+                  child: (story.userAvatar == null || story.userAvatar!.isEmpty)
+                      ? Icon(Icons.person,
+                          color: onSurface.withOpacity(.6), size: 20)
+                      : null,
+                ),
               ),
             ),
-          Positioned(
-            top: 8,
-            left: 8,
-            child: Container(
-              padding: const EdgeInsets.all(2),
-              decoration: BoxDecoration(
-                color: cs.primary,
-                shape: BoxShape.circle,
-                border: Border.all(color: cs.surface, width: 3),
-              ),
-              child: CircleAvatar(
-                radius: 18,
-                backgroundColor: cs.surfaceVariant,
-                backgroundImage:
-                    (story.userAvatar != null && story.userAvatar!.isNotEmpty)
-                        ? CachedNetworkImageProvider(story.userAvatar!)
-                        : null,
-                child: (story.userAvatar == null || story.userAvatar!.isEmpty)
-                    ? Icon(Icons.person,
-                        color: onSurface.withOpacity(.6), size: 20)
-                    : null,
+            Positioned(
+              bottom: 8,
+              left: 8,
+              right: 8,
+              child: Text(
+                story.userName ?? '',
+                style: TextStyle(
+                  color: onSurface,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  shadows: const [Shadow(color: Colors.black54, blurRadius: 4)],
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-          ),
-          Positioned(
-            bottom: 8,
-            left: 8,
-            right: 8,
-            child: Text(
-              story.userName ?? '',
-              style: TextStyle(
-                color: onSurface,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                shadows: const [Shadow(color: Colors.black54, blurRadius: 4)],
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1718,5 +1793,6 @@ class _Story {
 class EdgeBox {
   static const zero = EdgeInsets.zero;
 }
+
 
 

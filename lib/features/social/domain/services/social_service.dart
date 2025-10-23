@@ -44,6 +44,20 @@ class SocialService implements SocialServiceInterface {
   }
 
   @override
+  Future<List<SocialStory>> getMyStories(
+      {int limit = 10, int offset = 0}) async {
+    final resp =
+        await socialRepository.fetchUserStories(limit: limit, offset: offset);
+    if (resp.isSuccess &&
+        resp.response != null &&
+        resp.response!.statusCode == 200) {
+      return socialRepository.parseStories(resp.response!);
+    }
+    ApiChecker.checkApi(resp);
+    return [];
+  }
+
+  @override
   Future<SocialStory?> createStory({
     required String fileType,
     required String filePath,
@@ -127,6 +141,174 @@ class SocialService implements SocialServiceInterface {
 
     ApiChecker.checkApi(resp);
     throw Exception('Reaction failed');
+  }
+
+  @override
+  Future<void> reactToStory({
+    required String storyId,
+    required String reaction,
+  }) async {
+    final resp = await socialRepository.reactToStory(
+      storyId: storyId,
+      reaction: reaction,
+    );
+
+    if (resp.isSuccess && resp.response != null) {
+      final data = resp.response!.data;
+      final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
+      if (status == 200) return;
+      final msg =
+          (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
+      throw Exception(msg);
+    }
+
+    ApiChecker.checkApi(resp);
+    throw Exception('Reaction failed');
+  }
+
+  @override
+  Future<SocialStoryViewersPage> getStoryViews({
+    required String storyId,
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    final resp = await socialRepository.fetchStoryViews(
+      storyId: storyId,
+      limit: limit,
+      offset: offset,
+    );
+
+    if (resp.isSuccess && resp.response != null) {
+      final data = resp.response!.data;
+      final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
+      if (status == 200) {
+        final SocialStoryViewersPage viewsPage =
+            socialRepository.parseStoryViews(
+          resp.response!,
+          currentOffset: offset,
+          limit: limit,
+        );
+
+        SocialStoryViewersPage reactionsPage = const SocialStoryViewersPage();
+        try {
+          final int reactionLimit = offset + limit;
+          final respReactions = await socialRepository.fetchStoryReactions(
+            storyId: storyId,
+            reactionFilter: '1,2,3,4,5,6',
+            limit: reactionLimit > 0 ? reactionLimit : limit,
+            offset: 0,
+          );
+          if (respReactions.isSuccess && respReactions.response != null) {
+            final dynamic reactionsData = respReactions.response!.data;
+            final int reactionsStatus =
+                int.tryParse('${reactionsData?['api_status'] ?? 200}') ?? 200;
+            if (reactionsStatus == 200) {
+              reactionsPage = socialRepository.parseStoryViews(
+                respReactions.response!,
+                currentOffset: 0,
+                limit: reactionLimit > 0 ? reactionLimit : limit,
+              );
+            }
+          }
+        } catch (_) {
+          // Ignore reaction fetch failures; we still return viewer data.
+        }
+
+        if (reactionsPage.viewers.isEmpty) {
+          return viewsPage;
+        }
+
+        String viewerKeyFor(SocialStoryViewer viewer) {
+          if (viewer.userId.isNotEmpty) return viewer.userId;
+          if (viewer.id.isNotEmpty) return viewer.id;
+          return '${viewer.hashCode}';
+        }
+
+        List<String> extractedReactions(SocialStoryViewer viewer) {
+          if (viewer.reactions.isNotEmpty) return viewer.reactions;
+          if (viewer.reaction.isNotEmpty) {
+            return <String>[normalizeSocialReaction(viewer.reaction)];
+          }
+          return const <String>[];
+        }
+
+        final Map<String, SocialStoryViewer> reactionLookup =
+            <String, SocialStoryViewer>{
+          for (final SocialStoryViewer viewer in reactionsPage.viewers)
+            viewerKeyFor(viewer): viewer,
+        };
+
+        final List<SocialStoryViewer> mergedViewers = <SocialStoryViewer>[];
+
+        for (final SocialStoryViewer viewer in viewsPage.viewers) {
+          final String key = viewerKeyFor(viewer);
+          final SocialStoryViewer? reaction = reactionLookup.remove(key);
+          if (reaction != null) {
+            final List<String> reactionsList = extractedReactions(reaction);
+            mergedViewers.add(
+              viewer.copyWith(
+                name: (viewer.name?.isNotEmpty ?? false)
+                    ? viewer.name
+                    : reaction.name,
+                avatar: (viewer.avatar?.isNotEmpty ?? false)
+                    ? viewer.avatar
+                    : reaction.avatar,
+                isVerified: viewer.isVerified || reaction.isVerified,
+                viewedAt: viewer.viewedAt ?? reaction.viewedAt,
+                reactions: reactionsList,
+                reactionCount: reaction.reactionCount ??
+                    (reactionsList.isNotEmpty ? reactionsList.length : null),
+                reaction: reactionsList.isNotEmpty
+                    ? reactionsList.last
+                    : reaction.reaction,
+              ),
+            );
+          } else {
+            mergedViewers.add(viewer);
+          }
+        }
+
+        if (offset == 0 && reactionLookup.isNotEmpty) {
+          mergedViewers.addAll(
+            reactionLookup.values.map((reaction) {
+              final List<String> reactionsList = extractedReactions(reaction);
+              return reaction.copyWith(
+                reactions: reactionsList,
+                reaction: reactionsList.isNotEmpty
+                    ? reactionsList.last
+                    : reaction.reaction,
+                reactionCount: reaction.reactionCount ??
+                    (reactionsList.isNotEmpty ? reactionsList.length : null),
+              );
+            }),
+          );
+        }
+
+        mergedViewers.sort((a, b) {
+          final DateTime aTime =
+              a.viewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final DateTime bTime =
+              b.viewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return bTime.compareTo(aTime);
+        });
+
+        final int mergedTotal = mergedViewers.length > viewsPage.total
+            ? mergedViewers.length
+            : viewsPage.total;
+
+        return viewsPage.copyWith(
+          viewers: mergedViewers,
+          total: mergedTotal,
+        );
+      }
+      final msg =
+          (data?['errors']?['error_text'] ?? 'Load story viewers failed')
+              .toString();
+      throw Exception(msg);
+    }
+
+    ApiChecker.checkApi(resp);
+    throw Exception('Load story viewers failed');
   }
 
   @override

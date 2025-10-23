@@ -6,6 +6,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 abstract class SocialServiceInterface {
   Future<List<SocialPost>> getNewsFeed({int limit, String? afterPostId});
   Future<List<SocialStory>> getStories({int limit, int offset});
+  Future<List<SocialStory>> getMyStories({int limit, int offset});
   Future<SocialStory?> createStory({
     required String fileType,
     required String filePath,
@@ -18,6 +19,15 @@ abstract class SocialServiceInterface {
     required String postId,
     required String reaction,
     String action = 'reaction',
+  });
+  Future<void> reactToStory({
+    required String storyId,
+    required String reaction,
+  });
+  Future<SocialStoryViewersPage> getStoryViews({
+    required String storyId,
+    int limit,
+    int offset,
   });
   Future<void> reactToComment({
     required String commentId,
