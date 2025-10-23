@@ -226,8 +226,6 @@ class FreeDeliveryOrderAmount {
   }
 }
 
-
-
 class CartModelBody{
   int? productId;
   String? variant;

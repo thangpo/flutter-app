@@ -991,6 +991,8 @@ class InHouseShop {
   final String? slug;
   final String? contact;
   final String? address;
+  final int? fromDistrictId;
+  final String? fromWardId;
   final String? image;
   final String? imageStorageType;
   final String? banner;
@@ -1022,6 +1024,8 @@ class InHouseShop {
     this.slug,
     this.contact,
     this.address,
+    this.fromDistrictId,
+    this.fromWardId,
     this.image,
     this.imageStorageType,
     this.banner,
@@ -1053,6 +1057,10 @@ class InHouseShop {
     slug: json['slug'],
     contact: json['contact'],
     address: json['address'],
+    fromDistrictId: json['from_district_id'] != null
+        ? int.tryParse(json['from_district_id'].toString())
+        : null,
+    fromWardId: json['from_ward_id'],
     image: json['image'],
     imageStorageType: json['image_storage_type'],
     banner: json['banner'],
@@ -1094,6 +1102,8 @@ class InHouseShop {
     'slug': slug,
     'contact': contact,
     'address': address,
+    'from_district_id': fromDistrictId,
+    'from_ward_id': fromWardId,
     'image': image,
     'image_storage_type': imageStorageType,
     'banner': banner,
