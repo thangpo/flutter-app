@@ -22,6 +22,7 @@ import 'package:flutter_sixvalley_ecommerce/features/profile/controllers/profile
 import 'package:flutter_sixvalley_ecommerce/features/profile/domain/models/profile_model.dart';
 import 'package:flutter_sixvalley_ecommerce/features/splash/controllers/splash_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/splash/domain/models/config_model.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/country_code_helper.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/app_localization.dart';
@@ -305,6 +306,10 @@ class AuthController with ChangeNotifier {
       if (socialUserId.isNotEmpty) {
         await authServiceInterface.saveSocialUserId(socialUserId);
       }
+      try {
+        await Provider.of<SocialController>(Get.context!, listen: false)
+            .loadCurrentUser(force: true);
+      } catch (_) {}
       // ========== END EXTERNAL CALL ==========
 
       message = map["message"];
@@ -378,6 +383,10 @@ class AuthController with ChangeNotifier {
       } finally {
         await authServiceInterface.clearSocialAccessToken();
         await authServiceInterface.clearSocialUserId();
+        try {
+          Provider.of<SocialController>(Get.context!, listen: false)
+              .clearAuthState();
+        } catch (_) {}
       }
       // ========== END EXTERNAL SOCIAL LOGOUT ==========
 
@@ -536,6 +545,10 @@ class AuthController with ChangeNotifier {
       if (socialUserId.isNotEmpty) {
         await authServiceInterface.saveSocialUserId(socialUserId);
       }
+      try {
+        await Provider.of<SocialController>(Get.context!, listen: false)
+            .loadCurrentUser(force: true);
+      } catch (_) {}
       // ========== END EXTERNAL SOCIAL AUTH ==========
 
       if (token != null && token.isNotEmpty) {

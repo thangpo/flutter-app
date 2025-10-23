@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
@@ -23,8 +25,184 @@ class SocialController with ChangeNotifier {
   SocialUser? _currentUser;
   SocialUser? get currentUser => _currentUser;
 
+  SocialStory? _currentUserStory;
+  SocialStory? get currentUserStory => _currentUserStory;
+
   final List<SocialPost> _posts = [];
   List<SocialPost> get posts => List.unmodifiable(_posts);
+
+  final List<SocialStory> _stories = [];
+  List<SocialStory> get stories => List.unmodifiable(_stories);
+  int _storiesOffset = 0;
+  final Map<String, Queue<_PendingStoryReaction>> _queuedStoryReactions =
+      <String, Queue<_PendingStoryReaction>>{};
+
+  void clearAuthState({bool notify = true}) {
+    _loading = false;
+    _creatingPost = false;
+    _creatingStory = false;
+    _loadingUser = false;
+    _currentUser = null;
+    _currentUserStory = null;
+    _posts.clear();
+    _stories.clear();
+    _afterId = null;
+    _storiesOffset = 0;
+    _storyReactionLoading.clear();
+    _storyViewers.clear();
+    if (notify) {
+      notifyListeners();
+    }
+  }
+
+  String? _afterId;
+  final Set<String> _storyReactionLoading = <String>{};
+  static const int _storyViewersPageSize = 50;
+  final Map<String, StoryViewersState> _storyViewers =
+      <String, StoryViewersState>{};
+
+  String _storyKey(SocialStory story) {
+    final userKey = story.userId;
+    if (userKey != null && userKey.isNotEmpty) {
+      return 'user:$userKey';
+    }
+    return 'story:${story.id}';
+  }
+
+  int _storyComparator(SocialStory a, SocialStory b) {
+    final aTime =
+        a.firstItem?.postedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+    final bTime =
+        b.firstItem?.postedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+    return bTime.compareTo(aTime);
+  }
+
+  List<SocialStory> _normalizeStories(Iterable<SocialStory> source) {
+    final now = DateTime.now();
+    final result = <String, SocialStory>{};
+
+    for (final story in source) {
+      final filteredItems = <SocialStoryItem>[];
+      for (final item in story.items) {
+        final posted = item.postedAt;
+        final expire = item.expireAt;
+        final within24h =
+            posted == null || now.difference(posted) <= const Duration(hours: 24);
+        final notExpired = expire == null || expire.isAfter(now);
+        if (within24h && notExpired) {
+          filteredItems.add(item);
+        }
+      }
+      if (filteredItems.isEmpty) continue;
+
+      filteredItems.sort((a, b) {
+        final aTime =
+            a.postedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bTime =
+            b.postedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bTime.compareTo(aTime);
+      });
+
+      final SocialStoryItem first = filteredItems.first;
+      final normalized = story.copyWith(
+        items: filteredItems,
+        thumbUrl: first.thumbUrl ?? first.mediaUrl ?? story.thumbUrl,
+        mediaUrl: first.mediaUrl ?? first.thumbUrl ?? story.mediaUrl,
+      );
+      result[_storyKey(normalized)] = normalized;
+    }
+
+    final ordered = result.values.toList()..sort(_storyComparator);
+    return ordered;
+  }
+
+  void _syncCurrentUserStoryFrom(Iterable<SocialStory> source,
+      {bool resetIfMissing = false}) {
+    if (_currentUser == null) {
+      if (resetIfMissing) {
+        _currentUserStory = null;
+      }
+      return;
+    }
+    final userId = _currentUser!.id;
+    SocialStory? found;
+    for (final story in source) {
+      if (story.userId == userId) {
+        found = story;
+        break;
+      }
+    }
+    if (found != null) {
+      _currentUserStory = found;
+    } else if (resetIfMissing) {
+      _currentUserStory = null;
+    }
+  }
+
+  int _findStoryIndex(SocialStory target) {
+    final key = _storyKey(target);
+    final idx = _stories.indexWhere((story) => _storyKey(story) == key);
+    if (idx != -1) {
+      return idx;
+    }
+    return _stories.indexWhere((story) => story.id == target.id);
+  }
+
+  void _replaceStoryItem(
+      int storyIndex, int itemIndex, SocialStoryItem newItem) {
+    if (storyIndex < 0 ||
+        storyIndex >= _stories.length ||
+        itemIndex < 0 ||
+        itemIndex >= _stories[storyIndex].items.length) {
+      return;
+    }
+    final SocialStory story = _stories[storyIndex];
+    final List<SocialStoryItem> updatedItems =
+        List<SocialStoryItem>.from(story.items);
+    updatedItems[itemIndex] = newItem;
+    _stories[storyIndex] = story.copyWith(items: updatedItems);
+    _syncCurrentUserStoryFrom(_stories);
+  }
+
+  StoryViewersState? storyViewersState(String storyItemId) =>
+      _storyViewers[storyItemId];
+
+  void _replaceStories(Iterable<SocialStory> source) {
+    final original = source.toList();
+    final normalized = _normalizeStories(original);
+    _stories
+      ..clear()
+      ..addAll(normalized);
+    _storiesOffset = original.length;
+    _syncCurrentUserStoryFrom(_stories, resetIfMissing: true);
+  }
+
+  void _mergeStories(Iterable<SocialStory> source) {
+    final normalized = _normalizeStories(source);
+    if (normalized.isEmpty) return;
+
+    final map = <String, SocialStory>{
+      for (final story in _stories) _storyKey(story): story,
+    };
+    for (final story in normalized) {
+      map[_storyKey(story)] = story;
+    }
+
+    final merged = map.values.toList()..sort(_storyComparator);
+    _stories
+      ..clear()
+      ..addAll(merged);
+    _syncCurrentUserStoryFrom(_stories);
+  }
+
+  Future<void> _reloadStoriesFromServer({int? limit}) async {
+    final effectiveLimit =
+        limit ?? (_stories.isNotEmpty ? _stories.length : 10);
+    final fresh =
+        await service.getMyStories(limit: effectiveLimit, offset: 0);
+    _replaceStories(fresh);
+    notifyListeners();
+  }
 
   void _updatePost(String id, SocialPost newPost) {
     final i = _posts.indexWhere((e) => e.id == id);
@@ -86,8 +264,11 @@ class SocialController with ChangeNotifier {
         highlightHash: highlightHash,
       );
       if (story != null) {
-        _stories.removeWhere((element) => element.id == story.id);
-        _stories.insert(0, story);
+        _mergeStories([story]);
+        notifyListeners();
+        final int reloadLimit =
+            (_stories.length + 5).clamp(10, 50);
+        await _reloadStoriesFromServer(limit: reloadLimit);
       }
       return story;
     } catch (e) {
@@ -107,6 +288,7 @@ class SocialController with ChangeNotifier {
       final user = await service.getCurrentUser();
       if (user != null) {
         _currentUser = user;
+        _syncCurrentUserStoryFrom(_stories);
         notifyListeners();
       }
     } catch (e) {
@@ -115,12 +297,6 @@ class SocialController with ChangeNotifier {
       _loadingUser = false;
     }
   }
-
-  final List<SocialStory> _stories = [];
-  List<SocialStory> get stories => List.unmodifiable(_stories);
-  int _storiesOffset = 0;
-
-  String? _afterId;
 
   Future<void> refresh() async {
     if (_loading) return;
@@ -133,15 +309,9 @@ class SocialController with ChangeNotifier {
         ..addAll(list);
       _afterId = list.isNotEmpty ? list.last.id : null;
 
-      // load stories nếu bạn dùng
-      final s = await service.getStories(limit: 10, offset: 0);
-      _stories.clear();
-      final existing = _stories.map((e) => e.id).toSet();
-      final unique = s.where((e) => !existing.contains(e.id)).toList();
-      _stories.addAll(unique);
-      _storiesOffset = _stories.length;
+      final userStories = await service.getMyStories(limit: 10, offset: 0);
+      _replaceStories(userStories);
 
-      // Gợi ý debug (có thể bỏ khi xong):
       if (_posts.isEmpty) {
         showCustomSnackBar(
             'Không có bài viết. Kiểm tra socialAccessToken / API response.',
@@ -171,17 +341,231 @@ class SocialController with ChangeNotifier {
     }
   }
 
+  Future<void> reactOnStoryItem({
+    required SocialStory story,
+    required SocialStoryItem item,
+    required String reaction,
+    SocialStoryReaction? previousOverride,
+    bool fromQueue = false,
+  }) async {
+    final int storyIndex = _findStoryIndex(story);
+    if (storyIndex == -1) return;
+    final SocialStory targetStory = _stories[storyIndex];
+    final int itemIndex =
+        targetStory.items.indexWhere((element) => element.id == item.id);
+    if (itemIndex == -1) return;
+
+    final SocialStoryItem currentItem = targetStory.items[itemIndex];
+
+    final SocialStoryReaction originalReaction =
+        currentItem.reaction ?? const SocialStoryReaction(isReacted: false);
+    final SocialStoryReaction previous = previousOverride ?? originalReaction;
+    final String normalized = normalizeSocialReaction(reaction);
+
+    if (normalized.isEmpty && !previous.isReacted) {
+      if (!fromQueue) {
+        return;
+      } else {
+        if (!identical(currentItem.reaction, originalReaction)) {
+          _replaceStoryItem(
+            storyIndex,
+            itemIndex,
+            currentItem.copyWith(reaction: originalReaction),
+          );
+          notifyListeners();
+        }
+        return;
+      }
+    }
+
+    final bool removeReaction = normalized.isEmpty;
+
+    final String sendingReaction = removeReaction ? '' : normalized;
+    final int? previousCount = previous.count;
+    int? nextCount;
+    if (previousCount != null) {
+      int delta = 0;
+      if (!removeReaction && normalized.isNotEmpty) {
+        delta = 1;
+      } else if (removeReaction && previousCount > 0) {
+        delta = -1;
+      }
+      nextCount = (previousCount + delta).clamp(0, 1 << 30);
+    } else if (!removeReaction && normalized.isNotEmpty) {
+      nextCount = 1;
+    }
+
+    final SocialStoryReaction optimistic = SocialStoryReaction(
+      isReacted: !removeReaction && normalized.isNotEmpty,
+      type: removeReaction ? '' : normalized,
+      count: nextCount,
+    );
+
+    final _PendingStoryReaction pending =
+        _PendingStoryReaction(reaction: sendingReaction);
+
+    if (_storyReactionLoading.contains(currentItem.id)) {
+      final Queue<_PendingStoryReaction> queue =
+          _queuedStoryReactions.putIfAbsent(
+        currentItem.id,
+        () => Queue<_PendingStoryReaction>(),
+      );
+      queue.add(pending);
+      _replaceStoryItem(
+        storyIndex,
+        itemIndex,
+        currentItem.copyWith(reaction: optimistic),
+      );
+      notifyListeners();
+      return;
+    }
+
+    _storyReactionLoading.add(currentItem.id);
+
+    _replaceStoryItem(
+      storyIndex,
+      itemIndex,
+      currentItem.copyWith(reaction: optimistic),
+    );
+    notifyListeners();
+
+    try {
+      await service.reactToStory(
+        storyId: currentItem.id,
+        reaction: sendingReaction,
+      );
+    } catch (e) {
+      _replaceStoryItem(
+        storyIndex,
+        itemIndex,
+        currentItem.copyWith(reaction: originalReaction),
+      );
+      notifyListeners();
+      final msg = e.toString();
+      showCustomSnackBar(msg, Get.context!, isError: true);
+    } finally {
+      _storyReactionLoading.remove(currentItem.id);
+      final Queue<_PendingStoryReaction>? queue =
+          _queuedStoryReactions[currentItem.id];
+      final _PendingStoryReaction? queued =
+          queue != null && queue.isNotEmpty ? queue.removeFirst() : null;
+      if (queue != null && queue.isEmpty) {
+        _queuedStoryReactions.remove(currentItem.id);
+      }
+      if (queued != null) {
+        final String storyKey = _storyKey(targetStory);
+        final int refreshedStoryIndex =
+            _stories.indexWhere((element) => _storyKey(element) == storyKey);
+        if (refreshedStoryIndex != -1) {
+          final SocialStory refreshedStory = _stories[refreshedStoryIndex];
+          final SocialStoryItem refreshedItem = refreshedStory.items
+              .firstWhere(
+                (element) => element.id == currentItem.id,
+                orElse: () => currentItem,
+              );
+          await reactOnStoryItem(
+            story: refreshedStory,
+            item: refreshedItem,
+            reaction: queued.reaction,
+            fromQueue: true,
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> fetchStoryViewers(
+    SocialStoryItem item, {
+    bool refresh = false,
+  }) async {
+    final String key = item.id;
+    final StoryViewersState previous =
+        _storyViewers[key] ?? const StoryViewersState();
+
+    if (!refresh && previous.loading) return;
+    if (!refresh && !previous.hasMore && previous.viewers.isNotEmpty) return;
+
+    final int offset = refresh ? 0 : previous.nextOffset;
+    _storyViewers[key] = previous.copyWith(
+      loading: true,
+      viewers: refresh ? <SocialStoryViewer>[] : previous.viewers,
+      hasMore: refresh ? true : previous.hasMore,
+      nextOffset: offset,
+      total: refresh ? (item.viewCount ?? previous.total) : previous.total,
+    );
+    notifyListeners();
+
+    try {
+      final SocialStoryViewersPage page = await service.getStoryViews(
+        storyId: item.id,
+        limit: _storyViewersPageSize,
+        offset: offset,
+      );
+
+      final List<SocialStoryViewer> merged = refresh
+          ? <SocialStoryViewer>[]
+          : List<SocialStoryViewer>.from(previous.viewers);
+
+      for (final SocialStoryViewer viewer in page.viewers) {
+        final String viewerKey =
+            viewer.userId.isNotEmpty ? viewer.userId : viewer.id;
+        final int existingIndex = merged.indexWhere((existing) {
+          final String existingKey =
+              existing.userId.isNotEmpty ? existing.userId : existing.id;
+          return existingKey == viewerKey;
+        });
+        if (existingIndex >= 0) {
+          merged[existingIndex] = viewer;
+        } else {
+          merged.add(viewer);
+        }
+      }
+
+      merged.sort((a, b) {
+        final DateTime aTime = a.viewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final DateTime bTime = b.viewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bTime.compareTo(aTime);
+      });
+
+      final int calculatedNextOffset = page.nextOffset > offset
+          ? page.nextOffset
+          : offset + page.viewers.length;
+      final int total =
+          page.total != 0 ? page.total : (item.viewCount ?? merged.length);
+
+      _storyViewers[key] = StoryViewersState(
+        viewers: merged,
+        loading: false,
+        hasMore: page.hasMore,
+        nextOffset: calculatedNextOffset,
+        total: total,
+      );
+    } catch (e) {
+      _storyViewers[key] = previous.copyWith(loading: false);
+      notifyListeners();
+      showCustomSnackBar(e.toString(), Get.context!, isError: true);
+      return;
+    }
+
+    notifyListeners();
+  }
+
+  Future<void> refreshStoryViewers(SocialStoryItem item) =>
+      fetchStoryViewers(item, refresh: true);
+
+  Future<void> loadMoreStoryViewers(SocialStoryItem item) =>
+      fetchStoryViewers(item, refresh: false);
+
   Future<void> loadMoreStories() async {
     if (_loading) return;
     _loading = true;
     notifyListeners();
     try {
-      final s = await service.getStories(limit: 10, offset: _storiesOffset);
-      if (s.isNotEmpty) {
-        final existing = _stories.map((e) => e.id).toSet();
-        final unique = s.where((e) => !existing.contains(e.id)).toList();
-        _stories.addAll(unique);
-        _storiesOffset = _stories.length;
+      final fetchedStories =
+          await service.getMyStories(limit: 10, offset: _storiesOffset);
+      if (fetchedStories.isNotEmpty) {
+        _mergeStories(fetchedStories);
+        _storiesOffset += fetchedStories.length;
       }
     } finally {
       _loading = false;
@@ -190,10 +574,8 @@ class SocialController with ChangeNotifier {
   }
 
   Future<void> reactOnPost(SocialPost post, String reaction) async {
-    // optimistic update
     final was = post.myReaction;
 
-    // If already reacted and user taps again => dislike (remove reaction)
     if (was.isNotEmpty && (reaction.isEmpty || reaction == 'Like')) {
       final optimistic = post.copyWith(
         myReaction: '',
@@ -222,15 +604,50 @@ class SocialController with ChangeNotifier {
     try {
       await service.reactToPost(
           postId: post.id, reaction: reaction, action: 'reaction');
-      // (Optional) Nếu muốn đồng bộ lại số liệu từ server:
-      // - có thể gọi get-post-data và cập nhật reactionCount/myReaction
     } catch (e) {
-      // rollback khi lỗi
       _updatePost(post.id, post);
-
-      // Ưu tiên thông điệp server (error_text)
       final msg = e.toString();
       showCustomSnackBar(msg, Get.context!, isError: true);
     }
   }
 }
+
+class StoryViewersState {
+  final List<SocialStoryViewer> viewers;
+  final bool loading;
+  final bool hasMore;
+  final int nextOffset;
+  final int total;
+
+  const StoryViewersState({
+    this.viewers = const <SocialStoryViewer>[],
+    this.loading = false,
+    this.hasMore = false,
+    this.nextOffset = 0,
+    this.total = 0,
+  });
+
+  StoryViewersState copyWith({
+    List<SocialStoryViewer>? viewers,
+    bool? loading,
+    bool? hasMore,
+    int? nextOffset,
+    int? total,
+  }) {
+    return StoryViewersState(
+      viewers: viewers ?? this.viewers,
+      loading: loading ?? this.loading,
+      hasMore: hasMore ?? this.hasMore,
+      nextOffset: nextOffset ?? this.nextOffset,
+      total: total ?? this.total,
+    );
+  }
+}
+
+class _PendingStoryReaction {
+  final String reaction;
+
+  const _PendingStoryReaction({required this.reaction});
+}
+
+

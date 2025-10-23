@@ -9,7 +9,6 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
-import 'package:http/http.dart' as http;
 
 bool _isImageUrl(String url) {
   final u = url.toLowerCase();
@@ -369,6 +368,37 @@ class SocialRepository {
     }
   }
 
+  Future<ApiResponseModel<Response>> fetchUserStories({
+    int limit = 10,
+    int offset = 0,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError('Missing Social access_token');
+      }
+
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialGetUserStoriesUri}?access_token=$token';
+
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'limit': limit.toString(),
+        'offset': offset.toString(),
+      });
+
+      final Response res = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
   Future<ApiResponseModel<Response>> fetchStoryById({
     required String id,
   }) async {
@@ -396,13 +426,82 @@ class SocialRepository {
     }
   }
 
+  Future<ApiResponseModel<Response>> fetchStoryViews({
+    required String storyId,
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError('Missing Social access_token');
+      }
+
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialGetStoryViewsUri}?access_token=$token';
+
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'story_id': storyId,
+        'limit': limit.toString(),
+        'offset': offset.toString(),
+      });
+
+      final Response res = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+  Future<ApiResponseModel<Response>> fetchStoryReactions({
+    required String storyId,
+    String? reactionFilter,
+    int? limit,
+    int? offset,
+  }) async {
+    try {
+      final String? token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError('Missing Social access_token');
+      }
+
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialGetStoryReactionsUri}?access_token=$token';
+
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'type': 'story',
+        'id': storyId,
+        if (reactionFilter != null && reactionFilter.isNotEmpty)
+          'reaction': reactionFilter,
+        if (limit != null) 'limit': '$limit',
+        if (offset != null) 'offset': '$offset',
+      });
+
+      final Response res = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
   SocialStory? parseStoryDetail(Response res) {
     final data = res.data;
     if (data is Map) {
       final dynamic storyData =
           data['story'] ?? data['story_data'] ?? data['data'];
       if (storyData is Map) {
-        final map = Map<String, dynamic>.from(storyData as Map);
+        final map = Map<String, dynamic>.from(storyData);
         return SocialStory.fromJson(map);
       }
       if (storyData is List && storyData.isNotEmpty) {
@@ -413,6 +512,309 @@ class SocialRepository {
       }
     }
     return null;
+  }
+
+  SocialStoryViewersPage parseStoryViews(
+    Response res, {
+    int currentOffset = 0,
+    int limit = 20,
+  }) {
+    final Map<String, SocialStoryViewer> aggregated =
+        <String, SocialStoryViewer>{};
+    final Map<String, List<_ViewerReactionEntry>> reactionBuckets =
+        <String, List<_ViewerReactionEntry>>{};
+    const int maxReactionsPerViewer = 6;
+    int reactionSequence = 0;
+
+    void _registerReaction(
+      String key,
+      String label, {
+      int? rowId,
+      DateTime? timestamp,
+    }) {
+      if (label.isEmpty) return;
+      final List<_ViewerReactionEntry> bucket =
+          reactionBuckets.putIfAbsent(key, () => <_ViewerReactionEntry>[]);
+      reactionSequence++;
+      final double orderKey = rowId != null
+          ? rowId.toDouble()
+          : (timestamp != null
+              ? timestamp.millisecondsSinceEpoch.toDouble()
+              : reactionSequence.toDouble());
+      bucket.add(_ViewerReactionEntry(
+        label: label,
+        orderKey: orderKey,
+        sequence: reactionSequence,
+      ));
+      bucket.sort((a, b) {
+        final int cmp = b.orderKey.compareTo(a.orderKey);
+        if (cmp != 0) return cmp;
+        return b.sequence.compareTo(a.sequence);
+      });
+      if (bucket.length > maxReactionsPerViewer) {
+        bucket.removeRange(maxReactionsPerViewer, bucket.length);
+      }
+    }
+
+    void mergeViewer(
+      SocialStoryViewer viewer, {
+      int? rowId,
+      DateTime? reactionTime,
+    }) {
+      final String key = viewer.userId.isNotEmpty ? viewer.userId : viewer.id;
+      if (key.isEmpty) return;
+
+      final List<String> labels = viewer.reactions.isNotEmpty
+          ? List<String>.from(viewer.reactions)
+          : (viewer.reaction.isNotEmpty
+              ? <String>[viewer.reaction]
+              : const <String>[]);
+
+      if (labels.isNotEmpty) {
+        final DateTime? stamp = reactionTime ?? viewer.viewedAt;
+        for (int i = 0; i < labels.length; i++) {
+          final String label = labels[i];
+          final int? orderId = rowId != null ? rowId + i : null;
+          _registerReaction(
+            key,
+            label,
+            rowId: orderId,
+            timestamp: stamp,
+          );
+        }
+      }
+
+      final List<_ViewerReactionEntry> bucket =
+          reactionBuckets.putIfAbsent(key, () => <_ViewerReactionEntry>[]);
+      final List<String> snapshot =
+          bucket.map((entry) => entry.label).toList(growable: false);
+
+      final SocialStoryViewer? existing = aggregated[key];
+      if (existing == null) {
+        final int? resolvedCount = viewer.reactionCount ??
+            (snapshot.isNotEmpty ? snapshot.length : null);
+        aggregated[key] = viewer.copyWith(
+          reactions: snapshot,
+          reactionCount: resolvedCount,
+          reaction: snapshot.isNotEmpty ? snapshot.first : viewer.reaction,
+        );
+        return;
+      }
+
+      DateTime? viewedAt = existing.viewedAt;
+      if (viewer.viewedAt != null &&
+          (viewedAt == null || viewer.viewedAt!.isAfter(viewedAt))) {
+        viewedAt = viewer.viewedAt;
+      }
+
+      final String? resolvedName =
+          (existing.name?.isNotEmpty ?? false) ? existing.name : viewer.name;
+      final String? resolvedAvatar = (existing.avatar?.isNotEmpty ?? false)
+          ? existing.avatar
+          : viewer.avatar;
+
+      final int? resolvedCount = viewer.reactionCount ??
+          existing.reactionCount ??
+          (snapshot.isNotEmpty ? snapshot.length : existing.reactionCount);
+
+      aggregated[key] = existing.copyWith(
+        name: resolvedName,
+        avatar: resolvedAvatar,
+        isVerified: existing.isVerified || viewer.isVerified,
+        viewedAt: viewedAt,
+        reactions: snapshot,
+        reactionCount: resolvedCount,
+        reaction: snapshot.isNotEmpty ? snapshot.first : existing.reaction,
+      );
+    }
+
+    String? _normalizedReactionKey(String? key) {
+      if (key == null) return null;
+      final String value = key.trim();
+      if (value.isEmpty) return null;
+      switch (value.toLowerCase()) {
+        case '1':
+        case 'like':
+          return 'Like';
+        case '2':
+        case 'love':
+          return 'Love';
+        case '3':
+        case 'haha':
+          return 'HaHa';
+        case '4':
+        case 'wow':
+          return 'Wow';
+        case '5':
+        case 'sad':
+          return 'Sad';
+        case '6':
+        case 'angry':
+          return 'Angry';
+        default:
+          return null;
+      }
+    }
+
+    bool _looksLikeViewerMap(Map<String, dynamic> map) {
+      if (map.containsKey('user_id') ||
+          map.containsKey('username') ||
+          map.containsKey('name')) {
+        return true;
+      }
+      if (map['user'] is Map<String, dynamic>) return true;
+      if (map['user_data'] is Map<String, dynamic>) return true;
+      return false;
+    }
+
+    int? _parseIntValue(dynamic raw) {
+      if (raw == null) return null;
+      if (raw is int) return raw;
+      if (raw is num) return raw.toInt();
+      if (raw is String) return int.tryParse(raw);
+      return null;
+    }
+
+    DateTime? _parseTimestamp(dynamic raw) {
+      final int? seconds = _parseIntValue(raw);
+      if (seconds == null || seconds <= 0) return null;
+      if (seconds > 1000000000000) {
+        return DateTime.fromMillisecondsSinceEpoch(seconds, isUtc: true)
+            .toLocal();
+      }
+      return DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true)
+          .toLocal();
+    }
+
+    void addViewer(dynamic raw, [String? reactionFallback]) {
+      if (raw == null) return;
+      if (raw is Map<String, dynamic>) {
+        final Map<String, dynamic> payload = Map<String, dynamic>.from(raw);
+        payload.putIfAbsent('reaction', () => reactionFallback);
+        final int? reactionRowId = _parseIntValue(
+          payload['row_id'] ??
+              payload['reaction_id'] ??
+              payload['story_reaction_id'] ??
+              payload['story_react_id'] ??
+              payload['view_id'],
+        );
+        final DateTime? reactionStamp = _parseTimestamp(
+          payload['reaction_time'] ??
+              payload['time'] ??
+              payload['view_time'] ??
+              payload['seen'],
+        );
+        mergeViewer(
+          SocialStoryViewer.fromJson(payload),
+          rowId: reactionRowId,
+          reactionTime: reactionStamp,
+        );
+      } else if (raw is Map) {
+        final Map<String, dynamic> payload = Map<String, dynamic>.from(raw);
+        payload.putIfAbsent('reaction', () => reactionFallback);
+        final int? reactionRowId = _parseIntValue(
+          payload['row_id'] ??
+              payload['reaction_id'] ??
+              payload['story_reaction_id'] ??
+              payload['story_react_id'] ??
+              payload['view_id'],
+        );
+        final DateTime? reactionStamp = _parseTimestamp(
+          payload['reaction_time'] ??
+              payload['time'] ??
+              payload['view_time'] ??
+              payload['seen'],
+        );
+        mergeViewer(
+          SocialStoryViewer.fromJson(payload),
+          rowId: reactionRowId,
+          reactionTime: reactionStamp,
+        );
+      }
+    }
+
+    void process(dynamic container, {String? reactionHint, int depth = 0}) {
+      if (container == null || depth > 6) return;
+
+      if (container is List) {
+        for (final dynamic entry in container) {
+          process(entry, reactionHint: reactionHint, depth: depth + 1);
+        }
+        return;
+      }
+
+      if (container is Map) {
+        final Map<String, dynamic> map = container is Map<String, dynamic>
+            ? container
+            : Map<String, dynamic>.from(container);
+
+        if (_looksLikeViewerMap(map)) {
+          addViewer(map, reactionHint);
+          return;
+        }
+
+        for (final MapEntry<String, dynamic> entry in map.entries) {
+          final String key = entry.key;
+          final String? nextReaction =
+              _normalizedReactionKey(key) ?? reactionHint;
+          process(entry.value, reactionHint: nextReaction, depth: depth + 1);
+        }
+        return;
+      }
+    }
+
+    final dynamic root = res.data;
+    if (root != null) {
+      process(root);
+    }
+
+    final List<SocialStoryViewer> viewers = aggregated.values.toList()
+      ..sort((a, b) {
+        final DateTime aTime =
+            a.viewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final DateTime bTime =
+            b.viewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bTime.compareTo(aTime);
+      });
+
+    int? _extractTotal(dynamic source) {
+      if (source == null) return null;
+      if (source is num) return source.toInt();
+      if (source is String) return int.tryParse(source);
+      if (source is Map) {
+        for (final String key in const <String>[
+          'total',
+          'count',
+          'total_count',
+          'total_views',
+          'views_total'
+        ]) {
+          final int? value = _extractTotal(source[key]);
+          if (value != null) return value;
+        }
+      }
+      return null;
+    }
+
+    int? totalRaw;
+    if (root is Map) {
+      totalRaw = _extractTotal(root);
+      if (totalRaw == null && root['data'] is Map) {
+        totalRaw = _extractTotal(root['data']);
+      }
+    }
+
+    final int total = totalRaw != null && totalRaw >= viewers.length
+        ? totalRaw
+        : viewers.length;
+    final int nextOffset = currentOffset + viewers.length;
+
+    return SocialStoryViewersPage(
+      viewers: viewers,
+      total: total,
+      hasMore: false,
+      nextOffset: nextOffset,
+    );
   }
 
   Future<ApiResponseModel<Response>> reactToPost({
@@ -1063,6 +1465,36 @@ class SocialRepository {
     }
   }
 
+  Future<ApiResponseModel<Response>> reactToStory({
+    required String storyId,
+    required String reaction,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError('Missing Social access_token');
+      }
+
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialReactStoryUri}?access_token=$token';
+
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'id': storyId,
+        'reaction': reaction.isEmpty ? '0' : _mapReactionLabelToId(reaction),
+      });
+
+      final resp = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      return ApiResponseModel.withSuccess(resp);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
   Future<ApiResponseModel<Response>> reactToReply({
     required String replyId,
     required String reaction,
@@ -1322,4 +1754,16 @@ class SocialRepository {
     final s = value.toString().toLowerCase();
     return s == '1' || s == 'true' || s == 'yes';
   }
+}
+
+class _ViewerReactionEntry {
+  final String label;
+  final double orderKey;
+  final int sequence;
+
+  const _ViewerReactionEntry({
+    required this.label,
+    required this.orderKey,
+    required this.sequence,
+  });
 }
