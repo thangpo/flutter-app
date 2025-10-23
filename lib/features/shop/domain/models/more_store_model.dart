@@ -10,6 +10,9 @@ class MostPopularStoreModel {
   String? name;
   String? slug;
   String? address;
+  int? fromProvinceId;
+  int? fromDistrictId;
+  int? fromWardId;
   String? contact;
   String? image;
   String? bottomBanner;
@@ -39,41 +42,44 @@ class MostPopularStoreModel {
   List<Storage>? storage;
   Seller? seller;
 
-  MostPopularStoreModel(
-      {this.id,
-        this.sellerId,
-        this.name,
-        this.slug,
-        this.address,
-        this.contact,
-        this.image,
-        this.bottomBanner,
-        this.offerBanner,
-        this.vacationStartDate,
-        this.vacationEndDate,
-        this.vacationNote,
-        this.vacationStatus,
-        this.temporaryClose,
-        this.createdAt,
-        this.updatedAt,
-        this.banner,
-        this.productsCount,
-        this.products,
-        this.ordersCount,
-        this.couponList,
-        this.averageRating,
-        this.reviewCount,
-        this.totalRating,
-        this.positiveReview,
-        this.isVacationModeNow,
-        this.imageFullUrl,
-        this.bottomBannerFullUrl,
-        this.offerBannerFullUrl,
-        this.bannerFullUrl,
-        this.storage,
-        this.seller,
-        this.vacationDurationType,
-      });
+  MostPopularStoreModel({
+    this.id,
+    this.sellerId,
+    this.name,
+    this.slug,
+    this.address,
+    this.fromProvinceId,
+    this.fromDistrictId,
+    this.fromWardId,
+    this.contact,
+    this.image,
+    this.bottomBanner,
+    this.offerBanner,
+    this.vacationStartDate,
+    this.vacationEndDate,
+    this.vacationNote,
+    this.vacationStatus,
+    this.temporaryClose,
+    this.createdAt,
+    this.updatedAt,
+    this.banner,
+    this.productsCount,
+    this.products,
+    this.ordersCount,
+    this.couponList,
+    this.averageRating,
+    this.reviewCount,
+    this.totalRating,
+    this.positiveReview,
+    this.isVacationModeNow,
+    this.imageFullUrl,
+    this.bottomBannerFullUrl,
+    this.offerBannerFullUrl,
+    this.bannerFullUrl,
+    this.storage,
+    this.seller,
+    this.vacationDurationType,
+  });
 
   MostPopularStoreModel.fromJson(Map<String, dynamic> json) {
     id = json['id'];
@@ -81,6 +87,9 @@ class MostPopularStoreModel {
     name = json['name'];
     slug = json['slug'];
     address = json['address'];
+    fromProvinceId = json['from_province_id'];
+    fromDistrictId = json['from_district_id'];
+    fromWardId = json['from_ward_id'];
     contact = json['contact'];
     image = json['image'];
     bottomBanner = json['bottom_banner'];
@@ -130,8 +139,7 @@ class MostPopularStoreModel {
         storage!.add(Storage.fromJson(v));
       });
     }
-    seller =
-    json['seller'] != null ? Seller.fromJson(json['seller']) : null;
+    seller = json['seller'] != null ? Seller.fromJson(json['seller']) : null;
 
     if (json['vacation_duration_type'] != null) {
       vacationDurationType = VacationDurationType.fromJson(json['vacation_duration_type']);
@@ -145,6 +153,9 @@ class MostPopularStoreModel {
     data['name'] = name;
     data['slug'] = slug;
     data['address'] = address;
+    data['from_province_id'] = fromProvinceId;
+    data['from_district_id'] = fromDistrictId;
+    data['from_ward_id'] = fromWardId;
     data['contact'] = contact;
     data['image'] = image;
     data['bottom_banner'] = bottomBanner;

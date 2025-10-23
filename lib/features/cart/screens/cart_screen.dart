@@ -227,7 +227,6 @@ class CartScreenState extends State<CartScreen> {
                             bool closeShop = false;
                             double total = 0;
 
-                            // Kiểm tra các điều kiện hiện có
                             if (configProvider.configModel!.shippingMethod == 'sellerwise_shipping') {
                               for (int index = 0; index < sellerGroupList.length; index++) {
                                 bool hasPhysical = false;
@@ -335,7 +334,6 @@ class CartScreenState extends State<CartScreen> {
                                   context);
                             } else {
                               int sellerGroupLenght = 0;
-                              // Thu thập from_district_id và from_ward_id
                               List<int?> fromDistrictIds = [];
                               List<String?> fromWardIds = [];
 
@@ -359,8 +357,8 @@ class CartScreenState extends State<CartScreen> {
                                     tax: tax,
                                     onlyDigital: sellerGroupLenght != totalPhysical,
                                     hasPhysical: totalPhysical > 0,
-                                    fromDistrictIds: fromDistrictIds, // Truyền danh sách from_district_id
-                                    fromWardIds: fromWardIds, // Truyền danh sách from_ward_id
+                                    fromDistrictIds: fromDistrictIds,
+                                    fromWardIds: fromWardIds,
                                   ),
                                 ),
                               );
@@ -444,7 +442,6 @@ class CartScreenState extends State<CartScreen> {
 
                               return AnimatedContainer(
                                 color:
-                                //  sellerGroupList[index].id == requiredMinOrderQtyCart?.sellerCart.id ||
                                   ((sellerGroupList[index].minimumOrderAmountInfo! > totalCost) || (configProvider.configModel!.shippingMethod == 'sellerwise_shipping' &&
                                   sellerGroupList[index].shippingType == 'order_wise' &&
                                   Provider.of<ShippingController>(context, listen: false).shippingList != null &&  Provider.of<ShippingController>(context, listen: false).shippingList!.isNotEmpty &&
@@ -588,23 +585,6 @@ class CartScreenState extends State<CartScreen> {
                                         && shippingController.shippingList![index].shippingIndex != -1) &&
                                         shippingController.chosenShippingList.isNotEmpty) ?
                                       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                        // Row(children: [
-                                        //     Text((shippingController.shippingList == null ||
-                                        //         shippingController.shippingList![index].shippingMethodList == null ||
-                                        //         shippingController.chosenShippingList.isEmpty ||
-                                        //         shippingController.shippingList![index].shippingIndex == -1) ? '':
-                                        //     '${getTranslated('shipping_cost', context)??''} : ', style: textRegular.copyWith(color: Theme.of(context).textTheme.bodyLarge?.color),),
-                                        //
-                                        //   Text((shippingController.shippingList == null ||
-                                        //       shippingController.shippingList![index].shippingMethodList == null ||
-                                        //       shippingController.chosenShippingList.isEmpty ||
-                                        //       shippingController.shippingList![index].shippingIndex == -1) ? ''
-                                        //       : PriceConverter.convertPrice(context,
-                                        //       shippingController.shippingList![index].shippingMethodList![shippingController.shippingList![index].shippingIndex!].cost),
-                                        //       style: textBold.copyWith(color: Theme.of(context).textTheme.bodyLarge?.color),
-                                        //       maxLines: 1, overflow: TextOverflow.ellipsis,textAlign: TextAlign.end),
-                                        //   ],
-                                        // ),
                                         const SizedBox(height: Dimensions.paddingSizeExtraSmall),
                                         Row(children: [
                                             Text((shippingController.shippingList == null ||

@@ -62,7 +62,7 @@ android {
         }
 
         getByName("debug") {
-            signingConfig = signingConfigs.getByName("release") // để test bằng cùng keystore (không bắt buộc)
+            //signingConfig = signingConfigs.getByName("release") // để test bằng cùng keystore (không bắt buộc)
         }
     }
 }
