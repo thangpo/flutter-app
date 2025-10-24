@@ -21,6 +21,7 @@ import 'package:flutter_sixvalley_ecommerce/features/home/screens/fashion_theme_
 import 'package:flutter_sixvalley_ecommerce/features/home/screens/home_screens.dart';
 import 'package:flutter_sixvalley_ecommerce/features/more/screens/more_screen_view.dart';
 import 'package:flutter_sixvalley_ecommerce/features/order/screens/order_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/main_home/screens/main_home_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_screen.dart';
 import 'package:provider/provider.dart';
 
@@ -78,11 +79,16 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       NavigationModel(
         name: 'home',
         icon: Images.homeImage,
+        screen: const MainHomeScreen(),
+      ),
+      NavigationModel(
+        name: 'social',
+        icon: Images.SocialIcon,
         screen: const SocialFeedScreen(),
       ),
       NavigationModel(
-          name: 'reels',
-          icon: Images.ReelsImage,
+          name: 'friends',
+          icon: Images.friendImage,
           screen: const InboxScreen(isBackButtonExist: false)),
       NavigationModel(
           name: 'friends',
