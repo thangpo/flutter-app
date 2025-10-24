@@ -492,6 +492,7 @@ class SocialController with ChangeNotifier {
       hasMore: refresh ? true : previous.hasMore,
       nextOffset: offset,
       total: refresh ? (item.viewCount ?? previous.total) : previous.total,
+      fetched: previous.fetched,
     );
     notifyListeners();
 
@@ -539,9 +540,11 @@ class SocialController with ChangeNotifier {
         hasMore: page.hasMore,
         nextOffset: calculatedNextOffset,
         total: total,
+        fetched: true,
       );
     } catch (e) {
-      _storyViewers[key] = previous.copyWith(loading: false);
+      _storyViewers[key] =
+          previous.copyWith(loading: false, fetched: previous.fetched);
       notifyListeners();
       showCustomSnackBar(e.toString(), Get.context!, isError: true);
       return;
@@ -618,6 +621,7 @@ class StoryViewersState {
   final bool hasMore;
   final int nextOffset;
   final int total;
+  final bool fetched;
 
   const StoryViewersState({
     this.viewers = const <SocialStoryViewer>[],
@@ -625,6 +629,7 @@ class StoryViewersState {
     this.hasMore = false,
     this.nextOffset = 0,
     this.total = 0,
+    this.fetched = false,
   });
 
   StoryViewersState copyWith({
@@ -633,6 +638,7 @@ class StoryViewersState {
     bool? hasMore,
     int? nextOffset,
     int? total,
+    bool? fetched,
   }) {
     return StoryViewersState(
       viewers: viewers ?? this.viewers,
@@ -640,6 +646,7 @@ class StoryViewersState {
       hasMore: hasMore ?? this.hasMore,
       nextOffset: nextOffset ?? this.nextOffset,
       total: total ?? this.total,
+      fetched: fetched ?? this.fetched,
     );
   }
 }
