@@ -21,6 +21,7 @@ import 'package:flutter_sixvalley_ecommerce/features/home/screens/fashion_theme_
 import 'package:flutter_sixvalley_ecommerce/features/home/screens/home_screens.dart';
 import 'package:flutter_sixvalley_ecommerce/features/more/screens/more_screen_view.dart';
 import 'package:flutter_sixvalley_ecommerce/features/order/screens/order_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/main_home/screens/main_home_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_screen.dart';
 import 'package:provider/provider.dart';
 
@@ -31,7 +32,7 @@ class DashBoardScreen extends StatefulWidget {
 }
 
 class DashBoardScreenState extends State<DashBoardScreen> {
-  int _pageIndex = 2;
+  int _pageIndex = 0;
   late List<NavigationModel> _screens;
   final GlobalKey<ScaffoldMessengerState> _scaffoldKey = GlobalKey();
   final PageStorageBucket bucket = PageStorageBucket();
@@ -78,12 +79,20 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       NavigationModel(
         name: 'home',
         icon: Images.homeImage,
+        screen: const MainHomeScreen(),
+      ),
+      NavigationModel(
+        name: 'social',
+        icon: Images.SocialIcon,
         screen: const SocialFeedScreen(),
       ),
-
       NavigationModel(
-          name: 'reels',
-          icon: Images.ReelsImage,
+          name: 'friends',
+          icon: Images.friendImage,
+          screen: const InboxScreen(isBackButtonExist: false)),
+      NavigationModel(
+          name: 'friends',
+          icon: Images.friendImage,
           screen: const InboxScreen(isBackButtonExist: false)),
 
       NavigationModel(
@@ -92,20 +101,14 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         screen: (splashController.configModel!.activeTheme == "default")
             ? const HomePage()
             : (splashController.configModel!.activeTheme == "theme_aster")
-            ? const AsterThemeHomeScreen()
-            : const FashionThemeHomePage(),
+                ? const AsterThemeHomeScreen()
+                : const FashionThemeHomePage(),
       ),
 
       NavigationModel(
-          name: 'friends',
-          icon: Images.friendImage,
+          name: 'notifications',
+          icon: Images.notification,
           screen: const InboxScreen(isBackButtonExist: false)),
-
-
-      // NavigationModel(
-      //     name: 'notifications',
-      //     icon: Images.notification,
-      //     screen: const InboxScreen(isBackButtonExist: false)),
 
       // NavigationModel(name: 'inbox', icon: Images.messageImage, screen: const InboxScreen(isBackButtonExist: false)),
       // NavigationModel(name: 'cart', icon: Images.cartArrowDownImage, screen: const CartScreen(showBackButton: false), showCartIcon: true),

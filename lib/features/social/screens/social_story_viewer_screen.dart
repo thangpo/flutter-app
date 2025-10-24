@@ -168,6 +168,7 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
     final SocialStoryItem? item = _currentItem;
     if (item == null) {
       _progressController?.forward();
+      _prefetchOwnStoryViewers();
       return;
     }
 
@@ -203,6 +204,7 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
     }
 
     _precacheNextImage();
+    _prefetchOwnStoryViewers();
   }
 
   void _pauseForReaction() {
@@ -329,6 +331,20 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
   void _disposeVideo() {
     _videoController?.dispose();
     _videoController = null;
+  }
+
+  void _prefetchOwnStoryViewers() {
+    final SocialController? controller = _socialController;
+    final SocialStoryItem? item = _currentItem;
+    if (controller == null || item == null) return;
+    final SocialStory story = _currentStory;
+    final String? currentUserId = controller.currentUser?.id;
+    if (currentUserId == null || story.userId != currentUserId) return;
+
+    final StoryViewersState? state = controller.storyViewersState(item.id);
+    if (state == null || (!state.loading && !state.fetched)) {
+      controller.fetchStoryViewers(item, refresh: true);
+    }
   }
 
   void _pause() {
