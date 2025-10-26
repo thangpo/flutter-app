@@ -67,7 +67,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
 
       final String url =
@@ -278,7 +278,7 @@ class SocialRepository {
     try {
       final token = sharedPreferences.getString(AppConstants.socialAccessToken);
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
 
       final String url =
@@ -330,7 +330,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
 
       final String url =
@@ -375,7 +375,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
 
       final String url =
@@ -405,7 +405,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
 
       final String url =
@@ -434,7 +434,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
 
       final String url =
@@ -468,7 +468,7 @@ class SocialRepository {
     try {
       final String? token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
 
       final String url =
@@ -825,7 +825,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
 
       final String url =
@@ -875,7 +875,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
       final String url =
           '${AppConstants.socialBaseUrl}${AppConstants.socialGetPostDataUri}?access_token=$token';
@@ -907,7 +907,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
       final String url =
           '${AppConstants.socialBaseUrl}${AppConstants.socialCreatePostUri}?access_token=$token';
@@ -964,10 +964,10 @@ class SocialRepository {
       final token = _getSocialAccessToken();
       final userId = _getSocialUserId();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
       if (userId == null || userId.isEmpty) {
-        return ApiResponseModel.withError('Missing social user_id');
+        return ApiResponseModel.withError('The social network account does not exist');
       }
 
       final String url =
@@ -1305,7 +1305,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
       final String url =
           '${AppConstants.socialBaseUrl}${AppConstants.socialCommentsUri}?access_token=$token';
@@ -1333,7 +1333,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
       final String url =
           '${AppConstants.socialBaseUrl}${AppConstants.socialCommentsUri}?access_token=$token';
@@ -1365,7 +1365,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
       final String url =
           '${AppConstants.socialBaseUrl}${AppConstants.socialCommentsUri}?access_token=$token';
@@ -1406,7 +1406,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
       final String url =
           '${AppConstants.socialBaseUrl}${AppConstants.socialCommentsUri}?access_token=$token';
@@ -1444,7 +1444,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
       final String url =
           '${AppConstants.socialBaseUrl}${AppConstants.socialCommentsUri}?access_token=$token';
@@ -1472,7 +1472,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
 
       final String url =
@@ -1502,7 +1502,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
       final String url =
           '${AppConstants.socialBaseUrl}${AppConstants.socialCommentsUri}?access_token=$token';
@@ -1531,7 +1531,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
 
       final String url =
