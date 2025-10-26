@@ -42,6 +42,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
   final int _pageSize = 10;
   final Set<String> _commentReactionLoading = <String>{};
   CommentSortOrder _sortOrder = CommentSortOrder.newest;
+
   @override
   void initState() {
     super.initState();
@@ -136,12 +137,12 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
     _comments.sort((a, b) => multiplier * comparison(a, b));
   }
 
-  String _sortOrderLabel(CommentSortOrder order) {
+  String _sortOrderLabel(BuildContext context, CommentSortOrder order) {
     switch (order) {
       case CommentSortOrder.newest:
-        return 'Moi nhat';
+        return getTranslated('latest', context) ?? 'Latest';
       case CommentSortOrder.oldest:
-        return 'Cu nhat';
+        return getTranslated('oldest', context) ?? 'Oldest';
     }
   }
 
@@ -155,17 +156,20 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Chn nh t th vin'),
+              title: Text(getTranslated('pick_from_gallery', sheetCtx) ??
+                  'Pick from gallery'),
               onTap: () => Navigator.of(sheetCtx).pop('photo'),
             ),
             ListTile(
               leading: const Icon(Icons.gif_box_outlined),
-              title: const Text('Chn GIF t tp'),
+              title: Text(getTranslated('pick_gif_from_file', sheetCtx) ??
+                  'Pick GIF from file'),
               onTap: () => Navigator.of(sheetCtx).pop('gif'),
             ),
             ListTile(
               leading: const Icon(Icons.link_outlined),
-              title: const Text('Dn GIF t ng dn'),
+              title: Text(
+                  getTranslated('paste_gif_url', sheetCtx) ?? 'Paste GIF URL'),
               onTap: () => Navigator.of(sheetCtx).pop('url'),
             ),
           ],
@@ -212,7 +216,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
     final result = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Dn GIF URL'),
+        title: Text(getTranslated('enter_gif_url', ctx) ?? 'Enter GIF URL'),
         content: TextField(
           controller: controller,
           decoration: const InputDecoration(hintText: 'https://...gif'),
@@ -222,11 +226,11 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Hy'),
+            child: Text(getTranslated('cancel', ctx) ?? 'Cancel'),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-            child: const Text('Chn'),
+            child: Text(getTranslated('choose', ctx) ?? 'Choose'),
           ),
         ],
       ),
@@ -241,7 +245,8 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
     final cs = Theme.of(context).colorScheme;
     final onSurface = cs.onSurface;
     return Scaffold(
-      appBar: AppBar(title: Text(getTranslated('post_detail', context) ?? 'Post')),
+      appBar:
+          AppBar(title: Text(getTranslated('post_detail', context) ?? 'Post')),
       body: Column(
         children: [
           Expanded(
@@ -301,7 +306,10 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                             CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            post.userName ?? 'Ngi dng',
+                                            post.userName ??
+                                                (getTranslated(
+                                                        'user', context) ??
+                                                    'User'),
                                             style: Theme.of(context)
                                                 .textTheme
                                                 .titleMedium,
@@ -313,8 +321,9 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                   .textTheme
                                                   .bodySmall
                                                   ?.copyWith(
-                                                      color: onSurface
-                                                          .withOpacity(.6)),
+                                                    color: onSurface
+                                                        .withOpacity(.6),
+                                                  ),
                                             ),
                                         ],
                                       ),
@@ -414,7 +423,9 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                       ),
                                       _PostAction(
                                         icon: Icons.mode_comment_outlined,
-                                        label: getTranslated('comment', context) ?? 'Comment',
+                                        label:
+                                            getTranslated('comment', context) ??
+                                                'Comment',
                                         onTap: () {
                                           setState(() => _showInput = true);
                                           WidgetsBinding.instance
@@ -428,7 +439,9 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                       ),
                                       _PostAction(
                                         icon: Icons.share_outlined,
-                                        label: getTranslated('share', context) ?? 'Share'
+                                        label:
+                                            getTranslated('share', context) ??
+                                                'Share',
                                       ),
                                     ],
                                   ),
@@ -444,12 +457,14 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                           children: [
                             Expanded(
                               child: Text(
-                                'Binh luan (${_comments.length}${_hasMore ? '+' : ''})',
+                                '${getTranslated('comments', context) ?? 'Comments'} '
+                                '(${_comments.length}${_hasMore ? '+' : ''})',
                                 style: Theme.of(context).textTheme.titleMedium,
                               ),
                             ),
                             PopupMenuButton<CommentSortOrder>(
-                              tooltip: 'Sap xep binh luan',
+                              tooltip: getTranslated('arrange', context) ??
+                                  'Arrange',
                               onSelected: (value) {
                                 if (_sortOrder != value) {
                                   setState(() {
@@ -458,20 +473,24 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                   });
                                 }
                               },
-                              itemBuilder: (context) => const [
+                              itemBuilder: (context) => [
                                 PopupMenuItem(
                                   value: CommentSortOrder.newest,
-                                  child: Text('Moi nhat'),
+                                  child: Text(
+                                      getTranslated('latest', context) ??
+                                          'Latest'),
                                 ),
                                 PopupMenuItem(
                                   value: CommentSortOrder.oldest,
-                                  child: Text('Cu nhat'),
+                                  child: Text(
+                                      getTranslated('oldest', context) ??
+                                          'Oldest'),
                                 ),
                               ],
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Text(_sortOrderLabel(_sortOrder)),
+                                  Text(_sortOrderLabel(context, _sortOrder)),
                                   const SizedBox(width: 4),
                                   const Icon(Icons.sort, size: 18),
                                 ],
@@ -491,12 +510,14 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                             }
                             if (_comments.isEmpty) {
                               return Text(
-                                'Cha c bnh lun',
+                                getTranslated('no_comments_yet', context) ??
+                                    'No comments yet',
                                 style: Theme.of(context)
                                     .textTheme
                                     .bodyMedium
                                     ?.copyWith(
-                                        color: onSurface.withOpacity(.7)),
+                                      color: onSurface.withOpacity(.7),
+                                    ),
                               );
                             }
                             final svc = sl<SocialServiceInterface>();
@@ -537,7 +558,10 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                 children: [
                                                   Expanded(
                                                     child: Text(
-                                                      c.userName ?? 'Ngi dng',
+                                                      c.userName ??
+                                                          (getTranslated('user',
+                                                                  context) ??
+                                                              'User'),
                                                       style: Theme.of(context)
                                                           .textTheme
                                                           .bodyMedium
@@ -551,7 +575,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                       .isNotEmpty)
                                                     Text(
                                                       _formatTimeText(
-                                                          c.timeText),
+                                                          context, c.timeText),
                                                       style: Theme.of(context)
                                                           .textTheme
                                                           .bodySmall
@@ -575,8 +599,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                       const EdgeInsets.only(
                                                           top: 6),
                                                   child: _CommentImagePreview(
-                                                    url: c.imageUrl!,
-                                                  ),
+                                                      url: c.imageUrl!),
                                                 ),
                                               if ((c.audioUrl ?? '').isNotEmpty)
                                                 Padding(
@@ -700,7 +723,9 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                                 _commentFocus);
                                                       },
                                                       child: Text(
-                                                        'Tra loi',
+                                                        getTranslated('reply',
+                                                                context) ??
+                                                            'Reply',
                                                         style: replyActionStyle,
                                                       ),
                                                     ),
@@ -738,7 +763,11 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                   Center(
                                     child: TextButton(
                                       onPressed: _loadMoreComments,
-                                      child: const Text('Ti thm bnh lun'),
+                                      child: Text(
+                                        getTranslated('load_more_comments',
+                                                context) ??
+                                            'Load more comments',
+                                      ),
                                     ),
                                   )
                                 ],
@@ -754,7 +783,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
               ),
             ),
           ),
-// ====  nhp bnh lun ( ng  ngoc) ====
+          // ==== input bình luận ====
           _showInput
               ? SafeArea(
                   top: false,
@@ -787,7 +816,8 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                               children: [
                                 Expanded(
                                   child: Text(
-                                    'ang tr li "${_replyingTo!.userName ?? ''}"',
+                                    '${getTranslated('reply', context) ?? 'Reply'} '
+                                    '"${_replyingTo!.userName ?? (getTranslated('user', context) ?? 'User')}"',
                                     style: Theme.of(context)
                                         .textTheme
                                         .bodySmall
@@ -803,7 +833,9 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                 TextButton(
                                   onPressed: () =>
                                       setState(() => _replyingTo = null),
-                                  child: const Text('Hy'),
+                                  child: Text(
+                                      getTranslated('cancel', context) ??
+                                          'Cancel'),
                                 ),
                               ],
                             ),
@@ -814,9 +846,11 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                               child: TextField(
                                 controller: _commentController,
                                 focusNode: _commentFocus,
-                                decoration: const InputDecoration(
-                                  hintText: 'Nhp bnh lun...',
-                                  border: OutlineInputBorder(),
+                                decoration: InputDecoration(
+                                  hintText:
+                                      getTranslated('enter_comment', context) ??
+                                          'Enter comment',
+                                  border: const OutlineInputBorder(),
                                   isDense: true,
                                 ),
                                 minLines: 1,
@@ -825,12 +859,14 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                             ),
                             const SizedBox(width: 8),
                             IconButton(
-                              tooltip: 'nh nh',
+                              tooltip:
+                                  getTranslated('image', context) ?? 'Image',
                               onPressed: _handleImageAttachment,
                               icon: const Icon(Icons.image_outlined),
                             ),
                             IconButton(
-                              tooltip: 'nh audio',
+                              tooltip:
+                                  getTranslated('audio', context) ?? 'Audio',
                               onPressed: () async {
                                 final res = await FilePicker.platform
                                     .pickFiles(type: FileType.audio);
@@ -842,7 +878,8 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                               icon: const Icon(Icons.audiotrack_outlined),
                             ),
                             IconButton(
-                              tooltip: 'Gi',
+                              tooltip:
+                                  getTranslated('submit', context) ?? 'Submit',
                               onPressed: _sendingComment
                                   ? null
                                   : () async {
@@ -883,10 +920,8 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                         await _refreshAll();
                                       } catch (e) {
                                         showCustomSnackBar(
-                                          e.toString(),
-                                          context,
-                                          isError: true,
-                                        );
+                                            e.toString(), context,
+                                            isError: true);
                                       } finally {
                                         if (mounted) {
                                           setState(
@@ -897,7 +932,8 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                               icon: const Icon(Icons.send),
                             ),
                             IconButton(
-                              tooltip: 'n  nhp',
+                              tooltip:
+                                  getTranslated('cancel', context) ?? 'Cancel',
                               onPressed: () =>
                                   setState(() => _showInput = false),
                               icon: const Icon(Icons.close),
@@ -917,7 +953,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                 if (_commentImagePath != null)
                                   InputChip(
                                     label: Text(
-                                      'File: ${_basename(_commentImagePath!)}',
+                                      '${getTranslated('file', context) ?? 'File'}: ${_basename(_commentImagePath!)}',
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                     onDeleted: () => setState(
@@ -926,7 +962,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                 if (_commentImageUrl != null)
                                   InputChip(
                                     label: Text(
-                                      'GIF URL: ${_commentImageUrl!}',
+                                      '${getTranslated('gif_url', context) ?? 'GIF URL'}: ${_commentImageUrl!}',
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                     onDeleted: () =>
@@ -935,7 +971,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                 if (_commentAudioPath != null)
                                   InputChip(
                                     label: Text(
-                                      'Audio: ${_basename(_commentAudioPath!)}',
+                                      '${getTranslated('audio', context) ?? 'Audio'}: ${_basename(_commentAudioPath!)}',
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                     onDeleted: () => setState(
@@ -964,7 +1000,8 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                           FocusScope.of(context).requestFocus(_commentFocus);
                         },
                         icon: const Icon(Icons.mode_comment_outlined),
-                        label: const Text('Vit bnh lun'),
+                        label: Text(getTranslated('write_comment', context) ??
+                            'Write a comment'),
                       ),
                     ),
                   ),
@@ -1140,7 +1177,8 @@ class _ProductBlock extends StatelessWidget {
                     child: OutlinedButton(
                       onPressed: () =>
                           _openProduct(context, _sanitizeSlug(slug)),
-                      child: const Text('Xem chi tiet'),
+                      child: Text(getTranslated('view_detail', context) ??
+                          'View detail'),
                     ),
                   ),
                 ],
@@ -1158,9 +1196,8 @@ class _ProductBlock extends StatelessWidget {
   ) async {
     if (productId == null || productId! <= 0) {
       showCustomSnackBar(
-        getTranslated('product_not_found', context) ?? 'Product unavailable',
-        context,
-      );
+          getTranslated('product_not_found', context) ?? 'Product unavailable',
+          context);
       return;
     }
     String? slugValue = initialSlug;
@@ -1170,9 +1207,8 @@ class _ProductBlock extends StatelessWidget {
     if (!context.mounted) return;
     if (slugValue == null) {
       showCustomSnackBar(
-        getTranslated('product_not_found', context) ?? 'Product unavailable',
-        context,
-      );
+          getTranslated('product_not_found', context) ?? 'Product unavailable',
+          context);
       return;
     }
     Navigator.of(context).push(
@@ -1325,9 +1361,9 @@ class _RepliesLazyState extends State<_RepliesLazy> {
   bool _loading = false;
   List<SocialComment> _replies = const [];
   final Set<String> _replyReactionLoading = <String>{};
-// Gi li bin  khng nh hng logic c ( tt UI gi nhanh)
   final TextEditingController _replyController = TextEditingController();
   bool _sending = false;
+
   void _sortReplies() {
     int comparison(SocialComment a, SocialComment b) {
       final DateTime? aTime = a.createdAt;
@@ -1431,7 +1467,7 @@ class _RepliesLazyState extends State<_RepliesLazy> {
         child: TextButton(
           onPressed: _load,
           child: Text(
-            'Xem phan hoi ($repliesCount)',
+            '${getTranslated('view_replies', context) ?? 'View replies'} ($repliesCount)',
             style: replyActionStyle,
           ),
         ),
@@ -1472,7 +1508,8 @@ class _RepliesLazyState extends State<_RepliesLazy> {
                         children: [
                           Expanded(
                             child: Text(
-                              r.userName ?? 'Ngi dng',
+                              r.userName ??
+                                  (getTranslated('user', context) ?? 'User'),
                               style: Theme.of(context)
                                   .textTheme
                                   .bodySmall
@@ -1481,7 +1518,7 @@ class _RepliesLazyState extends State<_RepliesLazy> {
                           ),
                           if ((r.timeText ?? '').isNotEmpty)
                             Text(
-                              _formatTimeText(r.timeText),
+                              _formatTimeText(context, r.timeText),
                               style: Theme.of(context)
                                   .textTheme
                                   .bodySmall
@@ -1580,16 +1617,20 @@ class _RepliesLazyState extends State<_RepliesLazy> {
             children: [
               TextButton(
                 onPressed: () => setState(() => _expanded = false),
-                child: Text('n phn hi', style: replyActionStyle),
+                child: Text(
+                    getTranslated('collapse_replies', context) ??
+                        'Collapse replies',
+                    style: replyActionStyle),
               ),
               TextButton(
                 onPressed: () => widget.onRequestReply(widget.comment),
-                child: Text('Tr li', style: replyActionStyle),
+                child: Text(getTranslated('reply', context) ?? 'Reply',
+                    style: replyActionStyle),
               ),
             ],
           ),
         ),
-// Khi gi nhanh ( false)  gi nguyn  d bt li sau
+        // form reply inline (đang tắt)
         if (false)
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1597,9 +1638,10 @@ class _RepliesLazyState extends State<_RepliesLazy> {
               Expanded(
                 child: TextField(
                   controller: _replyController,
-                  decoration: const InputDecoration(
-                    hintText: 'Vit phn hi...',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    hintText: getTranslated('write_reply', context) ??
+                        'Write a reply...',
+                    border: const OutlineInputBorder(),
                     isDense: true,
                   ),
                   minLines: 1,
@@ -1608,7 +1650,7 @@ class _RepliesLazyState extends State<_RepliesLazy> {
               ),
               const SizedBox(width: 8),
               IconButton(
-                tooltip: 'Gi',
+                tooltip: getTranslated('send', context) ?? 'Send',
                 onPressed: _sending
                     ? null
                     : () async {
@@ -1678,7 +1720,7 @@ void _showImageViewer(BuildContext context, String url) {
   showGeneralDialog(
     context: context,
     barrierDismissible: true,
-    barrierLabel: 'close',
+    barrierLabel: getTranslated('close', context) ?? 'Close',
     barrierColor: Colors.black87,
     transitionDuration: const Duration(milliseconds: 150),
     pageBuilder: (ctx, animation, secondaryAnimation) {
@@ -1774,11 +1816,9 @@ class _VideoPlayerBoxState extends State<_VideoPlayerBox> {
             Row(
               children: [
                 IconButton(
-                  icon: Icon(
-                    _controller.value.isPlaying
-                        ? Icons.pause
-                        : Icons.play_arrow,
-                  ),
+                  icon: Icon(_controller.value.isPlaying
+                      ? Icons.pause
+                      : Icons.play_arrow),
                   onPressed: () {
                     setState(() {
                       _controller.value.isPlaying
@@ -1926,7 +1966,7 @@ String _basename(String path) {
   return parts.isNotEmpty ? parts.last : path;
 }
 
-String _formatTimeText(String? raw) {
+String _formatTimeText(BuildContext context, String? raw) {
   if (raw == null) return '';
   final s = raw.trim();
   if (s.isEmpty) return '';
@@ -1947,13 +1987,26 @@ String _formatTimeText(String? raw) {
   final now = DateTime.now();
   Duration diff = now.difference(dt);
   if (diff.isNegative) diff = -diff;
-  if (diff.inSeconds < 60) return 'vi giy trc';
-  if (diff.inMinutes < 60) return '${diff.inMinutes} pht trc';
-  if (diff.inHours < 24) return '${diff.inHours} gi trc';
-  if (diff.inDays < 7) return '${diff.inDays} ngy trc';
-  if (diff.inDays < 30) return '${(diff.inDays / 7).floor()} tun trc';
-  if (diff.inDays < 365) return '${(diff.inDays / 30).floor()} thng trc';
-  return '${(diff.inDays / 365).floor()} nm trc';
+
+  if (diff.inSeconds < 60) {
+    return '${diff.inSeconds} ${getTranslated('seconds_ago', context) ?? 'seconds ago'}';
+  }
+  if (diff.inMinutes < 60) {
+    return '${diff.inMinutes} ${getTranslated('minutes_ago', context) ?? 'minutes ago'}';
+  }
+  if (diff.inHours < 24) {
+    return '${diff.inHours} ${getTranslated('hours_ago', context) ?? 'hours ago'}';
+  }
+  if (diff.inDays < 7) {
+    return '${diff.inDays} ${getTranslated('days_ago', context) ?? 'days ago'}';
+  }
+  if (diff.inDays < 30) {
+    return '${(diff.inDays / 7).floor()} ${getTranslated('weeks_ago', context) ?? 'weeks ago'}';
+  }
+  if (diff.inDays < 365) {
+    return '${(diff.inDays / 30).floor()} ${getTranslated('months_ago', context) ?? 'months ago'}';
+  }
+  return '${(diff.inDays / 365).floor()} ${getTranslated('years_ago', context) ?? 'years ago'}';
 }
 
 class _AudioPlayerBox extends StatefulWidget {
@@ -1995,9 +2048,9 @@ class _AudioPlayerBoxState extends State<_AudioPlayerBox> {
         Row(
           children: [
             IconButton(
-              icon: Icon(
-                _playing ? Icons.pause_circle_filled : Icons.play_circle_fill,
-              ),
+              icon: Icon(_playing
+                  ? Icons.pause_circle_filled
+                  : Icons.play_circle_fill),
               onPressed: () async {
                 if (_playing) {
                   await _player.pause();

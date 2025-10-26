@@ -38,7 +38,7 @@ class _SocialFeedScreenState extends State<SocialFeedScreen>
   @override
   void initState() {
     super.initState();
-    // Gi refresh sau khi mn hnh mount  chc chn lc ny  c token
+    // Refresh sau khi màn hình mount để chắc có token
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final sc = context.read<SocialController>();
       sc.loadCurrentUser();
@@ -50,6 +50,7 @@ class _SocialFeedScreenState extends State<SocialFeedScreen>
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -80,11 +81,11 @@ class _SocialFeedScreenState extends State<SocialFeedScreen>
                             2, // +1: What'sOnYourMind, +1: Stories
                         itemBuilder: (ctx, i) {
                           if (i == 0) {
-                            // Block "Bn ang ngh g?"
+                            // Block "Bạn đang nghĩ gì?"
                             return Column(
                               children: [
                                 _WhatsOnYourMind(),
-                                const _SectionSeparator(), // tch vi Stories
+                                const _SectionSeparator(), // tách với Stories
                               ],
                             );
                           }
@@ -96,14 +97,13 @@ class _SocialFeedScreenState extends State<SocialFeedScreen>
                                   children: [
                                     _StoriesSectionFromApi(
                                         stories: sc2.stories),
-                                    // const _SectionSeparator(), // <-- khong cch & Divider ging post
                                   ],
                                 );
                               },
                             );
                           }
 
-                          // Cc post: bt u t i=2
+                          // Các post: bắt đầu từ i=2
                           final SocialPost p = sc.posts[i - 2];
                           return SocialPostCard(post: p);
                         },
@@ -123,13 +123,11 @@ class _SocialFeedScreenState extends State<SocialFeedScreen>
 class _FacebookHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final onSurface = cs.onSurface;
     final theme = Theme.of(context);
-// u tin appBarTheme.backgroundColor; fallback sang highlightColor ca app (Home cng ang dng highlightColor)
+    // ưu tiên appBarTheme.backgroundColor; fallback sang highlightColor (Home cũng đang dùng highlightColor)
     final Color appBarColor =
         theme.appBarTheme.backgroundColor ?? theme.highlightColor;
-// Chn mu ch/icon tng phn trn nn appBarColor
+    // Chọn màu chữ/icon tương phản trên nền appBarColor
     final bool isDark =
         ThemeData.estimateBrightnessForColor(appBarColor) == Brightness.dark;
     final Color onAppBar = isDark ? Colors.white : Colors.black87;
@@ -141,7 +139,6 @@ class _FacebookHeader extends StatelessWidget {
         right: 16,
         bottom: 8,
       ),
-      // surface cho thanh trn
       color: appBarColor,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -190,7 +187,6 @@ class _HeaderIcon extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        // elevated container theo surfaceVariant
         color: bubbleColor ?? cs.surfaceVariant,
         shape: BoxShape.circle,
       ),
@@ -250,7 +246,8 @@ class _WhatsOnYourMind extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Bn ang ngh g?',
+                  getTranslated('whats_on_your_mind', context) ??
+                      'What’s on your mind?',
                   style: TextStyle(
                     color: cs.onSurface.withOpacity(.7),
                     fontSize: 16,
@@ -278,10 +275,9 @@ class _SectionSeparator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Column(
+    return const Column(
       children: [
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
       ],
     );
   }
@@ -302,9 +298,9 @@ class _StoriesSectionFromApi extends StatelessWidget {
     String storyKey(SocialStory story) {
       final userId = story.userId;
       if (userId != null && userId.isNotEmpty) {
-        return 'user:' + userId;
+        return 'user:$userId';
       }
-      return 'story:' + story.id;
+      return 'story:${story.id}';
     }
 
     bool isCurrentUserStory(SocialStory story) {
@@ -370,7 +366,7 @@ class _StoriesSectionFromApi extends StatelessWidget {
           itemCount: orderedStories.length + 1,
           itemBuilder: (context, index) {
             if (index == 0) {
-              return _CreateStoryCard();
+              return const _CreateStoryCard();
             }
             final storyIndex = index - 1;
             final story = orderedStories[storyIndex];
@@ -526,8 +522,10 @@ class _CreateStoryCard extends StatelessWidget {
                           : null,
                     ),
                     const SizedBox(height: 8),
-                    Text('To tin',
-                        style: Theme.of(context).textTheme.bodySmall),
+                    Text(
+                      getTranslated('your_story', context) ?? 'Your story',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   ],
                 ),
               ),
@@ -546,9 +544,10 @@ class _CreateStoryCard extends StatelessWidget {
                   );
                 },
                 icon: const Icon(Icons.add, size: 16),
-                label: const Text('To'),
+                label: Text(getTranslated('create', context) ?? 'Create'),
                 style: ElevatedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(32)),
+                  minimumSize: const Size.fromHeight(32),
+                ),
               ),
             ),
           ],
@@ -660,7 +659,7 @@ bool _isVideo(String? url) {
   return u.endsWith('.mp4') || u.endsWith('.mov') || u.endsWith('.m4v');
 }
 
-// nh full-width, t gi t l theo kch thc tht
+// ảnh full-width, tối đa tỷ lệ theo kích thước thật
 class _AutoRatioNetworkImage extends StatefulWidget {
   final String url;
   const _AutoRatioNetworkImage(this.url, {super.key});
@@ -727,7 +726,7 @@ class _MediaCarouselState extends State<_MediaCarousel> {
     return Column(
       children: [
         AspectRatio(
-          aspectRatio: 1, // vung nh Instagram, hoc 4/5 nu thch
+          aspectRatio: 1, // vùng ảnh Instagram
           child: PageView(
             controller: _pc,
             onPageChanged: (i) => setState(() => _index = i),
@@ -798,8 +797,10 @@ class _AudioTileState extends State<_AudioTile> {
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(widget.title ?? 'Audio',
-                style: TextStyle(color: onSurface)),
+            child: Text(
+              widget.title ?? (getTranslated('audio', context) ?? 'Audio'),
+              style: TextStyle(color: onSurface),
+            ),
           ),
         ],
       ),
@@ -843,7 +844,7 @@ class _ImagesWithAutoAudioState extends State<_ImagesWithAutoAudio> {
 
   void _onVisibilityChanged(VisibilityInfo info) {
     final nowVisible = info.visibleFraction > 0.6;
-    if (nowVisible == _visible) return; // khng lm g nu state khng i
+    if (nowVisible == _visible) return; // không làm gì nếu state không đổi
     _visible = nowVisible;
 
     final state = _player.state;
@@ -861,7 +862,7 @@ class _ImagesWithAutoAudioState extends State<_ImagesWithAutoAudio> {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
-    final height = width; // vung ging FB
+    final height = width; // vùng giống FB
     return VisibilityDetector(
       key: ValueKey(widget.audioUrl),
       onVisibilityChanged: _onVisibilityChanged,
@@ -932,8 +933,9 @@ class _VideoPlayerTileState extends State<_VideoPlayerTile> {
   Widget build(BuildContext context) {
     if (!(_c?.value.isInitialized ?? false)) {
       return const AspectRatio(
-          aspectRatio: 16 / 9,
-          child: Center(child: CircularProgressIndicator()));
+        aspectRatio: 16 / 9,
+        child: Center(child: CircularProgressIndicator()),
+      );
     }
     final ratio = _c!.value.aspectRatio == 0 ? (16 / 9) : _c!.value.aspectRatio;
     return LayoutBuilder(
@@ -1002,25 +1004,6 @@ class SocialPostCard extends StatelessWidget {
       }
     }
 
-    // VIDEO: u tin render trc nh
-    // if (_isVideo(fileUrl)) {
-    //   return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    //     ClipRRect(
-    //       borderRadius: BorderRadius.circular(12),
-    //       child: _VideoPlayerTile(url: fileUrl!),
-    //     ),
-    //     const SizedBox(height: 8),
-    //     Padding(
-    //       padding: const EdgeInsets.symmetric(horizontal: 12),
-    //       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    //         if ((post.userName??'').isNotEmpty) Text(post.userName!, style: TextStyle(fontWeight: FontWeight.w600)),
-    //         if ((post.text??'').isNotEmpty) const SizedBox(height:4),
-    //         if ((post.text??'').isNotEmpty) Html(data: post.text!),
-    //       ]),
-    //     ),
-    //   ]);
-    // }
-
     Widget? _media() {
       // 0) VIDEO
       if (_isVideo(fileUrl)) {
@@ -1033,23 +1016,12 @@ class SocialPostCard extends StatelessWidget {
         return _ProductPostTile(post: post);
       }
 
-      // 1.5) NH + AUDIO => Carousel
-      // if (images.isNotEmpty && _isAudio(fileUrl)) {
-      //   final pages = <Widget>[
-      //     for (final u in images)
-      //       ClipRRect(
-      //         borderRadius: BorderRadius.circular(12),
-      //         child: Image.network(u, fit: BoxFit.cover),
-      //       ),
-      //     _AudioTile(url: fileUrl!, title: post.fileName),
-      //   ];
-      //   return _MediaCarousel(pages: pages);
-      // }
+      // 1.5) ẢNH + AUDIO => Carousel/AutoAudio
       if (images.isNotEmpty && _isAudio(fileUrl)) {
         return _ImagesWithAutoAudio(images: images, audioUrl: fileUrl!);
       }
 
-      // 2) MULTI IMAGE GRID (2,3,4 nh)
+      // 2) MULTI IMAGE GRID
       if (hasMulti) {
         return Column(
           children: [
@@ -1112,13 +1084,13 @@ class SocialPostCard extends StatelessWidget {
         );
       }
 
-      // 3) NH N
+      // 3) ẢNH ĐƠN
       if (hasSingle) {
         final String src = images.isNotEmpty ? images.first : (post.imageUrl!);
         return _AutoRatioNetworkImage(src);
       }
 
-      // 4) FILE (m thanh / PDF / Khc)
+      // 4) FILE (âm thanh / PDF / Khác)
       if (fileUrl != null && fileUrl.isNotEmpty) {
         if (_isAudio(fileUrl) && images.isNotEmpty) {
           return _ImagesWithAutoAudio(images: images, audioUrl: fileUrl);
@@ -1135,12 +1107,15 @@ class SocialPostCard extends StatelessWidget {
                 const Icon(Icons.audiotrack),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(post.fileName ?? 'm thanh',
-                      style: TextStyle(color: onSurface)),
+                  child: Text(
+                    post.fileName ??
+                        (getTranslated('audio', context) ?? 'Audio'),
+                    style: TextStyle(color: onSurface),
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.play_arrow),
-                  onPressed: () {}, // TODO: hook player nu cn
+                  onPressed: () {}, // hook player khi cần
                 ),
               ],
             ),
@@ -1157,8 +1132,12 @@ class SocialPostCard extends StatelessWidget {
                 const Icon(Icons.picture_as_pdf),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(post.fileName ?? 'Ti liu PDF',
-                      style: TextStyle(color: onSurface)),
+                  child: Text(
+                    post.fileName ??
+                        (getTranslated('pdf_document', context) ??
+                            'PDF document'),
+                    style: TextStyle(color: onSurface),
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.open_in_new),
@@ -1174,7 +1153,7 @@ class SocialPostCard extends StatelessWidget {
             ),
           );
         } else {
-          // fallback file khc
+          // fallback file khác
           return Container(
             decoration: BoxDecoration(
               color: cs.surfaceVariant.withOpacity(.35),
@@ -1186,8 +1165,11 @@ class SocialPostCard extends StatelessWidget {
                 const Icon(Icons.insert_drive_file),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(post.fileName ?? 'Tp nh km',
-                      style: TextStyle(color: onSurface)),
+                  child: Text(
+                    post.fileName ??
+                        (getTranslated('attachment', context) ?? 'Attachment'),
+                    style: TextStyle(color: onSurface),
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.open_in_new),
@@ -1199,7 +1181,7 @@ class SocialPostCard extends StatelessWidget {
         }
       }
 
-      // 5) Ch text
+      // 5) Chỉ text
       return null;
     }
 
@@ -1239,7 +1221,7 @@ class SocialPostCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // userName + postType cng 1 dng
+                      // userName + postType cùng 1 dòng
                       Row(
                         children: [
                           Flexible(
@@ -1266,9 +1248,13 @@ class SocialPostCard extends StatelessWidget {
                             Flexible(
                               child: Text(
                                 post.postType == 'profile_picture'
-                                    ? ' cp nht nh i din'
+                                    ? (getTranslated('updated_profile_picture',
+                                            context) ??
+                                        'updated profile picture')
                                     : post.postType == 'profile_cover_picture'
-                                        ? ' cp nht nh ba'
+                                        ? (getTranslated('updated_cover_photo',
+                                                context) ??
+                                            'updated cover photo')
                                         : post.postType!,
                                 style: TextStyle(
                                   color: onSurface.withOpacity(.7),
@@ -1358,7 +1344,7 @@ class SocialPostCard extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                // Nt Reaction: tap = Like/UnLike; long-press = chn reaction
+                // Nút Reaction: tap = Like/UnLike; long-press = chọn reaction
                 Expanded(
                   child: Builder(
                     builder: (itemCtx) => InkWell(
@@ -1367,7 +1353,7 @@ class SocialPostCard extends StatelessWidget {
                         itemCtx.read<SocialController>().reactOnPost(post, now);
                       },
                       onLongPress: () {
-                        // Tnh to  trung tm nt Like  hin popup NGAY TRN nt
+                        // Tính tọa độ trung tâm nút Like để hiển popup ngay trên nút
                         final overlayBox = Overlay.of(itemCtx)
                             .context
                             .findRenderObject() as RenderBox;
@@ -1406,7 +1392,7 @@ class SocialPostCard extends StatelessWidget {
                 ),
                 _PostAction(
                   icon: Icons.mode_comment_outlined,
-                  label: getTranslated('comment', context) ?? 'Comment',
+                  label: (getTranslated('comment', context) ?? 'Comment'),
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -1415,7 +1401,10 @@ class SocialPostCard extends StatelessWidget {
                     );
                   },
                 ),
-                _PostAction(icon: Icons.share_outlined, label: getTranslated('share', context) ?? 'Share'),
+                _PostAction(
+                  icon: Icons.share_outlined,
+                  label: (getTranslated('share', context) ?? 'Share'),
+                ),
               ],
             ),
           ),
@@ -1431,9 +1420,8 @@ class _ImageGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // p kch thc tng th  con bn trong c rng buc (khng b MISSING size)
-    final double aspect =
-        urls.length == 1 ? (16 / 9) : (16 / 9); // c th i 1.0 nu mun  vung
+    // ép kích thước từng thẻ con bám trong cột/ràng buộc
+    final double aspect = urls.length == 1 ? (16 / 9) : (16 / 9);
     return AspectRatio(
       aspectRatio: aspect,
       child: ClipRRect(
@@ -1492,7 +1480,7 @@ class _ImageGrid extends StatelessWidget {
                 const SizedBox(width: 4),
                 Expanded(
                   child: Stack(
-                    fit: StackFit.expand, // BY GI  c rng buc t Expanded cha
+                    fit: StackFit.expand,
                     children: [
                       _square(urls[3]),
                       if (remain > 0)
@@ -1519,7 +1507,7 @@ class _ImageGrid extends StatelessWidget {
     }
   }
 
-  // nh vung dng bn trong grid
+  // ảnh vuông dùng bên trong grid
   Widget _square(String u) => AspectRatio(
         aspectRatio: 1,
         child: _tile(u),
@@ -1604,13 +1592,13 @@ void _showReactionsOverlay(
         overlay.context.findRenderObject() as RenderBox;
     final Offset local = overlayBox.globalToLocal(globalPos);
 
-    // Kch thc khung popup (c lng),  canh nm ngay trn nt
+    // Kích thước khung popup, canh nằm ngay trên nút
     const double popupWidth = 300;
     const double popupHeight = 56;
 
     return Stack(
       children: [
-        // Tap ra ngoi  tt
+        // Tap ra ngoài để tắt
         Positioned.fill(
           child: GestureDetector(onTap: () => entry.remove()),
         ),
@@ -1749,7 +1737,11 @@ class _ProductPostTileState extends State<_ProductPostTile> {
                   padding: EdgeInsets.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                child: Text(_expanded ? 'Thu gon' : 'Xem them'),
+                child: Text(
+                  _expanded
+                      ? (getTranslated('collapse', context) ?? 'Collapse')
+                      : (getTranslated('see_more', context) ?? 'See more'),
+                ),
               ),
           ],
           if (canNavigate) ...[
@@ -1762,7 +1754,8 @@ class _ProductPostTileState extends State<_ProductPostTile> {
                   productId: productId!,
                   initialSlug: widget.post.productSlug,
                 ),
-                child: const Text('Xem chi tiet'),
+                child: Text(
+                    getTranslated('view_detail', context) ?? 'View detail'),
               ),
             ),
           ],
