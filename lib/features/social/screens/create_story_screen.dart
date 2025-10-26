@@ -33,21 +33,6 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
   final FocusNode _textFocus = FocusNode();
   final GlobalKey _textPreviewKey = GlobalKey();
 
-  String _t(
-    String key, {
-    BuildContext? ctx,
-    Map<String, String>? params,
-  }) {
-    final BuildContext contextToUse = ctx ?? context;
-    String text = getTranslated(key, contextToUse) ?? key;
-    if (params != null) {
-      params.forEach((placeholder, value) {
-        text = text.replaceAll('{$placeholder}', value);
-      });
-    }
-    return text;
-  }
-
   _StoryComposeMode _mode = _StoryComposeMode.media;
   bool _allowMultiple = true;
   bool _submitting = false;
@@ -125,7 +110,7 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
     if (_submitting) return;
     if (!_hasContent) {
       showCustomSnackBar(
-        _t('story_content_required'),
+        getTranslated('story_content_required', context) ?? 'Content required',
         context,
         isError: true,
       );
@@ -145,7 +130,8 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
         if (!mounted) return;
         if (image == null) {
           showCustomSnackBar(
-            _t('story_cannot_generate_image'),
+            getTranslated('story_cannot_generate_image', context) ??
+                'Cannot generate image',
             context,
             isError: true,
           );
@@ -191,17 +177,14 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
   Future<File?> _renderTextStoryToImageFile() async {
     if (kIsWeb) return null;
     await Future<void>.delayed(const Duration(milliseconds: 20));
-    final boundary =
-        _textPreviewKey.currentContext?.findRenderObject()
-            as RenderRepaintBoundary?;
+    final boundary = _textPreviewKey.currentContext?.findRenderObject()
+        as RenderRepaintBoundary?;
     if (boundary == null) return null;
-    final double pixelRatio = MediaQuery.of(
-      context,
-    ).devicePixelRatio.clamp(2.0, 4.0).toDouble();
+    final double pixelRatio =
+        MediaQuery.of(context).devicePixelRatio.clamp(2.0, 4.0).toDouble();
     final ui.Image image = await boundary.toImage(pixelRatio: pixelRatio);
-    final ByteData? byteData = await image.toByteData(
-      format: ui.ImageByteFormat.png,
-    );
+    final ByteData? byteData =
+        await image.toByteData(format: ui.ImageByteFormat.png);
     if (byteData == null) return null;
 
     final Uint8List bytes = byteData.buffer.asUint8List();
@@ -217,11 +200,7 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
     if (_mode == mode) return;
     setState(() {
       _mode = mode;
-      if (_mode == _StoryComposeMode.text) {
-        _allowMultiple = false;
-      } else {
-        _allowMultiple = true;
-      }
+      _allowMultiple = _mode != _StoryComposeMode.text;
     });
   }
 
@@ -255,12 +234,14 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
                   children: [
                     ListTile(
                       leading: const Icon(Icons.photo_library_outlined),
-                      title: Text(_t('choose_photo', ctx: ctx)),
+                      title:
+                          Text(getTranslated('choose_photo', ctx) ?? 'Photo'),
                       onTap: () => Navigator.of(ctx).pop(false),
                     ),
                     ListTile(
                       leading: const Icon(Icons.videocam_outlined),
-                      title: Text(_t('choose_video', ctx: ctx)),
+                      title:
+                          Text(getTranslated('choose_video', ctx) ?? 'Video'),
                       onTap: () => Navigator.of(ctx).pop(true),
                     ),
                   ],
@@ -300,7 +281,8 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
   Future<void> _pickVideo(ImageSource source) async {
     if (!_supportsVideo) {
       showCustomSnackBar(
-        _t('device_not_support_video_picker'),
+        getTranslated('device_not_support_video_picker', context) ??
+            'Device does not support video picking',
         context,
         isError: true,
       );
@@ -344,7 +326,8 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
     if (_mode == _StoryComposeMode.text) return;
     if (_selectedMedia.any((media) => media.isVideo)) {
       showCustomSnackBar(
-        _t('remove_video_before_multi_select'),
+        getTranslated('remove_video_before_multi_select', context) ??
+            'Remove video before selecting multiple',
         context,
         isError: true,
       );
@@ -382,7 +365,9 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
     return Scaffold(
       backgroundColor: colorScheme.background,
       appBar: AppBar(
-        title: Text(_t('create_story')),
+        title: Text(
+          getTranslated('create_story', context) ?? 'Create story',
+        ),
         actions: [
           TextButton(
             onPressed: _submitting ? null : _handleSubmit,
@@ -392,7 +377,7 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
                     width: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : Text(_t('post_action')),
+                : Text(getTranslated('post_action', context) ?? 'Post'),
           ),
         ],
       ),
@@ -407,7 +392,11 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
                       mode == _StoryComposeMode.text) {
                     _toggleMode(mode);
                   } else {
-                    showCustomSnackBar(_t('feature_in_development_short'), context);
+                    showCustomSnackBar(
+                      getTranslated('feature_in_development_short', context) ??
+                          'Coming soon',
+                      context,
+                    );
                   }
                 },
                 onOpenCamera: () => _pickSingleImage(ImageSource.camera),
@@ -415,22 +404,24 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
                 supportsVideo: _supportsVideo,
               ),
               Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: _submitting ? null : _pickFromGallery,
                         icon: const Icon(Icons.photo_library_outlined),
-                        label: Text(_t('photo_library')),
+                        label: Text(getTranslated('photo_library', context) ??
+                            'Photo library'),
                       ),
                     ),
                     const SizedBox(width: 12),
                     FilterChip(
-                      label: Text(_t('select_multiple_files')),
+                      label: Text(
+                        getTranslated('select_multiple_files', context) ??
+                            'Select multiple',
+                      ),
                       selected:
                           _mode != _StoryComposeMode.text && _allowMultiple,
                       onSelected: (_) => _toggleMultipleSelection(),
@@ -448,15 +439,14 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
               ),
               if (_mode == _StoryComposeMode.media)
                 Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: TextField(
                     controller: _captionController,
                     maxLines: 2,
                     decoration: InputDecoration(
-                      hintText: _t('story_caption_hint'),
+                      hintText: getTranslated('story_caption_hint', context) ??
+                          'Write a caption…',
                       border: const OutlineInputBorder(
                         borderRadius: BorderRadius.all(Radius.circular(12)),
                       ),
@@ -479,9 +469,9 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
   Widget _buildTextComposer(BuildContext context) {
     final _StoryBackground background =
         _backgrounds[_selectedBackgroundIndex.clamp(
-          0,
-          _backgrounds.length - 1,
-        )];
+      0,
+      _backgrounds.length - 1,
+    )];
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -501,7 +491,9 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
                       child: Center(
                         child: Text(
                           _textController.text.trim().isEmpty
-                               ? _t('story_text_placeholder_long')
+                              ? (getTranslated(
+                                      'story_text_placeholder_long', context) ??
+                                  'Write something…')
                               : _textController.text.trim(),
                           textAlign: _textAlign,
                           style: TextStyle(
@@ -525,7 +517,8 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
             maxLines: 3,
             minLines: 1,
             decoration: InputDecoration(
-              hintText: _t('story_text_hint'),
+              hintText:
+                  getTranslated('story_text_hint', context) ?? 'Add your text…',
               border: const OutlineInputBorder(
                 borderRadius: BorderRadius.all(Radius.circular(12)),
               ),
@@ -581,7 +574,7 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
       children: [
         Row(
           children: [
-            Text(_t('story_text_align')),
+            Text(getTranslated('story_text_align', context) ?? 'Text align'),
             const Spacer(),
             IconButton(
               onPressed: _cycleTextAlign,
@@ -589,15 +582,17 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
                 _textAlign == TextAlign.left
                     ? Icons.format_align_left
                     : _textAlign == TextAlign.center
-                    ? Icons.format_align_center
-                    : Icons.format_align_right,
+                        ? Icons.format_align_center
+                        : Icons.format_align_right,
               ),
+              tooltip:
+                  getTranslated('story_change_alignment', context) ?? 'Align',
             ),
           ],
         ),
         Row(
           children: [
-            Text(_t('story_font_size')),
+            Text(getTranslated('story_font_size', context) ?? 'Font size'),
             Expanded(
               child: Slider(
                 value: _fontSize,
@@ -624,9 +619,8 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
           children: [
             CircleAvatar(
               radius: 40,
-              backgroundColor: Theme.of(
-                context,
-              ).colorScheme.primary.withOpacity(0.1),
+              backgroundColor:
+                  Theme.of(context).colorScheme.primary.withOpacity(0.1),
               child: Icon(
                 Icons.photo_outlined,
                 size: 40,
@@ -634,7 +628,8 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            Text(_t('story_choose_media_prompt')),
+            Text(getTranslated('story_choose_media_prompt', context) ??
+                'Choose photos or videos'),
           ],
         ),
       );
@@ -731,51 +726,57 @@ class _StoryFeatureBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     String t(String key) => getTranslated(key, context) ?? key;
+
+    // FIX overflow: dùng scroll ngang thay vì Row cứng + Spacer
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          _StoryFeatureChip(
-            icon: Icons.text_fields,
-            label: t('story_feature_text'),
-            selected: mode == _StoryComposeMode.text,
-            onTap: () => onSelect(_StoryComposeMode.text),
-          ),
-          const SizedBox(width: 8),
-          _StoryFeatureChip(
-            icon: Icons.music_note,
-            label: t('story_feature_music'),
-            selected: false,
-            onTap: () => showCustomSnackBar(
-              t('story_music_coming_soon'),
-              context,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _StoryFeatureChip(
+              icon: Icons.text_fields,
+              label: t('story_feature_text'),
+              selected: mode == _StoryComposeMode.text,
+              onTap: () => onSelect(_StoryComposeMode.text),
             ),
-          ),
-          const SizedBox(width: 8),
-          _StoryFeatureChip(
-            icon: Icons.all_inclusive,
-            label: t('story_feature_boomerang'),
-            selected: false,
-            onTap: () => showCustomSnackBar(
-              t('story_boomerang_coming_soon'),
-              context,
+            const SizedBox(width: 8),
+            _StoryFeatureChip(
+              icon: Icons.music_note,
+              label: t('story_feature_music'),
+              selected: false,
+              onTap: () => showCustomSnackBar(
+                t('story_music_coming_soon'),
+                context,
+              ),
             ),
-          ),
-          const Spacer(),
-          IconButton(
-            tooltip: t('capture_photo'),
-            icon: const Icon(Icons.camera_alt_outlined),
-            color: colorScheme.onSurface,
-            onPressed: onOpenCamera,
-          ),
-          if (supportsVideo)
+            const SizedBox(width: 8),
+            _StoryFeatureChip(
+              icon: Icons.all_inclusive,
+              label: t('story_feature_boomerang'),
+              selected: false,
+              onTap: () => showCustomSnackBar(
+                t('story_boomerang_coming_soon'),
+                context,
+              ),
+            ),
+            const SizedBox(width: 12),
             IconButton(
-              tooltip: t('record_video'),
-              icon: const Icon(Icons.videocam_outlined),
+              tooltip: t('capture_photo'),
+              icon: const Icon(Icons.camera_alt_outlined),
               color: colorScheme.onSurface,
-              onPressed: onOpenVideoCamera,
+              onPressed: onOpenCamera,
             ),
-        ],
+            if (supportsVideo)
+              IconButton(
+                tooltip: t('record_video'),
+                icon: const Icon(Icons.videocam_outlined),
+                color: colorScheme.onSurface,
+                onPressed: onOpenVideoCamera,
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -834,4 +835,3 @@ class _StoryFeatureChip extends StatelessWidget {
     );
   }
 }
-
