@@ -59,6 +59,33 @@ class SocialRepository {
     return '$base/$trimmed';
   }
 
+  String? _normalizeString(dynamic value) {
+    if (value == null) return null;
+    final str = value.toString().trim();
+    if (str.isEmpty) return null;
+    final lower = str.toLowerCase();
+    if (lower == 'null' || lower == 'undefined') return null;
+    return str;
+  }
+
+  String? _extractProductSlug(Map product) {
+    const keys = [
+      'slug',
+      'product_slug',
+      'slug_url',
+      'slug_name',
+      'slug_en',
+      'slug_bn',
+      'slug_ar',
+      'slug_vi',
+    ];
+    for (final key in keys) {
+      final normalized = _normalizeString(product[key]);
+      if (normalized != null) return normalized;
+    }
+    return null;
+  }
+
   //Feeds
   Future<ApiResponseModel<Response>> fetchNewsFeed({
     int limit = 10,
@@ -227,10 +254,24 @@ class SocialRepository {
           final double? productPrice = product['price'] is num
               ? (product['price'] as num).toDouble()
               : double.tryParse((product['price'] ?? '').toString());
-          final String? productCurrency =
-              (product['currency'] ?? '').toString().isNotEmpty
-                  ? product['currency'].toString()
-                  : null;
+          final String? productCurrency = _normalizeString(product['currency']);
+          final String? productDescription = _normalizeString(
+            product['description_api'] ??
+                product['description'] ??
+                product['short_description'] ??
+                product['desc'],
+          );
+          final dynamic productIdRaw = product['ecommer_prod_id'] ??
+              product['ecommerce_prod_id'] ??
+              product['product_id'] ??
+              product['id'];
+          final int? ecommerceProductId = () {
+            if (productIdRaw == null) return null;
+            if (productIdRaw is int) return productIdRaw;
+            if (productIdRaw is num) return productIdRaw.toInt();
+            return int.tryParse(productIdRaw.toString());
+          }();
+          final String? productSlug = _extractProductSlug(product);
 
           final String? postType =
               (m['postType']?.toString().isNotEmpty ?? false)
@@ -258,6 +299,9 @@ class SocialRepository {
               productImages: productImages.isNotEmpty ? productImages : null,
               productPrice: productPrice,
               productCurrency: productCurrency,
+              productDescription: productDescription,
+              ecommerceProductId: ecommerceProductId,
+              productSlug: productSlug,
               pollOptions: (m['options'] is List)
                   ? List<Map<String, dynamic>>.from(m['options'])
                   : null,
@@ -1114,10 +1158,24 @@ class SocialRepository {
     final double? productPrice = product['price'] is num
         ? (product['price'] as num).toDouble()
         : double.tryParse((product['price'] ?? '').toString());
-    final String? productCurrency =
-        (product['currency'] ?? '').toString().isNotEmpty
-            ? product['currency'].toString()
-            : null;
+    final String? productCurrency = _normalizeString(product['currency']);
+    final String? productDescription = _normalizeString(
+      product['description_api'] ??
+          product['description'] ??
+          product['short_description'] ??
+          product['desc'],
+    );
+    final dynamic productIdRaw = product['ecommer_prod_id'] ??
+        product['ecommerce_prod_id'] ??
+        product['product_id'] ??
+        product['id'];
+    final int? ecommerceProductId = () {
+      if (productIdRaw == null) return null;
+      if (productIdRaw is int) return productIdRaw;
+      if (productIdRaw is num) return productIdRaw.toInt();
+      return int.tryParse(productIdRaw.toString());
+    }();
+    final String? productSlug = _extractProductSlug(product);
 
     final String? postType = (map['postType']?.toString().isNotEmpty ?? false)
         ? map['postType'].toString()
@@ -1143,6 +1201,9 @@ class SocialRepository {
       productImages: productImages.isNotEmpty ? productImages : null,
       productPrice: productPrice,
       productCurrency: productCurrency,
+      productDescription: productDescription,
+      ecommerceProductId: ecommerceProductId,
+      productSlug: productSlug,
       pollOptions: (map['options'] is List)
           ? List<Map<String, dynamic>>.from(map['options'])
           : null,

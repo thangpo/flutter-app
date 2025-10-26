@@ -87,15 +87,6 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         screen: const SocialFeedScreen(),
       ),
       NavigationModel(
-          name: 'friends',
-          icon: Images.friendImage,
-          screen: const InboxScreen(isBackButtonExist: false)),
-      NavigationModel(
-          name: 'friends',
-          icon: Images.friendImage,
-          screen: const InboxScreen(isBackButtonExist: false)),
-
-      NavigationModel(
         name: 'shop',
         icon: Images.storeIcon,
         screen: (splashController.configModel!.activeTheme == "default")
@@ -104,6 +95,10 @@ class DashBoardScreenState extends State<DashBoardScreen> {
                 ? const AsterThemeHomeScreen()
                 : const FashionThemeHomePage(),
       ),
+      NavigationModel(
+          name: 'travel',
+          icon: Images.TravelIcon,
+          screen: const InboxScreen(isBackButtonExist: false)),
 
       NavigationModel(
           name: 'notifications',
