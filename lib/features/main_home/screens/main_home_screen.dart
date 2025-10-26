@@ -1,21 +1,20 @@
 import 'dart:async';
-import 'dart:math';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_sixvalley_ecommerce/common/basewidget/product_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/title_row_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/features/banner/widgets/banners_widget.dart';
+import 'package:flutter_sixvalley_ecommerce/features/category/widgets/category_list_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/features/home/screens/home_screens.dart';
-import 'package:flutter_sixvalley_ecommerce/features/home/screens/view_all_product_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/home/widgets/featured_product_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/features/home/widgets/announcement_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/features/home/widgets/menu_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/features/home/widgets/search_home_page_widget.dart';
-import 'package:flutter_sixvalley_ecommerce/features/product/controllers/product_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/product/domain/models/product_model.dart';
-import 'package:flutter_sixvalley_ecommerce/features/product/enums/product_type.dart';
+import 'package:flutter_sixvalley_ecommerce/features/product/widgets/latest_product_list_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/features/search_product/screens/search_product_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_story_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_screen.dart';
@@ -50,10 +49,11 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
     _ensureBaseData();
     _toursFuture = _fetchTours();
     _flightsFuture = _fetchFlights();
-    scheduleMicrotask(() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       final social = context.read<SocialController>();
-      if (social.stories.isEmpty && !social.loading) {
-        social.loadMoreStories();
+      social.loadCurrentUser();
+      if (social.posts.isEmpty || social.stories.isEmpty) {
+        social.refresh();
       }
     });
   }
@@ -93,6 +93,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
   Future<void> _onRefresh() async {
     final tours = _fetchTours();
     final flights = _fetchFlights();
+    final socialRefresh = context.read<SocialController>().refresh();
     setState(() {
       _toursFuture = tours;
       _flightsFuture = flights;
@@ -101,14 +102,14 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
       HomePage.loadData(true),
       tours,
       flights,
+      socialRefresh,
     ]);
   }
 
   @override
   Widget build(BuildContext context) {
     final splash = Provider.of<SplashController>(context, listen: false);
-    final announcementEnabled =
-        splash.configModel?.announcement?.status == '1';
+    final announcementEnabled = splash.configModel?.announcement?.status == '1';
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
@@ -135,11 +136,12 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                 child: announcementEnabled
                     ? Consumer<SplashController>(
                         builder: (context, splashCtrl, _) {
-                          final data =
-                              splashCtrl.configModel?.announcement?.announcement;
+                          final data = splashCtrl
+                              .configModel?.announcement?.announcement;
                           if (data != null && splashCtrl.onOff) {
                             return AnnouncementWidget(
-                                announcement: splashCtrl.configModel!.announcement);
+                                announcement:
+                                    splashCtrl.configModel!.announcement);
                           }
                           return const SizedBox.shrink();
                         },
@@ -173,11 +175,17 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                       const SizedBox(height: Dimensions.paddingSizeDefault),
                       TourCarouselSection(future: _toursFuture),
                       const SizedBox(height: Dimensions.paddingSizeLarge),
+                      const CategoryListWidget(isHomePage: true),
+                      const SizedBox(height: Dimensions.paddingSizeDefault),
                       const LatestProductsSection(),
-                      const SizedBox(height: Dimensions.paddingSizeLarge),
+                      const SizedBox(height: Dimensions.paddingSizeDefault),
+                      const FeaturedProductsSection(),
+                      const SizedBox(height: Dimensions.paddingSizeDefault),
                       const SocialStoriesSection(),
                       const SizedBox(height: Dimensions.paddingSizeLarge),
                       FlightCarouselSection(future: _flightsFuture),
+                      const SizedBox(height: Dimensions.paddingSizeLarge),
+                      const TopSocialPostsSection(),
                       const SizedBox(height: Dimensions.paddingSizeExtraLarge),
                     ],
                   ),
@@ -262,121 +270,16 @@ class LatestProductsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: Dimensions.paddingSizeSmall,
-      ),
-      child: Selector<ProductController, ProductModel?>(
-        selector: (_, controller) => controller.latestProductModel,
-        builder: (context, latestModel, child) {
-          if (latestModel == null) {
-            return const _SectionLoadingSkeleton(height: 320);
-          }
+    return const LatestProductListWidget();
+  }
+}
 
-          final products = latestModel.products ?? [];
-          if (products.isEmpty) {
-            return _SectionError(
-              message: getTranslated('no_latest_product', context) ??
-                  'Chua co san pham moi.',
-              compact: true,
-            );
-          }
+class FeaturedProductsSection extends StatelessWidget {
+  const FeaturedProductsSection({super.key});
 
-          final displayProducts = products.take(10).toList();
-          final chunked = <List<Product>>[];
-          for (int i = 0; i < displayProducts.length; i += 2) {
-            chunked.add(displayProducts.sublist(
-              i,
-              min(displayProducts.length, i + 2),
-            ));
-          }
-
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: Dimensions.paddingSizeSmall,
-                ),
-                child: TitleRowWidget(
-                  title: getTranslated('latest_products', context) ??
-                      'San pham moi',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const ViewAllProductScreen(
-                        productType: ProductType.latestProduct,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: Dimensions.paddingSizeSmall),
-              SizedBox(
-                height: 320,
-                child: CarouselSlider.builder(
-                  options: CarouselOptions(
-                    height: 320,
-                    viewportFraction: 0.55,
-                    enableInfiniteScroll: false,
-                    enlargeCenterPage: true,
-                    enlargeFactor: 0.18,
-                  ),
-                  itemCount: chunked.length,
-                  itemBuilder: (context, index, realIndex) {
-                    final slide = chunked[index];
-                    return Container(
-                      margin: const EdgeInsets.symmetric(
-                        horizontal: Dimensions.paddingSizeExtraSmall,
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: Dimensions.paddingSizeSmall,
-                        vertical: Dimensions.paddingSizeSmall,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).cardColor,
-                        borderRadius: BorderRadius.circular(18),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Theme.of(context)
-                                .shadowColor
-                                .withValues(alpha: 0.06),
-                            blurRadius: 10,
-                            offset: const Offset(0, 6),
-                          ),
-                        ],
-                      ),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          return Column(
-                            children: [
-                              Expanded(
-                                child: ProductWidget(
-                                  productModel: slide.first,
-                                ),
-                              ),
-                              if (slide.length == 2) ...[
-                                const SizedBox(
-                                    height: Dimensions.paddingSizeSmall),
-                                Expanded(
-                                  child: ProductWidget(
-                                    productModel: slide[1],
-                                  ),
-                                ),
-                              ],
-                            ],
-                          );
-                        },
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
+  @override
+  Widget build(BuildContext context) {
+    return const FeaturedProductWidget();
   }
 }
 
@@ -433,8 +336,8 @@ class SocialStoriesSection extends StatelessWidget {
                       onTap: () {
                         final List<SocialStory> ordered =
                             List<SocialStory>.from(controller.stories);
-                        final startIndex = ordered.indexWhere(
-                            (element) => element.id == story.id);
+                        final startIndex = ordered
+                            .indexWhere((element) => element.id == story.id);
                         Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -498,7 +401,8 @@ class FlightCarouselSection extends StatelessWidget {
                     getTranslated('featured_flights', context) ?? 'Ve may bay',
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const FlightBookingScreen()),
+                  MaterialPageRoute(
+                      builder: (_) => const FlightBookingScreen()),
                 ),
               ),
               const SizedBox(height: Dimensions.paddingSizeSmall),
@@ -523,6 +427,96 @@ class FlightCarouselSection extends StatelessWidget {
   }
 }
 
+class TopSocialPostsSection extends StatelessWidget {
+  const TopSocialPostsSection({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    const horizontal = Dimensions.paddingSizeDefault;
+    return Consumer<SocialController>(
+      builder: (context, controller, _) {
+        final List<SocialPost> posts = controller.posts;
+        final bool loading = controller.loading && posts.isEmpty;
+        if (loading) {
+          return const _SectionLoadingSkeleton(height: 260);
+        }
+        final List<SocialPost> topPosts = _selectTopSocialPosts(posts);
+        if (topPosts.isEmpty) {
+          return _SectionError(
+            message: getTranslated('no_popular_posts', context) ??
+                'Chua co bai viet noi bat.',
+            compact: true,
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: Dimensions.paddingSizeSmall),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: horizontal),
+              child: TitleRowWidget(
+                title: getTranslated('top_social_posts', context) ??
+                    'Bai viet noi bat',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SocialFeedScreen()),
+                ),
+              ),
+            ),
+            const SizedBox(height: Dimensions.paddingSizeSmall),
+            for (int i = 0; i < topPosts.length; i++) ...[
+              SocialPostCard(post: topPosts[i]),
+              if (i != topPosts.length - 1)
+                const SizedBox(height: Dimensions.paddingSizeSmall),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+List<SocialPost> _selectTopSocialPosts(List<SocialPost> source) {
+  if (source.isEmpty) return const <SocialPost>[];
+  final sorted = List<SocialPost>.from(source);
+  sorted.sort((a, b) {
+    final int reactionCompare = b.reactionCount.compareTo(a.reactionCount);
+    if (reactionCompare != 0) {
+      return reactionCompare;
+    }
+    final int bTime = _postTimestampValue(b);
+    final int aTime = _postTimestampValue(a);
+    return bTime.compareTo(aTime);
+  });
+  final top = sorted.take(6).toList();
+  top.sort((a, b) => _postTimestampValue(b).compareTo(_postTimestampValue(a)));
+  return top;
+}
+
+int _postTimestampValue(SocialPost post) {
+  final DateTime? dt = _resolvePostTime(post.timeText);
+  if (dt != null) {
+    return dt.millisecondsSinceEpoch;
+  }
+  return int.tryParse(post.id) ?? 0;
+}
+
+DateTime? _resolvePostTime(String? raw) {
+  if (raw == null) return null;
+  final String trimmed = raw.trim();
+  if (trimmed.isEmpty) return null;
+  final int? value = int.tryParse(trimmed);
+  if (value == null) return null;
+  if (value >= 1000000000000) {
+    return DateTime.fromMillisecondsSinceEpoch(value);
+  }
+  if (value >= 1000000000) {
+    return DateTime.fromMillisecondsSinceEpoch(value * 1000);
+  }
+  return DateTime.now().subtract(Duration(seconds: value));
+}
+
 class _TourCard extends StatelessWidget {
   final dynamic data;
   final ThemeData theme;
@@ -541,8 +535,7 @@ class _TourCard extends StatelessWidget {
       onTap: () {
         final dynamic id = data['id'];
         if (id != null) {
-          final int? parsedId =
-              id is int ? id : int.tryParse(id.toString());
+          final int? parsedId = id is int ? id : int.tryParse(id.toString());
           if (parsedId != null) {
             Navigator.push(
               context,
@@ -576,13 +569,14 @@ class _TourCard extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               Positioned.fill(
-                child: image != null
-                    ? Image.network(
-                        image,
+                child: image != null && image.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: image,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          color: theme.dividerColor,
-                        ),
+                        placeholder: (_, __) =>
+                            Container(color: theme.dividerColor),
+                        errorWidget: (_, __, ___) =>
+                            Container(color: theme.dividerColor),
                       )
                     : Container(color: theme.dividerColor),
               ),
@@ -693,8 +687,7 @@ class _TourCard extends StatelessWidget {
   String _formatPrice(dynamic raw) {
     if (raw == null) return 'Lien he';
     try {
-      final num price =
-          raw is num ? raw : double.tryParse(raw.toString()) ?? 0;
+      final num price = raw is num ? raw : double.tryParse(raw.toString()) ?? 0;
       if (price == 0) return 'Lien he';
       final formatter =
           NumberFormat.currency(locale: 'vi_VN', symbol: 'đ', decimalDigits: 0);
@@ -807,8 +800,7 @@ class _FlightOfferCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                Icon(Icons.flight_takeoff,
-                    color: theme.primaryColor, size: 20),
+                Icon(Icons.flight_takeoff, color: theme.primaryColor, size: 20),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
@@ -1005,8 +997,7 @@ class _SectionLoadingSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color color =
-        Theme.of(context).dividerColor.withValues(alpha: 0.18);
+    final Color color = Theme.of(context).dividerColor.withValues(alpha: 0.18);
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: Dimensions.paddingSizeDefault,
@@ -1033,13 +1024,14 @@ class _SectionError extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: Dimensions.paddingSizeDefault,
-        vertical: compact ? Dimensions.paddingSizeSmall : Dimensions.paddingSizeDefault,
+        vertical: compact
+            ? Dimensions.paddingSizeSmall
+            : Dimensions.paddingSizeDefault,
       ),
       child: Container(
         padding: const EdgeInsets.all(Dimensions.paddingSizeDefault),
         decoration: BoxDecoration(
-          color:
-              Theme.of(context).colorScheme.error.withValues(alpha: 0.08),
+          color: Theme.of(context).colorScheme.error.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(

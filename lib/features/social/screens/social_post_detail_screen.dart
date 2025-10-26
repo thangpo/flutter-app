@@ -1,3 +1,5 @@
+﻿import 'package:flutter_sixvalley_ecommerce/features/product_details/controllers/product_details_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
@@ -12,13 +14,14 @@ import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_c
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter_sixvalley_ecommerce/features/product_details/screens/product_details_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/price_converter.dart';
 
 enum CommentSortOrder { newest, oldest }
 
 class SocialPostDetailScreen extends StatefulWidget {
   final SocialPost post;
   const SocialPostDetailScreen({super.key, required this.post});
-
   @override
   State<SocialPostDetailScreen> createState() => _SocialPostDetailScreenState();
 }
@@ -26,7 +29,6 @@ class SocialPostDetailScreen extends StatefulWidget {
 class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
   bool _showInput = true;
   late Future<SocialPost?> _postFuture;
-
   final TextEditingController _commentController = TextEditingController();
   final FocusNode _commentFocus = FocusNode();
   bool _sendingComment = false;
@@ -34,14 +36,12 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
   String? _commentImageUrl;
   String? _commentAudioPath;
   SocialComment? _replyingTo;
-
   final List<SocialComment> _comments = [];
   bool _loadingComments = false;
   bool _hasMore = true;
   final int _pageSize = 10;
   final Set<String> _commentReactionLoading = <String>{};
   CommentSortOrder _sortOrder = CommentSortOrder.newest;
-
   @override
   void initState() {
     super.initState();
@@ -155,17 +155,17 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Chọn ảnh từ thư viện'),
+              title: const Text('Chn nh t th vin'),
               onTap: () => Navigator.of(sheetCtx).pop('photo'),
             ),
             ListTile(
               leading: const Icon(Icons.gif_box_outlined),
-              title: const Text('Chọn GIF từ tệp'),
+              title: const Text('Chn GIF t tp'),
               onTap: () => Navigator.of(sheetCtx).pop('gif'),
             ),
             ListTile(
               leading: const Icon(Icons.link_outlined),
-              title: const Text('Dán GIF từ đường dẫn'),
+              title: const Text('Dn GIF t ng dn'),
               onTap: () => Navigator.of(sheetCtx).pop('url'),
             ),
           ],
@@ -173,7 +173,6 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
       ),
     );
     if (!mounted || choice == null) return;
-
     if (choice == 'photo') {
       final img = await ImagePicker()
           .pickImage(source: ImageSource.gallery, imageQuality: 80);
@@ -184,7 +183,6 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
       });
       return;
     }
-
     if (choice == 'gif') {
       final res = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -199,7 +197,6 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
       });
       return;
     }
-
     if (choice == 'url') {
       final url = await _askGifUrl();
       if (!mounted || url == null || url.isEmpty) return;
@@ -215,7 +212,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
     final result = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Dán GIF URL'),
+        title: const Text('Dn GIF URL'),
         content: TextField(
           controller: controller,
           decoration: const InputDecoration(hintText: 'https://...gif'),
@@ -225,11 +222,11 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Hủy'),
+            child: const Text('Hy'),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-            child: const Text('Chọn'),
+            child: const Text('Chn'),
           ),
         ],
       ),
@@ -243,9 +240,8 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
     final p = widget.post;
     final cs = Theme.of(context).colorScheme;
     final onSurface = cs.onSurface;
-
     return Scaffold(
-      appBar: AppBar(title: const Text('Bài viết')),
+      appBar: AppBar(title: Text(getTranslated('post_detail', context) ?? 'Post')),
       body: Column(
         children: [
           Expanded(
@@ -305,7 +301,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                             CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            post.userName ?? 'Người dùng',
+                                            post.userName ?? 'Ngi dng',
                                             style: Theme.of(context)
                                                 .textTheme
                                                 .titleMedium,
@@ -337,6 +333,9 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                       images: post.productImages ?? const [],
                                       price: post.productPrice,
                                       currency: post.productCurrency,
+                                      description: post.productDescription,
+                                      productId: post.ecommerceProductId,
+                                      slug: post.productSlug,
                                     ),
                                   ),
                                 const SizedBox(height: 12),
@@ -415,7 +414,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                       ),
                                       _PostAction(
                                         icon: Icons.mode_comment_outlined,
-                                        label: 'Bình luận',
+                                        label: getTranslated('comment', context) ?? 'Comment',
                                         onTap: () {
                                           setState(() => _showInput = true);
                                           WidgetsBinding.instance
@@ -427,9 +426,9 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                           });
                                         },
                                       ),
-                                      const _PostAction(
+                                      _PostAction(
                                         icon: Icons.share_outlined,
-                                        label: 'Chia sẻ',
+                                        label: getTranslated('share', context) ?? 'Share'
                                       ),
                                     ],
                                   ),
@@ -492,7 +491,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                             }
                             if (_comments.isEmpty) {
                               return Text(
-                                'Chưa có bình luận',
+                                'Cha c bnh lun',
                                 style: Theme.of(context)
                                     .textTheme
                                     .bodyMedium
@@ -538,8 +537,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                 children: [
                                                   Expanded(
                                                     child: Text(
-                                                      c.userName ??
-                                                          'Người dùng',
+                                                      c.userName ?? 'Ngi dng',
                                                       style: Theme.of(context)
                                                           .textTheme
                                                           .bodyMedium
@@ -740,7 +738,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                   Center(
                                     child: TextButton(
                                       onPressed: _loadMoreComments,
-                                      child: const Text('Tải thêm bình luận'),
+                                      child: const Text('Ti thm bnh lun'),
                                     ),
                                   )
                                 ],
@@ -756,8 +754,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
               ),
             ),
           ),
-
-          // ==== Ô nhập bình luận (đã đóng đủ ngoặc) ====
+// ====  nhp bnh lun ( ng  ngoc) ====
           _showInput
               ? SafeArea(
                   top: false,
@@ -790,7 +787,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                               children: [
                                 Expanded(
                                   child: Text(
-                                    'Đang trả lời "${_replyingTo!.userName ?? ''}"',
+                                    'ang tr li "${_replyingTo!.userName ?? ''}"',
                                     style: Theme.of(context)
                                         .textTheme
                                         .bodySmall
@@ -806,7 +803,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                 TextButton(
                                   onPressed: () =>
                                       setState(() => _replyingTo = null),
-                                  child: const Text('Hủy'),
+                                  child: const Text('Hy'),
                                 ),
                               ],
                             ),
@@ -818,7 +815,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                 controller: _commentController,
                                 focusNode: _commentFocus,
                                 decoration: const InputDecoration(
-                                  hintText: 'Nhập bình luận...',
+                                  hintText: 'Nhp bnh lun...',
                                   border: OutlineInputBorder(),
                                   isDense: true,
                                 ),
@@ -828,12 +825,12 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                             ),
                             const SizedBox(width: 8),
                             IconButton(
-                              tooltip: 'Đính ảnh',
+                              tooltip: 'nh nh',
                               onPressed: _handleImageAttachment,
                               icon: const Icon(Icons.image_outlined),
                             ),
                             IconButton(
-                              tooltip: 'Đính audio',
+                              tooltip: 'nh audio',
                               onPressed: () async {
                                 final res = await FilePicker.platform
                                     .pickFiles(type: FileType.audio);
@@ -845,7 +842,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                               icon: const Icon(Icons.audiotrack_outlined),
                             ),
                             IconButton(
-                              tooltip: 'Gửi',
+                              tooltip: 'Gi',
                               onPressed: _sendingComment
                                   ? null
                                   : () async {
@@ -900,7 +897,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                               icon: const Icon(Icons.send),
                             ),
                             IconButton(
-                              tooltip: 'Ẩn ô nhập',
+                              tooltip: 'n  nhp',
                               onPressed: () =>
                                   setState(() => _showInput = false),
                               icon: const Icon(Icons.close),
@@ -967,7 +964,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                           FocusScope.of(context).requestFocus(_commentFocus);
                         },
                         icon: const Icon(Icons.mode_comment_outlined),
-                        label: const Text('Viết bình luận'),
+                        label: const Text('Vit bnh lun'),
                       ),
                     ),
                   ),
@@ -990,7 +987,6 @@ class _PostAction extends StatelessWidget {
   final String label;
   final VoidCallback? onTap;
   const _PostAction({required this.icon, required this.label, this.onTap});
-
   @override
   Widget build(BuildContext context) {
     final onSurface = Theme.of(context).colorScheme.onSurface;
@@ -1016,7 +1012,6 @@ class _PostAction extends StatelessWidget {
 class _DetailMedia extends StatelessWidget {
   final SocialPost post;
   const _DetailMedia({required this.post});
-
   @override
   Widget build(BuildContext context) {
     if ((post.videoUrl ?? '').isNotEmpty) {
@@ -1063,12 +1058,26 @@ class _ProductBlock extends StatelessWidget {
   final List<String> images;
   final double? price;
   final String? currency;
-  const _ProductBlock(
-      {this.title, required this.images, this.price, this.currency});
+  final String? description;
+  final int? productId;
+  final String? slug;
+  const _ProductBlock({
+    this.title,
+    required this.images,
+    this.price,
+    this.currency,
+    this.description,
+    this.productId,
+    this.slug,
+  });
 
   @override
   Widget build(BuildContext context) {
     final onSurface = Theme.of(context).colorScheme.onSurface;
+    final String? priceText = _formatPrice(context);
+    final String descriptionText = _plainText(description);
+    final bool canNavigate = productId != null && productId! > 0;
+
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -1105,22 +1114,99 @@ class _ProductBlock extends StatelessWidget {
                     title!,
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
-                const SizedBox(height: 6),
-                if (price != null)
+                if (priceText != null) ...[
+                  const SizedBox(height: 6),
                   Text(
-                    currency == null
-                        ? '${price!.toStringAsFixed(2)}'
-                        : '${price!.toStringAsFixed(2)} $currency',
+                    priceText,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.w700),
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
                   ),
+                ],
+                if (descriptionText.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    descriptionText,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: onSurface.withOpacity(.8),
+                        ),
+                  ),
+                ],
+                if (canNavigate) ...[
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: () =>
+                          _openProduct(context, _sanitizeSlug(slug)),
+                      child: const Text('Xem chi tiet'),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _openProduct(
+    BuildContext context,
+    String? initialSlug,
+  ) async {
+    if (productId == null || productId! <= 0) {
+      showCustomSnackBar(
+        getTranslated('product_not_found', context) ?? 'Product unavailable',
+        context,
+      );
+      return;
+    }
+    String? slugValue = initialSlug;
+    final controller = context.read<ProductDetailsController>();
+    slugValue ??=
+        await controller.resolveSlugByProductId(productId!, silent: true);
+    if (!context.mounted) return;
+    if (slugValue == null) {
+      showCustomSnackBar(
+        getTranslated('product_not_found', context) ?? 'Product unavailable',
+        context,
+      );
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ProductDetails(
+          productId: productId,
+          slug: slugValue,
+        ),
+      ),
+    );
+  }
+
+  String? _formatPrice(BuildContext context) {
+    if (price == null) return null;
+    if (currency != null && currency!.isNotEmpty) {
+      return '${price!.toStringAsFixed(2)} $currency';
+    }
+    return PriceConverter.convertPrice(context, price!);
+  }
+
+  String _plainText(String? source) {
+    if (source == null || source.trim().isEmpty) return '';
+    final withoutTags = source.replaceAll(RegExp(r'<[^>]*>'), ' ');
+    final decoded = withoutTags.replaceAll('&nbsp;', ' ');
+    return decoded.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  static String? _sanitizeSlug(String? value) {
+    if (value == null) return null;
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+    final lower = trimmed.toLowerCase();
+    if (lower == 'null' || lower == 'undefined') return null;
+    return trimmed;
   }
 }
 
@@ -1135,7 +1221,6 @@ class _ImagesCarouselState extends State<_ImagesCarousel> {
   final PageController _pc = PageController();
   int _index = 0;
   double? _aspect;
-
   @override
   void initState() {
     super.initState();
@@ -1231,7 +1316,6 @@ class _RepliesLazy extends StatefulWidget {
       {required this.comment,
       required this.service,
       required this.onRequestReply});
-
   @override
   State<_RepliesLazy> createState() => _RepliesLazyState();
 }
@@ -1241,11 +1325,9 @@ class _RepliesLazyState extends State<_RepliesLazy> {
   bool _loading = false;
   List<SocialComment> _replies = const [];
   final Set<String> _replyReactionLoading = <String>{};
-
-  // Giữ lại biến để không ảnh hưởng logic cũ (đã tắt UI gửi nhanh)
+// Gi li bin  khng nh hng logic c ( tt UI gi nhanh)
   final TextEditingController _replyController = TextEditingController();
   bool _sending = false;
-
   void _sortReplies() {
     int comparison(SocialComment a, SocialComment b) {
       final DateTime? aTime = a.createdAt;
@@ -1339,7 +1421,6 @@ class _RepliesLazyState extends State<_RepliesLazy> {
         .textTheme
         .bodySmall
         ?.copyWith(color: onSurface.withOpacity(.6));
-
     if (!_expanded) {
       final repliesCount = widget.comment.repliesCount ?? 0;
       if (repliesCount == 0) {
@@ -1362,7 +1443,6 @@ class _RepliesLazyState extends State<_RepliesLazy> {
         child: CircularProgressIndicator(),
       );
     }
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1392,7 +1472,7 @@ class _RepliesLazyState extends State<_RepliesLazy> {
                         children: [
                           Expanded(
                             child: Text(
-                              r.userName ?? 'Người dùng',
+                              r.userName ?? 'Ngi dng',
                               style: Theme.of(context)
                                   .textTheme
                                   .bodySmall
@@ -1500,17 +1580,16 @@ class _RepliesLazyState extends State<_RepliesLazy> {
             children: [
               TextButton(
                 onPressed: () => setState(() => _expanded = false),
-                child: Text('Ẩn phản hồi', style: replyActionStyle),
+                child: Text('n phn hi', style: replyActionStyle),
               ),
               TextButton(
                 onPressed: () => widget.onRequestReply(widget.comment),
-                child: Text('Trả lời', style: replyActionStyle),
+                child: Text('Tr li', style: replyActionStyle),
               ),
             ],
           ),
         ),
-
-        // Khối gửi nhanh (để false) — giữ nguyên để dễ bật lại sau
+// Khi gi nhanh ( false)  gi nguyn  d bt li sau
         if (false)
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1519,7 +1598,7 @@ class _RepliesLazyState extends State<_RepliesLazy> {
                 child: TextField(
                   controller: _replyController,
                   decoration: const InputDecoration(
-                    hintText: 'Viết phản hồi...',
+                    hintText: 'Vit phn hi...',
                     border: OutlineInputBorder(),
                     isDense: true,
                   ),
@@ -1529,7 +1608,7 @@ class _RepliesLazyState extends State<_RepliesLazy> {
               ),
               const SizedBox(width: 8),
               IconButton(
-                tooltip: 'Gửi',
+                tooltip: 'Gi',
                 onPressed: _sending
                     ? null
                     : () async {
@@ -1560,7 +1639,6 @@ class _RepliesLazyState extends State<_RepliesLazy> {
 class _CommentImagePreview extends StatelessWidget {
   final String url;
   const _CommentImagePreview({required this.url});
-
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -1644,7 +1722,6 @@ class _VideoPlayerBox extends StatefulWidget {
 class _VideoPlayerBoxState extends State<_VideoPlayerBox> {
   late VideoPlayerController _controller;
   bool _ready = false;
-
   @override
   void initState() {
     super.initState();
@@ -1742,7 +1819,6 @@ class _VideoPlayerBoxState extends State<_VideoPlayerBox> {
 }
 
 typedef _OnReactionSelect = void Function(String);
-
 void _showReactionsOverlay(
   BuildContext context,
   Offset globalPos, {
@@ -1750,15 +1826,12 @@ void _showReactionsOverlay(
 }) {
   final overlay = Overlay.of(context);
   late OverlayEntry entry;
-
   entry = OverlayEntry(builder: (_) {
     final RenderBox overlayBox =
         overlay.context.findRenderObject() as RenderBox;
     final Offset local = overlayBox.globalToLocal(globalPos);
-
     const double popupWidth = 300;
     const double popupHeight = 56;
-
     return Stack(
       children: [
         Positioned.fill(
@@ -1781,14 +1854,12 @@ void _showReactionsOverlay(
       ],
     );
   });
-
   overlay.insert(entry);
 }
 
 class _ReactionBar extends StatelessWidget {
   final ValueChanged<String> onPick;
   const _ReactionBar({required this.onPick});
-
   @override
   Widget build(BuildContext context) {
     const items = ['Like', 'Love', 'HaHa', 'Wow', 'Sad', 'Angry'];
@@ -1876,14 +1947,13 @@ String _formatTimeText(String? raw) {
   final now = DateTime.now();
   Duration diff = now.difference(dt);
   if (diff.isNegative) diff = -diff;
-
-  if (diff.inSeconds < 60) return 'vài giây trước';
-  if (diff.inMinutes < 60) return '${diff.inMinutes} phút trước';
-  if (diff.inHours < 24) return '${diff.inHours} giờ trước';
-  if (diff.inDays < 7) return '${diff.inDays} ngày trước';
-  if (diff.inDays < 30) return '${(diff.inDays / 7).floor()} tuần trước';
-  if (diff.inDays < 365) return '${(diff.inDays / 30).floor()} tháng trước';
-  return '${(diff.inDays / 365).floor()} năm trước';
+  if (diff.inSeconds < 60) return 'vi giy trc';
+  if (diff.inMinutes < 60) return '${diff.inMinutes} pht trc';
+  if (diff.inHours < 24) return '${diff.inHours} gi trc';
+  if (diff.inDays < 7) return '${diff.inDays} ngy trc';
+  if (diff.inDays < 30) return '${(diff.inDays / 7).floor()} tun trc';
+  if (diff.inDays < 365) return '${(diff.inDays / 30).floor()} thng trc';
+  return '${(diff.inDays / 365).floor()} nm trc';
 }
 
 class _AudioPlayerBox extends StatefulWidget {
@@ -1900,7 +1970,6 @@ class _AudioPlayerBoxState extends State<_AudioPlayerBox> {
   bool _playing = false;
   Duration _pos = Duration.zero;
   Duration _dur = const Duration(seconds: 1);
-
   @override
   void initState() {
     super.initState();

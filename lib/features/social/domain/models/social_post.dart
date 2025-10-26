@@ -5,9 +5,9 @@ class SocialPost {
   final String? userAvatar;
   final String? timeText;
   // Media
-  final List<String> imageUrls;      // multi or single image
-  final String? imageUrl;            // convenience: first image
-  final String? fileUrl;             // postFile (pdf/mp3/mp4/others)
+  final List<String> imageUrls; // multi or single image
+  final String? imageUrl; // convenience: first image
+  final String? fileUrl; // postFile (pdf/mp3/mp4/others)
   final String? fileName;
   final String? videoUrl;
   final String? audioUrl;
@@ -19,10 +19,13 @@ class SocialPost {
 
   // Product
   final bool hasProduct;
-  final String? productTitle;// product.name
+  final String? productTitle; // product.name
   final List<String>? productImages;
   final double? productPrice;
   final String? productCurrency;
+  final String? productDescription;
+  final int? ecommerceProductId;
+  final String? productSlug;
 
   // Poll
   final List<Map<String, dynamic>>? pollOptions; // each: {text, percentage_num}
@@ -45,8 +48,11 @@ class SocialPost {
     this.hasProduct = false,
     this.productTitle,
     this.productImages,
-    this.productPrice,        // product.price (số)
+    this.productPrice, // product.price (số)
     this.productCurrency,
+    this.productDescription,
+    this.ecommerceProductId,
+    this.productSlug,
     this.pollOptions,
   });
 
@@ -70,6 +76,9 @@ class SocialPost {
     List<String>? productImages,
     double? productPrice,
     String? productCurrency,
+    String? productDescription,
+    int? ecommerceProductId,
+    String? productSlug,
     List<Map<String, dynamic>>? pollOptions,
   }) {
     return SocialPost(
@@ -92,6 +101,9 @@ class SocialPost {
       productImages: productImages ?? this.productImages,
       productPrice: productPrice ?? this.productPrice,
       productCurrency: productCurrency ?? this.productCurrency,
+      productDescription: productDescription ?? this.productDescription,
+      ecommerceProductId: ecommerceProductId ?? this.ecommerceProductId,
+      productSlug: productSlug ?? this.productSlug,
       pollOptions: pollOptions ?? this.pollOptions,
     );
   }

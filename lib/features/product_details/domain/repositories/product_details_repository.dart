@@ -13,20 +13,31 @@ class ProductDetailsRepository implements ProductDetailsRepositoryInterface {
   @override
   Future<ApiResponseModel> get(String productID) async {
     try {
-      final response = await dioClient!.get('${AppConstants.productDetailsUri}$productID?guest_id=1');
+      final response = await dioClient!
+          .get('${AppConstants.productDetailsUri}$productID?guest_id=1');
       return ApiResponseModel.withSuccess(response);
     } catch (e) {
       return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
     }
   }
 
-
-
+  @override
+  Future<ApiResponseModel> getById(String productID) async {
+    try {
+      final response = await dioClient!.get(
+        '${AppConstants.productDetailsUri}$productID?guest_id=1',
+      );
+      return ApiResponseModel.withSuccess(response);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
 
   @override
   Future<ApiResponseModel> getCount(String productID) async {
     try {
-      final response = await dioClient!.get(AppConstants.counterUri+productID);
+      final response =
+          await dioClient!.get(AppConstants.counterUri + productID);
       return ApiResponseModel.withSuccess(response);
     } catch (e) {
       return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
@@ -36,7 +47,8 @@ class ProductDetailsRepository implements ProductDetailsRepositoryInterface {
   @override
   Future<ApiResponseModel> getSharableLink(String productID) async {
     try {
-      final response = await dioClient!.get(AppConstants.socialLinkUri+productID);
+      final response =
+          await dioClient!.get(AppConstants.socialLinkUri + productID);
       return ApiResponseModel.withSuccess(response);
     } catch (e) {
       return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
@@ -70,12 +82,11 @@ class ProductDetailsRepository implements ProductDetailsRepositoryInterface {
   @override
   Future<HttpClientResponse> previewDownload(String? url) async {
     HttpClient client = HttpClient();
-    final response = await client.getUrl(Uri.parse(url!)).then((HttpClientRequest request) {
-      return request.close();
-    },
+    final response = await client.getUrl(Uri.parse(url!)).then(
+      (HttpClientRequest request) {
+        return request.close();
+      },
     );
     return response;
   }
-
-
 }

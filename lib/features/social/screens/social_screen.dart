@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
@@ -11,11 +11,15 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:video_player/video_player.dart';
 import 'package:intl/intl.dart';
 import 'package:visibility_detector/visibility_detector.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_post_detail_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
+import 'package:flutter_sixvalley_ecommerce/features/product_details/controllers/product_details_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/product_details/screens/product_details_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_post_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_story_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_post_detail_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_story_viewer_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/price_converter.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_sixvalley_ecommerce/features/profile/controllers/profile_contrroller.dart';
 
@@ -34,7 +38,7 @@ class _SocialFeedScreenState extends State<SocialFeedScreen>
   @override
   void initState() {
     super.initState();
-    // Gọi refresh sau khi màn hình mount để chắc chắn lúc này đã có token
+    // Gi refresh sau khi mn hnh mount  chc chn lc ny  c token
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final sc = context.read<SocialController>();
       sc.loadCurrentUser();
@@ -76,11 +80,11 @@ class _SocialFeedScreenState extends State<SocialFeedScreen>
                             2, // +1: What'sOnYourMind, +1: Stories
                         itemBuilder: (ctx, i) {
                           if (i == 0) {
-                            // Block "Bạn đang nghĩ gì?"
+                            // Block "Bn ang ngh g?"
                             return Column(
                               children: [
                                 _WhatsOnYourMind(),
-                                const _SectionSeparator(), // tách với Stories
+                                const _SectionSeparator(), // tch vi Stories
                               ],
                             );
                           }
@@ -92,16 +96,16 @@ class _SocialFeedScreenState extends State<SocialFeedScreen>
                                   children: [
                                     _StoriesSectionFromApi(
                                         stories: sc2.stories),
-                                    // const _SectionSeparator(), // <-- khoảng cách & Divider giống post
+                                    // const _SectionSeparator(), // <-- khong cch & Divider ging post
                                   ],
                                 );
                               },
                             );
                           }
 
-                          // Các post: bắt đầu từ i=2
+                          // Cc post: bt u t i=2
                           final SocialPost p = sc.posts[i - 2];
-                          return _PostCardFromApi(post: p);
+                          return SocialPostCard(post: p);
                         },
                       ),
                     ),
@@ -122,10 +126,10 @@ class _FacebookHeader extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final onSurface = cs.onSurface;
     final theme = Theme.of(context);
-// Ưu tiên appBarTheme.backgroundColor; fallback sang highlightColor của app (Home cũng đang dùng highlightColor)
+// u tin appBarTheme.backgroundColor; fallback sang highlightColor ca app (Home cng ang dng highlightColor)
     final Color appBarColor =
         theme.appBarTheme.backgroundColor ?? theme.highlightColor;
-// Chọn màu chữ/icon tương phản trên nền appBarColor
+// Chn mu ch/icon tng phn trn nn appBarColor
     final bool isDark =
         ThemeData.estimateBrightnessForColor(appBarColor) == Brightness.dark;
     final Color onAppBar = isDark ? Colors.white : Colors.black87;
@@ -137,7 +141,7 @@ class _FacebookHeader extends StatelessWidget {
         right: 16,
         bottom: 8,
       ),
-      // surface cho thanh trên
+      // surface cho thanh trn
       color: appBarColor,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -246,7 +250,7 @@ class _WhatsOnYourMind extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Bạn đang nghĩ gì?',
+                  'Bn ang ngh g?',
                   style: TextStyle(
                     color: cs.onSurface.withOpacity(.7),
                     fontSize: 16,
@@ -292,8 +296,8 @@ class _StoriesSectionFromApi extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final SocialUser? currentUser =
         context.select<SocialController, SocialUser?>((c) => c.currentUser);
-    final SocialStory? myStory =
-        context.select<SocialController, SocialStory?>((c) => c.currentUserStory);
+    final SocialStory? myStory = context
+        .select<SocialController, SocialStory?>((c) => c.currentUserStory);
 
     String storyKey(SocialStory story) {
       final userId = story.userId;
@@ -335,8 +339,7 @@ class _StoriesSectionFromApi extends StatelessWidget {
     final List<SocialStory> orderedStories = <SocialStory>[];
     if (myStory != null) {
       final key = storyKey(myStory);
-      dedupedStories
-          .removeWhere((story) => storyKey(story) == key);
+      dedupedStories.removeWhere((story) => storyKey(story) == key);
       orderedStories.add(myStory);
     } else if (currentUser != null) {
       final idx = dedupedStories.indexWhere(isCurrentUserStory);
@@ -523,7 +526,7 @@ class _CreateStoryCard extends StatelessWidget {
                           : null,
                     ),
                     const SizedBox(height: 8),
-                    Text('Tạo tin',
+                    Text('To tin',
                         style: Theme.of(context).textTheme.bodySmall),
                   ],
                 ),
@@ -543,7 +546,7 @@ class _CreateStoryCard extends StatelessWidget {
                   );
                 },
                 icon: const Icon(Icons.add, size: 16),
-                label: const Text('Tạo'),
+                label: const Text('To'),
                 style: ElevatedButton.styleFrom(
                     minimumSize: const Size.fromHeight(32)),
               ),
@@ -657,7 +660,7 @@ bool _isVideo(String? url) {
   return u.endsWith('.mp4') || u.endsWith('.mov') || u.endsWith('.m4v');
 }
 
-// ảnh full-width, tự giữ tỷ lệ theo kích thước thật
+// nh full-width, t gi t l theo kch thc tht
 class _AutoRatioNetworkImage extends StatefulWidget {
   final String url;
   const _AutoRatioNetworkImage(this.url, {super.key});
@@ -724,7 +727,7 @@ class _MediaCarouselState extends State<_MediaCarousel> {
     return Column(
       children: [
         AspectRatio(
-          aspectRatio: 1, // vuông như Instagram, hoặc 4/5 nếu thích
+          aspectRatio: 1, // vung nh Instagram, hoc 4/5 nu thch
           child: PageView(
             controller: _pc,
             onPageChanged: (i) => setState(() => _index = i),
@@ -840,7 +843,7 @@ class _ImagesWithAutoAudioState extends State<_ImagesWithAutoAudio> {
 
   void _onVisibilityChanged(VisibilityInfo info) {
     final nowVisible = info.visibleFraction > 0.6;
-    if (nowVisible == _visible) return; // không làm gì nếu state không đổi
+    if (nowVisible == _visible) return; // khng lm g nu state khng i
     _visible = nowVisible;
 
     final state = _player.state;
@@ -858,7 +861,7 @@ class _ImagesWithAutoAudioState extends State<_ImagesWithAutoAudio> {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
-    final height = width; // vuông giống FB
+    final height = width; // vung ging FB
     return VisibilityDetector(
       key: ValueKey(widget.audioUrl),
       onVisibilityChanged: _onVisibilityChanged,
@@ -975,9 +978,9 @@ class _VideoPlayerTileState extends State<_VideoPlayerTile> {
   }
 }
 
-class _PostCardFromApi extends StatelessWidget {
+class SocialPostCard extends StatelessWidget {
   final SocialPost post;
-  const _PostCardFromApi({required this.post});
+  const SocialPostCard({required this.post});
 
   @override
   Widget build(BuildContext context) {
@@ -999,7 +1002,7 @@ class _PostCardFromApi extends StatelessWidget {
       }
     }
 
-    // VIDEO: ưu tiên render trước ảnh
+    // VIDEO: u tin render trc nh
     // if (_isVideo(fileUrl)) {
     //   return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
     //     ClipRRect(
@@ -1018,67 +1021,19 @@ class _PostCardFromApi extends StatelessWidget {
     //   ]);
     // }
 
-    Widget _media() {
+    Widget? _media() {
       // 0) VIDEO
       if (_isVideo(fileUrl)) {
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: _VideoPlayerTile(url: fileUrl!),
-        );
+        return _VideoPlayerTile(url: fileUrl!);
       }
 
       // 1) PRODUCT
       if (post.hasProduct == true &&
           (post.productImages?.isNotEmpty ?? false)) {
-        final imgs = post.productImages!;
-        return Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: cs.surfaceVariant.withOpacity(.35),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (post.productTitle != null && post.productTitle!.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(post.productTitle!,
-                      style: TextStyle(
-                        color: onSurface,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 16,
-                      )),
-                ),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: _AutoRatioNetworkImage(imgs.first),
-              ),
-              const SizedBox(height: 6),
-              if (post.productPrice != null) ...[
-                Text(
-                  (() {
-                    final p = post.productPrice;
-                    if (p == null) return '';
-                    final asDouble = (p is num)
-                        ? p.toDouble()
-                        : double.tryParse(p.toString()) ?? 0;
-                    return PriceConverter.convertPrice(context, asDouble);
-                  })(),
-                  style: TextStyle(
-                    color: onSurface.withOpacity(.9),
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        );
+        return _ProductPostTile(post: post);
       }
 
-      // 1.5) ẢNH + AUDIO => Carousel
+      // 1.5) NH + AUDIO => Carousel
       // if (images.isNotEmpty && _isAudio(fileUrl)) {
       //   final pages = <Widget>[
       //     for (final u in images)
@@ -1094,83 +1049,76 @@ class _PostCardFromApi extends StatelessWidget {
         return _ImagesWithAutoAudio(images: images, audioUrl: fileUrl!);
       }
 
-      // 2) MULTI IMAGE GRID (2,3,4 ảnh…)
+      // 2) MULTI IMAGE GRID (2,3,4 nh)
       if (hasMulti) {
-        // tránh lỗi layout: luôn có width, height xác định
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: Column(
-            children: [
+        return Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: AspectRatio(
+                    aspectRatio: 1,
+                    child: Image.network(images[0], fit: BoxFit.cover),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: AspectRatio(
+                    aspectRatio: 1,
+                    child: Image.network(images[1], fit: BoxFit.cover),
+                  ),
+                ),
+              ],
+            ),
+            if (images.length > 2) const SizedBox(height: 4),
+            if (images.length > 2)
               Row(
                 children: [
                   Expanded(
                     child: AspectRatio(
                       aspectRatio: 1,
-                      child: Image.network(images[0], fit: BoxFit.cover),
+                      child: Image.network(images[2], fit: BoxFit.cover),
                     ),
                   ),
                   const SizedBox(width: 4),
                   Expanded(
                     child: AspectRatio(
                       aspectRatio: 1,
-                      child: Image.network(images[1], fit: BoxFit.cover),
+                      child: images.length > 3
+                          ? Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                Image.network(images[3], fit: BoxFit.cover),
+                                Container(
+                                  alignment: Alignment.center,
+                                  color: Colors.black45,
+                                  child: Text(
+                                    '+${images.length - 4}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            )
+                          : const SizedBox.shrink(),
                     ),
                   ),
                 ],
               ),
-              if (images.length > 2) const SizedBox(height: 4),
-              if (images.length > 2)
-                Row(
-                  children: [
-                    Expanded(
-                      child: AspectRatio(
-                        aspectRatio: 1,
-                        child: Image.network(images[2], fit: BoxFit.cover),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: AspectRatio(
-                        aspectRatio: 1,
-                        child: (images.length > 3)
-                            ? Stack(
-                                fit: StackFit.expand,
-                                children: [
-                                  Image.network(images[3], fit: BoxFit.cover),
-                                  Container(
-                                    alignment: Alignment.center,
-                                    color: Colors.black45,
-                                    child: Text(
-                                      '+${images.length - 4}',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              )
-                            : const SizedBox.shrink(),
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
+          ],
         );
       }
 
-      // 3) ẢNH ĐƠN
+      // 3) NH N
       if (hasSingle) {
         final String src = images.isNotEmpty ? images.first : (post.imageUrl!);
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: _AutoRatioNetworkImage(src),
-        );
+        return _AutoRatioNetworkImage(src);
       }
 
-      // 4) FILE (Âm thanh / PDF / Khác)
+      // 4) FILE (m thanh / PDF / Khc)
       if (fileUrl != null && fileUrl.isNotEmpty) {
         if (_isAudio(fileUrl) && images.isNotEmpty) {
           return _ImagesWithAutoAudio(images: images, audioUrl: fileUrl);
@@ -1187,12 +1135,12 @@ class _PostCardFromApi extends StatelessWidget {
                 const Icon(Icons.audiotrack),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(post.fileName ?? 'Âm thanh',
+                  child: Text(post.fileName ?? 'm thanh',
                       style: TextStyle(color: onSurface)),
                 ),
                 IconButton(
                   icon: const Icon(Icons.play_arrow),
-                  onPressed: () {}, // TODO: hook player nếu cần
+                  onPressed: () {}, // TODO: hook player nu cn
                 ),
               ],
             ),
@@ -1209,7 +1157,7 @@ class _PostCardFromApi extends StatelessWidget {
                 const Icon(Icons.picture_as_pdf),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(post.fileName ?? 'Tài liệu PDF',
+                  child: Text(post.fileName ?? 'Ti liu PDF',
                       style: TextStyle(color: onSurface)),
                 ),
                 IconButton(
@@ -1226,7 +1174,7 @@ class _PostCardFromApi extends StatelessWidget {
             ),
           );
         } else {
-          // fallback file khác
+          // fallback file khc
           return Container(
             decoration: BoxDecoration(
               color: cs.surfaceVariant.withOpacity(.35),
@@ -1238,7 +1186,7 @@ class _PostCardFromApi extends StatelessWidget {
                 const Icon(Icons.insert_drive_file),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(post.fileName ?? 'Tệp đính kèm',
+                  child: Text(post.fileName ?? 'Tp nh km',
                       style: TextStyle(color: onSurface)),
                 ),
                 IconButton(
@@ -1251,13 +1199,16 @@ class _PostCardFromApi extends StatelessWidget {
         }
       }
 
-      // 5) Chỉ text
-      return const SizedBox.shrink();
+      // 5) Ch text
+      return null;
     }
+
+    final Color baseColor = Theme.of(context).scaffoldBackgroundColor;
+    final Widget? mediaContent = _media();
 
     return Container(
       margin: const EdgeInsets.only(top: 8),
-      color: cs.surface,
+      color: baseColor,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1288,12 +1239,12 @@ class _PostCardFromApi extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // userName + postType cùng 1 dòng
+                      // userName + postType cng 1 dng
                       Row(
                         children: [
                           Flexible(
                             child: Text(
-                              post.userName ?? '—',
+                              post.userName ?? '',
                               style: TextStyle(
                                   fontWeight: FontWeight.w600,
                                   color: onSurface),
@@ -1315,9 +1266,9 @@ class _PostCardFromApi extends StatelessWidget {
                             Flexible(
                               child: Text(
                                 post.postType == 'profile_picture'
-                                    ? 'đã cập nhật ảnh đại diện'
+                                    ? ' cp nht nh i din'
                                     : post.postType == 'profile_cover_picture'
-                                        ? 'đã cập nhật ảnh bìa'
+                                        ? ' cp nht nh ba'
                                         : post.postType!,
                                 style: TextStyle(
                                   color: onSurface.withOpacity(.7),
@@ -1396,21 +1347,18 @@ class _PostCardFromApi extends StatelessWidget {
               ),
             ),
 
-          // Media block (đã chống lỗi layout)
-          const SizedBox(height: 12),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: _media(),
-          ),
-
-          const SizedBox(height: 8),
+          if (mediaContent != null) ...[
+            const SizedBox(height: 12),
+            mediaContent,
+            const SizedBox(height: 8),
+          ],
           // Actions
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                // Nút Reaction: tap = Like/UnLike; long-press = chọn reaction
+                // Nt Reaction: tap = Like/UnLike; long-press = chn reaction
                 Expanded(
                   child: Builder(
                     builder: (itemCtx) => InkWell(
@@ -1419,7 +1367,7 @@ class _PostCardFromApi extends StatelessWidget {
                         itemCtx.read<SocialController>().reactOnPost(post, now);
                       },
                       onLongPress: () {
-                        // Tính toạ độ trung tâm nút Like để hiện popup NGAY TRÊN nút
+                        // Tnh to  trung tm nt Like  hin popup NGAY TRN nt
                         final overlayBox = Overlay.of(itemCtx)
                             .context
                             .findRenderObject() as RenderBox;
@@ -1458,7 +1406,7 @@ class _PostCardFromApi extends StatelessWidget {
                 ),
                 _PostAction(
                   icon: Icons.mode_comment_outlined,
-                  label: 'Bình luận',
+                  label: getTranslated('comment', context) ?? 'Comment',
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -1467,7 +1415,7 @@ class _PostCardFromApi extends StatelessWidget {
                     );
                   },
                 ),
-                const _PostAction(icon: Icons.share_outlined, label: 'Chia sẻ'),
+                _PostAction(icon: Icons.share_outlined, label: getTranslated('share', context) ?? 'Share'),
               ],
             ),
           ),
@@ -1483,10 +1431,9 @@ class _ImageGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Ép kích thước tổng thể để con bên trong có ràng buộc (không bị MISSING size)
-    final double aspect = urls.length == 1
-        ? (16 / 9)
-        : (16 / 9); // có thể đổi 1.0 nếu muốn ô vuông
+    // p kch thc tng th  con bn trong c rng buc (khng b MISSING size)
+    final double aspect =
+        urls.length == 1 ? (16 / 9) : (16 / 9); // c th i 1.0 nu mun  vung
     return AspectRatio(
       aspectRatio: aspect,
       child: ClipRRect(
@@ -1545,8 +1492,7 @@ class _ImageGrid extends StatelessWidget {
                 const SizedBox(width: 4),
                 Expanded(
                   child: Stack(
-                    fit: StackFit
-                        .expand, // BÂY GIỜ đã có ràng buộc từ Expanded cha
+                    fit: StackFit.expand, // BY GI  c rng buc t Expanded cha
                     children: [
                       _square(urls[3]),
                       if (remain > 0)
@@ -1573,7 +1519,7 @@ class _ImageGrid extends StatelessWidget {
     }
   }
 
-  // Ảnh vuông dùng bên trong grid
+  // nh vung dng bn trong grid
   Widget _square(String u) => AspectRatio(
         aspectRatio: 1,
         child: _tile(u),
@@ -1658,13 +1604,13 @@ void _showReactionsOverlay(
         overlay.context.findRenderObject() as RenderBox;
     final Offset local = overlayBox.globalToLocal(globalPos);
 
-    // Kích thước khung popup (ước lượng), để canh nằm ngay trên nút
+    // Kch thc khung popup (c lng),  canh nm ngay trn nt
     const double popupWidth = 300;
     const double popupHeight = 56;
 
     return Stack(
       children: [
-        // Tap ra ngoài để tắt
+        // Tap ra ngoi  tt
         Positioned.fill(
           child: GestureDetector(onTap: () => entry.remove()),
         ),
@@ -1722,6 +1668,173 @@ class _ReactionBar extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ProductPostTile extends StatefulWidget {
+  final SocialPost post;
+  const _ProductPostTile({required this.post});
+
+  @override
+  State<_ProductPostTile> createState() => _ProductPostTileState();
+}
+
+class _ProductPostTileState extends State<_ProductPostTile> {
+  static const int _collapsedLines = 3;
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final onSurface = cs.onSurface;
+    final List<String> images = widget.post.productImages ?? const <String>[];
+    final String title = widget.post.productTitle ?? '';
+    final double? price = widget.post.productPrice;
+    final String? priceText =
+        price != null ? PriceConverter.convertPrice(context, price) : null;
+    final String description = _plainText(widget.post.productDescription);
+    final bool hasDescription = description.isNotEmpty;
+    final bool showToggle = hasDescription && description.length > 160;
+    final int? productId = widget.post.ecommerceProductId;
+    final bool canNavigate = productId != null && productId > 0;
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: cs.surfaceVariant.withOpacity(.35),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (title.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                title,
+                style: TextStyle(
+                  color: onSurface,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+          if (images.isNotEmpty) _AutoRatioNetworkImage(images.first),
+          const SizedBox(height: 6),
+          if (priceText != null)
+            Text(
+              priceText,
+              style: TextStyle(
+                color: onSurface.withOpacity(.9),
+                fontWeight: FontWeight.w700,
+                fontSize: 15,
+              ),
+            ),
+          if (hasDescription) ...[
+            const SizedBox(height: 8),
+            Text(
+              description,
+              maxLines: _expanded ? null : _collapsedLines,
+              overflow:
+                  _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+              style: TextStyle(
+                color: onSurface.withOpacity(.8),
+                fontSize: 13,
+              ),
+            ),
+            if (showToggle)
+              TextButton(
+                onPressed: () => setState(() => _expanded = !_expanded),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Text(_expanded ? 'Thu gon' : 'Xem them'),
+              ),
+          ],
+          if (canNavigate) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () => _navigateToEcommerceProduct(
+                  context,
+                  productId: productId!,
+                  initialSlug: widget.post.productSlug,
+                ),
+                child: const Text('Xem chi tiet'),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  static String _plainText(String? source) {
+    if (source == null || source.trim().isEmpty) return '';
+    final withoutTags = source.replaceAll(RegExp(r'<[^>]*>'), ' ');
+    final decoded = withoutTags.replaceAll('&nbsp;', ' ');
+    return decoded.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+}
+
+Future<void> _navigateToEcommerceProduct(
+  BuildContext context, {
+  required int productId,
+  String? initialSlug,
+}) async {
+  if (productId <= 0) {
+    showCustomSnackBar(
+      getTranslated('product_not_found', context) ?? 'Product unavailable',
+      context,
+    );
+    return;
+  }
+
+  final String? slug = await _ensureSlugForProduct(
+    context,
+    productId: productId,
+    initialSlug: initialSlug,
+  );
+  if (!context.mounted) return;
+
+  if (slug == null) {
+    showCustomSnackBar(
+      getTranslated('product_not_found', context) ?? 'Product unavailable',
+      context,
+    );
+    return;
+  }
+
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => ProductDetails(
+        productId: productId,
+        slug: slug,
+      ),
+    ),
+  );
+}
+
+Future<String?> _ensureSlugForProduct(
+  BuildContext context, {
+  required int productId,
+  String? initialSlug,
+}) async {
+  final String? sanitized = _sanitizeSlugValue(initialSlug);
+  if (sanitized != null) return sanitized;
+  final controller = context.read<ProductDetailsController>();
+  return controller.resolveSlugByProductId(productId, silent: true);
+}
+
+String? _sanitizeSlugValue(String? value) {
+  if (value == null) return null;
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return null;
+  final lower = trimmed.toLowerCase();
+  if (lower == 'null' || lower == 'undefined') return null;
+  return trimmed;
 }
 
 class _PostAction extends StatelessWidget {
@@ -1793,6 +1906,3 @@ class _Story {
 class EdgeBox {
   static const zero = EdgeInsets.zero;
 }
-
-
-
