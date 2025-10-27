@@ -16,6 +16,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_sixvalley_ecommerce/features/product_details/screens/product_details_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/price_converter.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/share_post_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/widgets/shared_post_preview.dart';
 
 enum CommentSortOrder { newest, oldest }
 
@@ -114,6 +116,28 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
     } finally {
       _commentReactionLoading.remove(comment.id);
     }
+  }
+
+  Future<void> _handleSharePost(SocialPost post) async {
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SharePostScreen(post: post),
+        fullscreenDialog: true,
+      ),
+    );
+  }
+
+  String _sharedSubtitleDetail(BuildContext context, SocialPost post) {
+    final SocialPost? shared = post.sharedPost;
+    if (shared == null) return '';
+    final String owner =
+        post.userName ?? (getTranslated('user', context) ?? 'User');
+    final String original =
+        shared.userName ?? (getTranslated('user', context) ?? 'User');
+    final String verb =
+        getTranslated('shared_post_from', context) ?? 'shared a post from';
+    return '$owner $verb $original';
   }
 
   void _sortComments() {
@@ -281,6 +305,8 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                 idx != -1 ? ctrl.posts[idx] : post;
                             final myReaction = effective.myReaction;
                             final reactionCount = effective.reactionCount;
+                            final bool isSharing =
+                                ctrl.isSharing(effective.id);
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -325,6 +351,22 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                         .withOpacity(.6),
                                                   ),
                                             ),
+                                          if (post.sharedPost != null)
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.only(top: 2),
+                                              child: Text(
+                                                _sharedSubtitleDetail(
+                                                    context, post),
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodySmall
+                                                    ?.copyWith(
+                                                      color: onSurface
+                                                          .withOpacity(.7),
+                                                    ),
+                                              ),
+                                            ),
                                         ],
                                       ),
                                     ),
@@ -333,7 +375,15 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                 const SizedBox(height: 12),
                                 if ((post.text ?? '').isNotEmpty)
                                   const SizedBox(height: 8),
-                                _DetailMedia(post: post),
+                                if (post.sharedPost != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 12),
+                                    child: SharedPostPreviewCard(
+                                      post: post.sharedPost!,
+                                    ),
+                                  )
+                                else
+                                  _DetailMedia(post: post),
                                 if (post.hasProduct)
                                   Padding(
                                     padding: const EdgeInsets.only(top: 12),
@@ -442,6 +492,10 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                         label:
                                             getTranslated('share', context) ??
                                                 'Share',
+                                        loading: isSharing,
+                                        onTap: isSharing
+                                            ? null
+                                            : () => _handleSharePost(effective),
                                       ),
                                     ],
                                   ),
@@ -1023,21 +1077,45 @@ class _PostAction extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
-  const _PostAction({required this.icon, required this.label, this.onTap});
+  final bool loading;
+  const _PostAction({
+    required this.icon,
+    required this.label,
+    this.onTap,
+    this.loading = false,
+  });
   @override
   Widget build(BuildContext context) {
     final onSurface = Theme.of(context).colorScheme.onSurface;
+    final bool enabled = onTap != null && !loading;
+    final Color iconColor = onSurface.withOpacity(enabled ? .8 : .4);
     return Expanded(
       child: InkWell(
-        onTap: onTap,
+        onTap: enabled ? onTap : null,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 20, color: onSurface.withOpacity(.8)),
+              if (loading)
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation(iconColor),
+                  ),
+                )
+              else
+                Icon(icon, size: 20, color: iconColor),
               const SizedBox(width: 6),
-              Text(label, style: Theme.of(context).textTheme.bodyMedium),
+              Text(
+                label,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: iconColor),
+              ),
             ],
           ),
         ),

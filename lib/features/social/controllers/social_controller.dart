@@ -7,6 +7,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_service_interface.dart';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
@@ -66,6 +67,8 @@ class SocialController with ChangeNotifier {
   static const int _storyViewersPageSize = 50;
   final Map<String, StoryViewersState> _storyViewers =
       <String, StoryViewersState>{};
+  final Set<String> _sharingPosts = <String>{};
+  bool isSharing(String id) => _sharingPosts.contains(id);
 
   String _storyKey(SocialStory story) {
     final userKey = story.userId;
@@ -641,6 +644,35 @@ class SocialController with ChangeNotifier {
       _updatePost(post.id, post);
       final msg = e.toString();
       showCustomSnackBar(msg, Get.context!, isError: true);
+    }
+  }
+
+  Future<bool> sharePost(SocialPost post, {String? text}) async {
+    if (_sharingPosts.contains(post.id)) return false;
+    _sharingPosts.add(post.id);
+    notifyListeners();
+
+    final SocialPost optimistic =
+        post.copyWith(shareCount: post.shareCount + 1);
+    _updatePost(post.id, optimistic);
+
+    try {
+      final SocialPost shared =
+          await service.sharePost(postId: post.id, text: text);
+      _posts.insert(0, shared);
+      notifyListeners();
+      final ctx = Get.context!;
+      final successMsg =
+          getTranslated('share_post_success', ctx) ?? 'Post shared successfully';
+      showCustomSnackBar(successMsg, ctx);
+      return true;
+    } catch (e) {
+      _updatePost(post.id, post);
+      showCustomSnackBar(e.toString(), Get.context!, isError: true);
+      return false;
+    } finally {
+      _sharingPosts.remove(post.id);
+      notifyListeners();
     }
   }
 
