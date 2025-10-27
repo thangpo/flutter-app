@@ -517,4 +517,26 @@ class SocialService implements SocialServiceInterface {
     ApiChecker.checkApi(resp);
     throw Exception('Create post failed');
   }
+
+  @override
+  Future<SocialPost> sharePost({required String postId, String? text}) async {
+    final resp = await socialRepository.sharePostOnTimeline(
+      postId: postId,
+      text: text,
+    );
+    if (resp.isSuccess && resp.response != null) {
+      final data = resp.response!.data;
+      final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
+      if (status == 200) {
+        final SocialPost? post = socialRepository.parsePostData(resp.response!);
+        if (post != null) return post;
+        throw Exception('Share failed: Missing post data.');
+      }
+      final msg =
+          (data?['errors']?['error_text'] ?? 'Share post failed').toString();
+      throw Exception(msg);
+    }
+    ApiChecker.checkApi(resp);
+    throw Exception('Share post failed');
+  }
 }

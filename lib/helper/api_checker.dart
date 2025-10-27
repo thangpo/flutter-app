@@ -12,7 +12,7 @@ import 'package:flutter_sixvalley_ecommerce/main.dart';
 import 'package:provider/provider.dart';
 
 class ApiChecker {
-  static const String _missingSocialTokenText = 'Missing Social access_token';
+  static const String _missingSocialTokenText = 'Please log in to your social network account';
   static bool _isRedirectingToLogin = false;
 
   static void checkApi(ApiResponseModel apiResponse,

@@ -59,6 +59,12 @@ class SocialRepository {
     return '$base/$trimmed';
   }
 
+  String? _normalizeMediaUrl(dynamic raw) {
+    final normalized = _normalizeString(raw);
+    if (normalized == null) return null;
+    return _absoluteUrl(normalized) ?? normalized;
+  }
+
   String? _normalizeString(dynamic value) {
     if (value == null) return null;
     final str = value.toString().trim();
@@ -94,7 +100,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
 
       final String url =
@@ -130,184 +136,12 @@ class SocialRepository {
       if (posts is List) {
         for (final raw in posts) {
           if (raw is! Map) continue;
-          final m = Map<String, dynamic>.from(raw);
-
-          final String id = (m['post_id'] ?? m['id'] ?? '').toString();
-          if (id.isEmpty) continue;
-
-          final String text =
-              (m['postText_API'] ?? m['postText'] ?? '').toString();
-          final String timeText =
-              (m['post_time'] ?? m['time_text'] ?? '').toString();
-
-          // publisher
-          final Map pub =
-              (m['publisher'] is Map) ? m['publisher'] as Map : const {};
-          final String userName =
-              (pub['name'] ?? pub['username'] ?? '').toString();
-          final String userAvatar = (pub['avatar'] ?? '').toString();
-
-          // multi-image
-          final List pm =
-              (m['photo_multi'] is List) ? m['photo_multi'] as List : const [];
-          final List<String> multiImages = [
-            ...pm
-                .whereType<Map>()
-                .map((x) => (x['image'] ?? '').toString())
-                .where((s) => s.isNotEmpty),
-          ];
-
-          // single image
-          final String singleFull = (m['postFile_full'] ?? '').toString();
-          final List<String> imageUrls =
-              multiImages.where(_isImageUrl).toList(growable: false) +
-                  (singleFull.isNotEmpty && _isImageUrl(singleFull)
-                      ? [singleFull]
-                      : <String>[]);
-
-          // file
-          final String fileUrl =
-              (m['postFile'] ?? m['postFile_full'] ?? '').toString();
-          final String fileName = (m['postFileName'] ?? '').toString();
-
-          // detect media type
-          String? videoUrl, audioUrl;
-          if (fileUrl.isNotEmpty) {
-            final u = fileUrl.toLowerCase();
-            if (u.endsWith('.mp4') ||
-                u.endsWith('.mov') ||
-                u.endsWith('.m4v')) {
-              videoUrl = fileUrl;
-            } else if (u.endsWith('.mp3') || u.contains('/sounds/')) {
-              audioUrl = fileUrl;
-            }
+          final SocialPost? post =
+              _mapToSocialPost(Map<String, dynamic>.from(raw));
+          if (post != null) {
+            list.add(post);
+            lastId = post.id;
           }
-
-          // reaction
-          final Map rx = (m['reaction'] is Map)
-              ? m['reaction'] as Map
-              : (m['reactions'] is Map ? m['reactions'] as Map : const {});
-
-          int _rxCount(Map rx) {
-            if (rx['count'] != null) {
-              return int.tryParse('${rx['count']}') ?? 0;
-            }
-            const keys = ['Like', 'Love', 'HaHa', 'Wow', 'Sad', 'Angry'];
-            int sum = 0;
-            for (final k in keys) {
-              final v = rx[k];
-              if (v is int) {
-                sum += v;
-              } else if (v != null) {
-                sum += int.tryParse('$v') ?? 0;
-              }
-            }
-            return sum;
-          }
-
-          String _rxMine(Map rx) {
-            final t = (rx['type'] ?? '').toString();
-            if (t.isNotEmpty) return t;
-            final isReacted = rx['is_reacted'] == true ||
-                rx['is_reacted'] == 1 ||
-                rx['is_reacted']?.toString() == '1';
-            return isReacted ? 'Like' : '';
-          }
-
-          final int reactionCount = _rxCount(rx);
-          String myReaction = _rxMine(rx);
-          switch (myReaction) {
-            case '1':
-              myReaction = 'Like';
-              break;
-            case '2':
-              myReaction = 'Love';
-              break;
-            case '3':
-              myReaction = 'HaHa';
-              break;
-            case '4':
-              myReaction = 'Wow';
-              break;
-            case '5':
-              myReaction = 'Sad';
-              break;
-            case '6':
-              myReaction = 'Angry';
-              break;
-          }
-
-          // product
-          final Map product =
-              (m['product'] is Map) ? m['product'] as Map : const {};
-          final bool hasProduct = product.isNotEmpty;
-          final String productName = (product['name'] ?? '').toString();
-          final List pImgsRaw = (product['images'] is List)
-              ? product['images'] as List
-              : const [];
-          final List<String> productImages = [
-            ...pImgsRaw
-                .whereType<Map>()
-                .map((x) => (x['image'] ?? '').toString())
-                .where((s) => s.isNotEmpty),
-          ];
-          final double? productPrice = product['price'] is num
-              ? (product['price'] as num).toDouble()
-              : double.tryParse((product['price'] ?? '').toString());
-          final String? productCurrency = _normalizeString(product['currency']);
-          final String? productDescription = _normalizeString(
-            product['description_api'] ??
-                product['description'] ??
-                product['short_description'] ??
-                product['desc'],
-          );
-          final dynamic productIdRaw = product['ecommer_prod_id'] ??
-              product['ecommerce_prod_id'] ??
-              product['product_id'] ??
-              product['id'];
-          final int? ecommerceProductId = () {
-            if (productIdRaw == null) return null;
-            if (productIdRaw is int) return productIdRaw;
-            if (productIdRaw is num) return productIdRaw.toInt();
-            return int.tryParse(productIdRaw.toString());
-          }();
-          final String? productSlug = _extractProductSlug(product);
-
-          final String? postType =
-              (m['postType']?.toString().isNotEmpty ?? false)
-                  ? m['postType'].toString()
-                  : null;
-
-          list.add(
-            SocialPost(
-              id: id,
-              userName: userName.isNotEmpty ? userName : null,
-              userAvatar: userAvatar.isNotEmpty ? userAvatar : null,
-              text: text.isNotEmpty ? text : null,
-              timeText: timeText.isNotEmpty ? timeText : null,
-              imageUrl: imageUrls.isNotEmpty ? imageUrls.first : null,
-              imageUrls: imageUrls,
-              fileUrl: fileUrl.isNotEmpty ? fileUrl : null,
-              fileName: fileName.isNotEmpty ? fileName : null,
-              videoUrl: videoUrl,
-              audioUrl: audioUrl,
-              postType: postType,
-              reactionCount: reactionCount,
-              myReaction: myReaction,
-              hasProduct: hasProduct,
-              productTitle: productName.isNotEmpty ? productName : null,
-              productImages: productImages.isNotEmpty ? productImages : null,
-              productPrice: productPrice,
-              productCurrency: productCurrency,
-              productDescription: productDescription,
-              ecommerceProductId: ecommerceProductId,
-              productSlug: productSlug,
-              pollOptions: (m['options'] is List)
-                  ? List<Map<String, dynamic>>.from(m['options'])
-                  : null,
-            ),
-          );
-          lastId = id;
         }
       }
     }
@@ -322,7 +156,7 @@ class SocialRepository {
     try {
       final token = sharedPreferences.getString(AppConstants.socialAccessToken);
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
 
       final String url =
@@ -374,7 +208,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
 
       final String url =
@@ -419,7 +253,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
 
       final String url =
@@ -449,7 +283,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
 
       final String url =
@@ -478,7 +312,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
 
       final String url =
@@ -512,7 +346,7 @@ class SocialRepository {
     try {
       final String? token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
 
       final String url =
@@ -869,7 +703,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
 
       final String url =
@@ -919,7 +753,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
       final String url =
           '${AppConstants.socialBaseUrl}${AppConstants.socialGetPostDataUri}?access_token=$token';
@@ -951,7 +785,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
       final String url =
           '${AppConstants.socialBaseUrl}${AppConstants.socialCreatePostUri}?access_token=$token';
@@ -1003,7 +837,10 @@ class SocialRepository {
     }
   }
 
-  Future<ApiResponseModel<Response>> fetchCurrentUserProfile() async {
+  Future<ApiResponseModel<Response>> sharePostOnTimeline({
+    required String postId,
+    String? text,
+  }) async {
     try {
       final token = _getSocialAccessToken();
       final userId = _getSocialUserId();
@@ -1012,6 +849,209 @@ class SocialRepository {
       }
       if (userId == null || userId.isEmpty) {
         return ApiResponseModel.withError('Missing social user_id');
+      }
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialPostsUri}?access_token=$token';
+      final Map<String, dynamic> payload = {
+        'server_key': AppConstants.socialServerKey,
+        'type': 'share_post_on_timeline',
+        'id': postId,
+        'user_id': userId,
+      };
+      final String? trimmed = text?.trim();
+      if (trimmed != null && trimmed.isNotEmpty) {
+        payload['text'] = trimmed;
+      }
+      final form = FormData.fromMap(payload);
+      final res = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+  SocialPost? _mapToSocialPost(
+    Map<String, dynamic> raw, {
+    bool includeSharedInfo = true,
+  }) {
+    final map = Map<String, dynamic>.from(raw);
+    final String id = (map['post_id'] ?? map['id'] ?? '').toString();
+    if (id.isEmpty) return null;
+
+    final String text =
+        (map['postText_API'] ?? map['postText'] ?? '').toString();
+    final String timeText =
+        (map['post_time'] ?? map['time_text'] ?? '').toString();
+
+    final Map pub =
+        (map['publisher'] is Map) ? map['publisher'] as Map : const {};
+    final String userName = (pub['name'] ?? pub['username'] ?? '').toString();
+    final String? userAvatar = _normalizeMediaUrl(pub['avatar']);
+
+    final List pm =
+        (map['photo_multi'] is List) ? map['photo_multi'] as List : const [];
+    final List<String> multiImages = <String>[];
+    for (final item in pm.whereType<Map>()) {
+      final String raw = (item['image'] ?? '').toString();
+      if (raw.isEmpty || !_isImageUrl(raw)) continue;
+      final String? resolved = _normalizeMediaUrl(raw);
+      if (resolved != null) {
+        multiImages.add(resolved);
+      }
+    }
+    final String singleFull = (map['postFile_full'] ?? '').toString();
+    final String? singleResolved =
+        singleFull.isNotEmpty ? _normalizeMediaUrl(singleFull) : null;
+    final List<String> imageUrls = <String>[
+      ...multiImages,
+      if (singleFull.isNotEmpty && _isImageUrl(singleFull))
+        singleResolved ?? singleFull,
+    ];
+
+    final String fileUrlRaw =
+        (map['postFile'] ?? map['postFile_full'] ?? '').toString();
+    final String? fileUrl = _normalizeMediaUrl(fileUrlRaw);
+    final String fileName = (map['postFileName'] ?? '').toString();
+
+    String? videoUrl, audioUrl;
+    if (fileUrl != null && fileUrl.isNotEmpty) {
+      final u = fileUrl.toLowerCase();
+      if (u.endsWith('.mp4') || u.endsWith('.mov') || u.endsWith('.m4v')) {
+        videoUrl = fileUrl;
+      } else if (u.endsWith('.mp3') || u.contains('/sounds/')) {
+        audioUrl = fileUrl;
+      }
+    }
+
+    final Map<String, dynamic> rx =
+        _extractReactionMap(map['reaction'] ?? map['reactions']);
+    final int reactionCount = _reactionCountFromMap(rx);
+    final String myReaction = _reactionLabelFromMap(rx);
+    final Map<String, int> reactionBreakdown = _reactionBreakdownFromMap(rx);
+
+    final int commentCount = _resolveCount(<dynamic>[
+      map['post_comments'],
+      map['comments_count'],
+      map['comment_count'],
+      map['comments_num'],
+      map['comments'],
+      map['get_post_comments'],
+    ]);
+
+    final int shareCount = _resolveCount(<dynamic>[
+      map['post_share'],
+      map['postShare'],
+      map['share_count'],
+      map['shared_count'],
+      map['shares_count'],
+      map['shares'],
+      map['post_shares'],
+      map['shared'],
+    ]);
+
+    final Map product =
+        (map['product'] is Map) ? map['product'] as Map : const {};
+    final bool hasProduct = product.isNotEmpty;
+    final String productName = (product['name'] ?? '').toString();
+    final List pImgsRaw =
+        (product['images'] is List) ? product['images'] as List : const [];
+    final List<String> productImages = <String>[];
+    for (final img in pImgsRaw) {
+      String raw = '';
+      if (img is Map) {
+        raw = (img['image'] ?? img['src'] ?? '').toString();
+      } else {
+        raw = img.toString();
+      }
+      if (raw.isEmpty) continue;
+      final String? resolved = _normalizeMediaUrl(raw);
+      if (resolved != null) {
+        productImages.add(resolved);
+      }
+    }
+    final double? productPrice = product['price'] is num
+        ? (product['price'] as num).toDouble()
+        : double.tryParse((product['price'] ?? '').toString());
+    final String? productCurrency = _normalizeString(product['currency']);
+    final String? productDescription = _normalizeString(
+      product['description_api'] ??
+          product['description'] ??
+          product['short_description'] ??
+          product['desc'],
+    );
+    final dynamic productIdRaw = product['ecommer_prod_id'] ??
+        product['ecommerce_prod_id'] ??
+        product['product_id'] ??
+        product['id'];
+    final int? ecommerceProductId = () {
+      if (productIdRaw == null) return null;
+      if (productIdRaw is int) return productIdRaw;
+      if (productIdRaw is num) return productIdRaw.toInt();
+      return int.tryParse(productIdRaw.toString());
+    }();
+    final String? productSlug = _extractProductSlug(product);
+
+    final String? postType = (map['postType']?.toString().isNotEmpty ?? false)
+        ? map['postType'].toString()
+        : null;
+
+    SocialPost? sharedPost;
+    if (includeSharedInfo) {
+      final sharedRaw = map['shared_info'];
+      if (sharedRaw is Map && sharedRaw.isNotEmpty) {
+        sharedPost = _mapToSocialPost(
+          Map<String, dynamic>.from(sharedRaw),
+          includeSharedInfo: false,
+        );
+      }
+    }
+
+    return SocialPost(
+      id: id,
+      userName: userName.isNotEmpty ? userName : null,
+      userAvatar: userAvatar,
+      text: text.isNotEmpty ? text : null,
+      timeText: timeText.isNotEmpty ? timeText : null,
+      imageUrl: imageUrls.isNotEmpty ? imageUrls.first : null,
+      imageUrls: imageUrls,
+      fileUrl: fileUrl,
+      fileName: fileName.isNotEmpty ? fileName : null,
+      videoUrl: videoUrl,
+      audioUrl: audioUrl,
+      postType: postType,
+      sharedPost: sharedPost,
+      reactionCount: reactionCount,
+      myReaction: myReaction,
+      reactionBreakdown: reactionBreakdown,
+      commentCount: commentCount,
+      shareCount: shareCount,
+      hasProduct: hasProduct,
+      productTitle: productName.isNotEmpty ? productName : null,
+      productImages: productImages.isNotEmpty ? productImages : null,
+      productPrice: productPrice,
+      productCurrency: productCurrency,
+      productDescription: productDescription,
+      ecommerceProductId: ecommerceProductId,
+      productSlug: productSlug,
+      pollOptions: (map['options'] is List)
+          ? List<Map<String, dynamic>>.from(map['options'])
+          : null,
+    );
+  }
+
+  Future<ApiResponseModel<Response>> fetchCurrentUserProfile() async {
+    try {
+      final token = _getSocialAccessToken();
+      final userId = _getSocialUserId();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError('Please log in to your social network account');
+      }
+      if (userId == null || userId.isEmpty) {
+        return ApiResponseModel.withError('The social network account does not exist');
       }
 
       final String url =
@@ -1048,166 +1088,7 @@ class SocialRepository {
       }
     }
     if (m == null) return null;
-
-    final map = Map<String, dynamic>.from(m);
-
-    final String id = (map['post_id'] ?? map['id'] ?? '').toString();
-    if (id.isEmpty) return null;
-    final String text =
-        (map['postText_API'] ?? map['postText'] ?? '').toString();
-    final String timeText =
-        (map['post_time'] ?? map['time_text'] ?? '').toString();
-
-    final Map pub =
-        (map['publisher'] is Map) ? map['publisher'] as Map : const {};
-    final String userName = (pub['name'] ?? pub['username'] ?? '').toString();
-    final String userAvatar = (pub['avatar'] ?? '').toString();
-
-    final List pm =
-        (map['photo_multi'] is List) ? map['photo_multi'] as List : const [];
-    final List<String> multiImages = [
-      ...pm
-          .whereType<Map>()
-          .map((x) => (x['image'] ?? '').toString())
-          .where((s) => s.isNotEmpty),
-    ];
-    final String singleFull = (map['postFile_full'] ?? '').toString();
-    final List<String> imageUrls =
-        multiImages.where(_isImageUrl).toList(growable: false) +
-            (singleFull.isNotEmpty && _isImageUrl(singleFull)
-                ? [singleFull]
-                : <String>[]);
-
-    final String fileUrl =
-        (map['postFile'] ?? map['postFile_full'] ?? '').toString();
-    final String fileName = (map['postFileName'] ?? '').toString();
-
-    String? videoUrl, audioUrl;
-    if (fileUrl.isNotEmpty) {
-      final u = fileUrl.toLowerCase();
-      if (u.endsWith('.mp4') || u.endsWith('.mov') || u.endsWith('.m4v')) {
-        videoUrl = fileUrl;
-      } else if (u.endsWith('.mp3') || u.contains('/sounds/')) {
-        audioUrl = fileUrl;
-      }
-    }
-
-    final Map rx = (map['reaction'] is Map)
-        ? map['reaction'] as Map
-        : (map['reactions'] is Map ? map['reactions'] as Map : const {});
-
-    int _rxCount(Map rx) {
-      if (rx['count'] != null) return int.tryParse('${rx['count']}') ?? 0;
-      const keys = ['Like', 'Love', 'HaHa', 'Wow', 'Sad', 'Angry'];
-      int sum = 0;
-      for (final k in keys) {
-        final v = rx[k];
-        if (v is int) {
-          sum += v;
-        } else if (v != null) {
-          sum += int.tryParse('$v') ?? 0;
-        }
-      }
-      return sum;
-    }
-
-    String _rxMine(Map rx) {
-      final t = (rx['type'] ?? '').toString();
-      if (t.isNotEmpty) return t;
-      final isReacted = rx['is_reacted'] == true ||
-          rx['is_reacted'] == 1 ||
-          rx['is_reacted']?.toString() == '1';
-      return isReacted ? 'Like' : '';
-    }
-
-    int reactionCount = _rxCount(rx);
-    String myReaction = _rxMine(rx);
-    switch (myReaction) {
-      case '1':
-        myReaction = 'Like';
-        break;
-      case '2':
-        myReaction = 'Love';
-        break;
-      case '3':
-        myReaction = 'HaHa';
-        break;
-      case '4':
-        myReaction = 'Wow';
-        break;
-      case '5':
-        myReaction = 'Sad';
-        break;
-      case '6':
-        myReaction = 'Angry';
-        break;
-    }
-
-    final Map product =
-        (map['product'] is Map) ? map['product'] as Map : const {};
-    final bool hasProduct = product.isNotEmpty;
-    final String productName = (product['name'] ?? '').toString();
-    final List pImgsRaw =
-        (product['images'] is List) ? product['images'] as List : const [];
-    final List<String> productImages = [
-      ...pImgsRaw
-          .whereType<Map>()
-          .map((x) => (x['image'] ?? '').toString())
-          .where((s) => s.isNotEmpty),
-    ];
-    final double? productPrice = product['price'] is num
-        ? (product['price'] as num).toDouble()
-        : double.tryParse((product['price'] ?? '').toString());
-    final String? productCurrency = _normalizeString(product['currency']);
-    final String? productDescription = _normalizeString(
-      product['description_api'] ??
-          product['description'] ??
-          product['short_description'] ??
-          product['desc'],
-    );
-    final dynamic productIdRaw = product['ecommer_prod_id'] ??
-        product['ecommerce_prod_id'] ??
-        product['product_id'] ??
-        product['id'];
-    final int? ecommerceProductId = () {
-      if (productIdRaw == null) return null;
-      if (productIdRaw is int) return productIdRaw;
-      if (productIdRaw is num) return productIdRaw.toInt();
-      return int.tryParse(productIdRaw.toString());
-    }();
-    final String? productSlug = _extractProductSlug(product);
-
-    final String? postType = (map['postType']?.toString().isNotEmpty ?? false)
-        ? map['postType'].toString()
-        : null;
-
-    return SocialPost(
-      id: id,
-      userName: userName.isNotEmpty ? userName : null,
-      userAvatar: userAvatar.isNotEmpty ? userAvatar : null,
-      text: text.isNotEmpty ? text : null,
-      timeText: timeText.isNotEmpty ? timeText : null,
-      imageUrl: imageUrls.isNotEmpty ? imageUrls.first : null,
-      imageUrls: imageUrls,
-      fileUrl: fileUrl.isNotEmpty ? fileUrl : null,
-      fileName: fileName.isNotEmpty ? fileName : null,
-      videoUrl: videoUrl,
-      audioUrl: audioUrl,
-      postType: postType,
-      reactionCount: reactionCount,
-      myReaction: myReaction,
-      hasProduct: hasProduct,
-      productTitle: productName.isNotEmpty ? productName : null,
-      productImages: productImages.isNotEmpty ? productImages : null,
-      productPrice: productPrice,
-      productCurrency: productCurrency,
-      productDescription: productDescription,
-      ecommerceProductId: ecommerceProductId,
-      productSlug: productSlug,
-      pollOptions: (map['options'] is List)
-          ? List<Map<String, dynamic>>.from(map['options'])
-          : null,
-    );
+    return _mapToSocialPost(Map<String, dynamic>.from(m));
   }
 
   List<SocialComment> parsePostComments(Response res) {
@@ -1366,7 +1247,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
       final String url =
           '${AppConstants.socialBaseUrl}${AppConstants.socialCommentsUri}?access_token=$token';
@@ -1394,7 +1275,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
       final String url =
           '${AppConstants.socialBaseUrl}${AppConstants.socialCommentsUri}?access_token=$token';
@@ -1426,7 +1307,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
       final String url =
           '${AppConstants.socialBaseUrl}${AppConstants.socialCommentsUri}?access_token=$token';
@@ -1467,7 +1348,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
       final String url =
           '${AppConstants.socialBaseUrl}${AppConstants.socialCommentsUri}?access_token=$token';
@@ -1505,7 +1386,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
       final String url =
           '${AppConstants.socialBaseUrl}${AppConstants.socialCommentsUri}?access_token=$token';
@@ -1533,7 +1414,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
 
       final String url =
@@ -1563,7 +1444,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
       final String url =
           '${AppConstants.socialBaseUrl}${AppConstants.socialCommentsUri}?access_token=$token';
@@ -1592,7 +1473,7 @@ class SocialRepository {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Missing Social access_token');
+        return ApiResponseModel.withError('Please log in to your social network account');
       }
 
       final String url =
@@ -1707,6 +1588,37 @@ class SocialRepository {
     return <String, dynamic>{};
   }
 
+  Map<String, int> _reactionBreakdownFromMap(Map<String, dynamic> rx) {
+    if (rx.isEmpty) return const <String, int>{};
+    final Map<String, int> normalized = <String, int>{};
+    const labels = ['Like', 'Love', 'HaHa', 'Wow', 'Sad', 'Angry'];
+    for (final label in labels) {
+      final dynamic raw = _reactionValue(rx, label);
+      final int? count = _coerceInt(raw);
+      if (count != null && count > 0) {
+        normalized[label] = count;
+      }
+    }
+    if (normalized.isEmpty) return const <String, int>{};
+    return Map<String, int>.unmodifiable(normalized);
+  }
+
+  dynamic _reactionValue(Map<String, dynamic> rx, String label) {
+    final List<String> keys = <String>[
+      label,
+      label.toLowerCase(),
+      label.toUpperCase(),
+    ];
+    final String idKey = _mapReactionLabelToId(label);
+    if (idKey.isNotEmpty && !keys.contains(idKey)) {
+      keys.add(idKey);
+    }
+    for (final key in keys) {
+      if (rx.containsKey(key)) return rx[key];
+    }
+    return null;
+  }
+
   int _reactionCountFromMap(Map<String, dynamic> rx) {
     if (rx.isEmpty) return 0;
     if (rx['count'] != null) {
@@ -1738,6 +1650,37 @@ class SocialRepository {
       }
     }
     return _normalizeReactionLabel(label ?? '');
+  }
+
+  int _resolveCount(List<dynamic> candidates) {
+    int maxValue = 0;
+    for (final candidate in candidates) {
+      if (candidate == null) continue;
+      int? value;
+      if (candidate is List) {
+        value = candidate.length;
+      } else {
+        value = _coerceInt(candidate);
+      }
+      if (value != null && value > maxValue) {
+        maxValue = value;
+      }
+    }
+    return maxValue;
+  }
+
+  int? _coerceInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) {
+      final trimmed = value.trim();
+      if (trimmed.isEmpty) return null;
+      final normalized = trimmed.replaceAll(RegExp(r'[^0-9\-]'), '');
+      if (normalized.isEmpty) return null;
+      return int.tryParse(normalized);
+    }
+    return null;
   }
 
   String _normalizeReactionLabel(String reaction) {

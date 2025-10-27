@@ -7,6 +7,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_service_interface.dart';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
@@ -66,6 +67,8 @@ class SocialController with ChangeNotifier {
   static const int _storyViewersPageSize = 50;
   final Map<String, StoryViewersState> _storyViewers =
       <String, StoryViewersState>{};
+  final Set<String> _sharingPosts = <String>{};
+  bool isSharing(String id) => _sharingPosts.contains(id);
 
   String _storyKey(SocialStory story) {
     final userKey = story.userId;
@@ -601,9 +604,12 @@ class SocialController with ChangeNotifier {
     final was = post.myReaction;
 
     if (was.isNotEmpty && (reaction.isEmpty || reaction == 'Like')) {
+      final updatedBreakdown =
+          _adjustReactionBreakdown(post.reactionBreakdown, remove: was);
       final optimistic = post.copyWith(
         myReaction: '',
         reactionCount: (post.reactionCount - 1).clamp(0, 1 << 31),
+        reactionBreakdown: updatedBreakdown,
       );
       _updatePost(post.id, optimistic);
       try {
@@ -619,9 +625,15 @@ class SocialController with ChangeNotifier {
     int delta = 0;
     if (was.isEmpty && now.isNotEmpty) delta = 1;
     if (was.isNotEmpty && now.isEmpty) delta = -1;
+    final updatedBreakdown = _adjustReactionBreakdown(
+      post.reactionBreakdown,
+      remove: was,
+      add: now,
+    );
     final optimistic = post.copyWith(
       myReaction: now,
       reactionCount: (post.reactionCount + delta).clamp(0, 1 << 31),
+      reactionBreakdown: updatedBreakdown,
     );
     _updatePost(post.id, optimistic);
 
@@ -633,6 +645,58 @@ class SocialController with ChangeNotifier {
       final msg = e.toString();
       showCustomSnackBar(msg, Get.context!, isError: true);
     }
+  }
+
+  Future<bool> sharePost(SocialPost post, {String? text}) async {
+    if (_sharingPosts.contains(post.id)) return false;
+    _sharingPosts.add(post.id);
+    notifyListeners();
+
+    final SocialPost optimistic =
+        post.copyWith(shareCount: post.shareCount + 1);
+    _updatePost(post.id, optimistic);
+
+    try {
+      final SocialPost shared =
+          await service.sharePost(postId: post.id, text: text);
+      _posts.insert(0, shared);
+      notifyListeners();
+      final ctx = Get.context!;
+      final successMsg =
+          getTranslated('share_post_success', ctx) ?? 'Post shared successfully';
+      showCustomSnackBar(successMsg, ctx);
+      return true;
+    } catch (e) {
+      _updatePost(post.id, post);
+      showCustomSnackBar(e.toString(), Get.context!, isError: true);
+      return false;
+    } finally {
+      _sharingPosts.remove(post.id);
+      notifyListeners();
+    }
+  }
+
+  Map<String, int> _adjustReactionBreakdown(
+    Map<String, int> base, {
+    String? remove,
+    String? add,
+  }) {
+    if ((remove == null || remove.isEmpty) &&
+        (add == null || add.isEmpty)) return base;
+    final Map<String, int> next = Map<String, int>.from(base);
+    void apply(String? key, int delta) {
+      if (key == null || key.isEmpty) return;
+      final int current = next[key] ?? 0;
+      final int updated = current + delta;
+      if (updated <= 0) {
+        next.remove(key);
+      } else {
+        next[key] = updated;
+      }
+    }
+    apply(remove, -1);
+    apply(add, 1);
+    return next;
   }
 }
 

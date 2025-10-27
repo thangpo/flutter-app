@@ -12,10 +12,16 @@ class SocialPost {
   final String? videoUrl;
   final String? audioUrl;
   final String? postType;
+  final SocialPost? sharedPost;
 
   // Reactions
   final int reactionCount; // tổng số phản ứng
   final String myReaction; // '', 'Like', 'Love', 'HaHa', 'Wow', 'Sad', 'Angry'
+  final Map<String, int> reactionBreakdown; // đếm theo từng loại reaction
+
+  // Meta
+  final int commentCount;
+  final int shareCount;
 
   // Product
   final bool hasProduct;
@@ -43,8 +49,12 @@ class SocialPost {
     this.videoUrl,
     this.audioUrl,
     this.postType,
+    this.sharedPost,
     required this.reactionCount,
     required this.myReaction,
+    this.reactionBreakdown = const <String, int>{},
+    this.commentCount = 0,
+    this.shareCount = 0,
     this.hasProduct = false,
     this.productTitle,
     this.productImages,
@@ -69,8 +79,12 @@ class SocialPost {
     String? videoUrl,
     String? audioUrl,
     String? postType,
+    SocialPost? sharedPost,
     int? reactionCount,
     String? myReaction,
+    Map<String, int>? reactionBreakdown,
+    int? commentCount,
+    int? shareCount,
     bool? hasProduct,
     String? productTitle,
     List<String>? productImages,
@@ -94,8 +108,12 @@ class SocialPost {
       videoUrl: videoUrl ?? this.videoUrl,
       audioUrl: audioUrl ?? this.audioUrl,
       postType: postType ?? this.postType,
+      sharedPost: sharedPost ?? this.sharedPost,
       reactionCount: reactionCount ?? this.reactionCount,
       myReaction: myReaction ?? this.myReaction,
+      reactionBreakdown: reactionBreakdown ?? this.reactionBreakdown,
+      commentCount: commentCount ?? this.commentCount,
+      shareCount: shareCount ?? this.shareCount,
       hasProduct: hasProduct ?? this.hasProduct,
       productTitle: productTitle ?? this.productTitle,
       productImages: productImages ?? this.productImages,
