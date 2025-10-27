@@ -118,6 +118,8 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_service_interface.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_service.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_friends_repository.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_friends_controller.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/refund/controllers/refund_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/refund/domain/repositories/refund_repository.dart';
@@ -315,6 +317,10 @@ Future<void> init() async {
   sl.registerFactory(() => RefundController(refundServiceInterface: sl()));
   sl.registerFactory(() => ReOrderController(reOrderServiceInterface: sl()));
   sl.registerFactory(() => RestockController(restockServiceInterface: sl()));
+
+  sl.registerLazySingleton(() => SocialFriendsRepository());
+  sl.registerFactory(() => SocialFriendsController(sl()));
+
 
   //interface
   AddressRepoInterface addressRepoInterface =
