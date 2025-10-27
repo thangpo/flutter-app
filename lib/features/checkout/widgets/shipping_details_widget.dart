@@ -15,8 +15,9 @@ import 'package:provider/provider.dart';
 class ShippingDetailsWidget extends StatefulWidget {
   final bool hasPhysical;
   final GlobalKey<FormState> passwordFormKey;
+  final VoidCallback? onAddressChanged;
 
-  const ShippingDetailsWidget({super.key, required this.hasPhysical, required this.passwordFormKey});
+  const ShippingDetailsWidget({super.key, required this.hasPhysical, required this.passwordFormKey, this.onAddressChanged,});
 
   @override
   State<ShippingDetailsWidget> createState() => _ShippingDetailsWidgetState();

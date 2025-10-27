@@ -23,6 +23,7 @@ import 'package:flutter_sixvalley_ecommerce/features/more/screens/more_screen_vi
 import 'package:flutter_sixvalley_ecommerce/features/order/screens/order_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/main_home/screens/main_home_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_screen.dart';
 import 'package:provider/provider.dart';
 
 class DashBoardScreen extends StatefulWidget {
@@ -81,19 +82,22 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         icon: Images.homeImage,
         screen: const MainHomeScreen(),
       ),
+
       NavigationModel(
         name: 'social',
         icon: Images.SocialIcon,
         screen: const SocialFeedScreen(),
       ),
+
       NavigationModel(
-          name: 'friends',
-          icon: Images.friendImage,
-          screen: const InboxScreen(isBackButtonExist: false)),
-      NavigationModel(
-          name: 'friends',
-          icon: Images.friendImage,
-          screen: const InboxScreen(isBackButtonExist: false)),
+        name: 'friends',
+        icon: Images.friendImage,
+        screen: const FriendsScreen(),
+      ),
+      // NavigationModel(
+      //     name: 'friends',
+      //     icon: Images.friendImage,
+      //     screen: const InboxScreen(isBackButtonExist: false)),
 
       NavigationModel(
         name: 'shop',

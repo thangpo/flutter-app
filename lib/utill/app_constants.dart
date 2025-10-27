@@ -33,6 +33,12 @@ class AppConstants {
   static const String socialGetPostDataUri = '/api/get-post-data';
   static const String socialCommentsUri = '/api/comments';
 
+  static const String socialFetchRecommendedUri = '/api/fetch-recommended';
+  static const String socialGetUserDataInfoUri = '/api/get-user-data';
+  static const String socialCheckUsernameUri = '/api/check_username';
+
+
+
   static const String googleServerClientId = 'client_id here';
   static const String userId = 'userId';
   static const String name = 'name';

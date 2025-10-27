@@ -31,6 +31,8 @@ import 'package:flutter_sixvalley_ecommerce/features/checkout/widgets/wallet_pay
 import 'package:flutter_sixvalley_ecommerce/features/dashboard/screens/dashboard_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/checkout/widgets/order_place_dialog_widget.dart';
 import 'package:provider/provider.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class CheckoutScreen extends StatefulWidget {
   final List<CartModel> cartList;
@@ -45,6 +47,7 @@ class CheckoutScreen extends StatefulWidget {
   final int quantity;
   final List<int?> fromDistrictIds;
   final List<String?> fromWardIds;
+  final int? cartId;
 
   const CheckoutScreen({
     super.key,
@@ -60,6 +63,7 @@ class CheckoutScreen extends StatefulWidget {
     required this.hasPhysical,
     required this.fromDistrictIds,
     required this.fromWardIds,
+    this.cartId,
   });
 
   @override
@@ -75,6 +79,11 @@ class CheckoutScreenState extends State<CheckoutScreen> {
   double _order = 0;
   double? _couponDiscount;
   double? _referralDiscount;
+  double _calculatedShippingFee = 0;
+  bool _isCalculatingShipping = false;
+  String? _shippingError;
+
+  static const double USD_TO_VND_RATE = 25000.0;
 
   DebounceHelper debounceHelper = DebounceHelper(milliseconds: 500);
 
@@ -103,9 +112,154 @@ class CheckoutScreenState extends State<CheckoutScreen> {
     Provider.of<CheckoutController>(context, listen: false).clearData();
   }
 
+  double _convertVNDtoUSD(double vndAmount) {
+    return vndAmount / USD_TO_VND_RATE;
+  }
+
+  Future<void> _calculateShippingFee() async {
+    if (!widget.hasPhysical || widget.onlyDigital) {
+      setState(() {
+        _calculatedShippingFee = 0;
+        _shippingError = null;
+      });
+      return;
+    }
+
+    final orderProvider = Provider.of<CheckoutController>(context, listen: false);
+    final addressController = Provider.of<AddressController>(context, listen: false);
+
+    if (orderProvider.addressIndex == null ||
+        addressController.addressList == null ||
+        orderProvider.addressIndex! >= addressController.addressList!.length) {
+      setState(() {
+        _shippingError = 'Please select a delivery address';
+        _calculatedShippingFee = 0;
+      });
+      return;
+    }
+
+    final selectedAddress = addressController.addressList![orderProvider.addressIndex!];
+
+    if (widget.cartId == null ||
+        widget.fromDistrictIds.isEmpty ||
+        widget.fromWardIds.isEmpty ||
+        selectedAddress.district == null ||
+        selectedAddress.province == null) {
+      setState(() {
+        _shippingError = 'Missing shipping information';
+        _calculatedShippingFee = 0;
+      });
+      debugPrint("🚨 Missing info: cartId=${widget.cartId}, "
+          "fromDistrictIds=${widget.fromDistrictIds}, "
+          "fromWardIds=${widget.fromWardIds}, "
+          "district=${selectedAddress.district}, "
+          "province=${selectedAddress.province}");
+      return;
+    }
+
+    if (widget.fromDistrictIds.length != widget.fromWardIds.length) {
+      setState(() {
+        _shippingError = 'Invalid shop data';
+        _calculatedShippingFee = 0;
+      });
+      debugPrint("🚨 Mismatch length: fromDistrictIds(${widget.fromDistrictIds.length}) "
+          "!= fromWardIds(${widget.fromWardIds.length})");
+      return;
+    }
+
+    setState(() {
+      _isCalculatingShipping = true;
+      _shippingError = null;
+    });
+
+    try {
+      double totalShippingCostVND = 0;
+      final toDistrictId = int.tryParse(selectedAddress.district ?? '0') ?? 0;
+      final toWardCode = selectedAddress.province ?? '';
+
+      for (int i = 0; i < widget.fromDistrictIds.length; i++) {
+        final fromDistrictId = widget.fromDistrictIds[i];
+        final fromWardId = widget.fromWardIds[i];
+
+        if (fromDistrictId == null || fromWardId == null) {
+          debugPrint("⚠️ Skip seller because fromDistrictId=$fromDistrictId or fromWardId=$fromWardId");
+          continue;
+        }
+
+        final sellerString = "{\"from_district_id\":$fromDistrictId,\"from_ward_id\":\"$fromWardId\"}";
+
+        final requestBody = {
+          "seller": sellerString,
+          "cart_id": widget.cartId,
+          "to_district_id": toWardCode,
+          "to_ward_code": toDistrictId,
+        };
+
+        debugPrint("📦 Calling GHN API for seller $i: ${jsonEncode(requestBody)}");
+
+        final response = await http.post(
+          Uri.parse('https://vnshop247.com/api/v1/shippingAPI/ghn/calculate-fee'),
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode(requestBody),
+        );
+
+        debugPrint("📩 Response ${response.statusCode}: ${response.body}");
+
+        if (response.statusCode == 200) {
+          final responseData = jsonDecode(response.body);
+          if (responseData['ok'] == true) {
+            totalShippingCostVND += (responseData['totalShippingCost'] ?? 0).toDouble();
+            debugPrint("✅ Success: totalShippingCost VND=${responseData['totalShippingCost']}");
+          } else {
+            debugPrint("❌ GHN API returned error: ${responseData['message']}");
+            setState(() {
+              _shippingError = responseData['message'] ?? 'Failed to calculate shipping fee';
+              _isCalculatingShipping = false;
+              _calculatedShippingFee = 0;
+            });
+            return;
+          }
+        } else {
+          debugPrint("❌ HTTP Error: ${response.statusCode} - ${response.body}");
+          setState(() {
+            _shippingError = 'Server error: ${response.statusCode}';
+            _isCalculatingShipping = false;
+            _calculatedShippingFee = 0;
+          });
+          return;
+        }
+      }
+
+      double totalShippingCostUSD = _convertVNDtoUSD(totalShippingCostVND);
+
+      setState(() {
+        _calculatedShippingFee = totalShippingCostUSD;
+        _isCalculatingShipping = false;
+        _shippingError = null;
+      });
+
+      debugPrint("✅ Tổng phí vận chuyển VND: $totalShippingCostVND");
+      debugPrint("✅ Tổng phí vận chuyển USD: $_calculatedShippingFee");
+
+    } catch (e, stack) {
+      debugPrint("🔥 Exception: $e");
+      debugPrint(stack.toString());
+      setState(() {
+        _shippingError = 'Network error: ${e.toString()}';
+        _isCalculatingShipping = false;
+        _calculatedShippingFee = 0;
+      });
+    }
+  }
+
+
   @override
   Widget build(BuildContext context) {
     _order = widget.totalOrderAmount + widget.discount;
+
     return Scaffold(
       resizeToAvoidBottomInset: true,
       key: _scaffoldKey,
@@ -207,6 +361,8 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                                                 String billingAddressId =
                                                     addressId;
 
+                                                double finalShippingFee = widget.hasPhysical ? _calculatedShippingFee : 0;
+
                                                 if (orderProvider
                                                     .paymentMethodIndex !=
                                                     -1) {
@@ -259,13 +415,12 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                                                       MaterialPageRoute(
                                                           builder: (_) => OfflinePaymentScreen(
                                                               payableAmount: _order +
-                                                                  widget
-                                                                      .shippingFee -
+                                                                  finalShippingFee -
                                                                   widget
                                                                       .discount -
                                                                   (_referralDiscount ??
                                                                       0) -
-                                                                  _couponDiscount! +
+                                                                  (_couponDiscount ?? 0) +
                                                                   widget.tax,
                                                               callback:
                                                               _callback)));
@@ -279,24 +434,22 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                                                               .balance ??
                                                               0,
                                                           orderAmount: _order +
-                                                              widget
-                                                                  .shippingFee -
+                                                              finalShippingFee -
                                                               widget.discount -
                                                               (_referralDiscount ??
                                                                   0) -
-                                                              _couponDiscount! +
+                                                              (_couponDiscount ?? 0) +
                                                               widget.tax,
                                                           onTap: () {
                                                             if (profileProvider
                                                                 .balance! <
                                                                 (_order +
-                                                                    widget
-                                                                        .shippingFee -
+                                                                    finalShippingFee -
                                                                     widget
                                                                         .discount -
                                                                     (_referralDiscount ??
                                                                         0) -
-                                                                    _couponDiscount! +
+                                                                    (_couponDiscount ?? 0) +
                                                                     widget
                                                                         .tax)) {
                                                               showCustomSnackBar(
@@ -361,13 +514,14 @@ class CheckoutScreenState extends State<CheckoutScreen> {
         builder: (context, authProvider, _) {
           return Consumer<CheckoutController>(
             builder: (context, orderProvider, _) {
-              final addressController = Provider.of<AddressController>(context);
-              final selectedAddress = orderProvider.addressIndex != null &&
-                  addressController.addressList != null &&
-                  orderProvider.addressIndex! <
-                      addressController.addressList!.length
-                  ? addressController.addressList![orderProvider.addressIndex!]
-                  : null;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (orderProvider.addressIndex != null &&
+                    !_isCalculatingShipping &&
+                    _calculatedShippingFee == 0 &&
+                    widget.hasPhysical) {
+                  _calculateShippingFee();
+                }
+              });
 
               return Column(
                 children: [
@@ -381,7 +535,10 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                               bottom: Dimensions.paddingSizeDefault),
                           child: ShippingDetailsWidget(
                               hasPhysical: widget.hasPhysical,
-                              passwordFormKey: passwordFormKey),
+                              passwordFormKey: passwordFormKey,
+                              onAddressChanged: () {
+                                _calculateShippingFee();
+                              }),
                         ),
                         if (Provider.of<AuthController>(context, listen: false)
                             .isLoggedIn())
@@ -424,6 +581,9 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                                   .referralAmount
                                   ?.amount ??
                                   0;
+
+                              double finalShippingFee = widget.hasPhysical ? _calculatedShippingFee : 0;
+
                               return Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -440,10 +600,41 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                                     amount: PriceConverter.convertPrice(
                                         context, _order),
                                   ),
-                                  AmountWidget(
-                                      title: getTranslated('shipping_fee', context),
-                                      amount: PriceConverter.convertPrice(
-                                          context, widget.shippingFee)),
+
+                                  if (widget.hasPhysical)
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: AmountWidget(
+                                            title: getTranslated('shipping_fee', context),
+                                            amount: _isCalculatingShipping
+                                                ? 'Calculating...'
+                                                : _shippingError != null
+                                                ? 'Error'
+                                                : PriceConverter.convertPrice(context, finalShippingFee),
+                                          ),
+                                        ),
+                                        if (_isCalculatingShipping)
+                                          const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(strokeWidth: 2),
+                                          ),
+                                      ],
+                                    ),
+
+                                  if (_shippingError != null)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Text(
+                                        _shippingError!,
+                                        style: TextStyle(
+                                          color: Colors.red,
+                                          fontSize: Dimensions.fontSizeSmall,
+                                        ),
+                                      ),
+                                    ),
+
                                   AmountWidget(
                                       title: getTranslated('discount', context),
                                       amount: PriceConverter.convertPrice(
@@ -465,147 +656,6 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                                     ),
                                   const SizedBox(
                                       height: Dimensions.paddingSizeSmall),
-                                  if (selectedAddress != null)
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          getTranslated(
-                                              'delivery_district', context) ??
-                                              'Delivery District:',
-                                          style: textMedium.copyWith(
-                                              fontSize: Dimensions.fontSizeLarge),
-                                        ),
-                                        const SizedBox(height: 5),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 10, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            borderRadius:
-                                            BorderRadius.circular(12),
-                                            color: Theme.of(context)
-                                                .primaryColor
-                                                .withOpacity(0.1),
-                                          ),
-                                          child: Text(
-                                            selectedAddress.district ?? 'N/A',
-                                            style: textRegular.copyWith(
-                                              fontSize: Dimensions.fontSizeSmall,
-                                              color: Theme.of(context)
-                                                  .textTheme
-                                                  .bodyLarge
-                                                  ?.color,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(
-                                            height: Dimensions.paddingSizeSmall),
-                                        Text(
-                                          getTranslated(
-                                              'delivery_province', context) ??
-                                              'Delivery Province:',
-                                          style: textMedium.copyWith(
-                                              fontSize: Dimensions.fontSizeLarge),
-                                        ),
-                                        const SizedBox(height: 5),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 10, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            borderRadius:
-                                            BorderRadius.circular(12),
-                                            color: Theme.of(context)
-                                                .primaryColor
-                                                .withOpacity(0.1),
-                                          ),
-                                          child: Text(
-                                            selectedAddress.province ?? 'N/A',
-                                            style: textRegular.copyWith(
-                                              fontSize: Dimensions.fontSizeSmall,
-                                              color: Theme.of(context)
-                                                  .textTheme
-                                                  .bodyLarge
-                                                  ?.color,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  const SizedBox(
-                                      height: Dimensions.paddingSizeDefault),
-                                  Text(
-                                    getTranslated('from_district_ids', context) ??
-                                        'From District IDs:',
-                                    style: textMedium.copyWith(
-                                        fontSize: Dimensions.fontSizeLarge),
-                                  ),
-                                  const SizedBox(height: 5),
-                                  Wrap(
-                                    spacing: 6,
-                                    children: widget.fromDistrictIds
-                                        .map((id) => Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 10, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        borderRadius:
-                                        BorderRadius.circular(12),
-                                        color: Theme.of(context)
-                                            .primaryColor
-                                            .withOpacity(0.1),
-                                      ),
-                                      child: Text(
-                                        id?.toString() ?? 'N/A',
-                                        style: textRegular.copyWith(
-                                          fontSize:
-                                          Dimensions.fontSizeSmall,
-                                          color: Theme.of(context)
-                                              .textTheme
-                                              .bodyLarge
-                                              ?.color,
-                                        ),
-                                      ),
-                                    ))
-                                        .toList(),
-                                  ),
-                                  const SizedBox(
-                                      height: Dimensions.paddingSizeDefault),
-                                  // Display Shop Ward IDs
-                                  Text(
-                                    getTranslated('from_ward_ids', context) ??
-                                        'From Ward IDs:',
-                                    style: textMedium.copyWith(
-                                        fontSize: Dimensions.fontSizeLarge),
-                                  ),
-                                  const SizedBox(height: 5),
-                                  Wrap(
-                                    spacing: 6,
-                                    children: widget.fromWardIds
-                                        .map((id) => Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 10, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        borderRadius:
-                                        BorderRadius.circular(12),
-                                        color: Theme.of(context)
-                                            .primaryColor
-                                            .withOpacity(0.1),
-                                      ),
-                                      child: Text(
-                                        id ?? 'N/A',
-                                        style: textRegular.copyWith(
-                                          fontSize:
-                                          Dimensions.fontSizeSmall,
-                                          color: Theme.of(context)
-                                              .textTheme
-                                              .bodyLarge
-                                              ?.color,
-                                        ),
-                                      ),
-                                    ))
-                                        .toList(),
-                                  ),
-                                  const SizedBox(
-                                      height: Dimensions.paddingSizeDefault),
                                   Divider(
                                       height: 5, color: Theme.of(context).hintColor),
                                   AmountWidget(
@@ -613,10 +663,10 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                                     amount: PriceConverter.convertPrice(
                                       context,
                                       (_order +
-                                          widget.shippingFee -
+                                          finalShippingFee -
                                           (_referralDiscount ?? 0) -
                                           widget.discount -
-                                          _couponDiscount! +
+                                          (_couponDiscount ?? 0) +
                                           widget.tax),
                                     ),
                                   ),

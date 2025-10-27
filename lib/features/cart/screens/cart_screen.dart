@@ -338,6 +338,7 @@ class CartScreenState extends State<CartScreen> {
                                         hasPhysical: totalPhysical > 0,
                                         fromDistrictIds: fromDistrictIds,
                                         fromWardIds: fromWardIds,
+                                        cartId: cartList.first.id,
                                       ),
                                     ),
                                   );
