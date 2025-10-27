@@ -23,6 +23,7 @@ import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dar
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_sixvalley_ecommerce/features/profile/controllers/profile_contrroller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_list_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_screen.dart';
 
 
 class SocialFeedScreen extends StatefulWidget {
@@ -166,7 +167,30 @@ class _FacebookHeader extends StatelessWidget {
                 },
               ),
               const SizedBox(width: 12),
-             _HeaderIcon(
+
+              _HeaderIcon(
+                icon: Icons.people_outline, // biểu tượng bạn bè
+                iconColor: onAppBar,
+                bubbleColor: onAppBar.withOpacity(0.08),
+                onTap: () {
+                  final token = context.read<SocialController>().accessToken;
+                  if (token == null || token.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Vui lòng kết nối tài khoản WoWonder trước.')),
+                    );
+                    return;
+                  }
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => FriendsScreen(),
+                    ),
+                  );
+                },
+              ),
+
+              const SizedBox(width: 12),
+
+              _HeaderIcon(
                 icon: Icons.messenger_outline,
                 iconColor: onAppBar,
                 bubbleColor: onAppBar.withOpacity(0.08),
@@ -179,7 +203,9 @@ class _FacebookHeader extends StatelessWidget {
                     return;
                   }
                   Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => FriendsListScreen(accessToken: token)),
+                    MaterialPageRoute(
+                      builder: (_) => FriendsListScreen(accessToken: token),
+                    ),
                   );
                 },
               ),

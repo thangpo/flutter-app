@@ -36,6 +36,7 @@ class AppConstants {
   static const String socialFetchRecommendedUri = '/api/fetch-recommended';
   static const String socialGetUserDataInfoUri = '/api/get-user-data';
   static const String socialCheckUsernameUri = '/api/check_username';
+  static const String socialGetUsername = '/api/get-user-data-username';
   
   static const String socialGetFriendsUri    = '/api/get-friends';
   static const String socialGetFollowersUri  = '/api/get-followers';

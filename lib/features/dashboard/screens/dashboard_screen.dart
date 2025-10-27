@@ -89,11 +89,11 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         screen: const SocialFeedScreen(),
       ),
 
-      NavigationModel(
-        name: 'friends',
-        icon: Images.friendImage,
-        screen: const FriendsScreen(),
-      ),
+      // NavigationModel(
+      //   name: 'friends',
+      //   icon: Images.friendImage,
+      //   screen: const FriendsScreen(),
+      // ),
       // NavigationModel(
       //     name: 'friends',
       //     icon: Images.friendImage,
