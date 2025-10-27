@@ -601,9 +601,12 @@ class SocialController with ChangeNotifier {
     final was = post.myReaction;
 
     if (was.isNotEmpty && (reaction.isEmpty || reaction == 'Like')) {
+      final updatedBreakdown =
+          _adjustReactionBreakdown(post.reactionBreakdown, remove: was);
       final optimistic = post.copyWith(
         myReaction: '',
         reactionCount: (post.reactionCount - 1).clamp(0, 1 << 31),
+        reactionBreakdown: updatedBreakdown,
       );
       _updatePost(post.id, optimistic);
       try {
@@ -619,9 +622,15 @@ class SocialController with ChangeNotifier {
     int delta = 0;
     if (was.isEmpty && now.isNotEmpty) delta = 1;
     if (was.isNotEmpty && now.isEmpty) delta = -1;
+    final updatedBreakdown = _adjustReactionBreakdown(
+      post.reactionBreakdown,
+      remove: was,
+      add: now,
+    );
     final optimistic = post.copyWith(
       myReaction: now,
       reactionCount: (post.reactionCount + delta).clamp(0, 1 << 31),
+      reactionBreakdown: updatedBreakdown,
     );
     _updatePost(post.id, optimistic);
 
@@ -633,6 +642,29 @@ class SocialController with ChangeNotifier {
       final msg = e.toString();
       showCustomSnackBar(msg, Get.context!, isError: true);
     }
+  }
+
+  Map<String, int> _adjustReactionBreakdown(
+    Map<String, int> base, {
+    String? remove,
+    String? add,
+  }) {
+    if ((remove == null || remove.isEmpty) &&
+        (add == null || add.isEmpty)) return base;
+    final Map<String, int> next = Map<String, int>.from(base);
+    void apply(String? key, int delta) {
+      if (key == null || key.isEmpty) return;
+      final int current = next[key] ?? 0;
+      final int updated = current + delta;
+      if (updated <= 0) {
+        next.remove(key);
+      } else {
+        next[key] = updated;
+      }
+    }
+    apply(remove, -1);
+    apply(add, 1);
+    return next;
   }
 }
 
