@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -10,10 +10,10 @@ import 'package:get_thumbnail_video/index.dart';
 import 'package:get_thumbnail_video/video_thumbnail.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:provider/provider.dart';
-
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:provider/provider.dart';
 
 enum _StoryComposeMode { text, media }
 
@@ -110,7 +110,7 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
     if (_submitting) return;
     if (!_hasContent) {
       showCustomSnackBar(
-        'Hãy thêm nội dung trước khi đăng tin.',
+        getTranslated('story_content_required', context) ?? 'Content required',
         context,
         isError: true,
       );
@@ -130,7 +130,8 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
         if (!mounted) return;
         if (image == null) {
           showCustomSnackBar(
-            'Không thể tạo hình ảnh từ văn bản.',
+            getTranslated('story_cannot_generate_image', context) ??
+                'Cannot generate image',
             context,
             isError: true,
           );
@@ -176,17 +177,14 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
   Future<File?> _renderTextStoryToImageFile() async {
     if (kIsWeb) return null;
     await Future<void>.delayed(const Duration(milliseconds: 20));
-    final boundary =
-        _textPreviewKey.currentContext?.findRenderObject()
-            as RenderRepaintBoundary?;
+    final boundary = _textPreviewKey.currentContext?.findRenderObject()
+        as RenderRepaintBoundary?;
     if (boundary == null) return null;
-    final double pixelRatio = MediaQuery.of(
-      context,
-    ).devicePixelRatio.clamp(2.0, 4.0).toDouble();
+    final double pixelRatio =
+        MediaQuery.of(context).devicePixelRatio.clamp(2.0, 4.0).toDouble();
     final ui.Image image = await boundary.toImage(pixelRatio: pixelRatio);
-    final ByteData? byteData = await image.toByteData(
-      format: ui.ImageByteFormat.png,
-    );
+    final ByteData? byteData =
+        await image.toByteData(format: ui.ImageByteFormat.png);
     if (byteData == null) return null;
 
     final Uint8List bytes = byteData.buffer.asUint8List();
@@ -202,11 +200,7 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
     if (_mode == mode) return;
     setState(() {
       _mode = mode;
-      if (_mode == _StoryComposeMode.text) {
-        _allowMultiple = false;
-      } else {
-        _allowMultiple = true;
-      }
+      _allowMultiple = _mode != _StoryComposeMode.text;
     });
   }
 
@@ -240,12 +234,14 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
                   children: [
                     ListTile(
                       leading: const Icon(Icons.photo_library_outlined),
-                      title: const Text('Chọn ảnh'),
+                      title:
+                          Text(getTranslated('choose_photo', ctx) ?? 'Photo'),
                       onTap: () => Navigator.of(ctx).pop(false),
                     ),
                     ListTile(
                       leading: const Icon(Icons.videocam_outlined),
-                      title: const Text('Chọn video'),
+                      title:
+                          Text(getTranslated('choose_video', ctx) ?? 'Video'),
                       onTap: () => Navigator.of(ctx).pop(true),
                     ),
                   ],
@@ -285,7 +281,8 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
   Future<void> _pickVideo(ImageSource source) async {
     if (!_supportsVideo) {
       showCustomSnackBar(
-        'Thiết bị không hỗ trợ chọn video.',
+        getTranslated('device_not_support_video_picker', context) ??
+            'Device does not support video picking',
         context,
         isError: true,
       );
@@ -329,7 +326,8 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
     if (_mode == _StoryComposeMode.text) return;
     if (_selectedMedia.any((media) => media.isVideo)) {
       showCustomSnackBar(
-        'Bạn đã chọn video, vui lòng bỏ chọn video trước khi bật chế độ nhiều file.',
+        getTranslated('remove_video_before_multi_select', context) ??
+            'Remove video before selecting multiple',
         context,
         isError: true,
       );
@@ -367,7 +365,9 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
     return Scaffold(
       backgroundColor: colorScheme.background,
       appBar: AppBar(
-        title: const Text('Tạo tin'),
+        title: Text(
+          getTranslated('create_story', context) ?? 'Create story',
+        ),
         actions: [
           TextButton(
             onPressed: _submitting ? null : _handleSubmit,
@@ -377,7 +377,7 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
                     width: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text('Đăng'),
+                : Text(getTranslated('post_action', context) ?? 'Post'),
           ),
         ],
       ),
@@ -392,7 +392,11 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
                       mode == _StoryComposeMode.text) {
                     _toggleMode(mode);
                   } else {
-                    showCustomSnackBar('Tính năng đang phát triển.', context);
+                    showCustomSnackBar(
+                      getTranslated('feature_in_development_short', context) ??
+                          'Coming soon',
+                      context,
+                    );
                   }
                 },
                 onOpenCamera: () => _pickSingleImage(ImageSource.camera),
@@ -400,22 +404,24 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
                 supportsVideo: _supportsVideo,
               ),
               Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: _submitting ? null : _pickFromGallery,
                         icon: const Icon(Icons.photo_library_outlined),
-                        label: const Text('Thư viện ảnh'),
+                        label: Text(getTranslated('photo_library', context) ??
+                            'Photo library'),
                       ),
                     ),
                     const SizedBox(width: 12),
                     FilterChip(
-                      label: const Text('Chọn nhiều file'),
+                      label: Text(
+                        getTranslated('select_multiple_files', context) ??
+                            'Select multiple',
+                      ),
                       selected:
                           _mode != _StoryComposeMode.text && _allowMultiple,
                       onSelected: (_) => _toggleMultipleSelection(),
@@ -433,16 +439,15 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
               ),
               if (_mode == _StoryComposeMode.media)
                 Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: TextField(
                     controller: _captionController,
                     maxLines: 2,
-                    decoration: const InputDecoration(
-                      hintText: 'Thêm chú thích cho tin (tuỳ chọn)',
-                      border: OutlineInputBorder(
+                    decoration: InputDecoration(
+                      hintText: getTranslated('story_caption_hint', context) ??
+                          'Write a caption…',
+                      border: const OutlineInputBorder(
                         borderRadius: BorderRadius.all(Radius.circular(12)),
                       ),
                     ),
@@ -464,9 +469,9 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
   Widget _buildTextComposer(BuildContext context) {
     final _StoryBackground background =
         _backgrounds[_selectedBackgroundIndex.clamp(
-          0,
-          _backgrounds.length - 1,
-        )];
+      0,
+      _backgrounds.length - 1,
+    )];
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -486,7 +491,9 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
                       child: Center(
                         child: Text(
                           _textController.text.trim().isEmpty
-                              ? 'Hãy chia sẻ điều bạn đang nghĩ...'
+                              ? (getTranslated(
+                                      'story_text_placeholder_long', context) ??
+                                  'Write something…')
                               : _textController.text.trim(),
                           textAlign: _textAlign,
                           style: TextStyle(
@@ -509,9 +516,10 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
             focusNode: _textFocus,
             maxLines: 3,
             minLines: 1,
-            decoration: const InputDecoration(
-              hintText: 'Viết gì đó...',
-              border: OutlineInputBorder(
+            decoration: InputDecoration(
+              hintText:
+                  getTranslated('story_text_hint', context) ?? 'Add your text…',
+              border: const OutlineInputBorder(
                 borderRadius: BorderRadius.all(Radius.circular(12)),
               ),
             ),
@@ -566,7 +574,7 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
       children: [
         Row(
           children: [
-            const Text('Căn chỉnh'),
+            Text(getTranslated('story_text_align', context) ?? 'Text align'),
             const Spacer(),
             IconButton(
               onPressed: _cycleTextAlign,
@@ -574,15 +582,17 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
                 _textAlign == TextAlign.left
                     ? Icons.format_align_left
                     : _textAlign == TextAlign.center
-                    ? Icons.format_align_center
-                    : Icons.format_align_right,
+                        ? Icons.format_align_center
+                        : Icons.format_align_right,
               ),
+              tooltip:
+                  getTranslated('story_change_alignment', context) ?? 'Align',
             ),
           ],
         ),
         Row(
           children: [
-            const Text('Kích thước chữ'),
+            Text(getTranslated('story_font_size', context) ?? 'Font size'),
             Expanded(
               child: Slider(
                 value: _fontSize,
@@ -609,9 +619,8 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
           children: [
             CircleAvatar(
               radius: 40,
-              backgroundColor: Theme.of(
-                context,
-              ).colorScheme.primary.withOpacity(0.1),
+              backgroundColor:
+                  Theme.of(context).colorScheme.primary.withOpacity(0.1),
               child: Icon(
                 Icons.photo_outlined,
                 size: 40,
@@ -619,7 +628,8 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            const Text('Chọn ảnh hoặc video để bắt đầu'),
+            Text(getTranslated('story_choose_media_prompt', context) ??
+                'Choose photos or videos'),
           ],
         ),
       );
@@ -715,49 +725,58 @@ class _StoryFeatureBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    String t(String key) => getTranslated(key, context) ?? key;
+
+    // FIX overflow: dùng scroll ngang thay vì Row cứng + Spacer
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          _StoryFeatureChip(
-            icon: Icons.text_fields,
-            label: 'Văn bản',
-            selected: mode == _StoryComposeMode.text,
-            onTap: () => onSelect(_StoryComposeMode.text),
-          ),
-          const SizedBox(width: 8),
-          _StoryFeatureChip(
-            icon: Icons.music_note,
-            label: 'Nhạc',
-            selected: false,
-            onTap: () =>
-                showCustomSnackBar('Tính năng nhạc sẽ sớm có mặt.', context),
-          ),
-          const SizedBox(width: 8),
-          _StoryFeatureChip(
-            icon: Icons.all_inclusive,
-            label: 'Boomerang',
-            selected: false,
-            onTap: () => showCustomSnackBar(
-              'Tính năng Boomerang sẽ sớm có mặt.',
-              context,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _StoryFeatureChip(
+              icon: Icons.text_fields,
+              label: t('story_feature_text'),
+              selected: mode == _StoryComposeMode.text,
+              onTap: () => onSelect(_StoryComposeMode.text),
             ),
-          ),
-          const Spacer(),
-          IconButton(
-            tooltip: 'Chụp ảnh',
-            icon: const Icon(Icons.camera_alt_outlined),
-            color: colorScheme.onSurface,
-            onPressed: onOpenCamera,
-          ),
-          if (supportsVideo)
+            const SizedBox(width: 8),
+            _StoryFeatureChip(
+              icon: Icons.music_note,
+              label: t('story_feature_music'),
+              selected: false,
+              onTap: () => showCustomSnackBar(
+                t('story_music_coming_soon'),
+                context,
+              ),
+            ),
+            const SizedBox(width: 8),
+            _StoryFeatureChip(
+              icon: Icons.all_inclusive,
+              label: t('story_feature_boomerang'),
+              selected: false,
+              onTap: () => showCustomSnackBar(
+                t('story_boomerang_coming_soon'),
+                context,
+              ),
+            ),
+            const SizedBox(width: 12),
             IconButton(
-              tooltip: 'Quay video',
-              icon: const Icon(Icons.videocam_outlined),
+              tooltip: t('capture_photo'),
+              icon: const Icon(Icons.camera_alt_outlined),
               color: colorScheme.onSurface,
-              onPressed: onOpenVideoCamera,
+              onPressed: onOpenCamera,
             ),
-        ],
+            if (supportsVideo)
+              IconButton(
+                tooltip: t('record_video'),
+                icon: const Icon(Icons.videocam_outlined),
+                color: colorScheme.onSurface,
+                onPressed: onOpenVideoCamera,
+              ),
+          ],
+        ),
       ),
     );
   }

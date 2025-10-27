@@ -16,6 +16,7 @@ class Images {
   static const String friendImage = 'assets/images/friends.png';
   static const String ReelsImage = 'assets/images/clapperboard.png';
   static const String SocialIcon = 'assets/images/social_icon.png';
+  static const String TravelIcon = 'assets/images/icon_travel.png';
   static const String messageImage = 'assets/images/inbox.png';
   static const String moreImage = 'assets/images/more.png';
   static const String shoppingImage = 'assets/images/order.png';

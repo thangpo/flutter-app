@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:collection';
 import 'dart:math';
 
@@ -10,6 +10,7 @@ import 'package:video_player/video_player.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 
 class SocialStoryViewerScreen extends StatefulWidget {
   final List<SocialStory> stories;
@@ -265,27 +266,27 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
 
     controller
         .reactOnStoryItem(
-          story: storySnapshot,
-          item: itemSnapshot,
-          reaction: sendValue,
-        )
+      story: storySnapshot,
+      item: itemSnapshot,
+      reaction: sendValue,
+    )
         .whenComplete(() {
-          if (!mounted) return;
-          setState(() {
-            _reactionRequestInFlight = false;
-            if (_reactionQueue.isEmpty) {
-              _reactionOverride = null;
-            }
-          });
-          if (_reactionQueue.isNotEmpty) {
-            _reactionDebounceTimer = Timer(
-              const Duration(milliseconds: 0),
-              _dispatchPendingReaction,
-            );
-          } else {
-            _resumeAfterReaction();
-          }
-        });
+      if (!mounted) return;
+      setState(() {
+        _reactionRequestInFlight = false;
+        if (_reactionQueue.isEmpty) {
+          _reactionOverride = null;
+        }
+      });
+      if (_reactionQueue.isNotEmpty) {
+        _reactionDebounceTimer = Timer(
+          const Duration(milliseconds: 0),
+          _dispatchPendingReaction,
+        );
+      } else {
+        _resumeAfterReaction();
+      }
+    });
   }
 
   void _precacheNextImage() {
@@ -679,10 +680,10 @@ class _StoryMedia extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (item == null) {
-      return const Center(
+      return Center(
         child: Text(
-          'Story unavailable',
-          style: TextStyle(color: Colors.white70),
+          getTranslated('story_unavailable', context) ?? 'Story unavailable',
+          style: const TextStyle(color: Colors.white70),
         ),
       );
     }
@@ -792,7 +793,7 @@ class _StoryHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    final String? timeText = _relativeTimeText(currentItem?.postedAt);
+    final String? timeText = _relativeTimeText(context, currentItem?.postedAt);
     final int watchers = viewCount ?? 0;
 
     return Padding(
@@ -818,7 +819,7 @@ class _StoryHeader extends StatelessWidget {
                 Text(
                   story.userName?.isNotEmpty == true
                       ? story.userName!
-                      : 'Story',
+                      : (getTranslated('story', context) ?? 'Story'),
                   style: theme.textTheme.titleMedium?.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w600,
@@ -864,7 +865,7 @@ class _StoryHeader extends StatelessWidget {
                         color: Colors.white,
                       ),
                       label: Text(
-                        '$watchers nguoi xem',
+                        '$watchers ${getTranslated('people_viewed', context) ?? 'viewers'}',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: Colors.white,
                         ),
@@ -938,8 +939,7 @@ class _StoryFooterState extends State<_StoryFooter>
     final BuildContext? iconContext = _iconKeys[reactionLabel]?.currentContext;
     if (stackContext == null || iconContext == null) return;
 
-    final RenderBox? stackBox =
-        stackContext.findRenderObject() as RenderBox?;
+    final RenderBox? stackBox = stackContext.findRenderObject() as RenderBox?;
     final RenderBox? iconBox = iconContext.findRenderObject() as RenderBox?;
     if (stackBox == null || iconBox == null) return;
 
@@ -994,8 +994,8 @@ class _StoryFooterState extends State<_StoryFooter>
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Text(
-                widget.caption!
-                    .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n'),
+                widget.caption!.replaceAll(
+                    RegExp(r'<br\s*/?>', caseSensitive: false), '\n'),
                 style: theme.textTheme.bodyLarge?.copyWith(
                   color: Colors.white,
                   height: 1.4,
@@ -1013,7 +1013,8 @@ class _StoryFooterState extends State<_StoryFooter>
               children: [
                 Expanded(
                   child: Text(
-                    'Gui tin nhan...',
+                    getTranslated('send_message_placeholder', context) ??
+                        'Send a message...',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: Colors.white70,
                     ),
@@ -1046,7 +1047,8 @@ class _StoryFooterState extends State<_StoryFooter>
                               width: 48,
                               height: 48,
                               decoration: BoxDecoration(
-                                color: isSelected ? Colors.white : Colors.black54,
+                                color:
+                                    isSelected ? Colors.white : Colors.black54,
                                 shape: BoxShape.circle,
                                 border: Border.all(
                                   color: isSelected
@@ -1072,7 +1074,7 @@ class _StoryFooterState extends State<_StoryFooter>
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              _storyReactionLabel(reactionLabel),
+                              _storyReactionLabel(context, reactionLabel),
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: Colors.white,
                                 fontWeight: isSelected
@@ -1263,7 +1265,7 @@ class _StoryViewersSheet extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '$total nguoi xem',
+                            '$total ${getTranslated('people_viewed', context) ?? 'viewers'}',
                             style: theme.textTheme.titleMedium?.copyWith(
                               color: Colors.white,
                               fontWeight: FontWeight.w600,
@@ -1283,7 +1285,9 @@ class _StoryViewersSheet extends StatelessWidget {
                               ),
                             ),
                             icon: const Icon(Icons.refresh, size: 18),
-                            label: const Text('Lam moi'),
+                            label: Text(
+                              getTranslated('refresh', context) ?? 'Refresh',
+                            ),
                           ),
                         ],
                       ),
@@ -1325,7 +1329,9 @@ class _StoryViewersSheet extends StatelessWidget {
                         vertical: 10,
                       ),
                     ),
-                    child: const Text('Xem them'),
+                    child: Text(
+                      getTranslated('see_more', context) ?? 'See more',
+                    ),
                   ),
                 ),
             ],
@@ -1390,7 +1396,7 @@ class _StoryViewerTile extends StatelessWidget {
         maxVisible: 8,
       );
     }
-    final String? timeText = _relativeTimeText(viewer.viewedAt);
+    final String? timeText = _relativeTimeText(context, viewer.viewedAt);
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
       leading: CircleAvatar(
@@ -1406,7 +1412,9 @@ class _StoryViewerTile extends StatelessWidget {
         children: [
           Expanded(
             child: Text(
-              viewer.name?.isNotEmpty == true ? viewer.name! : 'Nguoi dung',
+              viewer.name?.isNotEmpty == true
+                  ? viewer.name!
+                  : (getTranslated('user', context) ?? 'User'),
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w600,
@@ -1455,31 +1463,43 @@ String _storyReactionAsset(String reaction) {
   }
 }
 
-String _storyReactionLabel(String reaction) {
+String _storyReactionLabel(BuildContext context, String reaction) {
   switch (normalizeSocialReaction(reaction)) {
     case 'Love':
-      return 'Love';
+      return getTranslated('reaction_love', context) ?? 'Love';
     case 'HaHa':
-      return 'Haha';
+      return getTranslated('reaction_haha', context) ?? 'Haha';
     case 'Wow':
-      return 'Wow';
+      return getTranslated('reaction_wow', context) ?? 'Wow';
     case 'Sad':
-      return 'Sad';
+      return getTranslated('reaction_sad', context) ?? 'Sad';
     case 'Angry':
-      return 'Angry';
+      return getTranslated('reaction_angry', context) ?? 'Angry';
     case 'Like':
     default:
-      return 'Like';
+      return getTranslated('reaction_like', context) ?? 'Like';
   }
 }
 
-String? _relativeTimeText(DateTime? time) {
+String? _relativeTimeText(BuildContext context, DateTime? time) {
   if (time == null) return null;
   final Duration diff = DateTime.now().difference(time);
-  if (diff.inMinutes < 1) return 'Vua xong';
-  if (diff.inHours < 1) return '${diff.inMinutes} phut';
-  if (diff.inHours < 24) return '${diff.inHours} gio';
-  if (diff.inDays < 7) return '${diff.inDays} ngay';
+  if (diff.inMinutes < 1) {
+    return getTranslated('just_now', context) ?? 'Just now';
+  }
+  if (diff.inHours < 1) {
+    final String unit = getTranslated('minutes_short', context) ?? 'm';
+    return '${diff.inMinutes} $unit';
+  }
+  if (diff.inHours < 24) {
+    final String unit = getTranslated('hours_short', context) ?? 'h';
+    return '${diff.inHours} $unit';
+  }
+  if (diff.inDays < 7) {
+    final String unit = getTranslated('days_short', context) ?? 'd';
+    return '${diff.inDays} $unit';
+  }
   final int weeks = (diff.inDays / 7).floor();
-  return '$weeks tuan';
+  final String unit = getTranslated('weeks_short', context) ?? 'w';
+  return '$weeks $unit';
 }

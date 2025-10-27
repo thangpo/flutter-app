@@ -1,10 +1,10 @@
 ﻿import 'dart:io';
 
+import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-
-import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/features/profile/controllers/profile_contrroller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/profile/domain/models/profile_model.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
@@ -59,12 +59,12 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
             children: [
               ListTile(
                 leading: const Icon(Icons.photo_library_outlined),
-                title: const Text('Thêm ảnh'),
+                title: Text(getTranslated('add_photo', ctx) ?? 'Add photo'),
                 onTap: () => Navigator.of(ctx).pop(false),
               ),
               ListTile(
                 leading: const Icon(Icons.videocam_outlined),
-                title: const Text('Thêm video'),
+                title: Text(getTranslated('add_video', ctx) ?? 'Add video'),
                 onTap: () => Navigator.of(ctx).pop(true),
               ),
             ],
@@ -83,7 +83,8 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
   Future<void> _pickImages() async {
     if (_video != null) {
       showCustomSnackBar(
-        'Đã chọn video, hãy gỡ video trước khi thêm ảnh.',
+        getTranslated('remove_video_before_adding_images', context) ??
+            'Remove the video before adding images',
         context,
         isError: true,
       );
@@ -101,14 +102,17 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
   Future<void> _pickVideo() async {
     if (_images.isNotEmpty) {
       showCustomSnackBar(
-        'Đã chọn ảnh, hãy gỡ ảnh trước khi thêm video.',
+        getTranslated('remove_images_before_adding_video', context) ??
+            'Remove images before adding a video',
         context,
         isError: true,
       );
       return;
     }
     final XFile? file = await _picker.pickVideo(
-        source: ImageSource.gallery, maxDuration: const Duration(minutes: 5));
+      source: ImageSource.gallery,
+      maxDuration: const Duration(minutes: 5),
+    );
     if (!mounted || file == null) return;
     setState(() {
       _video = file;
@@ -138,7 +142,8 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
   Future<void> _submit() async {
     if (!_hasContent || _submitting) {
       showCustomSnackBar(
-        'Hãy viết gì đó hoặc thêm nội dung trước khi đăng.',
+        getTranslated('post_content_required', context) ??
+            'Please add something to your post',
         context,
         isError: true,
       );
@@ -162,7 +167,7 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
         Navigator.of(context).pop<SocialPost>(created);
       }
     } catch (_) {
-      // Error already surfaced via showCustomSnackBar in controller.
+      // Errors are surfaced via showCustomSnackBar inside controller if any.
     } finally {
       if (mounted) {
         setState(() {
@@ -179,47 +184,49 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
         context.watch<ProfileController>().userInfoModel;
     final social = context.watch<SocialController>();
     final socialUser = social.currentUser;
-    final _PrivacyOption selectedPrivacy = _privacyOptions.firstWhere(
+    final List<_PrivacyOption> privacyChoices = _buildPrivacyOptions(context);
+    final _PrivacyOption selectedPrivacy = privacyChoices.firstWhere(
       (opt) => opt.value == _privacy,
-      orElse: () => _privacyOptions.first,
+      orElse: () => privacyChoices.first,
     );
 
     final List<_ComposeAction> actions = [
       _ComposeAction(
         icon: Icons.photo_library_outlined,
         color: Colors.green,
-        label: 'Ảnh/video',
+        label: getTranslated('photos_videos', context) ?? 'Photos/Videos',
         onTap: _onPickMedia,
       ),
       _ComposeAction(
         icon: Icons.person_add_alt_1_outlined,
         color: Colors.lightBlue,
-        label: 'Gắn thẻ người khác',
-        onTap: () => _showComingSoon('Gắn thẻ người khác'),
+        label: getTranslated('tag_people', context) ?? 'Tag people',
+        onTap: () => _showComingSoon('tag_people'),
       ),
       _ComposeAction(
         icon: Icons.emoji_emotions_outlined,
         color: Colors.orange,
-        label: 'Cảm xúc/hoạt động',
-        onTap: () => _showComingSoon('Cảm xúc/hoạt động'),
+        label:
+            getTranslated('feelings_activity', context) ?? 'Feeling/Activity',
+        onTap: () => _showComingSoon('feelings_activity'),
       ),
       _ComposeAction(
         icon: Icons.place_outlined,
         color: Colors.redAccent,
-        label: 'Check in',
-        onTap: () => _showComingSoon('Check in'),
+        label: getTranslated('check_in', context) ?? 'Check in',
+        onTap: () => _showComingSoon('check_in'),
       ),
       _ComposeAction(
         icon: Icons.videocam_outlined,
         color: Colors.purple,
-        label: 'Video trực tiếp',
-        onTap: () => _showComingSoon('Video trực tiếp'),
+        label: getTranslated('live_video', context) ?? 'Live video',
+        onTap: () => _showComingSoon('live_video'),
       ),
       _ComposeAction(
         icon: Icons.format_color_fill_outlined,
         color: Colors.teal,
-        label: 'Màu nền',
-        onTap: () => _showComingSoon('Màu nền'),
+        label: getTranslated('background_color', context) ?? 'Background color',
+        onTap: () => _showComingSoon('background_color'),
       ),
     ];
 
@@ -233,7 +240,7 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
                   Navigator.of(context).maybePop();
                 },
         ),
-        title: const Text('Tạo bài viết'),
+        title: Text(getTranslated('create_post', context) ?? 'Create post'),
         actions: [
           TextButton(
             onPressed: _submitting || !_hasContent ? null : _submit,
@@ -248,7 +255,7 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
                       ),
                     ),
                   )
-                : const Text('Đăng'),
+                : Text(getTranslated('post_action', context) ?? 'Post'),
           ),
         ],
       ),
@@ -263,7 +270,12 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildComposerHeader(
-                        socialUser, profile, selectedPrivacy, theme),
+                      socialUser,
+                      profile,
+                      privacyChoices,
+                      selectedPrivacy,
+                      theme,
+                    ),
                     const SizedBox(height: 16),
                     _buildTextField(theme),
                     if (_images.isNotEmpty) ...[
@@ -288,6 +300,7 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
   Widget _buildComposerHeader(
     SocialUser? user,
     ProfileModel? profile,
+    List<_PrivacyOption> options,
     _PrivacyOption selectedPrivacy,
     ThemeData theme,
   ) {
@@ -326,7 +339,7 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
                 ),
               ),
               const SizedBox(height: 6),
-              _buildPrivacyControl(selectedPrivacy, theme),
+              _buildPrivacyControl(options, selectedPrivacy, theme),
             ],
           ),
         ),
@@ -334,7 +347,11 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
     );
   }
 
-  Widget _buildPrivacyControl(_PrivacyOption selectedPrivacy, ThemeData theme) {
+  Widget _buildPrivacyControl(
+    List<_PrivacyOption> options,
+    _PrivacyOption selectedPrivacy,
+    ThemeData theme,
+  ) {
     final ColorScheme cs = theme.colorScheme;
     return PopupMenuButton<int>(
       initialValue: selectedPrivacy.value,
@@ -344,7 +361,7 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
         });
       },
       itemBuilder: (BuildContext context) {
-        return _privacyOptions
+        return options
             .map(
               (opt) => PopupMenuItem<int>(
                 value: opt.value,
@@ -399,8 +416,9 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
       controller: _textController,
       maxLines: null,
       minLines: 5,
-      decoration: const InputDecoration(
-        hintText: 'Bạn đang nghĩ gì?',
+      decoration: InputDecoration(
+        hintText: getTranslated('whats_on_your_mind', context) ??
+            "What's on your mind?",
         border: InputBorder.none,
       ),
       style: theme.textTheme.titleMedium?.copyWith(fontSize: 18),
@@ -465,7 +483,8 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
                       size: 40, color: cs.onSurface.withOpacity(.7)),
                   const SizedBox(height: 8),
                   Text(
-                    'Video đã chọn',
+                    getTranslated('selected_video', context) ??
+                        'Selected video',
                     style: theme.textTheme.bodyMedium,
                   ),
                 ],
@@ -541,9 +560,32 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
     );
   }
 
-  void _showComingSoon(String feature) {
-    showCustomSnackBar('$feature đang được phát triển.', context,
-        isError: false);
+  List<_PrivacyOption> _buildPrivacyOptions(BuildContext ctx) {
+    return [
+      _PrivacyOption(
+        value: 0,
+        label: getTranslated('privacy_public', ctx) ?? 'Public',
+        icon: Icons.public,
+      ),
+      _PrivacyOption(
+        value: 1,
+        label: getTranslated('privacy_friends', ctx) ?? 'Friends',
+        icon: Icons.people,
+      ),
+      _PrivacyOption(
+        value: 2,
+        label: getTranslated('privacy_only_me', ctx) ?? 'Only me',
+        icon: Icons.lock,
+      ),
+    ];
+  }
+
+  void _showComingSoon(String featureKey) {
+    final String feature = getTranslated(featureKey, context) ?? featureKey;
+    final String template = getTranslated('feature_in_development', context) ??
+        '"{feature}" is being developed';
+    final String message = template.replaceAll('{feature}', feature);
+    showCustomSnackBar(message, context, isError: false);
   }
 
   String _displayName(SocialUser? user, ProfileModel? profile) {
@@ -564,7 +606,7 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
       final String name = profile.name?.trim() ?? '';
       if (name.isNotEmpty) return name;
     }
-    return 'Người dùng';
+    return getTranslated('social_user_placeholder', context) ?? 'User';
   }
 }
 
@@ -580,12 +622,6 @@ class _PrivacyOption {
   });
 }
 
-const List<_PrivacyOption> _privacyOptions = [
-  _PrivacyOption(value: 0, label: 'Công khai', icon: Icons.public),
-  _PrivacyOption(value: 1, label: 'Bạn bè', icon: Icons.people),
-  _PrivacyOption(value: 2, label: 'Chỉ mình tôi', icon: Icons.lock),
-];
-
 class _ComposeAction {
   final IconData icon;
   final Color color;
@@ -599,4 +635,3 @@ class _ComposeAction {
     required this.onTap,
   });
 }
-

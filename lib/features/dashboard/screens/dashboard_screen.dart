@@ -108,6 +108,10 @@ class DashBoardScreenState extends State<DashBoardScreen> {
                 ? const AsterThemeHomeScreen()
                 : const FashionThemeHomePage(),
       ),
+      NavigationModel(
+          name: 'travel',
+          icon: Images.TravelIcon,
+          screen: const InboxScreen(isBackButtonExist: false)),
 
       NavigationModel(
           name: 'notifications',
