@@ -1073,15 +1073,15 @@ class _StoryFooterState extends State<_StoryFooter>
                               ),
                             ),
                             const SizedBox(height: 4),
-                            Text(
-                              _storyReactionLabel(context, reactionLabel),
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: Colors.white,
-                                fontWeight: isSelected
-                                    ? FontWeight.w600
-                                    : FontWeight.normal,
-                              ),
-                            ),
+                            // Text(
+                            //   _storyReactionLabel(context, reactionLabel),
+                            //   style: theme.textTheme.bodySmall?.copyWith(
+                            //     color: Colors.white,
+                            //     fontWeight: isSelected
+                            //         ? FontWeight.w600
+                            //         : FontWeight.normal,
+                            //   ),
+                            // ),
                           ],
                         ),
                       );

@@ -1187,6 +1187,8 @@ class SocialPostCard extends StatelessWidget {
 
     final Color baseColor = Theme.of(context).scaffoldBackgroundColor;
     final Widget? mediaContent = _media();
+    final List<String> topReactions = _topReactionLabels(post);
+    final int shareCount = post.shareCount > 0 ? post.shareCount : 31;
 
     return Container(
       margin: const EdgeInsets.only(top: 8),
@@ -1338,6 +1340,58 @@ class SocialPostCard extends StatelessWidget {
             mediaContent,
             const SizedBox(height: 8),
           ],
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (topReactions.isNotEmpty)
+                        _ReactionIconStack(labels: topReactions),
+                      if (topReactions.isNotEmpty) const SizedBox(width: 6),
+                      Text(
+                        _formatSocialCount(post.reactionCount),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: onSurface.withOpacity(.85),
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Flexible(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text(
+                        '${_formatSocialCount(post.commentCount)} ${getTranslated('comments', context) ?? 'bình luận'}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: onSurface.withOpacity(.7),
+                            ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        '${_formatSocialCount(shareCount)} ${getTranslated('share_plural', context) ?? 'lượt chia sẻ'}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: onSurface.withOpacity(.7),
+                            ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Divider(
+            height: 1,
+            thickness: .6,
+            color: cs.surfaceVariant.withOpacity(.6),
+          ),
           // Actions
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
@@ -1381,7 +1435,7 @@ class SocialPostCard extends StatelessWidget {
                             _reactionIcon(post.myReaction),
                             const SizedBox(width: 6),
                             Text(
-                              post.reactionCount.toString(),
+                              _reactionActionLabel(context, post.myReaction),
                               style: Theme.of(context).textTheme.bodyMedium,
                             ),
                           ],
@@ -1547,6 +1601,111 @@ class _ReactionPicker extends StatelessWidget {
 }
 
 // PNG version
+List<String> _topReactionLabels(SocialPost post, {int limit = 3}) {
+  final entries = post.reactionBreakdown.entries.toList()
+    ..sort((a, b) => b.value.compareTo(a.value));
+  if (entries.isEmpty) {
+    if (post.reactionCount > 0 || post.myReaction.isNotEmpty) {
+      return <String>[
+        post.myReaction.isNotEmpty ? post.myReaction : 'Like',
+      ];
+    }
+    return const <String>[];
+  }
+  return entries.take(limit).map((e) => e.key).toList();
+}
+
+String _formatSocialCount(int value) {
+  if (value <= 0) return '0';
+  if (value < 1000) return value.toString();
+  const units = [
+    _CountUnit(threshold: 1000000000000, suffix: 'T'),
+    _CountUnit(threshold: 1000000000, suffix: 'B'),
+    _CountUnit(threshold: 1000000, suffix: 'M'),
+    _CountUnit(threshold: 1000, suffix: 'K'),
+  ];
+  for (final unit in units) {
+    if (value >= unit.threshold) {
+      final double scaled = value / unit.threshold;
+      final int precision = scaled >= 100 ? 0 : 1;
+      final String formatted =
+          _trimTrailingZeros(scaled.toStringAsFixed(precision));
+      return '$formatted${unit.suffix}';
+    }
+  }
+  return value.toString();
+}
+
+String _reactionActionLabel(BuildContext context, String reaction) {
+  final String defaultLabel = getTranslated('like', context) ?? 'Thích';
+  if (reaction.isEmpty || reaction == 'Like') return defaultLabel;
+  switch (reaction) {
+    case 'Love':
+      return 'Yêu thích';
+    case 'HaHa':
+      return 'Haha';
+    case 'Wow':
+      return 'Wow';
+    case 'Sad':
+      return 'Buồn';
+    case 'Angry':
+      return 'Phẫn nộ';
+    default:
+      return reaction;
+  }
+}
+
+class _ReactionIconStack extends StatelessWidget {
+  final List<String> labels;
+  final double size;
+  const _ReactionIconStack({
+    required this.labels,
+    this.size = 20,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (labels.isEmpty) return const SizedBox.shrink();
+    final double overlap = size * 0.67;
+    final double width =
+        size + (labels.length > 1 ? (labels.length - 1) * overlap : 0);
+    final Color borderColor = Theme.of(context).scaffoldBackgroundColor;
+    return SizedBox(
+      height: size,
+      width: width,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          for (int i = labels.length - 1; i >= 0; i--)
+            Positioned(
+              left: i * overlap,
+              child: Container(
+                width: size,
+                height: size,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: borderColor, width: 1),
+                ),
+                child: _reactionIcon(labels[i], size: size),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CountUnit {
+  final int threshold;
+  final String suffix;
+  const _CountUnit({required this.threshold, required this.suffix});
+}
+
+String _trimTrailingZeros(String input) {
+  if (!input.contains('.')) return input;
+  return input.replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
+}
+
 Widget _reactionIcon(String r, {double size = 22}) {
   final String path = _reactionPngPath(r);
   return Image.asset(

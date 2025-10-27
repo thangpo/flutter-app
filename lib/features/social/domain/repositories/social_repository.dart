@@ -183,59 +183,29 @@ class SocialRepository {
             }
           }
 
-          // reaction
-          final Map rx = (m['reaction'] is Map)
-              ? m['reaction'] as Map
-              : (m['reactions'] is Map ? m['reactions'] as Map : const {});
+          final Map<String, dynamic> rx =
+              _extractReactionMap(m['reaction'] ?? m['reactions']);
+          final int reactionCount = _reactionCountFromMap(rx);
+          final String myReaction = _reactionLabelFromMap(rx);
+          final Map<String, int> reactionBreakdown =
+              _reactionBreakdownFromMap(rx);
 
-          int _rxCount(Map rx) {
-            if (rx['count'] != null) {
-              return int.tryParse('${rx['count']}') ?? 0;
-            }
-            const keys = ['Like', 'Love', 'HaHa', 'Wow', 'Sad', 'Angry'];
-            int sum = 0;
-            for (final k in keys) {
-              final v = rx[k];
-              if (v is int) {
-                sum += v;
-              } else if (v != null) {
-                sum += int.tryParse('$v') ?? 0;
-              }
-            }
-            return sum;
-          }
+          final int commentCount = _resolveCount(<dynamic>[
+            m['post_comments'],
+            m['comments_count'],
+            m['comment_count'],
+            m['comments_num'],
+            m['comments'],
+            m['get_post_comments'],
+          ]);
 
-          String _rxMine(Map rx) {
-            final t = (rx['type'] ?? '').toString();
-            if (t.isNotEmpty) return t;
-            final isReacted = rx['is_reacted'] == true ||
-                rx['is_reacted'] == 1 ||
-                rx['is_reacted']?.toString() == '1';
-            return isReacted ? 'Like' : '';
-          }
-
-          final int reactionCount = _rxCount(rx);
-          String myReaction = _rxMine(rx);
-          switch (myReaction) {
-            case '1':
-              myReaction = 'Like';
-              break;
-            case '2':
-              myReaction = 'Love';
-              break;
-            case '3':
-              myReaction = 'HaHa';
-              break;
-            case '4':
-              myReaction = 'Wow';
-              break;
-            case '5':
-              myReaction = 'Sad';
-              break;
-            case '6':
-              myReaction = 'Angry';
-              break;
-          }
+          final int shareCount = _resolveCount(<dynamic>[
+            m['post_shares'],
+            m['shares'],
+            m['share_count'],
+            m['post_share'],
+            m['shared'],
+          ]);
 
           // product
           final Map product =
@@ -294,6 +264,9 @@ class SocialRepository {
               postType: postType,
               reactionCount: reactionCount,
               myReaction: myReaction,
+              reactionBreakdown: reactionBreakdown,
+              commentCount: commentCount,
+              shareCount: shareCount,
               hasProduct: hasProduct,
               productTitle: productName.isNotEmpty ? productName : null,
               productImages: productImages.isNotEmpty ? productImages : null,
@@ -1092,56 +1065,28 @@ class SocialRepository {
       }
     }
 
-    final Map rx = (map['reaction'] is Map)
-        ? map['reaction'] as Map
-        : (map['reactions'] is Map ? map['reactions'] as Map : const {});
+    final Map<String, dynamic> rx =
+        _extractReactionMap(map['reaction'] ?? map['reactions']);
+    final int reactionCount = _reactionCountFromMap(rx);
+    final String myReaction = _reactionLabelFromMap(rx);
+    final Map<String, int> reactionBreakdown = _reactionBreakdownFromMap(rx);
 
-    int _rxCount(Map rx) {
-      if (rx['count'] != null) return int.tryParse('${rx['count']}') ?? 0;
-      const keys = ['Like', 'Love', 'HaHa', 'Wow', 'Sad', 'Angry'];
-      int sum = 0;
-      for (final k in keys) {
-        final v = rx[k];
-        if (v is int) {
-          sum += v;
-        } else if (v != null) {
-          sum += int.tryParse('$v') ?? 0;
-        }
-      }
-      return sum;
-    }
+    final int commentCount = _resolveCount(<dynamic>[
+      map['post_comments'],
+      map['comments_count'],
+      map['comment_count'],
+      map['comments_num'],
+      map['comments'],
+      map['get_post_comments'],
+    ]);
 
-    String _rxMine(Map rx) {
-      final t = (rx['type'] ?? '').toString();
-      if (t.isNotEmpty) return t;
-      final isReacted = rx['is_reacted'] == true ||
-          rx['is_reacted'] == 1 ||
-          rx['is_reacted']?.toString() == '1';
-      return isReacted ? 'Like' : '';
-    }
-
-    int reactionCount = _rxCount(rx);
-    String myReaction = _rxMine(rx);
-    switch (myReaction) {
-      case '1':
-        myReaction = 'Like';
-        break;
-      case '2':
-        myReaction = 'Love';
-        break;
-      case '3':
-        myReaction = 'HaHa';
-        break;
-      case '4':
-        myReaction = 'Wow';
-        break;
-      case '5':
-        myReaction = 'Sad';
-        break;
-      case '6':
-        myReaction = 'Angry';
-        break;
-    }
+    final int shareCount = _resolveCount(<dynamic>[
+      map['post_shares'],
+      map['shares'],
+      map['share_count'],
+      map['post_share'],
+      map['shared'],
+    ]);
 
     final Map product =
         (map['product'] is Map) ? map['product'] as Map : const {};
@@ -1196,6 +1141,9 @@ class SocialRepository {
       postType: postType,
       reactionCount: reactionCount,
       myReaction: myReaction,
+      reactionBreakdown: reactionBreakdown,
+      commentCount: commentCount,
+      shareCount: shareCount,
       hasProduct: hasProduct,
       productTitle: productName.isNotEmpty ? productName : null,
       productImages: productImages.isNotEmpty ? productImages : null,
@@ -1707,6 +1655,37 @@ class SocialRepository {
     return <String, dynamic>{};
   }
 
+  Map<String, int> _reactionBreakdownFromMap(Map<String, dynamic> rx) {
+    if (rx.isEmpty) return const <String, int>{};
+    final Map<String, int> normalized = <String, int>{};
+    const labels = ['Like', 'Love', 'HaHa', 'Wow', 'Sad', 'Angry'];
+    for (final label in labels) {
+      final dynamic raw = _reactionValue(rx, label);
+      final int? count = _coerceInt(raw);
+      if (count != null && count > 0) {
+        normalized[label] = count;
+      }
+    }
+    if (normalized.isEmpty) return const <String, int>{};
+    return Map<String, int>.unmodifiable(normalized);
+  }
+
+  dynamic _reactionValue(Map<String, dynamic> rx, String label) {
+    final List<String> keys = <String>[
+      label,
+      label.toLowerCase(),
+      label.toUpperCase(),
+    ];
+    final String idKey = _mapReactionLabelToId(label);
+    if (idKey.isNotEmpty && !keys.contains(idKey)) {
+      keys.add(idKey);
+    }
+    for (final key in keys) {
+      if (rx.containsKey(key)) return rx[key];
+    }
+    return null;
+  }
+
   int _reactionCountFromMap(Map<String, dynamic> rx) {
     if (rx.isEmpty) return 0;
     if (rx['count'] != null) {
@@ -1738,6 +1717,32 @@ class SocialRepository {
       }
     }
     return _normalizeReactionLabel(label ?? '');
+  }
+
+  int _resolveCount(List<dynamic> candidates) {
+    for (final candidate in candidates) {
+      if (candidate == null) continue;
+      if (candidate is List) {
+        return candidate.length;
+      }
+      final int? parsed = _coerceInt(candidate);
+      if (parsed != null) return parsed;
+    }
+    return 0;
+  }
+
+  int? _coerceInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) {
+      final trimmed = value.trim();
+      if (trimmed.isEmpty) return null;
+      final normalized = trimmed.replaceAll(RegExp(r'[^0-9\-]'), '');
+      if (normalized.isEmpty) return null;
+      return int.tryParse(normalized);
+    }
+    return null;
   }
 
   String _normalizeReactionLabel(String reaction) {
