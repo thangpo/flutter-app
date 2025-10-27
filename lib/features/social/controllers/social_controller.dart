@@ -8,6 +8,9 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/soci
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/main.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
+
 class SocialController with ChangeNotifier {
   final SocialServiceInterface service;
   SocialController({required this.service});
@@ -30,6 +33,9 @@ class SocialController with ChangeNotifier {
 
   final List<SocialPost> _posts = [];
   List<SocialPost> get posts => List.unmodifiable(_posts);
+  
+   String? _accessToken;                         
+  String? get accessToken => _accessToken;
 
   final List<SocialStory> _stories = [];
   List<SocialStory> get stories => List.unmodifiable(_stories);
@@ -281,22 +287,37 @@ class SocialController with ChangeNotifier {
   }
 
   Future<void> loadCurrentUser({bool force = false}) async {
-    if (_loadingUser) return;
-    if (!force && _currentUser != null) return;
-    _loadingUser = true;
-    try {
-      final user = await service.getCurrentUser();
-      if (user != null) {
-        _currentUser = user;
-        _syncCurrentUserStoryFrom(_stories);
-        notifyListeners();
-      }
-    } catch (e) {
-      showCustomSnackBar(e.toString(), Get.context!, isError: true);
-    } finally {
-      _loadingUser = false;
+  if (_loadingUser) return;
+  if (!force && _currentUser != null) return;
+
+  _loadingUser = true;
+  try {
+    // 🔹 NẠP access token từ SharedPreferences nếu chưa có trong RAM
+    final sp = await SharedPreferences.getInstance();
+    _accessToken ??= sp.getString(AppConstants.socialAccessToken);
+
+    // 🔹 Nếu chưa kết nối WoWonder thì không gọi API, clear state nhẹ nhàng
+    if (_accessToken == null || _accessToken!.isEmpty) {
+      _currentUser = null;
+      _syncCurrentUserStoryFrom(_stories); // giữ logic đồng bộ story hiện có
+      notifyListeners();
+      return; // thoát sớm, finally vẫn chạy để _loadingUser=false
     }
+
+    
+    final user = await service.getCurrentUser();
+
+    if (user != null) {
+      _currentUser = user;
+      _syncCurrentUserStoryFrom(_stories);
+      notifyListeners();
+    }
+  } catch (e) {
+    showCustomSnackBar(e.toString(), Get.context!, isError: true);
+  } finally {
+    _loadingUser = false;
   }
+}
 
   Future<void> refresh() async {
     if (_loading) return;

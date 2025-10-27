@@ -33,6 +33,17 @@ class AppConstants {
   static const String socialGetPostDataUri = '/api/get-post-data';
   static const String socialCommentsUri = '/api/comments';
 
+  static const String socialGetFriendsUri    = '/api/get-friends';
+  static const String socialGetFollowersUri  = '/api/get-followers';
+  static const String socialGetFollowingUri  = '/api/get-following';
+
+  // Chat APIs – dùng đúng path theo WoWonder
+  static const String socialChatSendMessageUri = '/api/send-message';
+  static const String socialChatGetUserMessagesUri = '/api/get_user_messages';
+  static const String socialChatReadChatsUri = '/api/read_chats';
+
+
+
   static const String googleServerClientId = 'client_id here';
   static const String userId = 'userId';
   static const String name = 'name';

@@ -18,6 +18,8 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_story
 import 'package:flutter_sixvalley_ecommerce/helper/price_converter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_sixvalley_ecommerce/features/profile/controllers/profile_contrroller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_list_screen.dart';
+
 
 class SocialFeedScreen extends StatefulWidget {
   const SocialFeedScreen({super.key});
@@ -130,6 +132,9 @@ class _FacebookHeader extends StatelessWidget {
         ThemeData.estimateBrightnessForColor(appBarColor) == Brightness.dark;
     final Color onAppBar = isDark ? Colors.white : Colors.black87;
 
+    final sc = context.read<SocialController>();
+    final token = sc.accessToken; 
+
     return Container(
       padding: EdgeInsets.only(
         top: MediaQuery.of(context).padding.top + 8,
@@ -152,14 +157,31 @@ class _FacebookHeader extends StatelessWidget {
           Row(
             children: [
               _HeaderIcon(
-                  icon: Icons.search,
-                  iconColor: onAppBar,
-                  bubbleColor: onAppBar.withOpacity(0.08)),
+                icon: Icons.search,
+                iconColor: onAppBar,
+                bubbleColor: onAppBar.withOpacity(0.08),
+                onTap: () {
+                  // TODO: nếu muốn mở màn tìm kiếm
+                },
+              ),
               const SizedBox(width: 12),
-              _HeaderIcon(
-                  icon: Icons.messenger_outline,
-                  iconColor: onAppBar,
-                  bubbleColor: onAppBar.withOpacity(0.08)),
+             _HeaderIcon(
+                icon: Icons.messenger_outline,
+                iconColor: onAppBar,
+                bubbleColor: onAppBar.withOpacity(0.08),
+                onTap: () {
+                  final token = context.read<SocialController>().accessToken;
+                  if (token == null || token.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Vui lòng kết nối tài khoản WoWonder trước.')),
+                    );
+                    return;
+                  }
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => FriendsListScreen(accessToken: token)),
+                  );
+                },
+              ),
             ],
           ),
         ],
@@ -172,27 +194,31 @@ class _HeaderIcon extends StatelessWidget {
   final IconData icon;
   final Color? iconColor;
   final Color? bubbleColor;
+  final VoidCallback? onTap;
   const _HeaderIcon({
     required this.icon,
     this.iconColor,
     this.bubbleColor,
+     this.onTap, 
   });
 
-  @override
+ @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final onSurface = cs.onSurface;
 
-    return Container(
+    final child = Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        // elevated container theo surfaceVariant
         color: bubbleColor ?? cs.surfaceVariant,
         shape: BoxShape.circle,
       ),
-      child:
-          Icon(icon, color: iconColor ?? onSurface.withOpacity(.9), size: 24),
+      child: Icon(icon, color: iconColor ?? onSurface.withOpacity(.9), size: 24),
     );
+
+    return onTap == null
+        ? child
+        : InkWell(borderRadius: BorderRadius.circular(100), onTap: onTap, child: child); 
   }
 }
 
