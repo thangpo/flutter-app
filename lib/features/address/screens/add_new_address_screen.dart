@@ -1125,16 +1125,19 @@ class _AddNewAddressScreenState extends State<AddNewAddressScreen> {
                                       contactPersonName: _contactPersonNameController.text,
                                       phone: '${Provider.of<AuthController>(context, listen: false).countryDialCode}${_contactPersonNumberController.text.trim()}',
                                       email: _contactPersonEmailController.text.trim(),
-                                      city: _selectedProvince!.id.toString(),
-                                      district: _selectedWard!.id.toString(),
-                                      province: _selectedDistrict!.id.toString(),
+
+                                      city: _selectedProvince!.id.toString(),          // Tỉnh / Thành phố
+                                      district: _selectedDistrict!.id.toString(),      // Quận / Huyện
+                                      province: _selectedWard!.id.toString(),          // Phường / Xã
+
                                       country: _countryCodeController.text,
                                       guestId: Provider.of<AuthController>(context, listen: false).getGuestToken(),
                                       isBilling: _address == Address.billing,
                                       address: locationController.locationController.text,
-                                      latitude: widget.isEnableUpdate ? locationController.position.latitude.toString() : locationController.position.latitude.toString(),
-                                      longitude: widget.isEnableUpdate ? locationController.position.longitude.toString() : locationController.position.longitude.toString(),
+                                      latitude: locationController.position.latitude.toString(),
+                                      longitude: locationController.position.longitude.toString(),
                                     );
+
 
                                     if (widget.isEnableUpdate) {
                                       addressModel.id =

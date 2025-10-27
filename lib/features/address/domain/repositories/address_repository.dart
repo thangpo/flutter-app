@@ -62,6 +62,7 @@ class AddressRepository implements AddressRepoInterface<ApiResponseModel>{
   Future<ApiResponseModel> getList({int? offset}) async {
     try {
       final response = await dioClient!.get('${AppConstants.addressListUri}?guest_id=${Provider.of<AuthController>(Get.context!, listen: false).getGuestToken()}');
+      print('📦 Address API response: ${response.data}');
       return ApiResponseModel.withSuccess(response);
     } catch (e) {
       return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));

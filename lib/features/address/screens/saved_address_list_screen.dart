@@ -41,7 +41,7 @@ class _SavedAddressListScreenState extends State<SavedAddressListScreen> {
         builder: (context, locationProvider, child) {
           return SingleChildScrollView(
             child: Column(children: [
-              locationProvider.addressList != null? locationProvider.addressList!.isNotEmpty ?  ListView.builder(
+          locationProvider.addressList != null? locationProvider.addressList!.isNotEmpty ?  ListView.builder(
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: locationProvider.addressList?.length,
                 shrinkWrap: true,

@@ -951,7 +951,6 @@ class SocialMediaLoginOptions {
   }
 }
 
-
 class CustomerVerification {
   int? status;
   int? phone;
@@ -981,7 +980,6 @@ class CustomerVerification {
     return data;
   }
 }
-
 
 class InHouseShop {
   final int? id;
