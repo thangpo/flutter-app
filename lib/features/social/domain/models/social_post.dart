@@ -12,6 +12,7 @@ class SocialPost {
   final String? videoUrl;
   final String? audioUrl;
   final String? postType;
+  final SocialPost? sharedPost;
 
   // Reactions
   final int reactionCount; // tổng số phản ứng
@@ -48,6 +49,7 @@ class SocialPost {
     this.videoUrl,
     this.audioUrl,
     this.postType,
+    this.sharedPost,
     required this.reactionCount,
     required this.myReaction,
     this.reactionBreakdown = const <String, int>{},
@@ -77,6 +79,7 @@ class SocialPost {
     String? videoUrl,
     String? audioUrl,
     String? postType,
+    SocialPost? sharedPost,
     int? reactionCount,
     String? myReaction,
     Map<String, int>? reactionBreakdown,
@@ -105,6 +108,7 @@ class SocialPost {
       videoUrl: videoUrl ?? this.videoUrl,
       audioUrl: audioUrl ?? this.audioUrl,
       postType: postType ?? this.postType,
+      sharedPost: sharedPost ?? this.sharedPost,
       reactionCount: reactionCount ?? this.reactionCount,
       myReaction: myReaction ?? this.myReaction,
       reactionBreakdown: reactionBreakdown ?? this.reactionBreakdown,

@@ -64,4 +64,5 @@ abstract class SocialServiceInterface {
     int privacy = 0,
     String? backgroundColorId,
   });
+  Future<SocialPost> sharePost({required String postId, String? text});
 }
