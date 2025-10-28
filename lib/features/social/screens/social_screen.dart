@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
@@ -18,7 +18,9 @@ import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dar
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_sixvalley_ecommerce/features/profile/controllers/profile_contrroller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_list_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_profile_service.dart';
+
 
 class SocialFeedScreen extends StatefulWidget {
   const SocialFeedScreen({super.key});
@@ -35,7 +37,6 @@ class _SocialFeedScreenState extends State<SocialFeedScreen>
   @override
   void initState() {
     super.initState();
-    // Refresh sau khi màn hình mount d? ch?c có token
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final sc = context.read<SocialController>();
       sc.loadCurrentUser();
@@ -65,13 +66,13 @@ class _SocialFeedScreenState extends State<SocialFeedScreen>
                   return RefreshIndicator(
                     onRefresh: () => sc.refresh(),
                     child: NotificationListener<ScrollNotification>(
-                      onNotification: (n) {
-                        if (n.metrics.pixels >=
-                            n.metrics.maxScrollExtent - 200) {
-                          sc.loadMore();
-                        }
-                        return false;
-                      },
+                      // onNotification: (n) {
+                      //   if (n.metrics.pixels >=
+                      //       n.metrics.maxScrollExtent - 200) {
+                      //     sc.loadMore();
+                      //   }
+                      //   return false;
+                      // },
                       child: ListView.builder(
                         padding: EdgeInsets.zero,
                         itemCount: sc.posts.length +
@@ -102,6 +103,17 @@ class _SocialFeedScreenState extends State<SocialFeedScreen>
 
                           // Các post: b?t d?u t? i=2
                           final SocialPost p = sc.posts[i - 2];
+                          // Prefetch: khi người dùng chạm tới “nửa sau” của lô hiện tại thì nạp thêm
+                          const int pageSize = 10; // lô hiện tại đang là 10
+                          const int prefetchAt = pageSize ~/
+                              2; // 5  (tức là tới bài 5–6 sẽ gọi nạp)
+                          final int itemIndex = i - 2; // index trong mảng posts
+
+                          if (!sc.loading &&
+                              itemIndex >= sc.posts.length - prefetchAt) {
+                            sc.loadMore();
+                          }
+
                           return SocialPostCard(post: p);
                         },
                       ),
@@ -258,65 +270,92 @@ class _WhatsOnYourMind extends StatelessWidget {
     final user = social.currentUser;
     final profileCtrl = context.watch<ProfileController>();
     final fallbackProfile = profileCtrl.userInfoModel;
+
+    // ⚠️ Đổi .path -> .toString() để NetworkImage nhận URL đầy đủ
     final String? avatarUrl = () {
       final candidates = [
         user?.avatarUrl?.trim(),
-        fallbackProfile?.imageFullUrl?.path?.trim(),
+        fallbackProfile?.imageFullUrl?.toString().trim(),
         fallbackProfile?.image?.trim(),
       ];
-      for (final value in candidates) {
-        if (value != null && value.isNotEmpty) {
-          return value;
-        }
+      for (final v in candidates) {
+        if (v != null && v.isNotEmpty) return v;
       }
       return null;
     }();
 
     return Material(
       color: cs.surface,
-      child: InkWell(
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const SocialCreatePostScreen(),
-              fullscreenDialog: true,
-            ),
-          );
-        },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            children: [
-              CircleAvatar(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            // ===== Avatar: bấm -> ProfileScreen =====
+            InkWell(
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                );
+              },
+
+              borderRadius: BorderRadius.circular(999),
+              child: CircleAvatar(
                 radius: 20,
                 backgroundColor: cs.surfaceVariant,
-                backgroundImage:
-                    avatarUrl != null ? NetworkImage(avatarUrl) : null,
-                child: avatarUrl == null
+                backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
+                    ? NetworkImage(avatarUrl)
+                    : null,
+                child: (avatarUrl == null || avatarUrl.isEmpty)
                     ? Icon(Icons.person, color: cs.onSurface.withOpacity(.6))
                     : null,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  getTranslated('whats_on_your_mind', context) ??
-                      'What’s on your mind?',
-                  style: TextStyle(
-                    color: cs.onSurface.withOpacity(.7),
-                    fontSize: 16,
+            ),
+            const SizedBox(width: 12),
+
+            // ===== Ô “Bạn đang nghĩ gì?”: bấm -> tạo post =====
+            Expanded(
+              child: InkWell(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const SocialCreatePostScreen(),
+                      fullscreenDialog: true,
+                    ),
+                  );
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceVariant.withOpacity(.5),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    'Bạn đang nghĩ gì?',
+                    style: TextStyle(
+                      color: cs.onSurface.withOpacity(.7),
+                      fontSize: 16,
+                    ),
                   ),
                 ),
               ),
-              Container(
+            ),
+
+            const SizedBox(width: 12),
+
+            // (tuỳ chọn) nút +
+            InkWell(
+              onTap: () { /* TODO: action khác (ví dụ tạo story) */ },
+              customBorder: const CircleBorder(),
+              child: Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: cs.surfaceVariant,
+                decoration: const BoxDecoration(
                   shape: BoxShape.circle,
                 ),
                 child: Icon(Icons.add, color: cs.onSurface, size: 20),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -719,6 +758,15 @@ class SocialPostCard extends StatelessWidget {
       (ctrl) => ctrl.isSharing(post.id),
     );
 
+    final int reactionCount = post.reactionCount;
+    final int commentCount = post.commentCount;
+    // shareCount đã có ở trên
+
+    final bool showReactions = reactionCount > 0;
+    final bool showComments = commentCount > 0;
+    final bool showShares = shareCount > 0;
+    final bool showStats = showReactions || showComments || showShares;
+
     return Container(
       margin: const EdgeInsets.only(top: 8),
       color: baseColor,
@@ -730,100 +778,133 @@ class SocialPostCard extends StatelessWidget {
             padding: const EdgeInsets.all(12),
             child: Row(
               children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: cs.surfaceVariant,
-                  backgroundImage:
-                      (post.userAvatar != null && post.userAvatar!.isNotEmpty)
-                          ? CachedNetworkImageProvider(post.userAvatar!)
-                          : null,
-                  child: (post.userAvatar == null || post.userAvatar!.isEmpty)
-                      ? Text(
-                          (post.userName?.isNotEmpty ?? false)
-                              ? post.userName![0].toUpperCase()
-                              : '?',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold, color: onSurface),
-                        )
-                      : null,
+                // ==== Avatar (bấm để mở ProfileScreen) ====
+                InkWell(
+                  borderRadius: BorderRadius.circular(40),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const ProfileScreen(),
+                      ),
+                    );
+                  },
+                  child: CircleAvatar(
+                    radius: 20,
+                    backgroundColor: cs.surfaceVariant,
+                    backgroundImage:
+                    (post.userAvatar != null && post.userAvatar!.isNotEmpty)
+                        ? CachedNetworkImageProvider(post.userAvatar!)
+                        : null,
+                    child: (post.userAvatar == null || post.userAvatar!.isEmpty)
+                        ? Text(
+                      (post.userName?.isNotEmpty ?? false)
+                          ? post.userName![0].toUpperCase()
+                          : '?',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: onSurface,
+                      ),
+                    )
+                        : null,
+                  ),
                 ),
+
                 const SizedBox(width: 10),
+
+                // ==== Cột tên + time (bấm để mở ProfileScreen) ====
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // userName + postType cùng 1 dòng
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              post.userName ?? '',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: onSurface),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if ((post.postType ?? '').isNotEmpty) ...[
-                            const SizedBox(width: 6),
-                            Icon(
-                              post.postType == 'profile_picture'
-                                  ? Icons.person_outline
-                                  : post.postType == 'profile_cover_picture'
-                                      ? Icons.collections
-                                      : Icons.article_outlined,
-                              size: 16,
-                              color: onSurface.withOpacity(.6),
-                            ),
-                            const SizedBox(width: 4),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(6),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const ProfileScreen(),
+                        ),
+                      );
+                    },
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // userName + postType cùng 1 dòng
+                        Row(
+                          children: [
                             Flexible(
                               child: Text(
-                                post.postType == 'profile_picture'
-                                    ? (getTranslated('updated_profile_picture',
-                                            context) ??
-                                        'updated profile picture')
-                                    : post.postType == 'profile_cover_picture'
-                                        ? (getTranslated('updated_cover_photo',
-                                                context) ??
-                                            'updated cover photo')
-                                        : post.postType!,
+                                post.userName ?? '',
                                 style: TextStyle(
-                                  color: onSurface.withOpacity(.7),
-                                  fontStyle: FontStyle.italic,
+                                  fontWeight: FontWeight.w600,
+                                  color: onSurface,
                                 ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
+                            if ((post.postType ?? '').isNotEmpty) ...[
+                              const SizedBox(width: 6),
+                              Icon(
+                                post.postType == 'profile_picture'
+                                    ? Icons.person_outline
+                                    : post.postType == 'profile_cover_picture'
+                                    ? Icons.collections
+                                    : Icons.article_outlined,
+                                size: 16,
+                                color: onSurface.withOpacity(.6),
+                              ),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  post.postType == 'profile_picture'
+                                      ? (getTranslated(
+                                      'updated_profile_picture', context) ??
+                                      'updated profile picture')
+                                      : post.postType == 'profile_cover_picture'
+                                      ? (getTranslated(
+                                      'updated_cover_photo', context) ??
+                                      'updated cover photo')
+                                      : post.postType!,
+                                  style: TextStyle(
+                                    color: onSurface.withOpacity(.7),
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                           ],
-                        ],
-                      ),
-                      Text(
-                        post.timeText ?? '',
-                        style: TextStyle(
-                            color: onSurface.withOpacity(.6), fontSize: 13),
-                      ),
-                      if (hasSharedPost)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text(
-                            _sharedSubtitleText(context, post),
-                            style: TextStyle(
-                              color: onSurface.withOpacity(.7),
-                              fontSize: 13,
-                            ),
+                        ),
+                        Text(
+                          post.timeText ?? '',
+                          style: TextStyle(
+                            color: onSurface.withOpacity(.6),
+                            fontSize: 13,
                           ),
                         ),
-                    ],
+                        if (hasSharedPost)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              _sharedSubtitleText(context, post),
+                              style: TextStyle(
+                                color: onSurface.withOpacity(.7),
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
+
                 IconButton(
-                  icon:
-                      Icon(Icons.more_horiz, color: onSurface.withOpacity(.7)),
+                  icon: Icon(
+                    Icons.more_horiz,
+                    color: onSurface.withOpacity(.7),
+                  ),
                   onPressed: () {},
                 ),
               ],
             ),
           ),
+
 
           // Text
           if ((post.text ?? '').isNotEmpty)
@@ -880,58 +961,80 @@ class SocialPostCard extends StatelessWidget {
             mediaContent,
             const SizedBox(height: 8),
           ],
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (topReactions.isNotEmpty)
-                        _ReactionIconStack(labels: topReactions),
-                      if (topReactions.isNotEmpty) const SizedBox(width: 6),
-                      Text(
-                        _formatSocialCount(post.reactionCount),
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: onSurface.withOpacity(.85),
-                              fontWeight: FontWeight.w600,
-                            ),
+
+          if (showStats) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                children: [
+                  // Trái: chỉ hiện Reactions khi > 0
+                  if (showReactions)
+                    Expanded(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (topReactions.isNotEmpty)
+                            _ReactionIconStack(labels: topReactions),
+                          if (topReactions.isNotEmpty) const SizedBox(width: 6),
+                          Text(
+                            _formatSocialCount(reactionCount),
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: onSurface.withOpacity(.85),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                          ),
+                        ],
                       ),
-                    ],
+                    )
+                  else
+                    const Expanded(child: SizedBox.shrink()),
+
+                  const SizedBox(width: 12),
+
+                  // Phải: chỉ hiện comment/share khi > 0
+                  Flexible(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: Wrap(
+                        spacing: 12,
+                        children: [
+                          if (showComments)
+                            Text(
+                              '${_formatSocialCount(commentCount)} ${getTranslated("comments", context) ?? "comments"}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: onSurface.withOpacity(.7),
+                                  ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          if (showShares)
+                            Text(
+                              '${_formatSocialCount(shareCount)} ${getTranslated("share_plural", context) ?? "shares"}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: onSurface.withOpacity(.7),
+                                  ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Flexible(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Text(
-                        '${_formatSocialCount(post.commentCount)} ${getTranslated('comments', context) ?? 'bình lu?n'}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: onSurface.withOpacity(.7),
-                            ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        '${_formatSocialCount(shareCount)} ${getTranslated('share_plural', context) ?? 'lu?t chia s?'}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: onSurface.withOpacity(.7),
-                            ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          Divider(
-            height: 1,
-            thickness: .6,
-            color: cs.surfaceVariant.withOpacity(.6),
-          ),
+            Divider(
+              height: 1,
+              thickness: .6,
+              color: cs.surfaceVariant.withOpacity(.6),
+            ),
+          ],
+
           // Actions
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
@@ -1206,9 +1309,9 @@ String _reactionActionLabel(BuildContext context, String reaction) {
     case 'Wow':
       return 'Wow';
     case 'Sad':
-      return 'Bu?n';
+      return 'Buồn';
     case 'Angry':
-      return 'Ph?n n?';
+      return 'Phẫn nộ';
     default:
       return reaction;
   }
@@ -1223,7 +1326,7 @@ String _sharedSubtitleText(BuildContext context, SocialPost parent) {
       shared.userName ?? (getTranslated('user', context) ?? 'User');
   final String verb =
       getTranslated('shared_post_from', context) ?? 'shared a post from';
-  return '$owner $verb $original';
+  return '$verb $original';
 }
 
 class _ReactionIconStack extends StatelessWidget {

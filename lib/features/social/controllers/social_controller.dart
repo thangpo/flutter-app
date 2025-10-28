@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
@@ -8,6 +9,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/soci
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/main.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_profile_service.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
@@ -34,8 +36,8 @@ class SocialController with ChangeNotifier {
 
   final List<SocialPost> _posts = [];
   List<SocialPost> get posts => List.unmodifiable(_posts);
-  
-   String? _accessToken;                         
+
+  String? _accessToken;
   String? get accessToken => _accessToken;
 
   final List<SocialStory> _stories = [];
@@ -69,6 +71,7 @@ class SocialController with ChangeNotifier {
       <String, StoryViewersState>{};
   final Set<String> _sharingPosts = <String>{};
   bool isSharing(String id) => _sharingPosts.contains(id);
+  bool _pendingLoadMore = false;
 
   String _storyKey(SocialStory story) {
     final userKey = story.userId;
@@ -95,8 +98,8 @@ class SocialController with ChangeNotifier {
       for (final item in story.items) {
         final posted = item.postedAt;
         final expire = item.expireAt;
-        final within24h =
-            posted == null || now.difference(posted) <= const Duration(hours: 24);
+        final within24h = posted == null ||
+            now.difference(posted) <= const Duration(hours: 24);
         final notExpired = expire == null || expire.isAfter(now);
         if (within24h && notExpired) {
           filteredItems.add(item);
@@ -105,10 +108,8 @@ class SocialController with ChangeNotifier {
       if (filteredItems.isEmpty) continue;
 
       filteredItems.sort((a, b) {
-        final aTime =
-            a.postedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final bTime =
-            b.postedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final aTime = a.postedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bTime = b.postedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
         return bTime.compareTo(aTime);
       });
 
@@ -207,8 +208,7 @@ class SocialController with ChangeNotifier {
   Future<void> _reloadStoriesFromServer({int? limit}) async {
     final effectiveLimit =
         limit ?? (_stories.isNotEmpty ? _stories.length : 10);
-    final fresh =
-        await service.getMyStories(limit: effectiveLimit, offset: 0);
+    final fresh = await service.getMyStories(limit: effectiveLimit, offset: 0);
     _replaceStories(fresh);
     notifyListeners();
   }
@@ -275,8 +275,7 @@ class SocialController with ChangeNotifier {
       if (story != null) {
         _mergeStories([story]);
         notifyListeners();
-        final int reloadLimit =
-            (_stories.length + 5).clamp(10, 50);
+        final int reloadLimit = (_stories.length + 5).clamp(10, 50);
         await _reloadStoriesFromServer(limit: reloadLimit);
       }
       return story;
@@ -290,37 +289,36 @@ class SocialController with ChangeNotifier {
   }
 
   Future<void> loadCurrentUser({bool force = false}) async {
-  if (_loadingUser) return;
-  if (!force && _currentUser != null) return;
+    if (_loadingUser) return;
+    if (!force && _currentUser != null) return;
 
-  _loadingUser = true;
-  try {
-    // 🔹 NẠP access token từ SharedPreferences nếu chưa có trong RAM
-    final sp = await SharedPreferences.getInstance();
-    _accessToken ??= sp.getString(AppConstants.socialAccessToken);
+    _loadingUser = true;
+    try {
+      // 🔹 NẠP access token từ SharedPreferences nếu chưa có trong RAM
+      final sp = await SharedPreferences.getInstance();
+      _accessToken ??= sp.getString(AppConstants.socialAccessToken);
 
-    // 🔹 Nếu chưa kết nối WoWonder thì không gọi API, clear state nhẹ nhàng
-    if (_accessToken == null || _accessToken!.isEmpty) {
-      _currentUser = null;
-      _syncCurrentUserStoryFrom(_stories); // giữ logic đồng bộ story hiện có
-      notifyListeners();
-      return; // thoát sớm, finally vẫn chạy để _loadingUser=false
+      // 🔹 Nếu chưa kết nối WoWonder thì không gọi API, clear state nhẹ nhàng
+      if (_accessToken == null || _accessToken!.isEmpty) {
+        _currentUser = null;
+        _syncCurrentUserStoryFrom(_stories); // giữ logic đồng bộ story hiện có
+        notifyListeners();
+        return; // thoát sớm, finally vẫn chạy để _loadingUser=false
+      }
+
+      final user = await service.getCurrentUser();
+
+      if (user != null) {
+        _currentUser = user;
+        _syncCurrentUserStoryFrom(_stories);
+        notifyListeners();
+      }
+    } catch (e) {
+      showCustomSnackBar(e.toString(), Get.context!, isError: true);
+    } finally {
+      _loadingUser = false;
     }
-
-    
-    final user = await service.getCurrentUser();
-
-    if (user != null) {
-      _currentUser = user;
-      _syncCurrentUserStoryFrom(_stories);
-      notifyListeners();
-    }
-  } catch (e) {
-    showCustomSnackBar(e.toString(), Get.context!, isError: true);
-  } finally {
-    _loadingUser = false;
   }
-}
 
   Future<void> refresh() async {
     if (_loading) return;
@@ -349,6 +347,17 @@ class SocialController with ChangeNotifier {
 
   Future<void> loadMore() async {
     if (_loading) return;
+    final scheduler = SchedulerBinding.instance;
+    final phase = scheduler.schedulerPhase;
+    if (phase == SchedulerPhase.persistentCallbacks) {
+      if (_pendingLoadMore) return;
+      _pendingLoadMore = true;
+      scheduler.addPostFrameCallback((_) {
+        _pendingLoadMore = false;
+        loadMore();
+      });
+      return;
+    }
     _loading = true;
     notifyListeners();
     try {
@@ -482,11 +491,10 @@ class SocialController with ChangeNotifier {
             _stories.indexWhere((element) => _storyKey(element) == storyKey);
         if (refreshedStoryIndex != -1) {
           final SocialStory refreshedStory = _stories[refreshedStoryIndex];
-          final SocialStoryItem refreshedItem = refreshedStory.items
-              .firstWhere(
-                (element) => element.id == currentItem.id,
-                orElse: () => currentItem,
-              );
+          final SocialStoryItem refreshedItem = refreshedStory.items.firstWhere(
+            (element) => element.id == currentItem.id,
+            orElse: () => currentItem,
+          );
           await reactOnStoryItem(
             story: refreshedStory,
             item: refreshedItem,
@@ -547,8 +555,10 @@ class SocialController with ChangeNotifier {
       }
 
       merged.sort((a, b) {
-        final DateTime aTime = a.viewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final DateTime bTime = b.viewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final DateTime aTime =
+            a.viewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final DateTime bTime =
+            b.viewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
         return bTime.compareTo(aTime);
       });
 
@@ -662,9 +672,9 @@ class SocialController with ChangeNotifier {
       _posts.insert(0, shared);
       notifyListeners();
       final ctx = Get.context!;
-      final successMsg =
-          getTranslated('share_post_success', ctx) ?? 'Post shared successfully';
-      showCustomSnackBar(successMsg, ctx);
+      final successMsg = getTranslated('share_post_success', ctx) ??
+          'Post shared successfully';
+      showCustomSnackBar(successMsg, ctx, isError: false);
       return true;
     } catch (e) {
       _updatePost(post.id, post);
@@ -681,8 +691,8 @@ class SocialController with ChangeNotifier {
     String? remove,
     String? add,
   }) {
-    if ((remove == null || remove.isEmpty) &&
-        (add == null || add.isEmpty)) return base;
+    if ((remove == null || remove.isEmpty) && (add == null || add.isEmpty))
+      return base;
     final Map<String, int> next = Map<String, int>.from(base);
     void apply(String? key, int delta) {
       if (key == null || key.isEmpty) return;
@@ -694,6 +704,7 @@ class SocialController with ChangeNotifier {
         next[key] = updated;
       }
     }
+
     apply(remove, -1);
     apply(add, 1);
     return next;
@@ -741,5 +752,3 @@ class _PendingStoryReaction {
 
   const _PendingStoryReaction({required this.reaction});
 }
-
-
