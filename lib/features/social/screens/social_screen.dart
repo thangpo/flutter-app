@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
@@ -64,13 +64,13 @@ class _SocialFeedScreenState extends State<SocialFeedScreen>
                   return RefreshIndicator(
                     onRefresh: () => sc.refresh(),
                     child: NotificationListener<ScrollNotification>(
-                      onNotification: (n) {
-                        if (n.metrics.pixels >=
-                            n.metrics.maxScrollExtent - 200) {
-                          sc.loadMore();
-                        }
-                        return false;
-                      },
+                      // onNotification: (n) {
+                      //   if (n.metrics.pixels >=
+                      //       n.metrics.maxScrollExtent - 200) {
+                      //     sc.loadMore();
+                      //   }
+                      //   return false;
+                      // },
                       child: ListView.builder(
                         padding: EdgeInsets.zero,
                         itemCount: sc.posts.length +
@@ -101,6 +101,17 @@ class _SocialFeedScreenState extends State<SocialFeedScreen>
 
                           // Các post: b?t d?u t? i=2
                           final SocialPost p = sc.posts[i - 2];
+                          // Prefetch: khi người dùng chạm tới “nửa sau” của lô hiện tại thì nạp thêm
+                          const int pageSize = 10; // lô hiện tại đang là 10
+                          const int prefetchAt = pageSize ~/
+                              2; // 5  (tức là tới bài 5–6 sẽ gọi nạp)
+                          final int itemIndex = i - 2; // index trong mảng posts
+
+                          if (!sc.loading &&
+                              itemIndex >= sc.posts.length - prefetchAt) {
+                            sc.loadMore();
+                          }
+
                           return SocialPostCard(post: p);
                         },
                       ),
@@ -694,6 +705,15 @@ class SocialPostCard extends StatelessWidget {
       (ctrl) => ctrl.isSharing(post.id),
     );
 
+    final int reactionCount = post.reactionCount;
+    final int commentCount = post.commentCount;
+    // shareCount đã có ở trên
+
+    final bool showReactions = reactionCount > 0;
+    final bool showComments = commentCount > 0;
+    final bool showShares = shareCount > 0;
+    final bool showStats = showReactions || showComments || showShares;
+
     return Container(
       margin: const EdgeInsets.only(top: 8),
       color: baseColor,
@@ -855,58 +875,80 @@ class SocialPostCard extends StatelessWidget {
             mediaContent,
             const SizedBox(height: 8),
           ],
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (topReactions.isNotEmpty)
-                        _ReactionIconStack(labels: topReactions),
-                      if (topReactions.isNotEmpty) const SizedBox(width: 6),
-                      Text(
-                        _formatSocialCount(post.reactionCount),
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: onSurface.withOpacity(.85),
-                              fontWeight: FontWeight.w600,
-                            ),
+
+          if (showStats) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                children: [
+                  // Trái: chỉ hiện Reactions khi > 0
+                  if (showReactions)
+                    Expanded(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (topReactions.isNotEmpty)
+                            _ReactionIconStack(labels: topReactions),
+                          if (topReactions.isNotEmpty) const SizedBox(width: 6),
+                          Text(
+                            _formatSocialCount(reactionCount),
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: onSurface.withOpacity(.85),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                          ),
+                        ],
                       ),
-                    ],
+                    )
+                  else
+                    const Expanded(child: SizedBox.shrink()),
+
+                  const SizedBox(width: 12),
+
+                  // Phải: chỉ hiện comment/share khi > 0
+                  Flexible(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: Wrap(
+                        spacing: 12,
+                        children: [
+                          if (showComments)
+                            Text(
+                              '${_formatSocialCount(commentCount)} ${getTranslated("comments", context) ?? "comments"}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: onSurface.withOpacity(.7),
+                                  ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          if (showShares)
+                            Text(
+                              '${_formatSocialCount(shareCount)} ${getTranslated("share_plural", context) ?? "shares"}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: onSurface.withOpacity(.7),
+                                  ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Flexible(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Text(
-                        '${_formatSocialCount(post.commentCount)} ${getTranslated('comments', context) ?? 'bình lu?n'}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: onSurface.withOpacity(.7),
-                            ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        '${_formatSocialCount(shareCount)} ${getTranslated('share_plural', context) ?? 'lu?t chia s?'}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: onSurface.withOpacity(.7),
-                            ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          Divider(
-            height: 1,
-            thickness: .6,
-            color: cs.surfaceVariant.withOpacity(.6),
-          ),
+            Divider(
+              height: 1,
+              thickness: .6,
+              color: cs.surfaceVariant.withOpacity(.6),
+            ),
+          ],
+
           // Actions
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
@@ -1181,9 +1223,9 @@ String _reactionActionLabel(BuildContext context, String reaction) {
     case 'Wow':
       return 'Wow';
     case 'Sad':
-      return 'Bu?n';
+      return 'Buồn';
     case 'Angry':
-      return 'Ph?n n?';
+      return 'Phẫn nộ';
     default:
       return reaction;
   }
@@ -1198,7 +1240,7 @@ String _sharedSubtitleText(BuildContext context, SocialPost parent) {
       shared.userName ?? (getTranslated('user', context) ?? 'User');
   final String verb =
       getTranslated('shared_post_from', context) ?? 'shared a post from';
-  return '$owner $verb $original';
+  return '$verb $original';
 }
 
 class _ReactionIconStack extends StatelessWidget {

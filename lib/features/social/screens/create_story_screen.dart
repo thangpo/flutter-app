@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -10,6 +10,8 @@ import 'package:get_thumbnail_video/index.dart';
 import 'package:get_thumbnail_video/video_thumbnail.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:video_player/video_player.dart';
+import 'package:video_trimmer/video_trimmer.dart';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
@@ -27,6 +29,7 @@ class SocialCreateStoryScreen extends StatefulWidget {
 
 class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
   final ImagePicker _picker = ImagePicker();
+  static const Duration _maxVideoDuration = Duration(seconds: 30);
 
   final TextEditingController _textController = TextEditingController();
   final TextEditingController _captionController = TextEditingController();
@@ -105,6 +108,59 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
   }
 
   bool get _supportsVideo => !kIsWeb;
+
+  Future<XFile?> _processPickedVideo(XFile picked) async {
+    final Duration? duration = await _videoDurationOf(picked.path);
+    if (!mounted) return null;
+    if (duration == null || duration <= _maxVideoDuration) {
+      return picked;
+    }
+
+    final String? trimmedPath = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => _VideoTrimScreen(
+          videoPath: picked.path,
+          maxDuration: _maxVideoDuration,
+        ),
+        fullscreenDialog: true,
+      ),
+    );
+
+    if (!mounted) return null;
+    if (trimmedPath == null) {
+      return null;
+    }
+    return XFile(trimmedPath);
+  }
+
+  Future<Duration?> _videoDurationOf(String path) async {
+    final VideoPlayerController controller =
+        VideoPlayerController.file(File(path));
+    try {
+      await controller.initialize();
+      return controller.value.duration;
+    } catch (_) {
+      return null;
+    } finally {
+      await controller.dispose();
+    }
+  }
+
+  Future<String?> _generateVideoThumbnail(String path) async {
+    try {
+      final dynamic result = await VideoThumbnail.thumbnailFile(
+        video: path,
+        imageFormat: ImageFormat.PNG,
+        maxHeight: 720,
+        quality: 80,
+      );
+      if (result is String && result.isNotEmpty) return result;
+      if (result is XFile) return result.path;
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
 
   Future<void> _handleSubmit() async {
     if (_submitting) return;
@@ -288,29 +344,18 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
       );
       return;
     }
-    final XFile? video = await _picker.pickVideo(
-      source: source,
-      maxDuration: const Duration(seconds: 30),
-    );
-    if (!mounted || video == null) return;
+    final XFile? picked = await _picker.pickVideo(source: source);
+    if (!mounted || picked == null) return;
 
-    final dynamic coverResult = await VideoThumbnail.thumbnailFile(
-      video: video.path,
-      imageFormat: ImageFormat.PNG,
-      maxHeight: 720,
-      quality: 80,
-    );
-    String? cover;
-    if (coverResult is String) {
-      cover = coverResult;
-    } else if (coverResult is XFile) {
-      cover = coverResult.path;
-    }
+    final XFile? processed = await _processPickedVideo(picked);
+    if (!mounted || processed == null) return;
+
+    final String? cover = await _generateVideoThumbnail(processed.path);
 
     setState(() {
       _selectedMedia
         ..clear()
-        ..add(_StoryMedia(file: video, isVideo: true, coverPath: cover));
+        ..add(_StoryMedia(file: processed, isVideo: true, coverPath: cover));
       _allowMultiple = false;
     });
   }
@@ -775,6 +820,205 @@ class _StoryFeatureBar extends StatelessWidget {
                 color: colorScheme.onSurface,
                 onPressed: onOpenVideoCamera,
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _VideoTrimScreen extends StatefulWidget {
+  final String videoPath;
+  final Duration maxDuration;
+  const _VideoTrimScreen({
+    required this.videoPath,
+    required this.maxDuration,
+  });
+
+  @override
+  State<_VideoTrimScreen> createState() => _VideoTrimScreenState();
+}
+
+class _VideoTrimScreenState extends State<_VideoTrimScreen> {
+  final Trimmer _trimmer = Trimmer();
+
+  double _startValue = 0.0;
+  double _endValue = 0.0;
+  bool _isPlaying = false;
+  bool _saving = false;
+  bool _progressVisible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _trimmer.loadVideo(videoFile: File(widget.videoPath));
+  }
+
+  Future<void> _togglePlayback() async {
+    final bool playbackState = await _trimmer.videoPlaybackControl(
+      startValue: _startValue,
+      endValue: _endValue,
+    );
+    if (!mounted) return;
+    setState(() => _isPlaying = playbackState);
+  }
+
+  Future<void> _saveTrimmedVideo() async {
+    if (_saving) return;
+    setState(() {
+      _saving = true;
+      _progressVisible = true;
+    });
+
+    final double maxLengthMs =
+        widget.maxDuration.inMilliseconds.toDouble().clamp(0, double.infinity);
+    final double totalMs =
+        (_trimmer.videoPlayerController?.value.duration ?? Duration.zero)
+            .inMilliseconds
+            .toDouble();
+
+    double start = _startValue;
+    double end = _endValue;
+
+    if (end <= start) {
+      end = (start + maxLengthMs).clamp(0, totalMs);
+    }
+    if (end - start > maxLengthMs) {
+      end = start + maxLengthMs;
+    }
+    if (end > totalMs && totalMs > 0) {
+      end = totalMs;
+      start = (end - maxLengthMs).clamp(0, end);
+    }
+
+    await _trimmer.saveTrimmedVideo(
+      startValue: start,
+      endValue: end,
+      storageDir: StorageDir.temporaryDirectory,
+      videoFolderName: 'story_trim',
+      onSave: (String? outputPath) {
+        if (!mounted) return;
+        setState(() {
+          _progressVisible = false;
+          _saving = false;
+        });
+        if (outputPath == null || outputPath.isEmpty) {
+          showCustomSnackBar(
+            getTranslated('video_trim_failed', context) ??
+                'Unable to trim video',
+            context,
+            isError: true,
+          );
+        } else {
+          Navigator.of(context).pop(outputPath);
+        }
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _trimmer.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final double maxSeconds = widget.maxDuration.inSeconds.toDouble();
+    final double selectedMs = (_endValue - _startValue)
+        .clamp(0, widget.maxDuration.inMilliseconds.toDouble());
+    final Duration selectedDuration =
+        Duration(milliseconds: selectedMs.round());
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: Text(
+          getTranslated('trim_video', context) ?? 'Trim video',
+        ),
+        backgroundColor: Colors.black,
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: _saving ? null : _saveTrimmedVideo,
+            child: _saving
+                ? const SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : Text(
+                    getTranslated('save', context) ?? 'Save',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            if (_progressVisible)
+              const LinearProgressIndicator(
+                minHeight: 2,
+              ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: VideoViewer(trimmer: _trimmer),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TrimViewer(
+                      trimmer: _trimmer,
+                      viewerHeight: 60,
+                      viewerWidth: MediaQuery.of(context).size.width,
+                      maxVideoLength: widget.maxDuration,
+                      durationStyle: DurationStyle.FORMAT_MM_SS,
+                      onChangeStart: (value) => _startValue = value,
+                      onChangeEnd: (value) => _endValue = value,
+                      onChangePlaybackState: (value) =>
+                          setState(() => _isPlaying = value),
+                      editorProperties: TrimEditorProperties(
+                        borderRadius: 6,
+                        borderWidth: 3,
+                        borderPaintColor: theme.colorScheme.primary,
+                        circlePaintColor:
+                            theme.colorScheme.primary.withOpacity(.85),
+                      ),
+                      areaProperties:
+                          TrimAreaProperties.edgeBlur(thumbnailQuality: 40),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${selectedDuration.inSeconds}s / ${maxSeconds.toInt()}s',
+                      style: theme.textTheme.labelMedium
+                          ?.copyWith(color: Colors.white70),
+                    ),
+                    const SizedBox(height: 12),
+                    IconButton(
+                      iconSize: 48,
+                      color: Colors.white,
+                      icon: Icon(
+                        _isPlaying ? Icons.pause_circle : Icons.play_circle,
+                      ),
+                      onPressed: _saving ? null : _togglePlayback,
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),

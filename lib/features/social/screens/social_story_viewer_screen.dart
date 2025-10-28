@@ -1,10 +1,12 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:collection';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
 
@@ -46,6 +48,10 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
   final Queue<String> _reactionQueue = Queue<String>();
   bool _pausedForReaction = false;
   bool _reactionRequestInFlight = false;
+  final BaseCacheManager _videoCacheManager = DefaultCacheManager();
+  VideoPlayerController? _nextVideoController;
+  String? _nextVideoUrl;
+  VoidCallback? _videoListener;
 
   SocialStory get _currentStory => _stories[_currentStoryIndex];
 
@@ -93,7 +99,7 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
     _progressController?.stop();
     _videoController?.pause();
     _progressController?.dispose();
-    _disposeVideo();
+    _disposeVideo(disposePrefetched: true);
     _storyController.dispose();
     _reactionDebounceTimer?.cancel();
     _restoreStatusBar();
@@ -174,29 +180,17 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
     }
 
     if (item.isVideo && item.mediaUrl != null && item.mediaUrl!.isNotEmpty) {
-      final VideoPlayerController controller =
-          VideoPlayerController.networkUrl(Uri.parse(item.mediaUrl!));
-      _videoController = controller;
-      controller.initialize().then((_) {
-        if (!mounted || _isExiting) return;
-        final Duration duration = controller.value.duration == Duration.zero
-            ? const Duration(seconds: 10)
-            : controller.value.duration;
-        _progressController?.duration = duration;
-        setState(() {});
-        if (autoPlay) {
-          controller.play();
-          _progressController?.forward(from: 0);
-        }
-      });
-      controller.addListener(() {
-        if (!mounted || _isExiting) return;
-        if (controller.value.isPlaying) {
-          _progressController?.forward();
-        } else {
-          _progressController?.stop();
-        }
-      });
+      if (_nextVideoController != null &&
+          _nextVideoUrl == item.mediaUrl &&
+          _nextVideoController!.value.isInitialized) {
+        final VideoPlayerController controller = _nextVideoController!;
+        _nextVideoController = null;
+        _nextVideoUrl = null;
+        _activateVideoController(controller, autoPlay,
+            alreadyInitialized: true);
+      } else {
+        unawaited(_initializeVideoItem(item, autoPlay));
+      }
     } else {
       _progressController?.duration = const Duration(seconds: 6);
       if (autoPlay) {
@@ -205,7 +199,96 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
     }
 
     _precacheNextImage();
+    unawaited(_prefetchNextVideo());
     _prefetchOwnStoryViewers();
+  }
+
+  Future<void> _initializeVideoItem(
+    SocialStoryItem item,
+    bool autoPlay,
+  ) async {
+    final String url = item.mediaUrl!;
+    File? cachedFile;
+    try {
+      cachedFile = await _videoCacheManager.getSingleFile(url);
+    } catch (_) {
+      cachedFile = null;
+    }
+
+    if (_isExiting || !mounted) return;
+    VideoPlayerController controller;
+    if (cachedFile != null && await cachedFile.exists()) {
+      controller = VideoPlayerController.file(cachedFile);
+    } else {
+      controller = VideoPlayerController.networkUrl(Uri.parse(url));
+    }
+
+    try {
+      await controller.initialize();
+    } catch (e) {
+      if (!mounted || _isExiting) {
+        controller.dispose();
+        return;
+      }
+      debugPrint('Failed to initialize story video: ${e.toString()}');
+      controller.dispose();
+      _progressController?.duration = const Duration(seconds: 6);
+      if (autoPlay) {
+        _progressController?.forward(from: 0);
+      }
+      return;
+    }
+
+    if (!mounted || _isExiting) {
+      controller.dispose();
+      return;
+    }
+
+    _activateVideoController(controller, autoPlay, alreadyInitialized: true);
+  }
+
+  void _activateVideoController(
+    VideoPlayerController controller,
+    bool autoPlay, {
+    bool alreadyInitialized = false,
+  }) {
+    if (_videoListener != null && _videoController != null) {
+      _videoController!.removeListener(_videoListener!);
+      _videoListener = null;
+    }
+    _videoController?.dispose();
+
+    _videoController = controller;
+
+    if (!alreadyInitialized) {
+      controller.initialize().catchError((_) {});
+    }
+
+    controller.setLooping(true);
+
+    final Duration duration = controller.value.duration == Duration.zero
+        ? const Duration(seconds: 10)
+        : controller.value.duration;
+    _progressController?.duration = duration;
+
+    if (mounted && !_isExiting) {
+      setState(() {});
+    }
+
+    if (autoPlay) {
+      controller.play();
+      _progressController?.forward(from: 0);
+    }
+
+    _videoListener = () {
+      if (!mounted || _isExiting) return;
+      if (controller.value.isPlaying) {
+        _progressController?.forward();
+      } else {
+        _progressController?.stop();
+      }
+    };
+    controller.addListener(_videoListener!);
   }
 
   void _pauseForReaction() {
@@ -297,6 +380,53 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
     precacheImage(CachedNetworkImageProvider(url), context);
   }
 
+  Future<void> _prefetchNextVideo() async {
+    final SocialStoryItem? nextItem = _nextItem;
+    if (nextItem == null || !nextItem.isVideo) return;
+    final String? url = nextItem.mediaUrl;
+    if (url == null || url.isEmpty) return;
+
+    if (_nextVideoUrl == url &&
+        _nextVideoController != null &&
+        _nextVideoController!.value.isInitialized) {
+      return;
+    }
+
+    _disposePrefetchedVideo();
+
+    File? cachedFile;
+    try {
+      cachedFile = await _videoCacheManager.getSingleFile(url);
+    } catch (_) {
+      cachedFile = null;
+    }
+
+    if (_isExiting || !mounted) return;
+
+    VideoPlayerController controller;
+    if (cachedFile != null && await cachedFile.exists()) {
+      controller = VideoPlayerController.file(cachedFile);
+    } else {
+      controller = VideoPlayerController.networkUrl(Uri.parse(url));
+    }
+
+    try {
+      await controller.initialize();
+    } catch (_) {
+      controller.dispose();
+      return;
+    }
+
+    if (!mounted || _isExiting) {
+      controller.dispose();
+      return;
+    }
+
+    controller.setLooping(true);
+    _nextVideoController = controller;
+    _nextVideoUrl = url;
+  }
+
   SocialStoryReaction? _footerReactionFor(SocialStoryItem? item) {
     if (item == null) return null;
     if (_reactionOverride == null) return item.reaction;
@@ -329,9 +459,22 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
     return null;
   }
 
-  void _disposeVideo() {
+  void _disposeVideo({bool disposePrefetched = false}) {
+    if (_videoListener != null && _videoController != null) {
+      _videoController!.removeListener(_videoListener!);
+      _videoListener = null;
+    }
     _videoController?.dispose();
     _videoController = null;
+    if (disposePrefetched) {
+      _disposePrefetchedVideo();
+    }
+  }
+
+  void _disposePrefetchedVideo() {
+    _nextVideoController?.dispose();
+    _nextVideoController = null;
+    _nextVideoUrl = null;
   }
 
   void _prefetchOwnStoryViewers() {
@@ -688,9 +831,9 @@ class _StoryMedia extends StatelessWidget {
       );
     }
 
-    if (isCurrent && item!.isVideo && videoController != null) {
-      final VideoPlayerController controller = videoController!;
-      if (controller.value.isInitialized) {
+    if (isCurrent && item!.isVideo) {
+      final VideoPlayerController? controller = videoController;
+      if (controller != null && controller.value.isInitialized) {
         return Center(
           child: AspectRatio(
             aspectRatio: controller.value.aspectRatio == 0
