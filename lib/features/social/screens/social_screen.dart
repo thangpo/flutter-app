@@ -37,7 +37,6 @@ class _SocialFeedScreenState extends State<SocialFeedScreen>
   @override
   void initState() {
     super.initState();
-    // Refresh sau khi màn hình mount d? ch?c có token
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final sc = context.read<SocialController>();
       sc.loadCurrentUser();
@@ -174,6 +173,29 @@ class _FacebookHeader extends StatelessWidget {
                 },
               ),
               const SizedBox(width: 12),
+
+              _HeaderIcon(
+                icon: Icons.people_outline, // biểu tượng bạn bè
+                iconColor: onAppBar,
+                bubbleColor: onAppBar.withOpacity(0.08),
+                onTap: () {
+                  final token = context.read<SocialController>().accessToken;
+                  if (token == null || token.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Vui lòng kết nối tài khoản WoWonder trước.')),
+                    );
+                    return;
+                  }
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => FriendsScreen(),
+                    ),
+                  );
+                },
+              ),
+
+              const SizedBox(width: 12),
+
               _HeaderIcon(
                 icon: Icons.messenger_outline,
                 iconColor: onAppBar,
@@ -190,7 +212,8 @@ class _FacebookHeader extends StatelessWidget {
                   }
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                        builder: (_) => FriendsListScreen(accessToken: token)),
+                      builder: (_) => FriendsListScreen(accessToken: token),
+                    ),
                   );
                 },
               ),

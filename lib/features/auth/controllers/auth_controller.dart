@@ -312,6 +312,18 @@ class AuthController with ChangeNotifier {
       } catch (_) {}
       // ========== END EXTERNAL CALL ==========
 
+
+      Future<void> saveSocialUserId(String userId) async {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('social_user_id', userId);
+      }
+
+      Future<String?> getSocialUserId() async {
+        final prefs = await SharedPreferences.getInstance();
+        return prefs.getString('social_user_id');
+      }
+
+
       message = map["message"];
 
       if (token != null && token.isNotEmpty) {
