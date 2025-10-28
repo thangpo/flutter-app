@@ -11,6 +11,8 @@ import 'package:flutter_sixvalley_ecommerce/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_live_repository.dart';
+
 class SocialController with ChangeNotifier {
   final SocialServiceInterface service;
   SocialController({required this.service});
@@ -33,9 +35,12 @@ class SocialController with ChangeNotifier {
 
   final List<SocialPost> _posts = [];
   List<SocialPost> get posts => List.unmodifiable(_posts);
-  
-   String? _accessToken;                         
+
+  String? _accessToken;
   String? get accessToken => _accessToken;
+
+ bool _creatingLive = false;
+  bool get creatingLive => _creatingLive;
 
   final List<SocialStory> _stories = [];
   List<SocialStory> get stories => List.unmodifiable(_stories);
@@ -92,8 +97,8 @@ class SocialController with ChangeNotifier {
       for (final item in story.items) {
         final posted = item.postedAt;
         final expire = item.expireAt;
-        final within24h =
-            posted == null || now.difference(posted) <= const Duration(hours: 24);
+        final within24h = posted == null ||
+            now.difference(posted) <= const Duration(hours: 24);
         final notExpired = expire == null || expire.isAfter(now);
         if (within24h && notExpired) {
           filteredItems.add(item);
@@ -102,10 +107,8 @@ class SocialController with ChangeNotifier {
       if (filteredItems.isEmpty) continue;
 
       filteredItems.sort((a, b) {
-        final aTime =
-            a.postedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final bTime =
-            b.postedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final aTime = a.postedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bTime = b.postedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
         return bTime.compareTo(aTime);
       });
 
@@ -204,8 +207,7 @@ class SocialController with ChangeNotifier {
   Future<void> _reloadStoriesFromServer({int? limit}) async {
     final effectiveLimit =
         limit ?? (_stories.isNotEmpty ? _stories.length : 10);
-    final fresh =
-        await service.getMyStories(limit: effectiveLimit, offset: 0);
+    final fresh = await service.getMyStories(limit: effectiveLimit, offset: 0);
     _replaceStories(fresh);
     notifyListeners();
   }
@@ -272,8 +274,7 @@ class SocialController with ChangeNotifier {
       if (story != null) {
         _mergeStories([story]);
         notifyListeners();
-        final int reloadLimit =
-            (_stories.length + 5).clamp(10, 50);
+        final int reloadLimit = (_stories.length + 5).clamp(10, 50);
         await _reloadStoriesFromServer(limit: reloadLimit);
       }
       return story;
@@ -285,39 +286,63 @@ class SocialController with ChangeNotifier {
       notifyListeners();
     }
   }
+  void setAccessToken(String token) {
+    _accessToken = token;
+    notifyListeners();
+  }
+  Future<Map<String, dynamic>?> createLive() async {
+    if (_accessToken == null) throw Exception('Thiếu accessToken');
+
+    try {
+      _creatingLive = true;
+      notifyListeners();
+
+      final repo = SocialLiveRepository(
+        apiBaseUrl: 'https://social.vnshop247.com',
+        serverKey: 'f6e69c898ddd643154c9bd4b152555842e26a868-d195c100005dddb9f1a30a67a5ae42d4-19845955',
+      );
+
+      final data = await repo.createLive(_accessToken!);
+      return data;
+    } catch (e) {
+      rethrow;
+    } finally {
+      _creatingLive = false;
+      notifyListeners();
+    }
+  }
 
   Future<void> loadCurrentUser({bool force = false}) async {
-  if (_loadingUser) return;
-  if (!force && _currentUser != null) return;
+    if (_loadingUser) return;
+    if (!force && _currentUser != null) return;
 
-  _loadingUser = true;
-  try {
-    // 🔹 NẠP access token từ SharedPreferences nếu chưa có trong RAM
-    final sp = await SharedPreferences.getInstance();
-    _accessToken ??= sp.getString(AppConstants.socialAccessToken);
+    _loadingUser = true;
+    try {
+      // 🔹 NẠP access token từ SharedPreferences nếu chưa có trong RAM
+      final sp = await SharedPreferences.getInstance();
+      _accessToken ??= sp.getString(AppConstants.socialAccessToken);
 
-    // 🔹 Nếu chưa kết nối WoWonder thì không gọi API, clear state nhẹ nhàng
-    if (_accessToken == null || _accessToken!.isEmpty) {
-      _currentUser = null;
-      _syncCurrentUserStoryFrom(_stories); // giữ logic đồng bộ story hiện có
-      notifyListeners();
-      return; // thoát sớm, finally vẫn chạy để _loadingUser=false
+      // 🔹 Nếu chưa kết nối WoWonder thì không gọi API, clear state nhẹ nhàng
+      if (_accessToken == null || _accessToken!.isEmpty) {
+        _currentUser = null;
+        _syncCurrentUserStoryFrom(_stories); // giữ logic đồng bộ story hiện có
+        notifyListeners();
+        return; // thoát sớm, finally vẫn chạy để _loadingUser=false
+      }
+
+      final user = await service.getCurrentUser();
+
+      if (user != null) {
+        _currentUser = user;
+        _syncCurrentUserStoryFrom(_stories);
+        notifyListeners();
+      }
+    } catch (e) {
+      showCustomSnackBar(e.toString(), Get.context!, isError: true);
+    } finally {
+      _loadingUser = false;
     }
-
-    
-    final user = await service.getCurrentUser();
-
-    if (user != null) {
-      _currentUser = user;
-      _syncCurrentUserStoryFrom(_stories);
-      notifyListeners();
-    }
-  } catch (e) {
-    showCustomSnackBar(e.toString(), Get.context!, isError: true);
-  } finally {
-    _loadingUser = false;
   }
-}
 
   Future<void> refresh() async {
     if (_loading) return;
@@ -334,8 +359,7 @@ class SocialController with ChangeNotifier {
       _replaceStories(userStories);
 
       if (_posts.isEmpty) {
-        showCustomSnackBar(
-            'Không có bài viết. Kiểm tra socialAccessToken / API response.',
+        showCustomSnackBar('Không có bài viết. Vui lòng đăng nhập.',
             navigatorKey.currentContext!);
       }
     } finally {
@@ -479,11 +503,10 @@ class SocialController with ChangeNotifier {
             _stories.indexWhere((element) => _storyKey(element) == storyKey);
         if (refreshedStoryIndex != -1) {
           final SocialStory refreshedStory = _stories[refreshedStoryIndex];
-          final SocialStoryItem refreshedItem = refreshedStory.items
-              .firstWhere(
-                (element) => element.id == currentItem.id,
-                orElse: () => currentItem,
-              );
+          final SocialStoryItem refreshedItem = refreshedStory.items.firstWhere(
+            (element) => element.id == currentItem.id,
+            orElse: () => currentItem,
+          );
           await reactOnStoryItem(
             story: refreshedStory,
             item: refreshedItem,
@@ -544,8 +567,10 @@ class SocialController with ChangeNotifier {
       }
 
       merged.sort((a, b) {
-        final DateTime aTime = a.viewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final DateTime bTime = b.viewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final DateTime aTime =
+            a.viewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final DateTime bTime =
+            b.viewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
         return bTime.compareTo(aTime);
       });
 
@@ -649,8 +674,8 @@ class SocialController with ChangeNotifier {
     String? remove,
     String? add,
   }) {
-    if ((remove == null || remove.isEmpty) &&
-        (add == null || add.isEmpty)) return base;
+    if ((remove == null || remove.isEmpty) && (add == null || add.isEmpty))
+      return base;
     final Map<String, int> next = Map<String, int>.from(base);
     void apply(String? key, int delta) {
       if (key == null || key.isEmpty) return;
@@ -662,6 +687,7 @@ class SocialController with ChangeNotifier {
         next[key] = updated;
       }
     }
+
     apply(remove, -1);
     apply(add, 1);
     return next;
@@ -709,5 +735,3 @@ class _PendingStoryReaction {
 
   const _PendingStoryReaction({required this.reaction});
 }
-
-
