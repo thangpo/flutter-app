@@ -27,17 +27,6 @@ class SocialProfileBundle {
   });
 }
 
-/// Kết quả phân trang post
-class SocialFeedPage {
-  final List<SocialPost> posts;
-  final String? lastId;
-
-  const SocialFeedPage({
-    required this.posts,
-    required this.lastId,
-  });
-}
-
 class SocialService implements SocialServiceInterface {
   final SocialRepository socialRepository;
   SocialService({required this.socialRepository});
@@ -55,9 +44,9 @@ class SocialService implements SocialServiceInterface {
 
     final base = AppConstants.socialBaseUrl.endsWith('/')
         ? AppConstants.socialBaseUrl.substring(
-      0,
-      AppConstants.socialBaseUrl.length - 1,
-    )
+            0,
+            AppConstants.socialBaseUrl.length - 1,
+          )
         : AppConstants.socialBaseUrl;
 
     if (trimmed.startsWith('/')) {
@@ -80,8 +69,7 @@ class SocialService implements SocialServiceInterface {
       user['cover'] = _absoluteUrl(user['cover']?.toString());
     }
     if (user['cover_picture'] != null) {
-      user['cover_picture'] =
-          _absoluteUrl(user['cover_picture']?.toString());
+      user['cover_picture'] = _absoluteUrl(user['cover_picture']?.toString());
     }
 
     return user;
@@ -174,8 +162,7 @@ class SocialService implements SocialServiceInterface {
       }
       if (data is Map) {
         final dynamic errors = data['errors'];
-        final dynamic errorText =
-            errors is Map ? errors['error_text'] : null;
+        final dynamic errorText = errors is Map ? errors['error_text'] : null;
         final dynamic message = errorText ?? data['message'];
         throw Exception((message ?? 'Search groups failed').toString());
       }
@@ -206,8 +193,7 @@ class SocialService implements SocialServiceInterface {
       }
       if (data is Map) {
         final dynamic errors = data['errors'];
-        final dynamic errorText =
-            errors is Map ? errors['error_text'] : null;
+        final dynamic errorText = errors is Map ? errors['error_text'] : null;
         final dynamic message = errorText ?? data['message'];
         throw Exception((message ?? 'Fetch groups failed').toString());
       }
@@ -288,7 +274,7 @@ class SocialService implements SocialServiceInterface {
                 int.tryParse('${detailData?['api_status'] ?? 200}') ?? 200;
             if (detailStatus == 200) {
               final SocialStory? story =
-              socialRepository.parseStoryDetail(detailResp.response!);
+                  socialRepository.parseStoryDetail(detailResp.response!);
               if (story != null) {
                 return story;
               }
@@ -296,13 +282,13 @@ class SocialService implements SocialServiceInterface {
           }
         }
         final SocialStory? inline =
-        socialRepository.parseStoryDetail(resp.response!);
+            socialRepository.parseStoryDetail(resp.response!);
         return inline;
       }
 
       final msg = (data?['errors']?['error_text'] ??
-          data?['message'] ??
-          'Create story failed')
+              data?['message'] ??
+              'Create story failed')
           .toString();
       throw Exception(msg);
     }
@@ -328,7 +314,7 @@ class SocialService implements SocialServiceInterface {
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status == 200) {
         final SocialStoryViewersPage viewsPage =
-        socialRepository.parseStoryViews(
+            socialRepository.parseStoryViews(
           resp.response!,
           currentOffset: offset,
           limit: limit,
@@ -376,7 +362,7 @@ class SocialService implements SocialServiceInterface {
         }
 
         final Map<String, SocialStoryViewer> reactionLookup =
-        <String, SocialStoryViewer>{
+            <String, SocialStoryViewer>{
           for (final SocialStoryViewer viewer in reactionsPage.viewers)
             viewerKeyFor(viewer): viewer,
         };
@@ -445,8 +431,8 @@ class SocialService implements SocialServiceInterface {
         );
       }
       final msg =
-      (data?['errors']?['error_text'] ?? 'Load story viewers failed')
-          .toString();
+          (data?['errors']?['error_text'] ?? 'Load story viewers failed')
+              .toString();
       throw Exception(msg);
     }
 
@@ -472,7 +458,7 @@ class SocialService implements SocialServiceInterface {
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status != 200) {
         final msg =
-        (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
+            (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
         throw Exception(msg);
       }
       return;
@@ -497,7 +483,7 @@ class SocialService implements SocialServiceInterface {
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status == 200) return;
       final msg =
-      (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
+          (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
       throw Exception(msg);
     }
 
@@ -520,7 +506,7 @@ class SocialService implements SocialServiceInterface {
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status == 200) return;
       final msg =
-      (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
+          (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
       throw Exception(msg);
     }
 
@@ -543,7 +529,7 @@ class SocialService implements SocialServiceInterface {
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status == 200) return;
       final msg =
-      (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
+          (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
       throw Exception(msg);
     }
 
@@ -562,7 +548,7 @@ class SocialService implements SocialServiceInterface {
         return socialRepository.parseCurrentUser(resp.response!);
       }
       final msg =
-      (data?['errors']?['error_text'] ?? 'Load profile failed').toString();
+          (data?['errors']?['error_text'] ?? 'Load profile failed').toString();
       throw Exception(msg);
     }
     ApiChecker.checkApi(resp);
@@ -594,7 +580,7 @@ class SocialService implements SocialServiceInterface {
     // 1. user chính (header profile)
     // parseUserProfile(res) trả về SocialUserProfile?
     final SocialUserProfile? profileHeader =
-    socialRepository.parseUserProfile(res);
+        socialRepository.parseUserProfile(res);
 
     // 2. followers / following (danh sách rút gọn)
     final List<SocialUser> followersList = [];
@@ -632,13 +618,12 @@ class SocialService implements SocialServiceInterface {
 
     // 3. trả bundle
     return SocialProfileBundle(
-      user: profileHeader,        // <- giờ đúng kiểu SocialUserProfile?
-      followers: followersList,   // List<SocialUser>
-      following: followingList,   // List<SocialUser>
+      user: profileHeader, // <- giờ đúng kiểu SocialUserProfile?
+      followers: followersList, // List<SocialUser>
+      following: followingList, // List<SocialUser>
       likedPages: likedPagesRaw,
     );
   }
-
 
   /// Lấy danh sách post của user, có phân trang
   Future<SocialFeedPage> getUserPosts({
@@ -699,7 +684,7 @@ class SocialService implements SocialServiceInterface {
         return socialRepository.parsePostData(resp.response!);
       }
       final msg =
-      (data?['errors']?['error_text'] ?? 'Load post failed').toString();
+          (data?['errors']?['error_text'] ?? 'Load post failed').toString();
       throw Exception(msg);
     }
     ApiChecker.checkApi(resp);
@@ -714,6 +699,7 @@ class SocialService implements SocialServiceInterface {
     String? videoThumbnailPath,
     int privacy = 0,
     String? backgroundColorId,
+    String? groupId,
   }) async {
     final resp = await socialRepository.createPost(
       text: text,
@@ -732,8 +718,8 @@ class SocialService implements SocialServiceInterface {
         throw Exception('Create post failed: Missing post data.');
       }
       final msg = (data?['errors']?['error_text'] ??
-          data?['message'] ??
-          'Create post failed')
+              data?['message'] ??
+              'Create post failed')
           .toString();
       throw Exception(msg);
     }
@@ -756,7 +742,7 @@ class SocialService implements SocialServiceInterface {
         throw Exception('Share failed: Missing post data.');
       }
       final msg =
-      (data?['errors']?['error_text'] ?? 'Share post failed').toString();
+          (data?['errors']?['error_text'] ?? 'Share post failed').toString();
       throw Exception(msg);
     }
     ApiChecker.checkApi(resp);
@@ -782,7 +768,7 @@ class SocialService implements SocialServiceInterface {
         return socialRepository.parsePostComments(resp.response!);
       }
       final msg =
-      (data?['errors']?['error_text'] ?? 'Load comments failed').toString();
+          (data?['errors']?['error_text'] ?? 'Load comments failed').toString();
       throw Exception(msg);
     }
     ApiChecker.checkApi(resp);
@@ -803,7 +789,7 @@ class SocialService implements SocialServiceInterface {
         return socialRepository.parseCommentReplies(resp.response!);
       }
       final msg =
-      (data?['errors']?['error_text'] ?? 'Load replies failed').toString();
+          (data?['errors']?['error_text'] ?? 'Load replies failed').toString();
       throw Exception(msg);
     }
     ApiChecker.checkApi(resp);
@@ -857,70 +843,10 @@ class SocialService implements SocialServiceInterface {
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status == 200) return;
       final msg =
-      (data?['errors']?['error_text'] ?? 'Create reply failed').toString();
+          (data?['errors']?['error_text'] ?? 'Create reply failed').toString();
       throw Exception(msg);
     }
     ApiChecker.checkApi(resp);
     throw Exception('Create reply failed');
   }
-
-  @override
-  Future<SocialPost> createPost({
-    String? text,
-    List<String>? imagePaths,
-    String? videoPath,
-    String? videoThumbnailPath,
-    int privacy = 0,
-    String? backgroundColorId,
-    String? groupId,
-  }) async {
-    final resp = await socialRepository.createPost(
-      text: text,
-      imagePaths: imagePaths,
-      videoPath: videoPath,
-      videoThumbnailPath: videoThumbnailPath,
-      privacy: privacy,
-      backgroundColorId: backgroundColorId,
-      groupId: groupId,
-    );
-    if (resp.isSuccess && resp.response != null) {
-      final data = resp.response!.data;
-      final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
-      if (status == 200) {
-        final SocialPost? post = socialRepository.parsePostData(resp.response!);
-        if (post != null) return post;
-        throw Exception('Create post failed: Missing post data.');
-      }
-      final msg = (data?['errors']?['error_text'] ??
-              data?['message'] ??
-              'Create post failed')
-          .toString();
-      throw Exception(msg);
-    }
-    ApiChecker.checkApi(resp);
-    throw Exception('Create post failed');
-  }
-
-  @override
-  Future<SocialPost> sharePost({required String postId, String? text}) async {
-    final resp = await socialRepository.sharePostOnTimeline(
-      postId: postId,
-      text: text,
-    );
-    if (resp.isSuccess && resp.response != null) {
-      final data = resp.response!.data;
-      final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
-      if (status == 200) {
-        final SocialPost? post = socialRepository.parsePostData(resp.response!);
-        if (post != null) return post;
-        throw Exception('Share failed: Missing post data.');
-      }
-      final msg =
-          (data?['errors']?['error_text'] ?? 'Share post failed').toString();
-      throw Exception(msg);
-    }
-    ApiChecker.checkApi(resp);
-    throw Exception('Share post failed');
-  }
 }
-
