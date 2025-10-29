@@ -11,7 +11,7 @@ class AppConstants {
   ///Flutter SDK 3.32.8
   static const LocalCachesTypeEnum cachesType = LocalCachesTypeEnum.all;
 
-  static const String baseUrl = 'https://vnshop247.com/';
+  static const String baseUrl = 'https://vnshop247.com';
 
   static const String socialBaseUrl = 'https://social.vnshop247.com';
   static const String socialServerKey =

@@ -48,7 +48,7 @@ class SocialController with ChangeNotifier {
   String? _accessToken;
   String? get accessToken => _accessToken;
 
- bool _creatingLive = false;
+  bool _creatingLive = false;
   bool get creatingLive => _creatingLive;
 
   final List<SocialStory> _stories = [];
@@ -78,7 +78,7 @@ class SocialController with ChangeNotifier {
   final Set<String> _storyReactionLoading = <String>{};
   static const int _storyViewersPageSize = 50;
   final Map<String, StoryViewersState> _storyViewers =
-  <String, StoryViewersState>{};
+      <String, StoryViewersState>{};
   final Set<String> _sharingPosts = <String>{};
   bool isSharing(String id) => _sharingPosts.contains(id);
   bool _pendingLoadMore = false;
@@ -276,15 +276,6 @@ class SocialController with ChangeNotifier {
     }
   }
 
-  String? _afterId;
-  final Set<String> _storyReactionLoading = <String>{};
-  static const int _storyViewersPageSize = 50;
-  final Map<String, StoryViewersState> _storyViewers =
-      <String, StoryViewersState>{};
-  final Set<String> _sharingPosts = <String>{};
-  bool isSharing(String id) => _sharingPosts.contains(id);
-  bool _pendingLoadMore = false;
-
   String _storyKey(SocialStory story) {
     final userKey = story.userId;
     if (userKey != null && userKey.isNotEmpty) {
@@ -380,7 +371,7 @@ class SocialController with ChangeNotifier {
     }
     final SocialStory story = _stories[storyIndex];
     final List<SocialStoryItem> updatedItems =
-    List<SocialStoryItem>.from(story.items);
+        List<SocialStoryItem>.from(story.items);
     updatedItems[itemIndex] = newItem;
     _stories[storyIndex] = story.copyWith(items: updatedItems);
     _syncCurrentUserStoryFrom(_stories);
@@ -441,16 +432,16 @@ class SocialController with ChangeNotifier {
       notifyListeners();
     }
     // Cập nhật trong danh sách profile (_profilePosts)
-  final int profileIndex = _profilePosts.indexWhere((p) => p.id == id);
-  if (profileIndex != -1) {
-    _profilePosts[profileIndex] = newPost;
-    changed = true;
-  }
+    final int profileIndex = _profilePosts.indexWhere((p) => p.id == id);
+    if (profileIndex != -1) {
+      _profilePosts[profileIndex] = newPost;
+      changed = true;
+    }
 
-  // Nếu có thay đổi ở ít nhất 1 nơi thì thông báo UI rebuild
-  if (changed) {
-    notifyListeners();
-  }
+    // Nếu có thay đổi ở ít nhất 1 nơi thì thông báo UI rebuild
+    if (changed) {
+      notifyListeners();
+    }
   }
 
   // ========== POST CREATION ==========
@@ -529,10 +520,12 @@ class SocialController with ChangeNotifier {
       notifyListeners();
     }
   }
+
   void setAccessToken(String token) {
     _accessToken = token;
     notifyListeners();
   }
+
   Future<Map<String, dynamic>?> createLive() async {
     if (_accessToken == null) throw Exception('Thiếu accessToken');
 
@@ -542,7 +535,8 @@ class SocialController with ChangeNotifier {
 
       final repo = SocialLiveRepository(
         apiBaseUrl: 'https://social.vnshop247.com',
-        serverKey: 'f6e69c898ddd643154c9bd4b152555842e26a868-d195c100005dddb9f1a30a67a5ae42d4-19845955',
+        serverKey:
+            'f6e69c898ddd643154c9bd4b152555842e26a868-d195c100005dddb9f1a30a67a5ae42d4-19845955',
       );
 
       final data = await repo.createLive(_accessToken!);
@@ -652,7 +646,7 @@ class SocialController with ChangeNotifier {
     if (storyIndex == -1) return;
     final SocialStory targetStory = _stories[storyIndex];
     final int itemIndex =
-    targetStory.items.indexWhere((element) => element.id == item.id);
+        targetStory.items.indexWhere((element) => element.id == item.id);
     if (itemIndex == -1) return;
 
     final SocialStoryItem currentItem = targetStory.items[itemIndex];
@@ -702,13 +696,13 @@ class SocialController with ChangeNotifier {
     );
 
     final _PendingStoryReaction pending =
-    _PendingStoryReaction(reaction: sendingReaction);
+        _PendingStoryReaction(reaction: sendingReaction);
 
     if (_storyReactionLoading.contains(currentItem.id)) {
       final Queue<_PendingStoryReaction> queue =
-      _queuedStoryReactions.putIfAbsent(
+          _queuedStoryReactions.putIfAbsent(
         currentItem.id,
-            () => Queue<_PendingStoryReaction>(),
+        () => Queue<_PendingStoryReaction>(),
       );
       queue.add(pending);
       _replaceStoryItem(
@@ -746,20 +740,20 @@ class SocialController with ChangeNotifier {
     } finally {
       _storyReactionLoading.remove(currentItem.id);
       final Queue<_PendingStoryReaction>? queue =
-      _queuedStoryReactions[currentItem.id];
+          _queuedStoryReactions[currentItem.id];
       final _PendingStoryReaction? queued =
-      queue != null && queue.isNotEmpty ? queue.removeFirst() : null;
+          queue != null && queue.isNotEmpty ? queue.removeFirst() : null;
       if (queue != null && queue.isEmpty) {
         _queuedStoryReactions.remove(currentItem.id);
       }
       if (queued != null) {
         final String storyKey = _storyKey(targetStory);
         final int refreshedStoryIndex =
-        _stories.indexWhere((element) => _storyKey(element) == storyKey);
+            _stories.indexWhere((element) => _storyKey(element) == storyKey);
         if (refreshedStoryIndex != -1) {
           final SocialStory refreshedStory = _stories[refreshedStoryIndex];
           final SocialStoryItem refreshedItem = refreshedStory.items.firstWhere(
-                (element) => element.id == currentItem.id,
+            (element) => element.id == currentItem.id,
             orElse: () => currentItem,
           );
           await reactOnStoryItem(
@@ -775,9 +769,9 @@ class SocialController with ChangeNotifier {
 
   // ========== STORY VIEWERS ==========
   Future<void> fetchStoryViewers(
-      SocialStoryItem item, {
-        bool refresh = false,
-      }) async {
+    SocialStoryItem item, {
+    bool refresh = false,
+  }) async {
     final String key = item.id;
     final StoryViewersState previous =
         _storyViewers[key] ?? const StoryViewersState();
@@ -809,10 +803,10 @@ class SocialController with ChangeNotifier {
 
       for (final SocialStoryViewer viewer in page.viewers) {
         final String viewerKey =
-        viewer.userId.isNotEmpty ? viewer.userId : viewer.id;
+            viewer.userId.isNotEmpty ? viewer.userId : viewer.id;
         final int existingIndex = merged.indexWhere((existing) {
           final String existingKey =
-          existing.userId.isNotEmpty ? existing.userId : existing.id;
+              existing.userId.isNotEmpty ? existing.userId : existing.id;
           return existingKey == viewerKey;
         });
         if (existingIndex >= 0) {
@@ -834,7 +828,7 @@ class SocialController with ChangeNotifier {
           ? page.nextOffset
           : offset + page.viewers.length;
       final int total =
-      page.total != 0 ? page.total : (item.viewCount ?? merged.length);
+          page.total != 0 ? page.total : (item.viewCount ?? merged.length);
 
       _storyViewers[key] = StoryViewersState(
         viewers: merged,
@@ -867,7 +861,7 @@ class SocialController with ChangeNotifier {
     notifyListeners();
     try {
       final fetchedStories =
-      await service.getMyStories(limit: 10, offset: _storiesOffset);
+          await service.getMyStories(limit: 10, offset: _storiesOffset);
       if (fetchedStories.isNotEmpty) {
         _mergeStories(fetchedStories);
         _storiesOffset += fetchedStories.length;
@@ -883,7 +877,7 @@ class SocialController with ChangeNotifier {
 
     if (was.isNotEmpty && (reaction.isEmpty || reaction == 'Like')) {
       final updatedBreakdown =
-      _adjustReactionBreakdown(post.reactionBreakdown, remove: was);
+          _adjustReactionBreakdown(post.reactionBreakdown, remove: was);
       final optimistic = post.copyWith(
         myReaction: '',
         reactionCount: (post.reactionCount - 1).clamp(0, 1 << 31),
@@ -935,12 +929,12 @@ class SocialController with ChangeNotifier {
     notifyListeners();
 
     final SocialPost optimistic =
-    post.copyWith(shareCount: post.shareCount + 1);
+        post.copyWith(shareCount: post.shareCount + 1);
     _updatePost(post.id, optimistic);
 
     try {
       final SocialPost shared =
-      await service.sharePost(postId: post.id, text: text);
+          await service.sharePost(postId: post.id, text: text);
       _posts.insert(0, shared);
       notifyListeners();
       final ctx = Get.context!;
@@ -959,10 +953,10 @@ class SocialController with ChangeNotifier {
   }
 
   Map<String, int> _adjustReactionBreakdown(
-      Map<String, int> base, {
-        String? remove,
-        String? add,
-      }) {
+    Map<String, int> base, {
+    String? remove,
+    String? add,
+  }) {
     if ((remove == null || remove.isEmpty) && (add == null || add.isEmpty))
       return base;
     final Map<String, int> next = Map<String, int>.from(base);
@@ -986,8 +980,7 @@ class SocialController with ChangeNotifier {
 
   /// Load profile đầy đủ (user + followers + following + liked_pages + posts)
   Future<void> loadUserProfile({String? targetUserId}) async {
-    if (_loadingProfile &&
-        targetUserId == _profileHeaderUser?.id) {
+    if (_loadingProfile && targetUserId == _profileHeaderUser?.id) {
       return;
     }
 
@@ -1000,7 +993,6 @@ class SocialController with ChangeNotifier {
     _lastProfilePostId = null;
 
     notifyListeners();
-
 
     try {
       if (service is! SocialService) {
@@ -1061,7 +1053,6 @@ class SocialController with ChangeNotifier {
       notifyListeners();
     }
   }
-
 
   /// Load more profile posts (pagination)
   Future<void> loadMoreProfilePosts({

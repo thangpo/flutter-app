@@ -62,7 +62,6 @@ import 'localization/app_localization.dart';
 import 'features/social/controllers/group_chat_controller.dart';
 import 'features/social/domain/repositories/group_chat_repository.dart';
 
-
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -152,15 +151,14 @@ Future<void> main() async {
       ChangeNotifierProvider(create: (context) => di.sl<RestockController>()),
       ChangeNotifierProvider(
         create: (_) =>
-            SocialController(service: di.sl<SocialServiceInterface>())..refresh(),
+            SocialController(service: di.sl<SocialServiceInterface>())
+              ..refresh(),
       ),
-
       ChangeNotifierProvider(
         create: (_) => di.sl<SocialGroupController>(),
-
+      ),
       ChangeNotifierProvider(
         create: (_) => GroupChatController(repo: GroupChatRepository()),
-
       ),
     ],
     child: MyApp(body: body),
@@ -177,36 +175,41 @@ class MyApp extends StatelessWidget {
     for (var language in AppConstants.languages) {
       locals.add(Locale(language.languageCode!, language.countryCode));
     }
-    return Consumer<ThemeController>(
-        builder: (context, themeController, _) {
-          return MaterialApp(
-            title: AppConstants.appName,
-            navigatorKey: navigatorKey,
-            debugShowCheckedModeBanner: false,
-            theme: themeController.darkTheme ? dark : light(
-              primaryColor: themeController.selectedPrimaryColor,
-              secondaryColor: themeController.selectedPrimaryColor,
-            ),
-            locale: Provider.of<LocalizationController>(context).locale,
-            localizationsDelegates: [
-              AppLocalization.delegate,
-              GlobalMaterialLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
-              FallbackLocalizationDelegate()
-            ],
-            builder:(context,child) {
-              return MediaQuery(data: MediaQuery.of(context).copyWith(textScaler: TextScaler.noScaling), child: SafeArea(top: false, child: child!));
-            },
-            supportedLocales: locals,
-            home: SplashScreen(body: body,),
-            routes: {
-              '/login': (context) => const LoginScreen(),
-              '/booking-confirm': (context) => const BookingConfirmScreen(),
-            },
-          );
-        }
-    );
+    return Consumer<ThemeController>(builder: (context, themeController, _) {
+      return MaterialApp(
+        title: AppConstants.appName,
+        navigatorKey: navigatorKey,
+        debugShowCheckedModeBanner: false,
+        theme: themeController.darkTheme
+            ? dark
+            : light(
+                primaryColor: themeController.selectedPrimaryColor,
+                secondaryColor: themeController.selectedPrimaryColor,
+              ),
+        locale: Provider.of<LocalizationController>(context).locale,
+        localizationsDelegates: [
+          AppLocalization.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+          FallbackLocalizationDelegate()
+        ],
+        builder: (context, child) {
+          return MediaQuery(
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: TextScaler.noScaling),
+              child: SafeArea(top: false, child: child!));
+        },
+        supportedLocales: locals,
+        home: SplashScreen(
+          body: body,
+        ),
+        routes: {
+          '/login': (context) => const LoginScreen(),
+          '/booking-confirm': (context) => const BookingConfirmScreen(),
+        },
+      );
+    });
   }
 }
 

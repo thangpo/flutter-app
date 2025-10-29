@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
@@ -21,7 +21,6 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_list
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_profile_service.dart';
 
 class SocialFeedScreen extends StatefulWidget {
   const SocialFeedScreen({super.key});
@@ -785,7 +784,8 @@ class SocialPostCard extends StatelessWidget {
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) =>  ProfileScreen(targetUserId: post.publisherId),
+                        builder: (_) =>
+                            ProfileScreen(targetUserId: post.publisherId),
                         // targetUserId: post.publisherId,
                       ),
                     );
@@ -820,7 +820,8 @@ class SocialPostCard extends StatelessWidget {
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => ProfileScreen(targetUserId: post.publisherId),
+                          builder: (_) =>
+                              ProfileScreen(targetUserId: post.publisherId),
                           // targetUserId: post.publisherId,
                         ),
                       );
