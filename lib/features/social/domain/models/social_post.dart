@@ -1,5 +1,6 @@
 class SocialPost {
   final String id;
+  final String? publisherId;
   final String? text;
   final String? userName;
   final String? userAvatar;
@@ -38,6 +39,7 @@ class SocialPost {
 
   const SocialPost({
     required this.id,
+    this.publisherId,                // <-- NEW
     this.text,
     this.userName,
     this.userAvatar,
@@ -68,6 +70,7 @@ class SocialPost {
 
   SocialPost copyWith({
     String? id,
+    String? publisherId,            // <-- NEW
     String? text,
     String? userName,
     String? userAvatar,
@@ -97,6 +100,7 @@ class SocialPost {
   }) {
     return SocialPost(
       id: id ?? this.id,
+      publisherId: publisherId ?? this.publisherId,
       text: text ?? this.text,
       userName: userName ?? this.userName,
       userAvatar: userAvatar ?? this.userAvatar,
