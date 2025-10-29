@@ -1,9 +1,18 @@
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:provider/provider.dart';
+
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_friends_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_friends_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_friend.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/chat_screen.dart';
+
+// 👇 nhóm chat
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_chat_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_group_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/group_chats_screen.dart';
 
 class FriendsListScreen extends StatefulWidget {
   final String accessToken;
@@ -18,10 +27,9 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
       Get.put(SocialFriendsController(SocialFriendsRepository()));
   final searchCtrl = TextEditingController();
 
-  // footer state (demo)
   int _tabIndex = 0;
-  int chatBadgeCount = 1; // ví dụ có 1 tin chưa đọc
-  bool notifDot = true; // chấm đỏ thông báo
+  int chatBadgeCount = 1;
+  bool notifDot = true;
 
   @override
   void initState() {
@@ -41,6 +49,27 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
       appBar: AppBar(
         title: const Text('Đoạn chat'),
         elevation: 0,
+        actions: [
+          IconButton(
+            tooltip: 'Tạo nhóm chat',
+            icon: const Icon(Icons.group_add),
+            onPressed: () async {
+              final success = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      CreateGroupScreen(accessToken: widget.accessToken),
+                ),
+              );
+              if (success == true) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Tạo nhóm thành công')),
+                );
+              }
+            },
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {},
@@ -52,12 +81,20 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
         showNotifDot: notifDot,
         onTap: (i) {
           setState(() => _tabIndex = i);
-          // TODO: điều hướng sang các tab khác nếu có
+          if (i == 2) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) =>
+                    GroupChatsScreen(accessToken: widget.accessToken),
+              ),
+            );
+          }
         },
       ),
       body: Column(
         children: [
-          // ô tìm kiếm
+          // 🔍 ô tìm kiếm
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
             child: TextField(
@@ -77,7 +114,7 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
             ),
           ),
 
-          // dải avatar ngang
+          // 👥 dải avatar ngang
           SizedBox(
             height: 102,
             child: Obx(() {
@@ -112,7 +149,7 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
             ),
           ),
 
-          // danh sách dọc
+          // 📜 danh sách bạn bè (dọc)
           Expanded(
             child: Obx(() {
               if (friendsCtrl.isLoading.value && friendsCtrl.filtered.isEmpty) {
@@ -145,6 +182,8 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                               : (u.lastSeen ?? '');
                           return InkWell(
                             onTap: () => _openChat(u),
+                            onLongPress:
+                                _openCreateGroupDialog, // ✨ thêm tùy chọn nhanh
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 8),
@@ -211,10 +250,135 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
       ),
     );
   }
+
+  /// 🧩 Dialog tạo nhóm chat nhanh
+  void _openCreateGroupDialog() {
+    final nameCtrl = TextEditingController();
+    final partsCtrl = TextEditingController(); // nhập: 2,3,4
+    File? avatarFile;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        final groupCtrl = context.watch<GroupChatController>();
+        return AlertDialog(
+          title: const Text('Tạo nhóm chat'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Tên nhóm',
+                    hintText: 'VD: Team Dev',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: partsCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'ID thành viên (phân tách dấu phẩy)',
+                    hintText: 'VD: 2,3,4',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        final picked = await FilePicker.platform.pickFiles(
+                          allowMultiple: false,
+                          type: FileType.image,
+                        );
+                        if (picked != null &&
+                            picked.files.single.path != null) {
+                          setState(() {
+                            avatarFile = File(picked.files.single.path!);
+                          });
+                        }
+                      },
+                      icon: const Icon(Icons.image),
+                      label: const Text('Chọn ảnh nhóm (tùy chọn)'),
+                    ),
+                    const SizedBox(width: 8),
+                    if (avatarFile != null)
+                      const Icon(Icons.check_circle,
+                          size: 18, color: Colors.green),
+                  ],
+                ),
+                if (groupCtrl.lastError != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    groupCtrl.lastError!,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Hủy'),
+            ),
+            ElevatedButton(
+              onPressed: groupCtrl.creatingGroup
+                  ? null
+                  : () async {
+                      final name = nameCtrl.text.trim();
+                      final raw = partsCtrl.text.trim();
+                      if (name.isEmpty || raw.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content:
+                                Text('Nhập tên nhóm và ID thành viên hợp lệ'),
+                          ),
+                        );
+                        return;
+                      }
+                      final ids = raw
+                          .split(',')
+                          .map((e) => e.trim())
+                          .where((e) => e.isNotEmpty)
+                          .toList();
+
+                      final success =
+                          await context.read<GroupChatController>().createGroup(
+                                accessToken: widget.accessToken,
+                                name: name,
+                                memberIds: ids,
+                                avatarFile: avatarFile,
+                              );
+
+                      if (!mounted) return;
+                      if (success) {
+                        Navigator.of(ctx).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Tạo nhóm thành công!')),
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Không thể tạo nhóm!')),
+                        );
+                      }
+                    },
+              child: groupCtrl.creatingGroup
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Tạo nhóm'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }
 
-/* ======================= FOOTER ======================= */
-
+/* ===== FOOTER (Messenger style) ===== */
 class _MessengerFooter extends StatelessWidget {
   final int currentIndex;
   final int chatBadgeCount;
@@ -298,8 +462,8 @@ class _MessengerFooter extends StatelessWidget {
             item(index: 1, icon: Icons.video_collection, label: 'Tin'),
             item(
                 index: 2,
-                icon: Icons.notifications_none,
-                label: 'Thông báo',
+                icon: Icons.groups,
+                label: 'Nhóm Chat',
                 dot: showNotifDot),
             item(index: 3, icon: Icons.menu, label: 'Menu'),
           ],
@@ -341,7 +505,7 @@ class _Dot extends StatelessWidget {
   }
 }
 
-/* ============== avatar components + skeletons (giữ nguyên) ============== */
+/* ===== Avatar components & skeletons ===== */
 
 class _AvatarStoryTile extends StatelessWidget {
   final String name;
