@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
@@ -18,6 +18,7 @@ import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dar
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_sixvalley_ecommerce/features/profile/controllers/profile_contrroller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_list_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_profile_service.dart';
@@ -173,7 +174,6 @@ class _FacebookHeader extends StatelessWidget {
                 },
               ),
               const SizedBox(width: 12),
-
               _HeaderIcon(
                 icon: Icons.people_outline, // biểu tượng bạn bè
                 iconColor: onAppBar,
@@ -182,7 +182,9 @@ class _FacebookHeader extends StatelessWidget {
                   final token = context.read<SocialController>().accessToken;
                   if (token == null || token.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Vui lòng kết nối tài khoản WoWonder trước.')),
+                      const SnackBar(
+                          content: Text(
+                              'Vui lòng kết nối tài khoản WoWonder trước.')),
                     );
                     return;
                   }
@@ -193,9 +195,7 @@ class _FacebookHeader extends StatelessWidget {
                   );
                 },
               ),
-
               const SizedBox(width: 12),
-
               _HeaderIcon(
                 icon: Icons.messenger_outline,
                 iconColor: onAppBar,
@@ -297,7 +297,6 @@ class _WhatsOnYourMind extends StatelessWidget {
                   MaterialPageRoute(builder: (_) => const ProfileScreen()),
                 );
               },
-
               borderRadius: BorderRadius.circular(999),
               child: CircleAvatar(
                 radius: 20,
@@ -325,7 +324,8 @@ class _WhatsOnYourMind extends StatelessWidget {
                 },
                 borderRadius: BorderRadius.circular(12),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
                     color: cs.surfaceVariant.withOpacity(.5),
                     borderRadius: BorderRadius.circular(12),
@@ -345,7 +345,7 @@ class _WhatsOnYourMind extends StatelessWidget {
 
             // (tuỳ chọn) nút +
             InkWell(
-              onTap: () { /* TODO: action khác (ví dụ tạo story) */ },
+              onTap: () {/* TODO: action khác (ví dụ tạo story) */},
               customBorder: const CircleBorder(),
               child: Container(
                 padding: const EdgeInsets.all(8),
@@ -735,7 +735,8 @@ class _StoryCard extends StatelessWidget {
 
 class SocialPostCard extends StatelessWidget {
   final SocialPost post;
-  const SocialPostCard({required this.post});
+  final ValueChanged<SocialPost>? onPostUpdated;
+  const SocialPostCard({required this.post, this.onPostUpdated});
 
   @override
   Widget build(BuildContext context) {
@@ -793,19 +794,19 @@ class SocialPostCard extends StatelessWidget {
                     radius: 20,
                     backgroundColor: cs.surfaceVariant,
                     backgroundImage:
-                    (post.userAvatar != null && post.userAvatar!.isNotEmpty)
-                        ? CachedNetworkImageProvider(post.userAvatar!)
-                        : null,
+                        (post.userAvatar != null && post.userAvatar!.isNotEmpty)
+                            ? CachedNetworkImageProvider(post.userAvatar!)
+                            : null,
                     child: (post.userAvatar == null || post.userAvatar!.isEmpty)
                         ? Text(
-                      (post.userName?.isNotEmpty ?? false)
-                          ? post.userName![0].toUpperCase()
-                          : '?',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: onSurface,
-                      ),
-                    )
+                            (post.userName?.isNotEmpty ?? false)
+                                ? post.userName![0].toUpperCase()
+                                : '?',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: onSurface,
+                            ),
+                          )
                         : null,
                   ),
                 ),
@@ -840,14 +841,36 @@ class SocialPostCard extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
+                            if (post.isGroupPost &&
+                                ((post.groupTitle ?? post.groupName)
+                                        ?.isNotEmpty ??
+                                    false)) ...[
+                              const SizedBox(width: 6),
+                              Icon(
+                                Icons.chevron_right,
+                                size: 16,
+                                color: onSurface.withOpacity(.6),
+                              ),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  post.groupTitle ?? post.groupName ?? '',
+                                  style: TextStyle(
+                                    color: onSurface.withOpacity(.75),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                             if ((post.postType ?? '').isNotEmpty) ...[
                               const SizedBox(width: 6),
                               Icon(
                                 post.postType == 'profile_picture'
                                     ? Icons.person_outline
                                     : post.postType == 'profile_cover_picture'
-                                    ? Icons.collections
-                                    : Icons.article_outlined,
+                                        ? Icons.collections
+                                        : Icons.article_outlined,
                                 size: 16,
                                 color: onSurface.withOpacity(.6),
                               ),
@@ -856,13 +879,15 @@ class SocialPostCard extends StatelessWidget {
                                 child: Text(
                                   post.postType == 'profile_picture'
                                       ? (getTranslated(
-                                      'updated_profile_picture', context) ??
-                                      'updated profile picture')
+                                              'updated_profile_picture',
+                                              context) ??
+                                          'updated profile picture')
                                       : post.postType == 'profile_cover_picture'
-                                      ? (getTranslated(
-                                      'updated_cover_photo', context) ??
-                                      'updated cover photo')
-                                      : post.postType!,
+                                          ? (getTranslated(
+                                                  'updated_cover_photo',
+                                                  context) ??
+                                              'updated cover photo')
+                                          : post.postType!,
                                   style: TextStyle(
                                     color: onSurface.withOpacity(.7),
                                     fontStyle: FontStyle.italic,
@@ -906,7 +931,6 @@ class SocialPostCard extends StatelessWidget {
               ],
             ),
           ),
-
 
           // Text
           if ((post.text ?? '').isNotEmpty)
@@ -1049,7 +1073,14 @@ class SocialPostCard extends StatelessWidget {
                     builder: (itemCtx) => InkWell(
                       onTap: () {
                         final now = (post.myReaction == 'Like') ? '' : 'Like';
-                        itemCtx.read<SocialController>().reactOnPost(post, now);
+                        itemCtx
+                            .read<SocialController>()
+                            .reactOnPost(post, now)
+                            .then((updated) {
+                          if (onPostUpdated != null) {
+                            onPostUpdated!(updated);
+                          }
+                        });
                       },
                       onLongPress: () {
                         // Tính t?a d? trung tâm nút Like d? hi?n popup ngay trên nút
@@ -1068,7 +1099,12 @@ class SocialPostCard extends StatelessWidget {
                           onSelect: (val) {
                             itemCtx
                                 .read<SocialController>()
-                                .reactOnPost(post, val);
+                                .reactOnPost(post, val)
+                                .then((updated) {
+                              if (onPostUpdated != null) {
+                                onPostUpdated!(updated);
+                              }
+                            });
                           },
                         );
                       },

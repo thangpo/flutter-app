@@ -15,6 +15,16 @@ class SocialPost {
   final String? postType;
   final SocialPost? sharedPost;
 
+  // Group
+  final bool isGroupPost;
+  final bool isGroupAdmin;
+  final String? groupId;
+  final String? groupName;
+  final String? groupTitle;
+  final String? groupUrl;
+  final String? groupAvatar;
+  final String? groupCover;
+
   // Reactions
   final int reactionCount; // tổng số phản ứng
   final String myReaction; // '', 'Like', 'Love', 'HaHa', 'Wow', 'Sad', 'Angry'
@@ -52,6 +62,14 @@ class SocialPost {
     this.audioUrl,
     this.postType,
     this.sharedPost,
+    this.isGroupPost = false,
+    this.isGroupAdmin = false,
+    this.groupId,
+    this.groupName,
+    this.groupTitle,
+    this.groupUrl,
+    this.groupAvatar,
+    this.groupCover,
     required this.reactionCount,
     required this.myReaction,
     this.reactionBreakdown = const <String, int>{},
@@ -83,6 +101,14 @@ class SocialPost {
     String? audioUrl,
     String? postType,
     SocialPost? sharedPost,
+    bool? isGroupPost,
+    bool? isGroupAdmin,
+    String? groupId,
+    String? groupName,
+    String? groupTitle,
+    String? groupUrl,
+    String? groupAvatar,
+    String? groupCover,
     int? reactionCount,
     String? myReaction,
     Map<String, int>? reactionBreakdown,
@@ -113,6 +139,14 @@ class SocialPost {
       audioUrl: audioUrl ?? this.audioUrl,
       postType: postType ?? this.postType,
       sharedPost: sharedPost ?? this.sharedPost,
+      isGroupPost: isGroupPost ?? this.isGroupPost,
+      isGroupAdmin: isGroupAdmin ?? this.isGroupAdmin,
+      groupId: groupId ?? this.groupId,
+      groupName: groupName ?? this.groupName,
+      groupTitle: groupTitle ?? this.groupTitle,
+      groupUrl: groupUrl ?? this.groupUrl,
+      groupAvatar: groupAvatar ?? this.groupAvatar,
+      groupCover: groupCover ?? this.groupCover,
       reactionCount: reactionCount ?? this.reactionCount,
       myReaction: myReaction ?? this.myReaction,
       reactionBreakdown: reactionBreakdown ?? this.reactionBreakdown,

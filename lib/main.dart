@@ -55,6 +55,7 @@ import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screen
 import 'package:provider/provider.dart';
 import 'di_container.dart' as di;
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_group_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_service_interface.dart';
 import 'helper/custom_delegate.dart';
 import 'localization/app_localization.dart';
@@ -154,9 +155,12 @@ Future<void> main() async {
             SocialController(service: di.sl<SocialServiceInterface>())..refresh(),
       ),
 
+      ChangeNotifierProvider(
+        create: (_) => di.sl<SocialGroupController>(),
 
       ChangeNotifierProvider(
         create: (_) => GroupChatController(repo: GroupChatRepository()),
+
       ),
     ],
     child: MyApp(body: body),

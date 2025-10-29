@@ -6,6 +6,8 @@ class SocialUser {
   final String? userName;
   final String? avatarUrl;
   final String? coverUrl;
+  final bool isAdmin;
+  final bool isOwner;
 
   const SocialUser({
     required this.id,
@@ -15,6 +17,8 @@ class SocialUser {
     this.userName,
     this.avatarUrl,
     this.coverUrl,
+    this.isAdmin = false,
+    this.isOwner = false,
   });
 
   SocialUser copyWith({
@@ -25,6 +29,8 @@ class SocialUser {
     String? userName,
     String? avatarUrl,
     String? coverUrl,
+    bool? isAdmin,
+    bool? isOwner,
   }) {
     return SocialUser(
       id: id ?? this.id,
@@ -34,6 +40,8 @@ class SocialUser {
       userName: userName ?? this.userName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       coverUrl: coverUrl ?? this.coverUrl,
+      isAdmin: isAdmin ?? this.isAdmin,
+      isOwner: isOwner ?? this.isOwner,
     );
   }
 }
