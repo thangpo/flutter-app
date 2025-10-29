@@ -12,7 +12,16 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
 
 class SocialCreatePostScreen extends StatefulWidget {
-  const SocialCreatePostScreen({super.key});
+  final String? groupId;
+  final String? groupName;
+  final String? groupTitle;
+
+  const SocialCreatePostScreen({
+    super.key,
+    this.groupId,
+    this.groupName,
+    this.groupTitle,
+  });
 
   @override
   State<SocialCreatePostScreen> createState() => _SocialCreatePostScreenState();
@@ -162,6 +171,7 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
             _video == null ? _images.map((XFile f) => f.path).toList() : null,
         videoPath: _video?.path,
         privacy: _privacy,
+        groupId: widget.groupId,
       );
       if (mounted && created != null) {
         Navigator.of(context).pop<SocialPost>(created);
@@ -316,6 +326,19 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
       }
       return null;
     }();
+    final String? postingGroupName = () {
+      if (widget.groupId == null) return null;
+      final List<String?> candidates = <String?>[
+        widget.groupTitle?.trim(),
+        widget.groupName?.trim(),
+      ];
+      for (final String? value in candidates) {
+        if (value != null && value.isNotEmpty) {
+          return value;
+        }
+      }
+      return null;
+    }();
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -338,6 +361,32 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
                   fontWeight: FontWeight.w600,
                 ),
               ),
+              if (postingGroupName != null) ...[
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.groups_2_outlined,
+                        size: 16, color: cs.primary),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        postingGroupName,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                              color: cs.onSurface.withValues(alpha: .75),
+                              fontWeight: FontWeight.w600,
+                            ) ??
+                            TextStyle(
+                              color:
+                                  cs.onSurface.withValues(alpha: .75),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 6),
               _buildPrivacyControl(options, selectedPrivacy, theme),
             ],

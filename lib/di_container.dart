@@ -117,7 +117,9 @@ import 'package:flutter_sixvalley_ecommerce/features/profile/domain/services/pro
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_service_interface.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_service.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_group_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_group_service.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_group_service_interface.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_friends_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_friends_controller.dart';
 
@@ -320,7 +322,8 @@ Future<void> init() async {
 
   sl.registerLazySingleton(() => SocialFriendsRepository());
   sl.registerFactory(() => SocialFriendsController(sl()));
-
+  sl.registerFactory(
+      () => SocialGroupController(service: sl<SocialGroupServiceInterface>()));
 
   //interface
   AddressRepoInterface addressRepoInterface =
@@ -629,4 +632,6 @@ Future<void> init() async {
   sl.registerLazySingleton<SocialServiceInterface>(() => SocialService(
         socialRepository: sl<SocialRepository>(),
       ));
+  sl.registerLazySingleton<SocialGroupServiceInterface>(
+      () => SocialGroupService(socialRepository: sl<SocialRepository>()));
 }

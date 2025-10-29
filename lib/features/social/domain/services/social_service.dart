@@ -3,6 +3,8 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_comment.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_feed_page.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
 
 import 'social_service_interface.dart';
@@ -24,6 +26,84 @@ class SocialService implements SocialServiceInterface {
         resp.response!.statusCode == 200) {
       final page = socialRepository.parseNewsFeed(resp.response!);
       return page.posts;
+    }
+    ApiChecker.checkApi(resp);
+    return [];
+  }
+
+  @override
+  Future<SocialFeedPage> getGroupFeed({
+    required String groupId,
+    int limit = 10,
+    String? afterPostId,
+  }) async {
+    final resp = await socialRepository.fetchGroupFeed(
+      groupId: groupId,
+      limit: limit,
+      afterPostId: afterPostId,
+    );
+    if (resp.isSuccess &&
+        resp.response != null &&
+        resp.response!.statusCode == 200) {
+      return socialRepository.parseNewsFeed(resp.response!);
+    }
+    ApiChecker.checkApi(resp);
+    return const SocialFeedPage(posts: <SocialPost>[], lastId: null);
+  }
+
+  @override
+  Future<List<SocialGroup>> searchGroups({String keyword = ''}) async {
+    final resp = await socialRepository.searchSocial(searchKey: keyword);
+    if (resp.isSuccess && resp.response != null) {
+      final dynamic data = resp.response!.data;
+      final int status = int.tryParse(
+            '${data is Map ? (data['api_status'] ?? 200) : 200}',
+          ) ??
+          200;
+      if (status == 200) {
+        final groups = socialRepository.parseGroups(resp.response!);
+        return groups.where((group) => !group.isJoined).toList();
+      }
+      if (data is Map) {
+        final dynamic errors = data['errors'];
+        final dynamic errorText =
+            errors is Map ? errors['error_text'] : null;
+        final dynamic message = errorText ?? data['message'];
+        throw Exception((message ?? 'Search groups failed').toString());
+      }
+      throw Exception('Search groups failed');
+    }
+    ApiChecker.checkApi(resp);
+    return [];
+  }
+
+  @override
+  Future<List<SocialGroup>> getMyGroups({
+    required String type,
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    final resp = await socialRepository.fetchMyGroups(
+      type: type,
+      limit: limit,
+      offset: offset,
+    );
+    if (resp.isSuccess && resp.response != null) {
+      final dynamic data = resp.response!.data;
+      final int status =
+          int.tryParse('${data is Map ? (data['api_status'] ?? 200) : 200}') ??
+              200;
+      if (status == 200) {
+        return socialRepository.parseGroups(resp.response!);
+      }
+      if (data is Map) {
+        final dynamic errors = data['errors'];
+        final dynamic errorText =
+            errors is Map ? errors['error_text'] : null;
+        final dynamic message = errorText ?? data['message'];
+        throw Exception((message ?? 'Fetch groups failed').toString());
+      }
+      throw Exception('Fetch groups failed');
     }
     ApiChecker.checkApi(resp);
     return [];
@@ -491,6 +571,7 @@ class SocialService implements SocialServiceInterface {
     String? videoThumbnailPath,
     int privacy = 0,
     String? backgroundColorId,
+    String? groupId,
   }) async {
     final resp = await socialRepository.createPost(
       text: text,
@@ -499,6 +580,7 @@ class SocialService implements SocialServiceInterface {
       videoThumbnailPath: videoThumbnailPath,
       privacy: privacy,
       backgroundColorId: backgroundColorId,
+      groupId: groupId,
     );
     if (resp.isSuccess && resp.response != null) {
       final data = resp.response!.data;

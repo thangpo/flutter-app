@@ -5,11 +5,12 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_feed_page.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_service_interface.dart';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/main.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_profile_service.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
@@ -45,6 +46,23 @@ class SocialController with ChangeNotifier {
   int _storiesOffset = 0;
   final Map<String, Queue<_PendingStoryReaction>> _queuedStoryReactions =
       <String, Queue<_PendingStoryReaction>>{};
+  final List<SocialGroup> _suggestedGroups = <SocialGroup>[];
+  List<SocialGroup> get suggestedGroups => List.unmodifiable(_suggestedGroups);
+  bool _loadingSuggestedGroups = false;
+  bool get loadingSuggestedGroups => _loadingSuggestedGroups;
+  bool _suggestedGroupsFetched = false;
+  String _lastSuggestedKeyword = '';
+  final List<SocialGroup> _userGroups = <SocialGroup>[];
+  List<SocialGroup> get userGroups => List.unmodifiable(_userGroups);
+  bool _loadingUserGroups = false;
+  bool get loadingUserGroups => _loadingUserGroups;
+  bool _userGroupsFetched = false;
+  final List<SocialPost> _groupPosts = <SocialPost>[];
+  List<SocialPost> get groupPosts => List.unmodifiable(_groupPosts);
+  bool _loadingGroupPosts = false;
+  bool get loadingGroupPosts => _loadingGroupPosts;
+  bool _groupPostsFetched = false;
+  bool get groupPostsFetched => _groupPostsFetched;
 
   void clearAuthState({bool notify = true}) {
     _loading = false;
@@ -55,11 +73,157 @@ class SocialController with ChangeNotifier {
     _currentUserStory = null;
     _posts.clear();
     _stories.clear();
+    _suggestedGroups.clear();
+    _loadingSuggestedGroups = false;
+    _suggestedGroupsFetched = false;
+    _lastSuggestedKeyword = '';
+    _userGroups.clear();
+    _loadingUserGroups = false;
+    _userGroupsFetched = false;
+    _groupPosts.clear();
+    _loadingGroupPosts = false;
+    _groupPostsFetched = false;
     _afterId = null;
     _storiesOffset = 0;
     _storyReactionLoading.clear();
     _storyViewers.clear();
     if (notify) {
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadSuggestedGroups({
+    String keyword = '',
+    bool forceRefresh = false,
+  }) async {
+    final String normalizedKeyword = keyword.trim();
+    if (_loadingSuggestedGroups) return;
+    if (!forceRefresh &&
+        _suggestedGroupsFetched &&
+        normalizedKeyword == _lastSuggestedKeyword) {
+      return;
+    }
+
+    _loadingSuggestedGroups = true;
+    notifyListeners();
+
+    try {
+      final List<SocialGroup> groups =
+          await service.searchGroups(keyword: normalizedKeyword);
+      _suggestedGroups
+        ..clear()
+        ..addAll(groups);
+      _suggestedGroupsFetched = true;
+      _lastSuggestedKeyword = normalizedKeyword;
+    } catch (e) {
+      final ctx = Get.context;
+      if (ctx != null) {
+        showCustomSnackBar(e.toString(), ctx, isError: true);
+      }
+    } finally {
+      _loadingSuggestedGroups = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadUserGroups({bool forceRefresh = false}) async {
+    if (_loadingUserGroups) return;
+    if (!forceRefresh && _userGroupsFetched) return;
+
+    _loadingUserGroups = true;
+    notifyListeners();
+
+    try {
+      final List<SocialGroup> joined =
+          await service.getMyGroups(type: 'joined_groups');
+      final List<SocialGroup> mine =
+          await service.getMyGroups(type: 'my_groups');
+
+      final Map<String, SocialGroup> merged = <String, SocialGroup>{};
+      for (final SocialGroup group in joined) {
+        merged[group.id] = group;
+      }
+      for (final SocialGroup group in mine) {
+        merged[group.id] = group;
+      }
+
+      final List<SocialGroup> ordered = merged.values.toList()
+        ..sort((a, b) {
+          final DateTime aTime = a.updatedAt ??
+              a.createdAt ??
+              DateTime.fromMillisecondsSinceEpoch(0);
+          final DateTime bTime = b.updatedAt ??
+              b.createdAt ??
+              DateTime.fromMillisecondsSinceEpoch(0);
+          return bTime.compareTo(aTime);
+        });
+
+      _userGroups
+        ..clear()
+        ..addAll(ordered);
+      _userGroupsFetched = true;
+      _groupPosts.clear();
+      _groupPostsFetched = false;
+    } catch (e) {
+      final ctx = Get.context;
+      if (ctx != null) {
+        showCustomSnackBar(e.toString(), ctx, isError: true);
+      }
+    } finally {
+      _loadingUserGroups = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadGroupPosts({bool forceRefresh = false}) async {
+    if (_loadingGroupPosts) return;
+    if (!forceRefresh && _groupPostsFetched) return;
+
+    if (_userGroups.isEmpty && !_loadingUserGroups) {
+      await loadUserGroups(forceRefresh: forceRefresh);
+    }
+    if (_userGroups.isEmpty) {
+      _groupPosts.clear();
+      _groupPostsFetched = true;
+      notifyListeners();
+      return;
+    }
+
+    _loadingGroupPosts = true;
+    notifyListeners();
+
+    try {
+      final List<SocialPost> aggregated = <SocialPost>[];
+      for (final SocialGroup group in _userGroups) {
+        try {
+          final SocialFeedPage page =
+              await service.getGroupFeed(groupId: group.id, limit: 10);
+          for (final SocialPost post in page.posts) {
+            aggregated.add(post.copyWith(
+              isGroupPost: true,
+              groupId: group.id,
+              groupName: group.name,
+              groupTitle: group.title ?? post.groupTitle,
+              groupUrl: group.url ?? post.groupUrl,
+              groupAvatar: group.avatarUrl ?? post.groupAvatar,
+              groupCover: group.coverUrl ?? post.groupCover,
+            ));
+          }
+        } catch (e) {
+          debugPrint('Failed to load posts for group ${group.id}: $e');
+        }
+      }
+      _groupPosts
+        ..clear()
+        ..addAll(aggregated);
+      _groupPostsFetched = true;
+    } catch (e) {
+      final ctx = Get.context;
+      if (ctx != null) {
+        showCustomSnackBar(e.toString(), ctx, isError: true);
+      }
+    } finally {
+      _loadingGroupPosts = false;
       notifyListeners();
     }
   }
@@ -214,9 +378,18 @@ class SocialController with ChangeNotifier {
   }
 
   void _updatePost(String id, SocialPost newPost) {
-    final i = _posts.indexWhere((e) => e.id == id);
-    if (i != -1) {
-      _posts[i] = newPost;
+    bool changed = false;
+    final int feedIndex = _posts.indexWhere((e) => e.id == id);
+    if (feedIndex != -1) {
+      _posts[feedIndex] = newPost;
+      changed = true;
+    }
+    final int groupIndex = _groupPosts.indexWhere((e) => e.id == id);
+    if (groupIndex != -1) {
+      _groupPosts[groupIndex] = newPost;
+      changed = true;
+    }
+    if (changed) {
       notifyListeners();
     }
   }
@@ -228,6 +401,7 @@ class SocialController with ChangeNotifier {
     String? videoThumbnailPath,
     int privacy = 0,
     String? backgroundColorId,
+    String? groupId,
   }) async {
     if (_creatingPost) return null;
     _creatingPost = true;
@@ -240,9 +414,16 @@ class SocialController with ChangeNotifier {
         videoThumbnailPath: videoThumbnailPath,
         privacy: privacy,
         backgroundColorId: backgroundColorId,
+        groupId: groupId,
       );
-      _posts.insert(0, post);
-      return post;
+      final SocialPost normalized = groupId != null
+          ? post.copyWith(
+              isGroupPost: true,
+              groupId: groupId,
+            )
+          : post;
+      _posts.insert(0, normalized);
+      return normalized;
     } catch (e) {
       showCustomSnackBar(e.toString(), Get.context!, isError: true);
       rethrow;
@@ -610,7 +791,7 @@ class SocialController with ChangeNotifier {
     }
   }
 
-  Future<void> reactOnPost(SocialPost post, String reaction) async {
+  Future<SocialPost> reactOnPost(SocialPost post, String reaction) async {
     final was = post.myReaction;
 
     if (was.isNotEmpty && (reaction.isEmpty || reaction == 'Like')) {
@@ -625,11 +806,12 @@ class SocialController with ChangeNotifier {
       try {
         await service.reactToPost(
             postId: post.id, reaction: was, action: 'dislike');
+        return optimistic;
       } catch (e) {
         _updatePost(post.id, post);
         showCustomSnackBar(e.toString(), Get.context!, isError: true);
+        return post;
       }
-      return;
     }
     final now = reaction;
     int delta = 0;
@@ -650,10 +832,12 @@ class SocialController with ChangeNotifier {
     try {
       await service.reactToPost(
           postId: post.id, reaction: reaction, action: 'reaction');
+      return optimistic;
     } catch (e) {
       _updatePost(post.id, post);
       final msg = e.toString();
       showCustomSnackBar(msg, Get.context!, isError: true);
+      return post;
     }
   }
 
