@@ -14,6 +14,8 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/soci
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_live_repository.dart';
+
 class SocialController with ChangeNotifier {
   final SocialServiceInterface service;
   SocialController({required this.service});
@@ -39,6 +41,9 @@ class SocialController with ChangeNotifier {
 
   String? _accessToken;
   String? get accessToken => _accessToken;
+
+ bool _creatingLive = false;
+  bool get creatingLive => _creatingLive;
 
   final List<SocialStory> _stories = [];
   List<SocialStory> get stories => List.unmodifiable(_stories);
@@ -287,6 +292,31 @@ class SocialController with ChangeNotifier {
       notifyListeners();
     }
   }
+  void setAccessToken(String token) {
+    _accessToken = token;
+    notifyListeners();
+  }
+  Future<Map<String, dynamic>?> createLive() async {
+    if (_accessToken == null) throw Exception('Thiếu accessToken');
+
+    try {
+      _creatingLive = true;
+      notifyListeners();
+
+      final repo = SocialLiveRepository(
+        apiBaseUrl: 'https://social.vnshop247.com',
+        serverKey: 'f6e69c898ddd643154c9bd4b152555842e26a868-d195c100005dddb9f1a30a67a5ae42d4-19845955',
+      );
+
+      final data = await repo.createLive(_accessToken!);
+      return data;
+    } catch (e) {
+      rethrow;
+    } finally {
+      _creatingLive = false;
+      notifyListeners();
+    }
+  }
 
   Future<void> loadCurrentUser({bool force = false}) async {
     if (_loadingUser) return;
@@ -335,8 +365,7 @@ class SocialController with ChangeNotifier {
       _replaceStories(userStories);
 
       if (_posts.isEmpty) {
-        showCustomSnackBar(
-            'Không có bài viết. Kiểm tra socialAccessToken / API response.',
+        showCustomSnackBar('Không có bài viết. Vui lòng đăng nhập.',
             navigatorKey.currentContext!);
       }
     } finally {

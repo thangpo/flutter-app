@@ -99,6 +99,7 @@ dependencies:
   audio_session: ^0.1.21
   change_app_package_name: ^1.5.0
 
+  agora_rtc_engine: ^6.3.2
 
 #dependency_overrides:
 #  firebase_core_platform_interface: ^5.4.0
