@@ -40,7 +40,20 @@ class TourService {
         return data['data'];
       }
     }
-
     throw Exception('Không thể tìm kiếm tour');
+  }
+
+  static Future<List<dynamic>> fetchToursByLocation(int locationId) async {
+    final uri = Uri.parse('$baseUrl/tours/by-location/$locationId');
+    final response = await http.get(uri);
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      if (data['status'] == true && data['data'] != null) {
+        return data['data'];
+      }
+    }
+
+    throw Exception('Không thể tải tour theo địa điểm');
   }
 }

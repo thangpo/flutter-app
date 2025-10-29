@@ -24,6 +24,7 @@ import 'package:flutter_sixvalley_ecommerce/features/order/screens/order_screen.
 import 'package:flutter_sixvalley_ecommerce/features/main_home/screens/main_home_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/travel_screen.dart';
 import 'package:provider/provider.dart';
 
 class DashBoardScreen extends StatefulWidget {
@@ -33,7 +34,7 @@ class DashBoardScreen extends StatefulWidget {
 }
 
 class DashBoardScreenState extends State<DashBoardScreen> {
-  int _pageIndex = 0;
+  int _pageIndex = 1;
   late List<NavigationModel> _screens;
   final GlobalKey<ScaffoldMessengerState> _scaffoldKey = GlobalKey();
   final PageStorageBucket bucket = PageStorageBucket();
@@ -84,6 +85,12 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       ),
 
       NavigationModel(
+        name: 'travel',
+        icon: Images.TravelIcon,
+        screen: const TravelScreen(isBackButtonExist: false),
+      ),
+
+      NavigationModel(
         name: 'social',
         icon: Images.SocialIcon,
         screen: const SocialFeedScreen(),
@@ -108,10 +115,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
                 ? const AsterThemeHomeScreen()
                 : const FashionThemeHomePage(),
       ),
-      NavigationModel(
-          name: 'travel',
-          icon: Images.TravelIcon,
-          screen: const InboxScreen(isBackButtonExist: false)),
+
 
       NavigationModel(
           name: 'notifications',

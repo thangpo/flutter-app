@@ -85,7 +85,10 @@ class CartScreenState extends State<CartScreen> {
               double discount = 0.0;
               double tax = 0.0;
               int totalQuantity = 0;
+
+              int sellerGroupLength = 0;
               int totalPhysical = 0;
+
               bool onlyDigital = true;
               List<CartModel> cartList = [];
               cartList.addAll(cart.cartList);
@@ -229,17 +232,18 @@ class CartScreenState extends State<CartScreen> {
                               ),
                             ),
                             InkWell(
-                              onTap: () {
+                              onTap: () async {
                                 bool hasNull = false;
                                 bool minimum = false;
                                 bool stockOutProduct = false;
                                 bool closeShop = false;
-                                double total = 0;
 
                                 for (int index = 0; index < sellerGroupList.length; index++) {
-                                  total = 0;
+                                  double total = 0;
                                   for (CartModel cart in cartProductList[index]) {
-                                    total += (cart.price! - cart.discount!) * cart.quantity!;
+                                    if (cart.isChecked == true) {
+                                      total += (cart.price! - cart.discount!) * cart.quantity!;
+                                    }
                                   }
                                   if (total < sellerGroupList[index].minimumOrderAmountInfo!) {
                                     minimum = true;
@@ -258,17 +262,17 @@ class CartScreenState extends State<CartScreen> {
                                 }
 
                                 for (int index = 0; index < sellerGroupList.length; index++) {
-                                  if (sellerGroupList[index].shop?.vacationEndDate != null) {
+                                  final shop = sellerGroupList[index].shop;
+                                  if (shop?.vacationEndDate != null) {
                                     bool vacationIsOn = ShopHelper.isVacationActive(
                                       context,
-                                      startDate: sellerGroupList[index].shop?.vacationStartDate,
-                                      endDate: sellerGroupList[index].shop?.vacationEndDate,
-                                      vacationDurationType: sellerGroupList[index].shop?.vacationDurationType,
-                                      vacationStatus: sellerGroupList[index].shop?.vacationStatus,
-                                      isInHouseSeller: sellerGroupList[index].shop?.id == 0,
+                                      startDate: shop?.vacationStartDate,
+                                      endDate: shop?.vacationEndDate,
+                                      vacationDurationType: shop?.vacationDurationType,
+                                      vacationStatus: shop?.vacationStatus,
+                                      isInHouseSeller: shop?.id == 0,
                                     );
-
-                                    if ((vacationIsOn || (sellerGroupList[index].shop?.temporaryClose ?? false)) &&
+                                    if ((vacationIsOn || (shop?.temporaryClose ?? false)) &&
                                         (sellerGroupList[index].isGroupItemChecked ?? false)) {
                                       closeShop = true;
                                       break;
@@ -283,66 +287,101 @@ class CartScreenState extends State<CartScreen> {
                                     context: context,
                                     builder: (_) => const NotLoggedInBottomSheetWidget(),
                                   );
-                                } else if (cart.cartList.isEmpty) {
-                                  showCustomSnackBar(getTranslated('select_at_least_one_product', context), context);
-                                } else if (stockOutProduct) {
+                                  return;
+                                }
+
+                                if (cart.cartList.isEmpty || !isItemChecked) {
+                                  showCustomSnackBar(getTranslated('please_select_items', context), context);
+                                  return;
+                                }
+
+                                if (stockOutProduct) {
                                   showCustomSnackBar(getTranslated('stock_out_product_in_your_cart', context), context);
-                                } else if (closeShop) {
+                                  return;
+                                }
+
+                                if (closeShop) {
                                   showCustomSnackBar(getTranslated('unavailable_shop_product_in_your_cart', context), context);
-                                } else if (shippingController.chosenShippingList.isEmpty && !onlyDigital) {
+                                  return;
+                                }
+
+                                if (shippingController.chosenShippingList.isEmpty && !onlyDigital) {
                                   changeColor();
                                   showCustomSnackBar(getTranslated('select_all_shipping_method', context), context);
-                                } else if (minimum) {
-                                  changeColor();
-                                  showCustomSnackBar(
-                                    getTranslated('some_shop_not_full_fill_minimum_order_amount', context),
-                                    context,
-                                  );
-                                } else if (!isItemChecked) {
-                                  showCustomSnackBar(getTranslated('please_select_items', context), context);
-                                } else if (requiredMinOrderQtyCart != null) {
-                                  changeColor();
-                                  showCustomSnackBar(
-                                    '${getTranslated('to_order', context)} ${requiredMinOrderQtyCart.productCart.name} ${getTranslated('min_order_quantity_is', context)} ${requiredMinOrderQtyCart.productCart.productInfo?.minimumOrderQty}',
-                                    context,
-                                  );
-                                } else {
-                                  int sellerGroupLength = 0;
-                                  List<int?> fromDistrictIds = [];
-                                  List<String?> fromWardIds = [];
+                                  return;
+                                }
 
-                                  for (CartModel seller in sellerGroupList) {
-                                    if (seller.isGroupItemChecked!) {
-                                      sellerGroupLength += 1;
-                                      if (seller.sellerIs == 'admin') {
-                                        fromDistrictIds.add(configProvider.configModel?.inHouseShop?.fromDistrictId);
-                                        fromWardIds.add(configProvider.configModel?.inHouseShop?.fromWardId);
-                                      } else {
-                                        fromDistrictIds.add(seller.shop?.fromDistrictId);
-                                        fromWardIds.add(seller.shop?.fromWardId);
+                                if (minimum) {
+                                  changeColor();
+                                  showCustomSnackBar(getTranslated('some_shop_not_full_fill_minimum_order_amount', context), context);
+                                  return;
+                                }
+
+                                if (requiredMinOrderQtyCart != null) {
+                                  changeColor();
+                                  showCustomSnackBar(
+                                    '${getTranslated('to_order', context)} ${requiredMinOrderQtyCart!.productCart.name} ${getTranslated('min_order_quantity_is', context)} ${requiredMinOrderQtyCart!.productCart.productInfo?.minimumOrderQty}',
+                                    context,
+                                  );
+                                  return;
+                                }
+
+                                int sellerGroupLength = 0;
+                                int totalPhysical = 0;
+                                List<int?> fromDistrictIds = [];
+                                List<String?> fromWardIds = [];
+                                List<int> selectedCartIds = [];
+
+                                for (int index = 0; index < sellerGroupList.length; index++) {
+                                  final seller = sellerGroupList[index];
+                                  final items = cartProductList[index];
+
+                                  bool hasCheckedItem = items.any((c) => c.isChecked == true);
+                                  if (!hasCheckedItem) continue;
+
+                                  sellerGroupLength++;
+
+                                  if (seller.sellerIs == 'admin') {
+                                    fromDistrictIds.add(configProvider.configModel?.inHouseShop?.fromDistrictId);
+                                    fromWardIds.add(configProvider.configModel?.inHouseShop?.fromWardId);
+                                  } else {
+                                    fromDistrictIds.add(seller.shop?.fromDistrictId);
+                                    fromWardIds.add(seller.shop?.fromWardId);
+                                  }
+
+                                  for (var cart in items) {
+                                    if (cart.isChecked == true) {
+                                      selectedCartIds.add(cart.id!);
+                                      if (cart.productType == 'physical') {
+                                        totalPhysical++;
                                       }
                                     }
                                   }
-
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => CheckoutScreen(
-                                        quantity: totalQuantity,
-                                        cartList: cartList,
-                                        totalOrderAmount: amount,
-                                        shippingFee: shippingAmount - freeDeliveryAmountDiscount,
-                                        discount: discount,
-                                        tax: tax,
-                                        onlyDigital: sellerGroupLength != totalPhysical,
-                                        hasPhysical: totalPhysical > 0,
-                                        fromDistrictIds: fromDistrictIds,
-                                        fromWardIds: fromWardIds,
-                                        cartId: cartList.first.id,
-                                      ),
-                                    ),
-                                  );
                                 }
+
+                                if (selectedCartIds.isEmpty) {
+                                  showCustomSnackBar(getTranslated('please_select_items', context), context);
+                                  return;
+                                }
+
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => CheckoutScreen(
+                                      quantity: totalQuantity,
+                                      cartList: cartList,
+                                      totalOrderAmount: amount,
+                                      shippingFee: shippingAmount - freeDeliveryAmountDiscount,
+                                      discount: discount,
+                                      tax: tax,
+                                      onlyDigital: sellerGroupLength > 0 && totalPhysical == 0,
+                                      hasPhysical: totalPhysical > 0,
+                                      fromDistrictIds: fromDistrictIds,
+                                      fromWardIds: fromWardIds,
+                                      selectedCartIds: selectedCartIds,
+                                    ),
+                                  ),
+                                );
                               },
                               child: Container(
                                 decoration: BoxDecoration(
@@ -747,8 +786,10 @@ class CartScreenState extends State<CartScreen> {
       List<List<CartModel>> cartProductList,
       ) {
     for (int index = 0; index < sellerGroupList.length; index++) {
-      for (CartModel cart in cartProductList[index]) {
-        if (cart.isChecked == true && cart.quantity! < (cart.productInfo?.minimumOrderQty ?? 1)) {
+      final cartItemsInGroup = cartProductList[index];
+      for (var cart in cartItemsInGroup) {
+        if (cart.isChecked == true &&
+            cart.quantity! < (cart.productInfo?.minimumOrderQty ?? 1)) {
           return (
           productCart: cart,
           sellerCart: sellerGroupList[index],
