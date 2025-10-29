@@ -19,7 +19,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_sixvalley_ecommerce/features/profile/controllers/profile_contrroller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_list_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_profile_service.dart';
 
 
 class SocialFeedScreen extends StatefulWidget {
@@ -784,7 +783,8 @@ class SocialPostCard extends StatelessWidget {
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => const ProfileScreen(),
+                        builder: (_) =>  ProfileScreen(targetUserId: post.publisherId),
+                        // targetUserId: post.publisherId,
                       ),
                     );
                   },
@@ -818,7 +818,8 @@ class SocialPostCard extends StatelessWidget {
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => const ProfileScreen(),
+                          builder: (_) => ProfileScreen(targetUserId: post.publisherId),
+                          // targetUserId: post.publisherId,
                         ),
                       );
                     },
