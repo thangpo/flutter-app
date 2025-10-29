@@ -60,6 +60,7 @@ class TravelScreen extends StatelessWidget {
                 FlightListWidget(),
                 SizedBox(height: 20),
                 HotelListWidget(),
+                SizedBox(height: 30),
                 // Bạn có thể thêm phần khác sau này, ví dụ:
               ],
             ),

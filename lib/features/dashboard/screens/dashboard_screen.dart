@@ -34,7 +34,7 @@ class DashBoardScreen extends StatefulWidget {
 }
 
 class DashBoardScreenState extends State<DashBoardScreen> {
-  int _pageIndex = 0;
+  int _pageIndex = 1;
   late List<NavigationModel> _screens;
   final GlobalKey<ScaffoldMessengerState> _scaffoldKey = GlobalKey();
   final PageStorageBucket bucket = PageStorageBucket();
@@ -85,6 +85,12 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       ),
 
       NavigationModel(
+        name: 'travel',
+        icon: Images.TravelIcon,
+        screen: const TravelScreen(isBackButtonExist: false),
+      ),
+
+      NavigationModel(
         name: 'social',
         icon: Images.SocialIcon,
         screen: const SocialFeedScreen(),
@@ -109,11 +115,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
                 ? const AsterThemeHomeScreen()
                 : const FashionThemeHomePage(),
       ),
-      NavigationModel(
-        name: 'travel',
-        icon: Images.TravelIcon,
-        screen: const TravelScreen(isBackButtonExist: false),
-      ),
+
 
       NavigationModel(
           name: 'notifications',
