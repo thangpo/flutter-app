@@ -1,5 +1,6 @@
 ﻿import 'dart:io';
-
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +11,8 @@ import 'package:flutter_sixvalley_ecommerce/features/profile/domain/models/profi
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_live_repository.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/live_screen.dart';
 
 class SocialCreatePostScreen extends StatefulWidget {
   final String? groupId;
@@ -142,6 +145,70 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
     });
   }
 
+  Future<void> _startLiveVideo() async {
+    try {
+      final sc = context.read<SocialController>();
+      final data = await sc.createLive();
+      print('🎬 Live Data: $data');
+
+      if (!mounted) return;
+
+      if (data == null) {
+        showCustomSnackBar('Không thể tạo Live stream', context, isError: true);
+        return;
+      }
+
+      // 🔹 Nếu /api/live chưa có token, bạn cần tự gọi API generate_agora_token
+      // hoặc nếu bạn đã nhúng token_agora trong data thì đoạn này sẽ hoạt động ngay.
+      final token = data?['token_agora']?.toString() ?? '';
+      final channel = data?['channel']?.toString() ??
+          data?['stream_name']?.toString() ?? '';
+
+      print('🎬 [DEBUG] Token: $token, Channel: $channel');
+
+      // 🔹 Nếu token rỗng -> gọi API /api/generate_agora_token để lấy token mới
+      String finalToken = token;
+      if (finalToken.isEmpty && channel.isNotEmpty) {
+        final url = Uri.parse(
+          'https://social.vnshop247.com/api/generate_agora_token?access_token=${sc.accessToken}',
+        );
+
+        final res = await http.post(url, body: {
+          'server_key': 'f6e69c898ddd643154c9bd4b152555842e26a868-d195c100005dddb9f1a30a67a5ae42d4-19845955',
+          'channelName': channel,
+          'uid': '316',
+          'role': 'publisher',
+        });
+
+        final jsonData = jsonDecode(res.body);
+        print('📡 [DEBUG] Generate Token Response: $jsonData');
+
+        if (jsonData['token_agora'] != null) {
+          finalToken = jsonData['token_agora'];
+        }
+      }
+
+      // 🚀 Mở LiveScreen
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => LiveScreen(
+            appId: '554e80e2bcfe401cbde32aaf13d48ce5',
+            channelName: channel,
+            token: finalToken,
+            accessToken: sc.accessToken!,
+          ),
+        ),
+      );
+    } catch (e) {
+      print('🔥 [ERROR] Lỗi khi tạo live: $e');
+      if (!mounted) return;
+      showCustomSnackBar('Lỗi khi tạo live: $e', context, isError: true);
+    }
+  }
+
+
+
   bool get _hasContent {
     return _textController.text.trim().isNotEmpty ||
         _images.isNotEmpty ||
@@ -230,7 +297,7 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
         icon: Icons.videocam_outlined,
         color: Colors.purple,
         label: getTranslated('live_video', context) ?? 'Live video',
-        onTap: () => _showComingSoon('live_video'),
+        onTap: _startLiveVideo,
       ),
       _ComposeAction(
         icon: Icons.format_color_fill_outlined,

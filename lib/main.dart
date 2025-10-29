@@ -59,6 +59,9 @@ import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_g
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_service_interface.dart';
 import 'helper/custom_delegate.dart';
 import 'localization/app_localization.dart';
+import 'features/social/controllers/group_chat_controller.dart';
+import 'features/social/domain/repositories/group_chat_repository.dart';
+
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -151,8 +154,13 @@ Future<void> main() async {
         create: (_) =>
             SocialController(service: di.sl<SocialServiceInterface>())..refresh(),
       ),
+
       ChangeNotifierProvider(
         create: (_) => di.sl<SocialGroupController>(),
+
+      ChangeNotifierProvider(
+        create: (_) => GroupChatController(repo: GroupChatRepository()),
+
       ),
     ],
     child: MyApp(body: body),

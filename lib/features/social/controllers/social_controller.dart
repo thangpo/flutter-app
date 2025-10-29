@@ -7,18 +7,22 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_feed_page.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user_profile.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_service_interface.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_service.dart';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/main.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
+
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_live_repository.dart';
 
 class SocialController with ChangeNotifier {
   final SocialServiceInterface service;
   SocialController({required this.service});
 
+  // ========== NEWS FEED STATE ==========
   bool _loading = false;
   bool get loading => _loading;
 
@@ -32,6 +36,9 @@ class SocialController with ChangeNotifier {
   SocialUser? _currentUser;
   SocialUser? get currentUser => _currentUser;
 
+  SocialUserProfile? _profileHeaderUser;
+  SocialUserProfile? get profileHeaderUser => _profileHeaderUser;
+
   SocialStory? _currentUserStory;
   SocialStory? get currentUserStory => _currentUserStory;
 
@@ -40,6 +47,9 @@ class SocialController with ChangeNotifier {
 
   String? _accessToken;
   String? get accessToken => _accessToken;
+
+ bool _creatingLive = false;
+  bool get creatingLive => _creatingLive;
 
   final List<SocialStory> _stories = [];
   List<SocialStory> get stories => List.unmodifiable(_stories);
@@ -64,6 +74,34 @@ class SocialController with ChangeNotifier {
   bool _groupPostsFetched = false;
   bool get groupPostsFetched => _groupPostsFetched;
 
+  String? _afterId;
+  final Set<String> _storyReactionLoading = <String>{};
+  static const int _storyViewersPageSize = 50;
+  final Map<String, StoryViewersState> _storyViewers =
+  <String, StoryViewersState>{};
+  final Set<String> _sharingPosts = <String>{};
+  bool isSharing(String id) => _sharingPosts.contains(id);
+  bool _pendingLoadMore = false;
+
+  // ========== USER PROFILE STATE (MERGED FROM PROFILE CONTROLLER) ==========
+  List<SocialUser> _followers = const [];
+  List<SocialUser> _following = const [];
+  List<dynamic> _likedPages = const [];
+  List<SocialPost> _profilePosts = [];
+
+  bool _loadingProfile = false;
+  bool _loadingProfilePosts = false;
+  String? _lastProfilePostId;
+
+  // Profile getters
+  List<SocialUser> get followers => _followers;
+  List<SocialUser> get following => _following;
+  List<dynamic> get likedPages => _likedPages;
+  List<SocialPost> get profilePosts => List.unmodifiable(_profilePosts);
+  bool get isLoadingProfile => _loadingProfile;
+  bool get isLoadingProfilePosts => _loadingProfilePosts;
+
+  // ========== CLEAR STATE ==========
   void clearAuthState({bool notify = true}) {
     _loading = false;
     _creatingPost = false;
@@ -87,6 +125,16 @@ class SocialController with ChangeNotifier {
     _storiesOffset = 0;
     _storyReactionLoading.clear();
     _storyViewers.clear();
+
+    // Clear profile state
+    _followers = const [];
+    _following = const [];
+    _likedPages = const [];
+    _profilePosts.clear();
+    _loadingProfile = false;
+    _loadingProfilePosts = false;
+    _lastProfilePostId = null;
+
     if (notify) {
       notifyListeners();
     }
@@ -332,7 +380,7 @@ class SocialController with ChangeNotifier {
     }
     final SocialStory story = _stories[storyIndex];
     final List<SocialStoryItem> updatedItems =
-        List<SocialStoryItem>.from(story.items);
+    List<SocialStoryItem>.from(story.items);
     updatedItems[itemIndex] = newItem;
     _stories[storyIndex] = story.copyWith(items: updatedItems);
     _syncCurrentUserStoryFrom(_stories);
@@ -392,8 +440,20 @@ class SocialController with ChangeNotifier {
     if (changed) {
       notifyListeners();
     }
+    // Cập nhật trong danh sách profile (_profilePosts)
+  final int profileIndex = _profilePosts.indexWhere((p) => p.id == id);
+  if (profileIndex != -1) {
+    _profilePosts[profileIndex] = newPost;
+    changed = true;
   }
 
+  // Nếu có thay đổi ở ít nhất 1 nơi thì thông báo UI rebuild
+  if (changed) {
+    notifyListeners();
+  }
+  }
+
+  // ========== POST CREATION ==========
   Future<SocialPost?> createPost({
     String? text,
     List<String>? imagePaths,
@@ -433,6 +493,7 @@ class SocialController with ChangeNotifier {
     }
   }
 
+  // ========== STORY CREATION ==========
   Future<SocialStory?> createStory({
     required String fileType,
     required String filePath,
@@ -468,23 +529,47 @@ class SocialController with ChangeNotifier {
       notifyListeners();
     }
   }
+  void setAccessToken(String token) {
+    _accessToken = token;
+    notifyListeners();
+  }
+  Future<Map<String, dynamic>?> createLive() async {
+    if (_accessToken == null) throw Exception('Thiếu accessToken');
 
+    try {
+      _creatingLive = true;
+      notifyListeners();
+
+      final repo = SocialLiveRepository(
+        apiBaseUrl: 'https://social.vnshop247.com',
+        serverKey: 'f6e69c898ddd643154c9bd4b152555842e26a868-d195c100005dddb9f1a30a67a5ae42d4-19845955',
+      );
+
+      final data = await repo.createLive(_accessToken!);
+      return data;
+    } catch (e) {
+      rethrow;
+    } finally {
+      _creatingLive = false;
+      notifyListeners();
+    }
+  }
+
+  // ========== LOAD CURRENT USER ==========
   Future<void> loadCurrentUser({bool force = false}) async {
     if (_loadingUser) return;
     if (!force && _currentUser != null) return;
 
     _loadingUser = true;
     try {
-      // 🔹 NẠP access token từ SharedPreferences nếu chưa có trong RAM
       final sp = await SharedPreferences.getInstance();
       _accessToken ??= sp.getString(AppConstants.socialAccessToken);
 
-      // 🔹 Nếu chưa kết nối WoWonder thì không gọi API, clear state nhẹ nhàng
       if (_accessToken == null || _accessToken!.isEmpty) {
         _currentUser = null;
-        _syncCurrentUserStoryFrom(_stories); // giữ logic đồng bộ story hiện có
+        _syncCurrentUserStoryFrom(_stories);
         notifyListeners();
-        return; // thoát sớm, finally vẫn chạy để _loadingUser=false
+        return;
       }
 
       final user = await service.getCurrentUser();
@@ -501,6 +586,7 @@ class SocialController with ChangeNotifier {
     }
   }
 
+  // ========== NEWS FEED OPERATIONS ==========
   Future<void> refresh() async {
     if (_loading) return;
     _loading = true;
@@ -516,8 +602,7 @@ class SocialController with ChangeNotifier {
       _replaceStories(userStories);
 
       if (_posts.isEmpty) {
-        showCustomSnackBar(
-            'Không có bài viết. Kiểm tra socialAccessToken / API response.',
+        showCustomSnackBar('Không có bài viết. Vui lòng đăng nhập.',
             navigatorKey.currentContext!);
       }
     } finally {
@@ -555,6 +640,7 @@ class SocialController with ChangeNotifier {
     }
   }
 
+  // ========== STORY REACTIONS ==========
   Future<void> reactOnStoryItem({
     required SocialStory story,
     required SocialStoryItem item,
@@ -566,7 +652,7 @@ class SocialController with ChangeNotifier {
     if (storyIndex == -1) return;
     final SocialStory targetStory = _stories[storyIndex];
     final int itemIndex =
-        targetStory.items.indexWhere((element) => element.id == item.id);
+    targetStory.items.indexWhere((element) => element.id == item.id);
     if (itemIndex == -1) return;
 
     final SocialStoryItem currentItem = targetStory.items[itemIndex];
@@ -616,13 +702,13 @@ class SocialController with ChangeNotifier {
     );
 
     final _PendingStoryReaction pending =
-        _PendingStoryReaction(reaction: sendingReaction);
+    _PendingStoryReaction(reaction: sendingReaction);
 
     if (_storyReactionLoading.contains(currentItem.id)) {
       final Queue<_PendingStoryReaction> queue =
-          _queuedStoryReactions.putIfAbsent(
+      _queuedStoryReactions.putIfAbsent(
         currentItem.id,
-        () => Queue<_PendingStoryReaction>(),
+            () => Queue<_PendingStoryReaction>(),
       );
       queue.add(pending);
       _replaceStoryItem(
@@ -660,20 +746,20 @@ class SocialController with ChangeNotifier {
     } finally {
       _storyReactionLoading.remove(currentItem.id);
       final Queue<_PendingStoryReaction>? queue =
-          _queuedStoryReactions[currentItem.id];
+      _queuedStoryReactions[currentItem.id];
       final _PendingStoryReaction? queued =
-          queue != null && queue.isNotEmpty ? queue.removeFirst() : null;
+      queue != null && queue.isNotEmpty ? queue.removeFirst() : null;
       if (queue != null && queue.isEmpty) {
         _queuedStoryReactions.remove(currentItem.id);
       }
       if (queued != null) {
         final String storyKey = _storyKey(targetStory);
         final int refreshedStoryIndex =
-            _stories.indexWhere((element) => _storyKey(element) == storyKey);
+        _stories.indexWhere((element) => _storyKey(element) == storyKey);
         if (refreshedStoryIndex != -1) {
           final SocialStory refreshedStory = _stories[refreshedStoryIndex];
           final SocialStoryItem refreshedItem = refreshedStory.items.firstWhere(
-            (element) => element.id == currentItem.id,
+                (element) => element.id == currentItem.id,
             orElse: () => currentItem,
           );
           await reactOnStoryItem(
@@ -687,10 +773,11 @@ class SocialController with ChangeNotifier {
     }
   }
 
+  // ========== STORY VIEWERS ==========
   Future<void> fetchStoryViewers(
-    SocialStoryItem item, {
-    bool refresh = false,
-  }) async {
+      SocialStoryItem item, {
+        bool refresh = false,
+      }) async {
     final String key = item.id;
     final StoryViewersState previous =
         _storyViewers[key] ?? const StoryViewersState();
@@ -722,10 +809,10 @@ class SocialController with ChangeNotifier {
 
       for (final SocialStoryViewer viewer in page.viewers) {
         final String viewerKey =
-            viewer.userId.isNotEmpty ? viewer.userId : viewer.id;
+        viewer.userId.isNotEmpty ? viewer.userId : viewer.id;
         final int existingIndex = merged.indexWhere((existing) {
           final String existingKey =
-              existing.userId.isNotEmpty ? existing.userId : existing.id;
+          existing.userId.isNotEmpty ? existing.userId : existing.id;
           return existingKey == viewerKey;
         });
         if (existingIndex >= 0) {
@@ -747,7 +834,7 @@ class SocialController with ChangeNotifier {
           ? page.nextOffset
           : offset + page.viewers.length;
       final int total =
-          page.total != 0 ? page.total : (item.viewCount ?? merged.length);
+      page.total != 0 ? page.total : (item.viewCount ?? merged.length);
 
       _storyViewers[key] = StoryViewersState(
         viewers: merged,
@@ -780,7 +867,7 @@ class SocialController with ChangeNotifier {
     notifyListeners();
     try {
       final fetchedStories =
-          await service.getMyStories(limit: 10, offset: _storiesOffset);
+      await service.getMyStories(limit: 10, offset: _storiesOffset);
       if (fetchedStories.isNotEmpty) {
         _mergeStories(fetchedStories);
         _storiesOffset += fetchedStories.length;
@@ -796,7 +883,7 @@ class SocialController with ChangeNotifier {
 
     if (was.isNotEmpty && (reaction.isEmpty || reaction == 'Like')) {
       final updatedBreakdown =
-          _adjustReactionBreakdown(post.reactionBreakdown, remove: was);
+      _adjustReactionBreakdown(post.reactionBreakdown, remove: was);
       final optimistic = post.copyWith(
         myReaction: '',
         reactionCount: (post.reactionCount - 1).clamp(0, 1 << 31),
@@ -841,18 +928,19 @@ class SocialController with ChangeNotifier {
     }
   }
 
+  // ========== POST SHARING ==========
   Future<bool> sharePost(SocialPost post, {String? text}) async {
     if (_sharingPosts.contains(post.id)) return false;
     _sharingPosts.add(post.id);
     notifyListeners();
 
     final SocialPost optimistic =
-        post.copyWith(shareCount: post.shareCount + 1);
+    post.copyWith(shareCount: post.shareCount + 1);
     _updatePost(post.id, optimistic);
 
     try {
       final SocialPost shared =
-          await service.sharePost(postId: post.id, text: text);
+      await service.sharePost(postId: post.id, text: text);
       _posts.insert(0, shared);
       notifyListeners();
       final ctx = Get.context!;
@@ -871,10 +959,10 @@ class SocialController with ChangeNotifier {
   }
 
   Map<String, int> _adjustReactionBreakdown(
-    Map<String, int> base, {
-    String? remove,
-    String? add,
-  }) {
+      Map<String, int> base, {
+        String? remove,
+        String? add,
+      }) {
     if ((remove == null || remove.isEmpty) && (add == null || add.isEmpty))
       return base;
     final Map<String, int> next = Map<String, int>.from(base);
@@ -893,8 +981,154 @@ class SocialController with ChangeNotifier {
     apply(add, 1);
     return next;
   }
+
+  // ========== USER PROFILE OPERATIONS (MERGED FROM PROFILE CONTROLLER) ==========
+
+  /// Load profile đầy đủ (user + followers + following + liked_pages + posts)
+  Future<void> loadUserProfile({String? targetUserId}) async {
+    if (_loadingProfile &&
+        targetUserId == _profileHeaderUser?.id) {
+      return;
+    }
+
+    _loadingProfile = true;
+    _profileHeaderUser = null;
+    _followers = const [];
+    _following = const [];
+    _likedPages = const [];
+    _profilePosts = [];
+    _lastProfilePostId = null;
+
+    notifyListeners();
+
+
+    try {
+      if (service is! SocialService) {
+        throw Exception('Service must be SocialService to load profile');
+      }
+
+      final SocialService socialService = service as SocialService;
+
+      // gọi service để lấy profile bundle (đã sửa để trả SocialUserProfile trong bundle.user)
+      final bundle = await socialService.getUserProfile(
+        targetUserId: targetUserId,
+      );
+
+      // lưu header user đầy đủ (SocialUserProfile?)
+      _profileHeaderUser = bundle.user;
+
+      // nếu đây là profile của chính mình thì bạn có thể
+      // optionally sync lại _currentUser nếu muốn.
+      // Nhưng KHÔNG bắt buộc. Bạn có thể bỏ hẳn block này nếu không muốn đụng _currentUser.
+      if (targetUserId == null || (targetUserId == _currentUser?.id)) {
+        // ví dụ: chỉ cập nhật avatar / cover / displayName tạm thời,
+        // tránh gán cả object khác kiểu
+        if (_currentUser != null && bundle.user != null) {
+          _currentUser = SocialUser(
+            id: _currentUser!.id,
+            displayName: bundle.user!.displayName ?? _currentUser!.displayName,
+            userName: bundle.user!.userName ?? _currentUser!.userName,
+            avatarUrl: bundle.user!.avatarUrl ?? _currentUser!.avatarUrl,
+            coverUrl: bundle.user!.coverUrl ?? _currentUser!.coverUrl,
+            // ... các field khác mà SocialUser có
+          );
+        }
+        // nếu bạn không muốn sync gì hết thì có thể bỏ hết block if này luôn
+      }
+
+      // followers / following / likedPages từ bundle (vẫn List<SocialUser>)
+      _followers = bundle.followers;
+      _following = bundle.following;
+      _likedPages = bundle.likedPages;
+
+      // load posts cho profile này
+      if (bundle.user != null && bundle.user!.id.isNotEmpty) {
+        final feedPage = await socialService.getUserPosts(
+          targetUserId: bundle.user!.id,
+          limit: 10,
+          afterPostId: null,
+        );
+        _profilePosts = feedPage.posts;
+        _lastProfilePostId = feedPage.lastId;
+      } else {
+        _profilePosts = [];
+        _lastProfilePostId = null;
+      }
+    } catch (e) {
+      showCustomSnackBar(e.toString(), Get.context!, isError: true);
+    } finally {
+      _loadingProfile = false;
+      notifyListeners();
+    }
+  }
+
+
+  /// Load more profile posts (pagination)
+  Future<void> loadMoreProfilePosts({
+    String? targetUserId,
+    int limit = 10,
+  }) async {
+    if (_loadingProfilePosts) return;
+    if (_lastProfilePostId == null || _lastProfilePostId!.isEmpty) return;
+
+    final userId = targetUserId ?? _currentUser?.id;
+    if (userId == null || userId.isEmpty) return;
+
+    _loadingProfilePosts = true;
+    notifyListeners();
+
+    try {
+      if (service is! SocialService) {
+        throw Exception('Service must be SocialService');
+      }
+
+      final SocialService socialService = service as SocialService;
+
+      final feedPage = await socialService.getUserPosts(
+        targetUserId: userId,
+        limit: limit,
+        afterPostId: _lastProfilePostId,
+      );
+
+      if (feedPage.posts.isNotEmpty) {
+        _profilePosts = [..._profilePosts, ...feedPage.posts];
+        _lastProfilePostId = feedPage.lastId;
+      }
+    } catch (e) {
+      showCustomSnackBar(e.toString(), Get.context!, isError: true);
+    } finally {
+      _loadingProfilePosts = false;
+      notifyListeners();
+    }
+  }
+
+  /// Apply reaction update to profile post (from ProfileController)
+  void applyReactionUpdate({
+    required String postId,
+    required String newReaction,
+    required int newReactionCount,
+    required Map<String, int> newBreakdown,
+  }) {
+    final idx = _profilePosts.indexWhere((p) => p.id == postId);
+    if (idx == -1) return;
+
+    final updated = _profilePosts[idx].copyWith(
+      myReaction: newReaction,
+      reactionCount: newReactionCount,
+      reactionBreakdown: newBreakdown,
+    );
+
+    _profilePosts = [
+      ..._profilePosts.sublist(0, idx),
+      updated,
+      ..._profilePosts.sublist(idx + 1),
+    ];
+
+    notifyListeners();
+  }
 }
 
+// ========== HELPER CLASSES ==========
 class StoryViewersState {
   final List<SocialStoryViewer> viewers;
   final bool loading;

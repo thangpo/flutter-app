@@ -11,6 +11,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_feed_page.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user_profile.dart';
 
 bool _isImageUrl(String url) {
   final u = url.toLowerCase();
@@ -183,6 +184,242 @@ class SocialRepository {
     }
     return SocialFeedPage(posts: list, lastId: lastId);
   }
+
+  //thêm
+  // THÊM vào class SocialRepository
+  Future<ApiResponseModel<Response>> fetchUserProfile({
+    String? targetUserId, // null = lấy của mình
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token?.isNotEmpty != true) {
+        return ApiResponseModel.withError('Missing Social access_token');
+      }
+
+      final String? userId = targetUserId ?? _getSocialUserId();
+
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialGetUserDataUri}?access_token=$token';
+
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'user_id': userId,
+        'fetch': 'user_data,followers,following,liked_pages',
+        'send_notify': '1',
+      });
+
+      final res = await dioClient.post(
+        url,
+        data: form,
+        options: Options(
+          contentType: Headers.multipartFormDataContentType,
+        ),
+      );
+
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+  // THÊM vào class SocialRepository
+  Future<ApiResponseModel<Response>> fetchUserPosts({
+    required String targetUserId,
+    int limit = 10,
+    String? afterPostId,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError(
+            'Please log in to your social network account');
+      }
+
+      final String userIdToLoad = targetUserId.isNotEmpty
+          ? targetUserId
+          : (_getSocialUserId() ?? '');
+
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialPostsUri}?access_token=$token';
+
+      final formMap = <String, dynamic>{
+        'server_key': AppConstants.socialServerKey,
+        'type': 'get_user_posts',
+        'id': userIdToLoad,
+        'limit': limit.toString(),
+      };
+
+      if (afterPostId != null && afterPostId.isNotEmpty) {
+        formMap['after_post_id'] = afterPostId;
+      }
+
+      final form = FormData.fromMap(formMap);
+
+      final Response res = await dioClient.post(
+        url,
+        data: form,
+        options: Options(
+          contentType: Headers.multipartFormDataContentType,
+        ),
+      );
+
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+  // THÊM vào class SocialRepository
+  SocialUserProfile? parseUserProfile(Response res) {
+    final data = res.data;
+    if (data is! Map) return null;
+
+    // Lấy block user_data từ response
+    Map? raw;
+    if (data['user_data'] is Map) {
+      raw = data['user_data'] as Map;
+    } else if (data['data'] is Map) {
+      raw = data['data'] as Map;
+    }
+    if (raw == null) return null;
+
+    final map = Map<String, dynamic>.from(raw);
+
+    // Helpers cục bộ
+    String? _cleanStr(dynamic v) {
+      if (v == null) return null;
+      final s = v.toString().trim();
+      if (s.isEmpty || s == '0' || s == '0000-00-00') return null;
+      return s;
+    }
+
+    int _toInt(dynamic v) {
+      if (v == null) return 0;
+      if (v is int) return v;
+      if (v is String) {
+        final parsed = int.tryParse(v);
+        if (parsed != null) return parsed;
+      }
+      return 0;
+    }
+
+    bool _toBool(dynamic v) {
+      if (v == null) return false;
+      if (v is bool) return v;
+      if (v is num) return v != 0;
+      final s = v.toString().trim().toLowerCase();
+      return s == '1' || s == 'true';
+    }
+
+    // id
+    final String id = (map['user_id'] ?? map['id'] ?? '').toString();
+    if (id.isEmpty) return null;
+
+    // tên cơ bản
+    String? firstName = _cleanStr(map['first_name'] ?? map['fname']);
+    String? lastName  = _cleanStr(map['last_name'] ?? map['lname']);
+    String? userName  = _cleanStr(map['username'] ?? map['user_name']);
+
+    // displayName ưu tiên: name -> first+last -> username
+    String? displayName = _cleanStr(map['name']);
+    if (displayName == null || displayName.isEmpty) {
+      final combined = [
+        if (firstName != null && firstName.isNotEmpty) firstName,
+        if (lastName  != null && lastName.isNotEmpty) lastName,
+      ].join(' ').trim();
+
+      if (combined.isNotEmpty) {
+        displayName = combined;
+      } else if (userName != null && userName.isNotEmpty) {
+        displayName = userName;
+      }
+    }
+
+    // avatar & cover
+    final avatarRaw = (map['avatar_full'] ??
+        map['avatar_original'] ??
+        map['avatar'] ??
+        '').toString();
+    final coverRaw = (map['cover_full'] ??
+        map['cover_original'] ??
+        map['cover'] ??
+        '').toString();
+
+    final String? avatarUrl = _absoluteUrl(avatarRaw);
+    final String? coverUrl  = _absoluteUrl(coverRaw);
+
+    // details block (đếm follower/following/post...)
+    final details = (map['details'] is Map)
+        ? Map<String, dynamic>.from(map['details'])
+        : <String, dynamic>{};
+
+    final int followersCount = _toInt(
+      details['followers_count'] ?? map['followers'],
+    );
+    final int followingCount = _toInt(
+      details['following_count'] ?? map['following'],
+    );
+    final int postsCount = _toInt(
+      details['post_count'] ?? map['posts_count'] ?? map['posts'],
+    );
+    final int friendsCount = _toInt(
+      details['mutual_friends_count'],
+    );
+
+    // xác thực
+    final bool isVerified = _toBool(map['is_verified'] ?? map['verified']);
+
+    // mô tả cá nhân / giới thiệu
+    final String? about = _cleanStr(map['about']);
+
+    // thêm các field mở rộng
+    final String? work = _cleanStr(
+      map['working'] ?? map['currently_working'],
+    );
+    final String? education = _cleanStr(map['school']);
+    final String? city = _cleanStr(map['city']);
+    // country_id là mã số, mình nhét tạm vào country cho UI hiển thị, bạn có thể đổi sau
+    final String? country = _cleanStr(map['country_id']);
+    final String? website = _cleanStr(map['website']);
+    final String? birthday = _cleanStr(map['birthday']);
+    final String? relationshipStatus = _cleanStr(
+      map['relationship_id'],
+    );
+
+    final String? genderText = _cleanStr(map['gender_text']);
+    final String? lastSeenText = _cleanStr(map['lastseen_time_text']);
+
+    final bool isFollowing = _toBool(map['is_following']);
+    final bool isFollowingMe = _toBool(map['is_following_me']);
+
+    return SocialUserProfile(
+      id: id,
+      displayName: displayName,
+      firstName: firstName,
+      lastName: lastName,
+      userName: userName,
+      avatarUrl: avatarUrl,
+      coverUrl: coverUrl,
+      followersCount: followersCount,
+      followingCount: followingCount,
+      postsCount: postsCount,
+      friendsCount: friendsCount,
+      isVerified: isVerified,
+      about: about,
+      work: work,
+      education: education,
+      city: city,
+      country: country,
+      website: website,
+      birthday: birthday,
+      relationshipStatus: relationshipStatus,
+      genderText: genderText,
+      lastSeenText: lastSeenText,
+      isFollowing: isFollowing,
+      isFollowingMe: isFollowingMe,
+    );
+  }
+
+
 
   //Stories
   Future<ApiResponseModel<Response>> fetchStories({
@@ -932,6 +1169,7 @@ class SocialRepository {
     final String id = (map['post_id'] ?? map['id'] ?? '').toString();
     if (id.isEmpty) return null;
 
+
     final String text =
         (map['postText_API'] ?? map['postText'] ?? '').toString();
     final String timeText =
@@ -941,6 +1179,12 @@ class SocialRepository {
         (map['publisher'] is Map) ? map['publisher'] as Map : const {};
     final String userName = (pub['name'] ?? pub['username'] ?? '').toString();
     final String? userAvatar = _normalizeMediaUrl(pub['avatar']);
+    final String publisherId = (pub['user_id'] ??
+        pub['id'] ??
+        map['publisher_id'] ??
+        map['user_id'] ??
+        '')
+        .toString();
 
     final List pm =
         (map['photo_multi'] is List) ? map['photo_multi'] as List : const [];
@@ -1105,6 +1349,7 @@ class SocialRepository {
 
     return SocialPost(
       id: id,
+      publisherId: publisherId.isNotEmpty ? publisherId : null,
       userName: userName.isNotEmpty ? userName : null,
       userAvatar: userAvatar,
       text: text.isNotEmpty ? text : null,
@@ -1144,6 +1389,7 @@ class SocialRepository {
     );
   }
 
+  //profile
   Future<ApiResponseModel<Response>> fetchCurrentUserProfile() async {
     try {
       final token = _getSocialAccessToken();
@@ -1221,6 +1467,7 @@ class SocialRepository {
           final String userName =
               (pub['name'] ?? pub['username'] ?? '').toString();
           final String userAvatar = (pub['avatar'] ?? '').toString();
+
           final String timeText =
               (m['time_text'] ?? m['time'] ?? '').toString();
           final String cFile =
@@ -1574,6 +1821,12 @@ class SocialRepository {
       return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
     }
   }
+
+
+
+
+
+
 
   Future<ApiResponseModel<Response>> reactToPostWithAction({
     required String postId,
@@ -2340,6 +2593,10 @@ class SocialRepository {
     );
   }
 
+  //map public
+   SocialPost? mapToSocialPost(Map<String, dynamic> raw) {
+    return _mapToSocialPost(Map<String, dynamic>.from(raw));
+  }
   DateTime? _parseCommentDate(dynamic raw) {
     if (raw == null) return null;
     final String str = raw.toString().trim();

@@ -34,6 +34,8 @@ import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
+
+
 class CheckoutScreen extends StatefulWidget {
   final List<CartModel> cartList;
   final bool fromProductDetails;
@@ -47,7 +49,7 @@ class CheckoutScreen extends StatefulWidget {
   final int quantity;
   final List<int?> fromDistrictIds;
   final List<String?> fromWardIds;
-  final int? cartId;
+  final List<int> selectedCartIds;
 
   const CheckoutScreen({
     super.key,
@@ -63,7 +65,7 @@ class CheckoutScreen extends StatefulWidget {
     required this.hasPhysical,
     required this.fromDistrictIds,
     required this.fromWardIds,
-    this.cartId,
+    required this.selectedCartIds,
   });
 
   @override
@@ -74,8 +76,8 @@ class CheckoutScreenState extends State<CheckoutScreen> {
   final GlobalKey<ScaffoldMessengerState> _scaffoldKey = GlobalKey<ScaffoldMessengerState>();
   final TextEditingController _controller = TextEditingController();
   final GlobalKey<FormState> passwordFormKey = GlobalKey<FormState>();
-
   final FocusNode _orderNoteNode = FocusNode();
+
   double _order = 0;
   double? _couponDiscount;
   double? _referralDiscount;
@@ -83,7 +85,7 @@ class CheckoutScreenState extends State<CheckoutScreen> {
   bool _isCalculatingShipping = false;
   String? _shippingError;
 
-  static const double USD_TO_VND_RATE = 25000.0;
+  static const double USD_TO_VND_RATE = 26000.0;
 
   DebounceHelper debounceHelper = DebounceHelper(milliseconds: 500);
 
@@ -96,6 +98,7 @@ class CheckoutScreenState extends State<CheckoutScreen> {
     Provider.of<CartController>(context, listen: false).getCartData(context);
     Provider.of<CheckoutController>(context, listen: false).resetPaymentMethod();
     Provider.of<ShippingController>(context, listen: false).getChosenShippingMethod(context);
+
     if (Provider.of<SplashController>(context, listen: false).configModel != null &&
         Provider.of<SplashController>(context, listen: false).configModel!.offlinePayment != null) {
       Provider.of<CheckoutController>(context, listen: false).getOfflinePaymentList();
@@ -114,6 +117,42 @@ class CheckoutScreenState extends State<CheckoutScreen> {
 
   double _convertVNDtoUSD(double vndAmount) {
     return vndAmount / USD_TO_VND_RATE;
+  }
+
+  // Tách cart_id theo từng shop (dựa trên fromDistrictId + fromWardId)
+  Map<String, List<int>> _getCartIdsBySeller() {
+    final splashController = Provider.of<SplashController>(context, listen: false);
+    final config = splashController.configModel;
+    final inHouseDistrictId = config?.inHouseShop?.fromDistrictId;
+    final inHouseWardId = config?.inHouseShop?.fromWardId;
+
+    Map<String, List<int>> cartIdsBySeller = {};
+
+    for (int i = 0; i < widget.fromDistrictIds.length; i++) {
+      final fromDistrictId = widget.fromDistrictIds[i];
+      final fromWardId = widget.fromWardIds[i];
+      if (fromDistrictId == null || fromWardId == null) continue;
+
+      final key = '${fromDistrictId}_$fromWardId';
+      cartIdsBySeller[key] ??= [];
+
+      for (final cart in widget.cartList) {
+        if (!cart.isChecked!) continue;
+
+        bool belongsToSeller = false;
+        if (cart.sellerIs == 'admin') {
+          belongsToSeller = (fromDistrictId == inHouseDistrictId && fromWardId == inHouseWardId);
+        } else {
+          belongsToSeller = (cart.shop?.fromDistrictId == fromDistrictId && cart.shop?.fromWardId == fromWardId);
+        }
+
+        if (belongsToSeller) {
+          cartIdsBySeller[key]!.add(cart.id!);
+        }
+      }
+    }
+
+    return cartIdsBySeller;
   }
 
   Future<void> _calculateShippingFee() async {
@@ -139,31 +178,14 @@ class CheckoutScreenState extends State<CheckoutScreen> {
     }
 
     final selectedAddress = addressController.addressList![orderProvider.addressIndex!];
+    final toDistrictId = int.tryParse(selectedAddress.district ?? '0') ?? 0;
+    final toWardCode = selectedAddress.province ?? '';
 
-    if (widget.cartId == null ||
-        widget.fromDistrictIds.isEmpty ||
-        widget.fromWardIds.isEmpty ||
-        selectedAddress.district == null ||
-        selectedAddress.province == null) {
+    if (toDistrictId == 0 || toWardCode.isEmpty) {
       setState(() {
-        _shippingError = 'Missing shipping information';
+        _shippingError = 'Invalid delivery address';
         _calculatedShippingFee = 0;
       });
-      debugPrint("🚨 Missing info: cartId=${widget.cartId}, "
-          "fromDistrictIds=${widget.fromDistrictIds}, "
-          "fromWardIds=${widget.fromWardIds}, "
-          "district=${selectedAddress.district}, "
-          "province=${selectedAddress.province}");
-      return;
-    }
-
-    if (widget.fromDistrictIds.length != widget.fromWardIds.length) {
-      setState(() {
-        _shippingError = 'Invalid shop data';
-        _calculatedShippingFee = 0;
-      });
-      debugPrint("🚨 Mismatch length: fromDistrictIds(${widget.fromDistrictIds.length}) "
-          "!= fromWardIds(${widget.fromWardIds.length})");
       return;
     }
 
@@ -174,28 +196,30 @@ class CheckoutScreenState extends State<CheckoutScreen> {
 
     try {
       double totalShippingCostVND = 0;
-      final toDistrictId = int.tryParse(selectedAddress.district ?? '0') ?? 0;
-      final toWardCode = selectedAddress.province ?? '';
+      final cartIdsBySeller = _getCartIdsBySeller();
 
       for (int i = 0; i < widget.fromDistrictIds.length; i++) {
         final fromDistrictId = widget.fromDistrictIds[i];
         final fromWardId = widget.fromWardIds[i];
+        if (fromDistrictId == null || fromWardId == null) continue;
 
-        if (fromDistrictId == null || fromWardId == null) {
-          debugPrint("⚠️ Skip seller because fromDistrictId=$fromDistrictId or fromWardId=$fromWardId");
-          continue;
-        }
+        final key = '${fromDistrictId}_$fromWardId';
+        final cartIdsForThisSeller = cartIdsBySeller[key] ?? [];
+        if (cartIdsForThisSeller.isEmpty) continue;
 
-        final sellerString = "{\"from_district_id\":$fromDistrictId,\"from_ward_id\":\"$fromWardId\"}";
-
-        final requestBody = {
-          "seller": sellerString,
-          "cart_id": widget.cartId,
-          "to_district_id": toWardCode,
-          "to_ward_code": toDistrictId,
+        final sellerInfo = {
+          "from_district_id": fromDistrictId,
+          "from_ward_id": fromWardId,
         };
 
-        debugPrint("📦 Calling GHN API for seller $i: ${jsonEncode(requestBody)}");
+        final requestBody = {
+          "seller": jsonEncode(sellerInfo),
+          "cart_id": cartIdsForThisSeller,
+          "to_district_id": toDistrictId,
+          "to_ward_code": toWardCode,
+        };
+
+        debugPrint("GHN API Request (Seller $i): ${jsonEncode(requestBody)}");
 
         final response = await http.post(
           Uri.parse('https://vnshop247.com/api/v1/shippingAPI/ghn/calculate-fee'),
@@ -206,24 +230,21 @@ class CheckoutScreenState extends State<CheckoutScreen> {
           body: jsonEncode(requestBody),
         );
 
-        debugPrint("📩 Response ${response.statusCode}: ${response.body}");
+        debugPrint("GHN Response: ${response.statusCode} - ${response.body}");
 
         if (response.statusCode == 200) {
-          final responseData = jsonDecode(response.body);
-          if (responseData['ok'] == true) {
-            totalShippingCostVND += (responseData['totalShippingCost'] ?? 0).toDouble();
-            debugPrint("✅ Success: totalShippingCost VND=${responseData['totalShippingCost']}");
+          final data = jsonDecode(response.body);
+          if (data['ok'] == true) {
+            totalShippingCostVND += (data['totalShippingCost'] ?? 0).toDouble();
           } else {
-            debugPrint("❌ GHN API returned error: ${responseData['message']}");
             setState(() {
-              _shippingError = responseData['message'] ?? 'Failed to calculate shipping fee';
+              _shippingError = data['message'] ?? 'Shipping calculation failed';
               _isCalculatingShipping = false;
               _calculatedShippingFee = 0;
             });
             return;
           }
         } else {
-          debugPrint("❌ HTTP Error: ${response.statusCode} - ${response.body}");
           setState(() {
             _shippingError = 'Server error: ${response.statusCode}';
             _isCalculatingShipping = false;
@@ -233,7 +254,7 @@ class CheckoutScreenState extends State<CheckoutScreen> {
         }
       }
 
-      double totalShippingCostUSD = _convertVNDtoUSD(totalShippingCostVND);
+      final totalShippingCostUSD = _convertVNDtoUSD(totalShippingCostVND);
 
       setState(() {
         _calculatedShippingFee = totalShippingCostUSD;
@@ -241,20 +262,18 @@ class CheckoutScreenState extends State<CheckoutScreen> {
         _shippingError = null;
       });
 
-      debugPrint("✅ Tổng phí vận chuyển VND: $totalShippingCostVND");
-      debugPrint("✅ Tổng phí vận chuyển USD: $_calculatedShippingFee");
+      debugPrint("Tổng phí vận chuyển: $totalShippingCostVND VND → $totalShippingCostUSD USD");
 
     } catch (e, stack) {
-      debugPrint("🔥 Exception: $e");
+      debugPrint("Exception in shipping calculation: $e");
       debugPrint(stack.toString());
       setState(() {
-        _shippingError = 'Network error: ${e.toString()}';
+        _shippingError = 'Network error: $e';
         _isCalculatingShipping = false;
         _calculatedShippingFee = 0;
       });
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -266,247 +285,152 @@ class CheckoutScreenState extends State<CheckoutScreen> {
       bottomNavigationBar: Consumer<AddressController>(
         builder: (context, locationProvider, _) {
           return Consumer<CheckoutController>(
-              builder: (context, orderProvider, child) {
-                return Consumer<CouponController>(
-                    builder: (context, couponProvider, _) {
-                      return Consumer<CartController>(
-                          builder: (context, cartProvider, _) {
-                            return Consumer<ProfileController>(
-                                builder: (context, profileProvider, _) {
-                                  return orderProvider.isLoading
-                                      ? const Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      SizedBox(
-                                          width: 30,
-                                          height: 30,
-                                          child: CircularProgressIndicator())
-                                    ],
-                                  )
-                                      : Container(
-                                    padding: const EdgeInsets.all(
-                                        Dimensions.paddingSizeDefault),
-                                    color: Theme.of(context).cardColor,
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const CheckoutConditionCheckBox(),
-                                        const SizedBox(
-                                            height: Dimensions.paddingSizeSmall),
-                                        CustomButton(
-                                          onTap: (orderProvider.isLoading ||
-                                              !orderProvider.isAcceptTerms)
-                                              ? null
-                                              : () async {
-                                            if (orderProvider.addressIndex ==
-                                                null &&
-                                                widget.hasPhysical) {
-                                              Navigator.of(context).push(
-                                                  MaterialPageRoute(
-                                                      builder: (BuildContext
-                                                      context) =>
-                                                      const SavedAddressListScreen()));
-                                              showCustomSnackBar(
-                                                  getTranslated(
-                                                      'select_a_shipping_address',
-                                                      context),
-                                                  context,
-                                                  isToaster: true);
-                                            } else {
-                                              if (!orderProvider
-                                                  .isCheckCreateAccount ||
-                                                  (orderProvider
-                                                      .isCheckCreateAccount &&
-                                                      (passwordFormKey
-                                                          .currentState
-                                                          ?.validate() ??
-                                                          false))) {
-                                                String orderNote =
-                                                orderProvider
-                                                    .orderNoteController
-                                                    .text
-                                                    .trim();
-                                                String couponCode =
-                                                couponProvider.discount !=
-                                                    null &&
-                                                    couponProvider
-                                                        .discount !=
-                                                        0
-                                                    ? couponProvider
-                                                    .couponCode
-                                                    : '';
-                                                String couponCodeAmount =
-                                                couponProvider.discount !=
-                                                    null &&
-                                                    couponProvider
-                                                        .discount !=
-                                                        0
-                                                    ? couponProvider
-                                                    .discount
-                                                    .toString()
-                                                    : '0';
+            builder: (context, orderProvider, child) {
+              return Consumer<CouponController>(
+                builder: (context, couponProvider, _) {
+                  return Consumer<CartController>(
+                    builder: (context, cartProvider, _) {
+                      return Consumer<ProfileController>(
+                        builder: (context, profileProvider, _) {
+                          return orderProvider.isLoading
+                              ? const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(width: 30, height: 30, child: CircularProgressIndicator())
+                            ],
+                          )
+                              : Container(
+                            padding: const EdgeInsets.all(Dimensions.paddingSizeDefault),
+                            color: Theme.of(context).cardColor,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const CheckoutConditionCheckBox(),
+                                const SizedBox(height: Dimensions.paddingSizeSmall),
+                                CustomButton(
+                                  onTap: (orderProvider.isLoading || !orderProvider.isAcceptTerms)
+                                      ? null
+                                      : () async {
+                                    if (orderProvider.addressIndex == null && widget.hasPhysical) {
+                                      Navigator.of(context).push(MaterialPageRoute(
+                                          builder: (context) => const SavedAddressListScreen()));
+                                      showCustomSnackBar(
+                                          getTranslated('select_a_shipping_address', context), context,
+                                          isToaster: true);
+                                      return;
+                                    }
 
-                                                String addressId =
-                                                orderProvider
-                                                    .addressIndex !=
-                                                    null
-                                                    ? locationProvider
-                                                    .addressList![
-                                                orderProvider
-                                                    .addressIndex!]
-                                                    .id
-                                                    .toString()
-                                                    : '';
+                                    if (!orderProvider.isCheckCreateAccount ||
+                                        (orderProvider.isCheckCreateAccount &&
+                                            (passwordFormKey.currentState?.validate() ?? false))) {
+                                      String orderNote = orderProvider.orderNoteController.text.trim();
+                                      String couponCode = couponProvider.discount != null && couponProvider.discount != 0
+                                          ? couponProvider.couponCode
+                                          : '';
+                                      String couponCodeAmount = couponProvider.discount != null && couponProvider.discount != 0
+                                          ? couponProvider.discount.toString()
+                                          : '0';
 
-                                                String billingAddressId =
-                                                    addressId;
+                                      String addressId = orderProvider.addressIndex != null
+                                          ? locationProvider.addressList![orderProvider.addressIndex!].id.toString()
+                                          : '';
+                                      String billingAddressId = addressId;
 
-                                                double finalShippingFee = widget.hasPhysical ? _calculatedShippingFee : 0;
+                                      double finalShippingFee = widget.hasPhysical ? _calculatedShippingFee : 0;
 
-                                                if (orderProvider
-                                                    .paymentMethodIndex !=
-                                                    -1) {
-                                                  orderProvider
-                                                      .digitalPaymentPlaceOrder(
-                                                      orderNote:
-                                                      orderNote,
-                                                      customerId: Provider.of<
-                                                          AuthController>(
-                                                          context,
-                                                          listen:
-                                                          false)
-                                                          .isLoggedIn()
-                                                          ? profileProvider
-                                                          .userInfoModel
-                                                          ?.id
-                                                          .toString()
-                                                          : Provider.of<
-                                                          AuthController>(
-                                                          context,
-                                                          listen:
-                                                          false)
-                                                          .getGuestToken(),
-                                                      addressId:
-                                                      addressId,
-                                                      billingAddressId:
-                                                      billingAddressId,
-                                                      couponCode:
-                                                      couponCode,
-                                                      couponDiscount:
-                                                      couponCodeAmount,
-                                                      paymentMethod:
-                                                      orderProvider
-                                                          .selectedDigitalPaymentMethodName);
-                                                } else if (orderProvider
-                                                    .isCODChecked &&
-                                                    !widget.onlyDigital) {
-                                                  orderProvider.placeOrder(
-                                                      callback: _callback,
-                                                      addressID: addressId,
-                                                      couponCode: couponCode,
-                                                      couponAmount:
-                                                      couponCodeAmount,
-                                                      billingAddressId:
-                                                      billingAddressId,
-                                                      orderNote: orderNote);
-                                                } else if (orderProvider
-                                                    .isOfflineChecked) {
-                                                  Navigator.of(context).push(
-                                                      MaterialPageRoute(
-                                                          builder: (_) => OfflinePaymentScreen(
-                                                              payableAmount: _order +
-                                                                  finalShippingFee -
-                                                                  widget
-                                                                      .discount -
-                                                                  (_referralDiscount ??
-                                                                      0) -
-                                                                  (_couponDiscount ?? 0) +
-                                                                  widget.tax,
-                                                              callback:
-                                                              _callback)));
-                                                } else if (orderProvider
-                                                    .isWalletChecked) {
-                                                  showAnimatedDialog(
-                                                      context,
-                                                      WalletPaymentWidget(
-                                                          currentBalance:
-                                                          profileProvider
-                                                              .balance ??
-                                                              0,
-                                                          orderAmount: _order +
-                                                              finalShippingFee -
-                                                              widget.discount -
-                                                              (_referralDiscount ??
-                                                                  0) -
-                                                              (_couponDiscount ?? 0) +
-                                                              widget.tax,
-                                                          onTap: () {
-                                                            if (profileProvider
-                                                                .balance! <
-                                                                (_order +
-                                                                    finalShippingFee -
-                                                                    widget
-                                                                        .discount -
-                                                                    (_referralDiscount ??
-                                                                        0) -
-                                                                    (_couponDiscount ?? 0) +
-                                                                    widget
-                                                                        .tax)) {
-                                                              showCustomSnackBar(
-                                                                  getTranslated(
-                                                                      'insufficient_balance',
-                                                                      context),
-                                                                  context,
-                                                                  isToaster:
-                                                                  true);
-                                                            } else {
-                                                              Navigator.pop(
-                                                                  context);
-                                                              orderProvider
-                                                                  .placeOrder(
-                                                                  callback:
-                                                                  _callback,
-                                                                  wallet:
-                                                                  true,
-                                                                  addressID:
-                                                                  addressId,
-                                                                  couponCode:
-                                                                  couponCode,
-                                                                  couponAmount:
-                                                                  couponCodeAmount,
-                                                                  billingAddressId:
-                                                                  billingAddressId,
-                                                                  orderNote:
-                                                                  orderNote);
-                                                            }
-                                                          }),
-                                                      dismissible: false,
-                                                      willFlip: true);
-                                                } else {
-                                                  showModalBottomSheet(
-                                                    context: context,
-                                                    isScrollControlled: true,
-                                                    backgroundColor:
-                                                    Colors.transparent,
-                                                    builder: (c) =>
-                                                        PaymentMethodBottomSheetWidget(
-                                                            onlyDigital: widget
-                                                                .onlyDigital),
-                                                  );
-                                                }
+                                      if (orderProvider.paymentMethodIndex != -1) {
+                                        orderProvider.digitalPaymentPlaceOrder(
+                                          orderNote: orderNote,
+                                          customerId: Provider.of<AuthController>(context, listen: false).isLoggedIn()
+                                              ? profileProvider.userInfoModel?.id.toString()
+                                              : Provider.of<AuthController>(context, listen: false).getGuestToken(),
+                                          addressId: addressId,
+                                          billingAddressId: billingAddressId,
+                                          couponCode: couponCode,
+                                          couponDiscount: couponCodeAmount,
+                                          paymentMethod: orderProvider.selectedDigitalPaymentMethodName,
+                                        );
+                                      } else if (orderProvider.isCODChecked && !widget.onlyDigital) {
+                                        orderProvider.placeOrder(
+                                          callback: _callback,
+                                          addressID: addressId,
+                                          couponCode: couponCode,
+                                          couponAmount: couponCodeAmount,
+                                          billingAddressId: billingAddressId,
+                                          orderNote: orderNote,
+                                        );
+                                      } else if (orderProvider.isOfflineChecked) {
+                                        Navigator.of(context).push(MaterialPageRoute(
+                                            builder: (_) => OfflinePaymentScreen(
+                                                payableAmount: _order +
+                                                    finalShippingFee -
+                                                    widget.discount -
+                                                    (_referralDiscount ?? 0) -
+                                                    (_couponDiscount ?? 0) +
+                                                    widget.tax,
+                                                callback: _callback)));
+                                      } else if (orderProvider.isWalletChecked) {
+                                        showAnimatedDialog(
+                                          context,
+                                          WalletPaymentWidget(
+                                            currentBalance: profileProvider.balance ?? 0,
+                                            orderAmount: _order +
+                                                finalShippingFee -
+                                                widget.discount -
+                                                (_referralDiscount ?? 0) -
+                                                (_couponDiscount ?? 0) +
+                                                widget.tax,
+                                            onTap: () {
+                                              if (profileProvider.balance! <
+                                                  (_order +
+                                                      finalShippingFee -
+                                                      widget.discount -
+                                                      (_referralDiscount ?? 0) -
+                                                      (_couponDiscount ?? 0) +
+                                                      widget.tax)) {
+                                                showCustomSnackBar(
+                                                    getTranslated('insufficient_balance', context), context,
+                                                    isToaster: true);
+                                              } else {
+                                                Navigator.pop(context);
+                                                orderProvider.placeOrder(
+                                                  callback: _callback,
+                                                  wallet: true,
+                                                  addressID: addressId,
+                                                  couponCode: couponCode,
+                                                  couponAmount: couponCodeAmount,
+                                                  billingAddressId: billingAddressId,
+                                                  orderNote: orderNote,
+                                                );
                                               }
-                                            }
-                                          },
-                                          buttonText:
-                                          '${getTranslated('proceed', context)}',
-                                        )
-                                      ],
-                                    ),
-                                  );
-                                });
-                          });
-                    });
-              });
+                                            },
+                                          ),
+                                          dismissible: false,
+                                          willFlip: true,
+                                        );
+                                      } else {
+                                        showModalBottomSheet(
+                                          context: context,
+                                          isScrollControlled: true,
+                                          backgroundColor: Colors.transparent,
+                                          builder: (c) => PaymentMethodBottomSheetWidget(onlyDigital: widget.onlyDigital),
+                                        );
+                                      }
+                                    }
+                                  },
+                                  buttonText: '${getTranslated('proceed', context)}',
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  );
+                },
+              );
+            },
+          );
         },
       ),
       appBar: CustomAppBar(title: getTranslated('checkout', context)),
@@ -531,56 +455,45 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                       padding: const EdgeInsets.all(0),
                       children: [
                         Padding(
-                          padding: const EdgeInsets.only(
-                              bottom: Dimensions.paddingSizeDefault),
+                          padding: const EdgeInsets.only(bottom: Dimensions.paddingSizeDefault),
                           child: ShippingDetailsWidget(
-                              hasPhysical: widget.hasPhysical,
-                              passwordFormKey: passwordFormKey,
-                              onAddressChanged: () {
-                                _calculateShippingFee();
-                              }),
+                            hasPhysical: widget.hasPhysical,
+                            passwordFormKey: passwordFormKey,
+                            onAddressChanged: () {
+                              setState(() {
+                                _calculatedShippingFee = 0;
+                                _shippingError = null;
+                              });
+                              _calculateShippingFee();
+                            },
+                          ),
                         ),
-                        if (Provider.of<AuthController>(context, listen: false)
-                            .isLoggedIn())
+                        if (Provider.of<AuthController>(context, listen: false).isLoggedIn())
                           Padding(
-                            padding: const EdgeInsets.only(
-                                bottom: Dimensions.paddingSizeSmall),
-                            child: CouponApplyWidget(
-                                couponController: _controller,
-                                orderAmount: _order),
+                            padding: const EdgeInsets.only(bottom: Dimensions.paddingSizeSmall),
+                            child: CouponApplyWidget(couponController: _controller, orderAmount: _order),
                           ),
                         Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: Dimensions.paddingSizeSmall),
-                          child: ChoosePaymentWidget(
-                              onlyDigital: widget.onlyDigital),
+                          padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeSmall),
+                          child: ChoosePaymentWidget(onlyDigital: widget.onlyDigital),
                         ),
                         Padding(
                           padding: const EdgeInsets.fromLTRB(
-                              Dimensions.paddingSizeDefault,
-                              Dimensions.paddingSizeDefault,
-                              Dimensions.paddingSizeDefault,
-                              Dimensions.paddingSizeSmall),
+                              Dimensions.paddingSizeDefault, Dimensions.paddingSizeDefault, Dimensions.paddingSizeDefault, Dimensions.paddingSizeSmall),
                           child: Text(
-                              getTranslated('order_summary', context) ?? '',
-                              style: textMedium.copyWith(
-                                  fontSize: Dimensions.fontSizeLarge,
-                                  color:
-                                  Theme.of(context).textTheme.bodyLarge?.color)),
+                            getTranslated('order_summary', context) ?? '',
+                            style: textMedium.copyWith(
+                              fontSize: Dimensions.fontSizeLarge,
+                              color: Theme.of(context).textTheme.bodyLarge?.color,
+                            ),
+                          ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: Dimensions.paddingSizeDefault),
+                          padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeDefault),
                           child: Consumer<CheckoutController>(
                             builder: (context, checkoutController, child) {
-                              _couponDiscount =
-                                  Provider.of<CouponController>(context).discount ??
-                                      0;
-                              _referralDiscount = Provider.of<CheckoutController>(
-                                  context)
-                                  .referralAmount
-                                  ?.amount ??
-                                  0;
+                              _couponDiscount = Provider.of<CouponController>(context).discount ?? 0;
+                              _referralDiscount = Provider.of<CheckoutController>(context).referralAmount?.amount ?? 0;
 
                               double finalShippingFee = widget.hasPhysical ? _calculatedShippingFee : 0;
 
@@ -589,16 +502,12 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                                 children: [
                                   widget.quantity > 1
                                       ? AmountWidget(
-                                    title:
-                                    '${getTranslated('sub_total', context)} (${widget.quantity} ${getTranslated('items', context)})',
-                                    amount: PriceConverter.convertPrice(
-                                        context, _order),
+                                    title: '${getTranslated('sub_total', context)} (${widget.quantity} ${getTranslated('items', context)})',
+                                    amount: PriceConverter.convertPrice(context, _order),
                                   )
                                       : AmountWidget(
-                                    title:
-                                    '${getTranslated('sub_total', context)} (${widget.quantity} ${getTranslated('item', context)})',
-                                    amount: PriceConverter.convertPrice(
-                                        context, _order),
+                                    title: '${getTranslated('sub_total', context)} (${widget.quantity} ${getTranslated('item', context)})',
+                                    amount: PriceConverter.convertPrice(context, _order),
                                   ),
 
                                   if (widget.hasPhysical)
@@ -615,11 +524,7 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                                           ),
                                         ),
                                         if (_isCalculatingShipping)
-                                          const SizedBox(
-                                            width: 16,
-                                            height: 16,
-                                            child: CircularProgressIndicator(strokeWidth: 2),
-                                          ),
+                                          const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
                                       ],
                                     ),
 
@@ -628,46 +533,22 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                                       padding: const EdgeInsets.only(top: 4),
                                       child: Text(
                                         _shippingError!,
-                                        style: TextStyle(
-                                          color: Colors.red,
-                                          fontSize: Dimensions.fontSizeSmall,
-                                        ),
+                                        style: const TextStyle(color: Colors.red, fontSize: 12),
                                       ),
                                     ),
 
-                                  AmountWidget(
-                                      title: getTranslated('discount', context),
-                                      amount: PriceConverter.convertPrice(
-                                          context, widget.discount)),
-                                  AmountWidget(
-                                      title: getTranslated('coupon_voucher', context),
-                                      amount: PriceConverter.convertPrice(
-                                          context, _couponDiscount)),
-                                  AmountWidget(
-                                      title: getTranslated('tax', context),
-                                      amount: PriceConverter.convertPrice(
-                                          context, widget.tax)),
+                                  AmountWidget(title: getTranslated('discount', context), amount: PriceConverter.convertPrice(context, widget.discount)),
+                                  AmountWidget(title: getTranslated('coupon_voucher', context), amount: PriceConverter.convertPrice(context, _couponDiscount)),
+                                  AmountWidget(title: getTranslated('tax', context), amount: PriceConverter.convertPrice(context, widget.tax)),
                                   if ((_referralDiscount ?? 0) > 0)
-                                    AmountWidget(
-                                      title:
-                                      getTranslated('referral_discount', context),
-                                      amount: PriceConverter.convertPrice(
-                                          context, _referralDiscount),
-                                    ),
-                                  const SizedBox(
-                                      height: Dimensions.paddingSizeSmall),
-                                  Divider(
-                                      height: 5, color: Theme.of(context).hintColor),
+                                    AmountWidget(title: getTranslated('referral_discount', context), amount: PriceConverter.convertPrice(context, _referralDiscount)),
+                                  const SizedBox(height: Dimensions.paddingSizeSmall),
+                                  Divider(height: 5, color: Theme.of(context).hintColor),
                                   AmountWidget(
                                     title: getTranslated('total_payable', context),
                                     amount: PriceConverter.convertPrice(
                                       context,
-                                      (_order +
-                                          finalShippingFee -
-                                          (_referralDiscount ?? 0) -
-                                          widget.discount -
-                                          (_couponDiscount ?? 0) +
-                                          widget.tax),
+                                      _order + finalShippingFee - (_referralDiscount ?? 0) - widget.discount - (_couponDiscount ?? 0) + widget.tax,
                                     ),
                                   ),
                                 ],
@@ -676,26 +557,13 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(
-                              Dimensions.paddingSizeDefault,
-                              Dimensions.paddingSizeDefault,
-                              Dimensions.paddingSizeDefault,
-                              0),
+                          padding: const EdgeInsets.fromLTRB(Dimensions.paddingSizeDefault, Dimensions.paddingSizeDefault, Dimensions.paddingSizeDefault, 0),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
-                                children: [
-                                  Text(
-                                    '${getTranslated('order_note', context)}',
-                                    style: textRegular.copyWith(
-                                        fontSize: Dimensions.fontSizeLarge,
-                                        color: Theme.of(context)
-                                            .textTheme
-                                            .bodyLarge
-                                            ?.color),
-                                  )
-                                ],
+                              Text(
+                                '${getTranslated('order_note', context)}',
+                                style: textRegular.copyWith(fontSize: Dimensions.fontSizeLarge, color: Theme.of(context).textTheme.bodyLarge?.color),
                               ),
                               const SizedBox(height: Dimensions.paddingSizeSmall),
                               CustomTextFieldWidget(
@@ -723,21 +591,18 @@ class CheckoutScreenState extends State<CheckoutScreen> {
 
   void _callback(bool isSuccess, String message, String orderID, bool createAccount) async {
     if (isSuccess) {
-      Navigator.of(Get.context!).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const DashBoardScreen()),
-              (route) => false);
+      Navigator.of(Get.context!).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const DashBoardScreen()), (route) => false);
       showAnimatedDialog(
-          context,
-          OrderPlaceDialogWidget(
-            icon: Icons.check,
-            title: getTranslated(
-                createAccount ? 'order_placed_Account_Created' : 'order_placed',
-                context),
-            description: getTranslated('your_order_placed', context),
-            isFailed: false,
-          ),
-          dismissible: false,
-          willFlip: true);
+        context,
+        OrderPlaceDialogWidget(
+          icon: Icons.check,
+          title: getTranslated(createAccount ? 'order_placed_Account_Created' : 'order_placed', context),
+          description: getTranslated('your_order_placed', context),
+          isFailed: false,
+        ),
+        dismissible: false,
+        willFlip: true,
+      );
     } else {
       showCustomSnackBar(message, context, isToaster: true);
     }

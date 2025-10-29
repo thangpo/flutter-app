@@ -1121,7 +1121,19 @@
   "empty_joined_groups": "Ban chua tham gia nhom nao.",
   "empty_discover_groups": "Chua co goi y nhom.",
   "retry": "Thu lai",
-  "field_required": "Truong nay la bat buoc"
+  "field_required": "Truong nay la bat buoc",
+  "your_story": "Tin của bạn",
+
+  "hotel": "khách sạn",
+  "popular_destinations": "Địa điểm nổi bật",
+  "no_tours_found": "Không có tour nào.",
+  "recommended_tours": "Tour đề xuất",
+  "best_flight_deals": "Chặng bay giá tốt nhất",
+  "most_popular_routes": "Mọi người quan tâm nhiều nhất",
+  "departure": "Khởi hành",
+  "no_flights": "Không có chuyến bay nào",
+  "after_tax_price": "Giá sau thuế",
+  "airline": "Hãng bay"
 }
 
 

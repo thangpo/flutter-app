@@ -1128,5 +1128,16 @@
   "empty_joined_groups": "You have not joined any groups yet.",
   "empty_discover_groups": "No group suggestions right now.",
   "retry": "Retry",
-  "field_required": "This field is required"
+  "field_required": "This field is required",
+
+  "hotel": "hotel",
+  "popular_destinations": "popular destinations",
+  "no_tours_found": "no tours found",
+  "recommended_tours": "recommended tours",
+  "best_flight_deals": "Best flight deals",
+  "most_popular_routes": "Most popular routes",
+  "departure": "Departure",
+  "no_flights": "No flights available",
+  "after_tax_price": "After-tax price",
+  "airline": "Airline"
 }
