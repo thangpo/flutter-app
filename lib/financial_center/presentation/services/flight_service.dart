@@ -4,9 +4,8 @@ import 'package:http/http.dart' as http;
 class FlightService {
   static const String baseUrl = "https://api.duffel.com/air";
   static const String apiKey =
-      "Bearer duffel_test_lkVeDLi9UBt6AvHi8BuQ4CwXBj6HEhE5idyn3nz9hrb"; // key thật
+      "Bearer duffel_test_lkVeDLi9UBt6AvHi8BuQ4CwXBj6HEhE5idyn3nz9hrb";
 
-  /// Lấy chi tiết 1 offer (chuyến bay)
   static Future<Map<String, dynamic>> getFlightDetail(String flightId) async {
     final url = Uri.parse("$baseUrl/offers/$flightId");
 
@@ -26,7 +25,6 @@ class FlightService {
     }
   }
 
-  /// Lấy sơ đồ ghế của offer
   static Future<List<dynamic>> getSeatMaps(String flightId) async {
     final url = Uri.parse("$baseUrl/seat_maps?offer_id=$flightId");
 
@@ -47,7 +45,6 @@ class FlightService {
     }
   }
 
-  /// 👉 Thêm hàm này để lấy các hạng vé (upgrade offers)
   static Future<List<dynamic>> getOffers(String offerRequestId) async {
     final url =
     Uri.parse("$baseUrl/offers?offer_request_id=$offerRequestId");

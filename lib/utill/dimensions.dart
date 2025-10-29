@@ -61,4 +61,6 @@ class Dimensions {
   static const double featuredProductCard = 370.0;
   static const double compareCardWidget = 200.0;
   static const double clearanceHomeTitleHeight = 60.0;
+
+
 }
