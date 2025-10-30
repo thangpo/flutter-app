@@ -389,33 +389,35 @@ class _SocialGroupFormScreenState extends State<SocialGroupFormScreen> {
                         });
                       },
               ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                initialValue: _joinPrivacyValue,
-                decoration: InputDecoration(
-                  labelText: getTranslated('group_join_privacy', context) ??
-                      'Join privacy',
+              if (isEditing) ...[
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  initialValue: _joinPrivacyValue,
+                  decoration: InputDecoration(
+                    labelText: getTranslated('group_join_privacy', context) ??
+                        'Join privacy',
+                  ),
+                  items:
+                      _joinPrivacyOptions(context, privacyValue: _privacyValue)
+                          .map(
+                    (option) => DropdownMenuItem<String>(
+                      value: option.value,
+                      child: Text(option.label),
+                    ),
+                  ).toList(),
+                  onChanged: _submitting
+                      ? null
+                      : (value) {
+                          if (value == null) return;
+                          setState(() {
+                            _joinPrivacyValue = value;
+                            if (_joinPrivacyValue == '2') {
+                              _privacyValue = '2';
+                            }
+                          });
+                        },
                 ),
-                items: _joinPrivacyOptions(context, privacyValue: _privacyValue)
-                    .map(
-                      (option) => DropdownMenuItem<String>(
-                        value: option.value,
-                        child: Text(option.label),
-                      ),
-                    )
-                    .toList(),
-                onChanged: _submitting
-                    ? null
-                    : (value) {
-                        if (value == null) return;
-                        setState(() {
-                          _joinPrivacyValue = value;
-                          if (_joinPrivacyValue == '2') {
-                            _privacyValue = '2';
-                          }
-                        });
-                      },
-              ),
+              ],
               const SizedBox(height: 20),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,

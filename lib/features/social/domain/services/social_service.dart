@@ -708,6 +708,7 @@ class SocialService implements SocialServiceInterface {
       videoThumbnailPath: videoThumbnailPath,
       privacy: privacy,
       backgroundColorId: backgroundColorId,
+      groupId: groupId,
     );
     if (resp.isSuccess && resp.response != null) {
       final data = resp.response!.data;

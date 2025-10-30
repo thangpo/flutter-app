@@ -12,6 +12,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_feed_page.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user_profile.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group_join_request.dart';
 
 bool _isImageUrl(String url) {
   final u = url.toLowerCase();
@@ -2060,6 +2061,158 @@ class SocialRepository {
     }
   }
 
+  Future<ApiResponseModel<Response>> deleteGroupMember({
+    required String groupId,
+    required String userId,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError(
+            'Please log in to your social network account');
+      }
+
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialDeleteGroupMemberUri}?access_token=$token';
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'group_id': groupId,
+        'user_id': userId,
+      });
+      final Response resp = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      return ApiResponseModel.withSuccess(resp);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+  Future<ApiResponseModel<Response>> reportGroup({
+    required String groupId,
+    required String text,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError(
+            'Please log in to your social network account');
+      }
+
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialReportGroupUri}?access_token=$token';
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'group_id': groupId,
+        'text': text,
+      });
+      final Response resp = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      return ApiResponseModel.withSuccess(resp);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+  Future<ApiResponseModel<Response>> deleteGroup({
+    required String groupId,
+    required String password,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError(
+            'Please log in to your social network account');
+      }
+
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialDeleteGroupUri}?access_token=$token';
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'group_id': groupId,
+        'password': password,
+      });
+      final Response resp = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      return ApiResponseModel.withSuccess(resp);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+  Future<ApiResponseModel<Response>> fetchGroupJoinRequests({
+    required String groupId,
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError(
+            'Please log in to your social network account');
+      }
+
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialGroupsUri}?access_token=$token';
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'type': 'get_requests',
+        'group_id': groupId,
+        'limit': limit.toString(),
+        'offset': offset.toString(),
+      });
+      final Response resp = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      return ApiResponseModel.withSuccess(resp);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+  Future<ApiResponseModel<Response>> respondGroupJoinRequest({
+    required String groupId,
+    required String userId,
+    String? requestId,
+    required bool accept,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError(
+            'Please log in to your social network account');
+      }
+
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialGroupsUri}?access_token=$token';
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'type': accept ? 'accept_request' : 'delete_request',
+        'group_id': groupId,
+        'user_id': userId,
+        if (requestId != null && requestId.isNotEmpty) 'request_id': requestId,
+      });
+      final Response resp = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      return ApiResponseModel.withSuccess(resp);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
   Future<ApiResponseModel<Response>> fetchCommunityGroups({
     int limit = 20,
     int offset = 0,
@@ -2175,6 +2328,37 @@ class SocialRepository {
         'group_id': groupId,
         'limit': limit.toString(),
         'offset': offset.toString(),
+      });
+      final Response resp = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      return ApiResponseModel.withSuccess(resp);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+  Future<ApiResponseModel<Response>> inviteGroupMember({
+    required String groupId,
+    required String userId,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError(
+            'Please log in to your social network account');
+      }
+
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialNotificationsUri}?access_token=$token';
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'type': 'create',
+        'recipient_id': userId,
+        'type_name': 'invited_you_to_the_group',
+        'group_id': groupId,
       });
       final Response resp = await dioClient.post(
         url,
@@ -2308,6 +2492,36 @@ class SocialRepository {
       }
     }
     return members;
+  }
+
+  List<SocialGroupJoinRequest> parseGroupJoinRequests(Response res) {
+    final List<SocialGroupJoinRequest> requests = <SocialGroupJoinRequest>[];
+    final Iterable<dynamic> candidates = _extractListCandidates(res.data);
+    for (final dynamic raw in candidates) {
+      if (raw is! Map) continue;
+      final map = Map<String, dynamic>.from(raw);
+      String? requestId =
+          _normalizeString(map['id'] ?? map['request_id'] ?? map['requestId']);
+      final dynamic userRaw = map['user_data'] ?? map['user'] ?? map['member'];
+      SocialUser? user = _parseUser(userRaw ?? map);
+      if (user == null && userRaw is Map) {
+        user = _parseUser(userRaw);
+      }
+      if (user == null) continue;
+      final String key =
+          (requestId != null && requestId.isNotEmpty) ? requestId : user.id;
+      if (requestId != null && requestId.isEmpty) {
+        requestId = null;
+      }
+      requests.add(
+        SocialGroupJoinRequest(
+          key: key,
+          requestId: requestId,
+          user: user,
+        ),
+      );
+    }
+    return requests;
   }
 
   Iterable<dynamic> _extractListCandidates(dynamic data) {

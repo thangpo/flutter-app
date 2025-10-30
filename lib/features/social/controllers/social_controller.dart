@@ -174,6 +174,15 @@ class SocialController with ChangeNotifier {
     }
   }
 
+  void removeSuggestedGroupById(String groupId) {
+    final int index =
+        _suggestedGroups.indexWhere((SocialGroup g) => g.id == groupId);
+    if (index != -1) {
+      _suggestedGroups.removeAt(index);
+      notifyListeners();
+    }
+  }
+
   Future<void> loadUserGroups({bool forceRefresh = false}) async {
     if (_loadingUserGroups) return;
     if (!forceRefresh && _userGroupsFetched) return;
