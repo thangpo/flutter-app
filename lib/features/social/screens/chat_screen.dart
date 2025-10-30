@@ -1,21 +1,26 @@
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_chat_controller.dart';
+import 'package:flutter_sound/flutter_sound.dart';
+import 'package:path_provider/path_provider.dart';
+
+import 'package:flutter_sixvalley_ecommerce/features/social/widgets/chat_message_bubble.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_chat_repository.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/utils/wowonder_text.dart';
 
 class ChatScreen extends StatefulWidget {
-  final String receiverId;
   final String accessToken;
-  final String? title;
-  final String? avatar;
+  final String peerUserId; // id người nhận (recipient_id)
+  final String? receiverId; // để tương thích chỗ gọi cũ (không còn dùng)
+  final String? peerName;
+  final String? peerAvatar;
 
   const ChatScreen({
     super.key,
-    required this.receiverId,
     required this.accessToken,
-    this.title,
-    this.avatar,
+    required this.peerUserId,
+    this.receiverId,
+    this.peerName,
+    this.peerAvatar,
   });
 
   @override
@@ -23,267 +28,374 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  final chatCtrl = Get.put(SocialChatController(SocialChatRepository()));
-  final _textCtrl = TextEditingController();
-  final _scrollCtrl = ScrollController();
+  final repo = SocialChatRepository();
+
+  final _inputCtrl = TextEditingController();
+  final _scroll = ScrollController();
+
+  bool _loading = false;
+  bool _sending = false;
+  bool _hasMore = true;
+
+  /// Lấy thêm cũ hơn sẽ dùng `before_message_id = _beforeId`
+  String? _beforeId;
+
+  /// Luôn giữ **tăng dần theo id** (cũ → mới)
+  List<Map<String, dynamic>> _messages = [];
+
+  // ====== FlutterSound (ghi âm) ======
+  final _recorder = FlutterSoundRecorder();
+  bool _recReady = false;
+  bool _recOn = false;
+  String? _recPath;
+
+  late final String _peerId;
 
   @override
   void initState() {
     super.initState();
-    chatCtrl.loadMessages(widget.accessToken, widget.receiverId);
-    ever(chatCtrl.messages, (_) {
-      if (_scrollCtrl.hasClients) {
-        _scrollCtrl.jumpTo(_scrollCtrl.position.maxScrollExtent + 120);
+    // peerUserId là required nên dùng trực tiếp, không cần ?? receiverId
+    _peerId = widget.peerUserId;
+    _initRecorder();
+    _loadInit();
+  }
+
+  @override
+  void dispose() {
+    _inputCtrl.dispose();
+    _scroll.dispose();
+    _recorder.closeRecorder();
+    super.dispose();
+  }
+
+  // ===== utils =====
+  int _msgId(Map<String, dynamic> m) =>
+      int.tryParse('${m['id'] ?? m['message_id'] ?? m['msg_id'] ?? ''}') ?? 0;
+
+  String _msgIdStr(Map<String, dynamic> m) =>
+      '${m['id'] ?? m['message_id'] ?? m['msg_id'] ?? ''}';
+
+  void _sortAscById(List<Map<String, dynamic>> list) {
+    list.sort((a, b) => _msgId(a).compareTo(_msgId(b)));
+  }
+
+  /// Merge + dedupe; giữ thứ tự tăng dần theo id.
+  /// - toTail=true: thường dùng khi push tin mới (append nếu id lớn hơn).
+  /// - toTail=false: thường dùng khi prepend older (id nhỏ hơn).
+  void _mergeIncoming(List<Map<String, dynamic>> incoming,
+      {required bool toTail}) {
+    if (incoming.isEmpty) return;
+
+    // sắp xếp incoming trước cho chắc
+    _sortAscById(incoming);
+
+    if (_messages.isEmpty) {
+      _messages = [...incoming];
+      return;
+    }
+
+    final exist = _messages.map(_msgIdStr).where((e) => e.isNotEmpty).toSet();
+    final filtered = <Map<String, dynamic>>[];
+    for (final m in incoming) {
+      final idStr = _msgIdStr(m);
+      if (idStr.isEmpty || exist.contains(idStr)) continue;
+      filtered.add(m);
+    }
+    if (filtered.isEmpty) return;
+
+    final curMin = _msgId(_messages.first);
+    final curMax = _msgId(_messages.last);
+    final incMin = _msgId(filtered.first);
+    final incMax = _msgId(filtered.last);
+
+    if (toTail) {
+      // tất cả đều mới hơn
+      if (incMin > curMax) {
+        _messages.addAll(filtered);
+        return;
       }
+    } else {
+      // tất cả đều cũ hơn
+      if (incMax < curMin) {
+        _messages.insertAll(0, filtered);
+        return;
+      }
+    }
+
+    // fallback: có id chen giữa → gộp rồi sort 1 lần
+    _messages.addAll(filtered);
+    _sortAscById(_messages);
+  }
+
+  // ===== recorder =====
+  Future<void> _initRecorder() async {
+    await _recorder.openRecorder();
+    _recReady = true;
+    setState(() {});
+  }
+
+  // ===== data =====
+  Future<void> _loadInit() async {
+    await _fetchNew(); // lấy tin mới nhất (page đầu)
+    // mark read
+    await repo.readChats(token: widget.accessToken, peerUserId: _peerId);
+  }
+
+  Future<void> _fetchNew() async {
+    if (_loading) return;
+    setState(() => _loading = true);
+    try {
+      final list = await repo.getUserMessages(
+        token: widget.accessToken,
+        peerUserId: _peerId,
+        limit: 30,
+      );
+      _sortAscById(list);
+      _messages = list;
+
+      if (list.isNotEmpty) _beforeId = _msgIdStr(list.first);
+      _hasMore = list.length >= 30;
+
+      setState(() {});
+      _jumpToBottom();
+    } catch (e) {
+      debugPrint('load messages error: $e');
+    } finally {
+      setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _fetchOlder() async {
+    if (_loading || !_hasMore) return;
+    setState(() => _loading = true);
+    final oldMax = _scroll.hasClients ? _scroll.position.maxScrollExtent : 0.0;
+
+    try {
+      final older = await repo.getUserMessages(
+        token: widget.accessToken,
+        peerUserId: _peerId,
+        limit: 30,
+        beforeMessageId: _beforeId,
+      );
+      if (older.isNotEmpty) {
+        _sortAscById(older);
+        _beforeId = _msgIdStr(older.first);
+
+        // giữ viewport: chèn lên đầu nhưng không nhảy vị trí
+        if (_scroll.hasClients) {
+          _mergeIncoming(older, toTail: false);
+          setState(() {});
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            final newMax = _scroll.position.maxScrollExtent;
+            final delta = newMax - oldMax;
+            final want = _scroll.position.pixels + delta;
+            _scroll.jumpTo(want.clamp(
+              _scroll.position.minScrollExtent,
+              _scroll.position.maxScrollExtent,
+            ));
+          });
+        } else {
+          _mergeIncoming(older, toTail: false);
+          setState(() {});
+        }
+      } else {
+        _hasMore = false;
+        setState(() {});
+      }
+    } catch (e) {
+      debugPrint('load older error: $e');
+    } finally {
+      setState(() => _loading = false);
+    }
+  }
+
+  void _jumpToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scroll.hasClients) return;
+      _scroll.animateTo(
+        _scroll.position.maxScrollExtent + 80,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
     });
   }
 
-  @override
-  void dispose() {
-    _textCtrl.dispose();
-    _scrollCtrl.dispose();
-    super.dispose();
+  Future<void> _sendText() async {
+    final text = _inputCtrl.text.trim();
+    if (text.isEmpty || _sending) return;
+    setState(() => _sending = true);
+    try {
+      final sent = await repo.sendMessage(
+        token: widget.accessToken,
+        peerUserId: _peerId,
+        text: text,
+      );
+      _inputCtrl.clear();
+      if (sent != null) {
+        _mergeIncoming([sent], toTail: true);
+        setState(() {});
+        _jumpToBottom();
+      }
+    } catch (e) {
+      debugPrint('send text error: $e');
+    } finally {
+      setState(() => _sending = false);
+    }
   }
 
-  void _send() {
-    final txt = _textCtrl.text.trim();
-    if (txt.isEmpty) return;
-    chatCtrl.sendMessage(widget.accessToken, widget.receiverId, txt);
-    _textCtrl.clear();
+  Future<void> _pickAndSendFile() async {
+    if (_sending) return;
+    final res = await FilePicker.platform.pickFiles(allowMultiple: false);
+    if (res == null || res.files.isEmpty) return;
+    final path = res.files.single.path;
+    if (path == null) return;
+
+    setState(() => _sending = true);
+    try {
+      final sent = await repo.sendMessage(
+        token: widget.accessToken,
+        peerUserId: _peerId,
+        filePath: path,
+      );
+      if (sent != null) {
+        _mergeIncoming([sent], toTail: true);
+        setState(() {});
+        _jumpToBottom();
+      }
+    } catch (e) {
+      debugPrint('send file error: $e');
+    } finally {
+      setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _toggleRecord() async {
+    if (!_recReady) return;
+    if (_recOn) {
+      // stop & gửi
+      final path = await _recorder.stopRecorder();
+      _recOn = false;
+      setState(() {});
+      if (path != null) {
+        setState(() => _sending = true);
+        try {
+          final sent = await repo.sendMessage(
+            token: widget.accessToken,
+            peerUserId: _peerId,
+            filePath: path, // repo sẽ đoán content-type audio/*
+          );
+          if (sent != null) {
+            _mergeIncoming([sent], toTail: true);
+            setState(() {});
+            _jumpToBottom();
+          }
+        } catch (e) {
+          debugPrint('send voice error: $e');
+        } finally {
+          setState(() => _sending = false);
+        }
+      }
+    } else {
+      // start
+      final dir = await getTemporaryDirectory();
+      _recPath = '${dir.path}/${DateTime.now().millisecondsSinceEpoch}.m4a';
+      await _recorder.startRecorder(toFile: _recPath!, codec: Codec.aacMP4);
+      _recOn = true;
+      setState(() {});
+    }
+  }
+
+  Future<void> _onRefresh() async {
+    await _fetchNew();
+    await repo.readChats(token: widget.accessToken, peerUserId: _peerId);
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
+    final title = widget.peerName ?? 'Chat';
     return Scaffold(
       appBar: AppBar(
-        titleSpacing: 0,
-        title: Row(
-          children: [
-            CircleAvatar(
-              backgroundImage:
-                  (widget.avatar != null && widget.avatar!.isNotEmpty)
-                      ? NetworkImage(widget.avatar!)
-                      : null,
-              child: (widget.avatar == null || widget.avatar!.isEmpty)
-                  ? Text(
-                      (widget.title ?? '').isNotEmpty
-                          ? widget.title![0].toUpperCase()
-                          : '?',
-                    )
-                  : null,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(widget.title ?? 'Đoạn chat',
-                  overflow: TextOverflow.ellipsis),
-            ),
-          ],
-        ),
+        title: Text(title),
+        elevation: 0,
       ),
       body: Column(
         children: [
+          if (_loading && _messages.isEmpty)
+            const LinearProgressIndicator(minHeight: 2),
+
+          // ====== List messages (mới ở dưới) ======
           Expanded(
-            child: Obx(() {
-              final data = chatCtrl.messages;
-              if (chatCtrl.isLoading.value && data.isEmpty) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              return ListView.builder(
-                controller: _scrollCtrl,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                itemCount: data.length,
-                itemBuilder: (_, i) {
-                  final m = data[i];
-
-                  // Xác định bubble của mình hay của đối phương.
-                  // WoWonder trả from_id/to_id; nếu from_id != receiverId => là mình.
-                  final mine = (m['from_id']?.toString() != widget.receiverId);
-
-                  // LẤY TEXT HIỂN THỊ
-                  final text =
-                      (m['display_text'] ?? pickWoWonderText(m)).toString();
-
-                  return Align(
-                    alignment:
-                        mine ? Alignment.centerRight : Alignment.centerLeft,
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      constraints: BoxConstraints(
-                        maxWidth: MediaQuery.of(context).size.width * 0.78,
-                      ),
-                      decoration: BoxDecoration(
-                        color: mine ? cs.primary : cs.surfaceVariant,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Text(
-                        text,
-                        style: TextStyle(
-                          color: mine ? cs.onPrimary : cs.onSurface,
-                          fontSize: 15,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              );
-            }),
-          ),
-
-          // Thanh nhập tin nhắn
-          SafeArea(
-            top: false,
-            child: _ComposerBar(
-              controller: _textCtrl,
-              onSend: _send,
-              onTapPlus: () {},
-              onTapCamera: () {},
-              onTapGallery: () {},
-              onTapMic: () {},
-              onTapLike: () {
-                if (_textCtrl.text.trim().isEmpty) {
-                  chatCtrl.sendMessage(
-                      widget.accessToken, widget.receiverId, '👍');
-                } else {
-                  _send();
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (n) {
+                if (n.metrics.pixels <= 80 && _hasMore && !_loading) {
+                  _fetchOlder();
                 }
+                return false;
               },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ComposerBar extends StatefulWidget {
-  final TextEditingController controller;
-  final VoidCallback onSend;
-  final VoidCallback onTapPlus;
-  final VoidCallback onTapCamera;
-  final VoidCallback onTapGallery;
-  final VoidCallback onTapMic;
-  final VoidCallback onTapLike;
-
-  const _ComposerBar({
-    required this.controller,
-    required this.onSend,
-    required this.onTapPlus,
-    required this.onTapCamera,
-    required this.onTapGallery,
-    required this.onTapMic,
-    required this.onTapLike,
-  });
-
-  @override
-  State<_ComposerBar> createState() => _ComposerBarState();
-}
-
-class _ComposerBarState extends State<_ComposerBar> {
-  bool _hasText = false;
-
-  @override
-  void initState() {
-    super.initState();
-    widget.controller.addListener(_onChanged);
-  }
-
-  @override
-  void dispose() {
-    widget.controller.removeListener(_onChanged);
-    super.dispose();
-  }
-
-  void _onChanged() {
-    final now = widget.controller.text.trim().isNotEmpty;
-    if (now != _hasText) setState(() => _hasText = now);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-      decoration: BoxDecoration(
-        color: cs.surface.withOpacity(.9),
-        border: Border(
-            top: BorderSide(
-                color: cs.outlineVariant.withOpacity(.6), width: .5)),
-      ),
-      child: Row(
-        children: [
-          _CircleIcon(icon: Icons.add, onTap: widget.onTapPlus),
-          const SizedBox(width: 6),
-          _CircleIcon(
-              icon: Icons.photo_camera_outlined, onTap: widget.onTapCamera),
-          const SizedBox(width: 6),
-          _CircleIcon(icon: Icons.image_outlined, onTap: widget.onTapGallery),
-          const SizedBox(width: 6),
-          _CircleIcon(icon: Icons.mic_none_outlined, onTap: widget.onTapMic),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              controller: widget.controller,
-              textCapitalization: TextCapitalization.sentences,
-              minLines: 1,
-              maxLines: 5,
-              decoration: InputDecoration(
-                hintText: 'Nhắn tin',
-                isDense: true,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                filled: true,
-                fillColor: cs.surfaceVariant.withOpacity(.6),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24),
-                  borderSide: BorderSide.none,
-                ),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.emoji_emotions_outlined),
-                  onPressed: () {},
+              child: RefreshIndicator(
+                onRefresh: _onRefresh,
+                child: ListView.builder(
+                  controller: _scroll,
+                  reverse: false, // rất quan trọng: mới ở BOTTOM
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  itemCount: _messages.length,
+                  itemBuilder: (ctx, i) {
+                    final m = _messages[i];
+                    final isMe = (m['position'] == 'right');
+                    return ChatMessageBubble(
+                      message: m,
+                      isMe: isMe,
+                    );
+                  },
                 ),
               ),
-              onSubmitted: (_) => widget.onSend(),
             ),
           ),
-          const SizedBox(width: 8),
-          _CircleIcon(
-            icon: _hasText ? Icons.send_rounded : Icons.thumb_up_alt_outlined,
-            onTap: _hasText ? widget.onSend : widget.onTapLike,
+
+          // ====== Input bar ======
+          SafeArea(
+            top: false,
+            minimum: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+            child: Row(
+              children: [
+                IconButton(
+                  onPressed: _sending ? null : _pickAndSendFile,
+                  icon: const Icon(Icons.attach_file),
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: _inputCtrl,
+                    minLines: 1,
+                    maxLines: 5,
+                    decoration: const InputDecoration(
+                      hintText: 'Nhập tin nhắn...',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                    onSubmitted: (_) => _sendText(),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                // Mic
+                IconButton(
+                  onPressed: _sending ? null : _toggleRecord,
+                  icon: Icon(
+                    _recOn ? Icons.stop_circle_outlined : Icons.mic_none,
+                    color: _recOn ? Colors.red : null,
+                  ),
+                  tooltip: _recOn ? 'Dừng & gửi' : 'Ghi âm',
+                ),
+                // Send
+                IconButton(
+                  onPressed: _sending ? null : _sendText,
+                  icon: const Icon(Icons.send),
+                ),
+              ],
+            ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _CircleIcon extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback? onTap;
-  const _CircleIcon({required this.icon, this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Material(
-      color: Colors.transparent,
-      child: InkResponse(
-        onTap: onTap,
-        radius: 22,
-        child: Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: cs.surfaceVariant.withOpacity(.6),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(icon, size: 20, color: cs.primary),
-        ),
       ),
     );
   }

@@ -1,14 +1,24 @@
-import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
+/// ✅ WoWonder API endpoints
+/// Tất cả endpoint đều nối sau `AppConstants.socialBaseUrl`
+class WowonderAPI {
+  // 🔹 Chat nhóm
+  static const String groupChat = '/api/group_chat';
 
-/// Cấu hình API WoWonder
-/// Dùng cho các endpoint liên quan đến group chat
-class WoWonderApiConfig {
-  /// Ví dụ: https://social.vnshop247.com/api/group_chat?access_token=...
-  static Uri groupChatUri(String accessToken) {
-    return Uri.parse('${AppConstants.socialBaseUrl}/api/group_chat')
-        .replace(queryParameters: {'access_token': accessToken});
-  }
+  // 🔹 Chat cá nhân (nếu dùng sau này)
+  static const String chat = '/api/chat';
 
-  /// Server key của WoWonder (lấy từ AppConstants)
-  static String get serverKey => AppConstants.socialServerKey;
+  // 🔹 Livestream (nếu cần tích hợp sau)
+  static const String live = '/api/live';
+
+  // 🔹 Đăng bài (tích hợp social post)
+  static const String createPost = '/api/posts/create';
+
+  // 🔹 Danh sách bạn bè
+  static const String getFriends = '/api/get_friends';
+
+  // 🔹 AI image generation (WoWonder AI module)
+  static const String aiImage = '/api/ai_image';
+
+  // 🔹 Cấu hình / thông tin user
+  static const String me = '/api/me';
 }
