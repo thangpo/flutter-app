@@ -16,7 +16,7 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<GroupChatController>().loadGroups(widget.accessToken);
+      context.read<GroupChatController>().loadGroups();
     });
   }
 
@@ -47,7 +47,7 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
           }
 
           return RefreshIndicator(
-            onRefresh: () => ctrl.loadGroups(widget.accessToken),
+            onRefresh: () => ctrl.loadGroups(),
             child: ListView.separated(
               itemCount: groups.length,
               separatorBuilder: (_, __) => Divider(
@@ -100,11 +100,9 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
                       context,
                       MaterialPageRoute(
                         builder: (_) => GroupChatScreen(
-                          accessToken: widget.accessToken,
                           groupId: group['group_id'].toString(),
                           groupName: group['group_name'],
-                          currentUserId:
-                              ctrl.currentUserId ?? '', // 🆕 thêm dòng này
+                           // 🆕 thêm dòng này
                         ),
                       ),
                     );
