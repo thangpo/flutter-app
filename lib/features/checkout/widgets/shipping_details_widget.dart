@@ -56,10 +56,26 @@ class _ShippingDetailsWidgetState extends State<ShippingDetailsWidget> {
                                       style: textMedium.copyWith(fontSize: Dimensions.fontSizeLarge, color: Theme.of(context).textTheme.bodyLarge?.color)))])),
 
 
-                            InkWell(onTap: () => Navigator.of(context).push(
-                                MaterialPageRoute(builder: (BuildContext context) => const SavedAddressListScreen())),
-                              child: SizedBox(width: 20, child: Image.asset(Images.edit,
-                                scale: 3, color: Theme.of(context).primaryColor,)),),]),
+                            InkWell(
+                              onTap: () async {
+                                await Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (BuildContext context) => const SavedAddressListScreen()),
+                                );
+
+                                if (widget.onAddressChanged != null) {
+                                  widget.onAddressChanged!();
+                                }
+                              },
+                              child: SizedBox(
+                                width: 20,
+                                child: Image.asset(
+                                  Images.edit,
+                                  scale: 3,
+                                  color: Theme.of(context).primaryColor,
+                                ),
+                              ),
+                            ),
+                          ]),
                           const SizedBox(height: Dimensions.paddingSizeDefault,),
 
                           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

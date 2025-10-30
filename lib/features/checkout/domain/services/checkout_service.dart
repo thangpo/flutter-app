@@ -32,9 +32,33 @@ class CheckoutService implements CheckoutServiceInterface{
   }
 
   @override
-  Future digitalPaymentPlaceOrder(String? orderNote, String? customerId, String? addressId, String? billingAddressId, String? couponCode, String? couponDiscount, String? paymentMethod, bool? isCheckCreateAccount, String? password) async {
-    return await checkoutRepositoryInterface.digitalPaymentPlaceOrder(orderNote, customerId, addressId, billingAddressId, couponCode, couponDiscount, paymentMethod, isCheckCreateAccount, password);
+  Future digitalPaymentPlaceOrder(
+      String? orderNote,
+      String? customerId,
+      String? addressId,
+      String? billingAddressId,
+      String? couponCode,
+      String? couponDiscount,
+      String? paymentMethod,
+      bool? isCheckCreateAccount,
+      String? password, {
+        Map<String, dynamic>? checkedIds, // 👈 thêm
+      }) async {
+    return await checkoutRepositoryInterface.digitalPaymentPlaceOrder(
+      orderNote,
+      customerId,
+      addressId,
+      billingAddressId,
+      couponCode,
+      couponDiscount,
+      paymentMethod,
+      isCheckCreateAccount,
+      password,
+      checkedIds: checkedIds, // 👈 truyền tiếp
+    );
   }
+
+
 
   @override
   Future offlinePaymentList()  async{

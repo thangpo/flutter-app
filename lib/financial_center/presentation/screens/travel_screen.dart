@@ -70,4 +70,3 @@ class TravelScreen extends StatelessWidget {
     );
   }
 }
-

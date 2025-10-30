@@ -326,13 +326,12 @@ class CartScreenState extends State<CartScreen> {
                                   return;
                                 }
 
-                                // THAY TOÀN BỘ PHẦN NÀY TRONG InkWell onTap
                                 int sellerGroupLength = 0;
                                 int totalPhysical = 0;
                                 List<int?> fromDistrictIds = [];
                                 List<String?> fromWardIds = [];
                                 List<int> selectedCartIds = [];
-                                Map<String, int> groupToIndex = {}; // cartGroupId → index trong fromDistrictIds
+                                Map<String, int> groupToIndex = {};
 
                                 int locationIndex = 0;
 
@@ -343,13 +342,10 @@ class CartScreenState extends State<CartScreen> {
                                   bool hasCheckedItem = items.any((c) => c.isChecked == true);
                                   if (!hasCheckedItem) continue;
 
-                                  // CHỐNG TRÙNG cartGroupId
                                   if (groupToIndex.containsKey(seller.cartGroupId)) continue;
 
-                                  // GÁN VỊ TRÍ CHO GROUP
                                   groupToIndex[seller.cartGroupId!] = locationIndex++;
 
-                                  // THÊM LOCATION CHO SHOP NÀY
                                   if (seller.sellerIs == 'admin') {
                                     fromDistrictIds.add(configProvider.configModel?.inHouseShop?.fromDistrictId);
                                     fromWardIds.add(configProvider.configModel?.inHouseShop?.fromWardId);
@@ -358,7 +354,6 @@ class CartScreenState extends State<CartScreen> {
                                     fromWardIds.add(seller.shop?.fromWardId);
                                   }
 
-                                  // THÊM cart_id ĐÃ CHỌN
                                   for (var cart in items) {
                                     if (cart.isChecked == true) {
                                       selectedCartIds.add(cart.id!);
@@ -388,9 +383,9 @@ class CartScreenState extends State<CartScreen> {
                                       quantity: totalQuantity,
                                       onlyDigital: sellerGroupLength > 0 && totalPhysical == 0,
                                       hasPhysical: totalPhysical > 0,
-                                      fromDistrictIds: fromDistrictIds,     // ĐÚNG THỨ TỰ
-                                      fromWardIds: fromWardIds,             // ĐÚNG THỨ TỰ
-                                      selectedCartIds: selectedCartIds,     // ĐÚNG DANH SÁCH
+                                      fromDistrictIds: fromDistrictIds,
+                                      fromWardIds: fromWardIds,
+                                      selectedCartIds: selectedCartIds,
                                     ),
                                   ),
                                 );

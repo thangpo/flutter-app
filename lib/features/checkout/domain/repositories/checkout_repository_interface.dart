@@ -18,7 +18,9 @@ abstract class CheckoutRepositoryInterface implements RepositoryInterface{
 
   Future<dynamic> walletPaymentPlaceOrder(String? addressID, String? couponCode,String? couponDiscountAmount, String? billingAddressId, String? orderNote, bool? isCheckCreateAccount, String? password);
 
-  Future<dynamic> digitalPaymentPlaceOrder(String? orderNote, String? customerId, String? addressId, String? billingAddressId, String? couponCode, String? couponDiscount, String? paymentMethod, bool? isCheckCreateAccount, String? password);
+  Future<dynamic> digitalPaymentPlaceOrder(String? orderNote, String? customerId, String? addressId, String? billingAddressId, String? couponCode, String? couponDiscount, String? paymentMethod, bool? isCheckCreateAccount, String? password, {
+    Map<String, dynamic>? checkedIds, // 👈 thêm
+  });
 
   Future<dynamic> offlinePaymentList();
 

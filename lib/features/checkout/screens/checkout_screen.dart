@@ -83,9 +83,19 @@ class CheckoutScreenState extends State<CheckoutScreen> {
   bool _isCalculatingShipping = false;
   String? _shippingError;
 
-  // THÊM: Lưu phí từng shop
   final Map<String, double> _shopShippingFeesVND = {};
   final Map<String, String> _shopNames = {};
+
+  Map<String, dynamic> _buildCheckedIds() {
+    final Map<String, dynamic> checkedIds = {};
+    _shopShippingFeesVND.forEach((shopId, feeVND) {
+      checkedIds[shopId] = {
+        "name": _shopNames[shopId] ?? "Shop $shopId",
+        "fee": feeVND,
+      };
+    });
+    return checkedIds;
+  }
 
   static const double USD_TO_VND_RATE = 26000.0;
 
@@ -120,7 +130,6 @@ class CheckoutScreenState extends State<CheckoutScreen> {
     return vndAmount / USD_TO_VND_RATE;
   }
 
-  // NHÓM cart_id THEO cartGroupId
   Map<String, List<int>> _getCartIdsByGroupId() {
     Map<String, List<int>> result = {};
 
@@ -137,16 +146,14 @@ class CheckoutScreenState extends State<CheckoutScreen> {
     return result;
   }
 
-  // LẤY THÔNG TIN SHOP: (districtId, wardId, shopName)
-  Map<String, (int, String, String)> _getShopInfoByGroupId() {
-    Map<String, (int, String, String)> shopInfo = {};
+  Map<String, (int, String, String, int?)> _getShopInfoByGroupId() {
+    Map<String, (int, String, String, int?)> shopInfo = {};
     Map<String, int> groupIndexMap = {};
 
     int locationIndex = 0;
     for (final cart in widget.cartList) {
       if (!cart.isChecked! || cart.cartGroupId == null) continue;
       if (groupIndexMap.containsKey(cart.cartGroupId)) continue;
-
       groupIndexMap[cart.cartGroupId!] = locationIndex++;
     }
 
@@ -159,17 +166,18 @@ class CheckoutScreenState extends State<CheckoutScreen> {
 
       final districtId = widget.fromDistrictIds[idx];
       final wardId = widget.fromWardIds[idx];
+      final shopId = cart.sellerIs == 'admin' ? 0 : cart.sellerId; // Lấy id shop ở đây
       if (districtId == null || wardId == null) continue;
 
       final shopName = cart.shopInfo ?? 'Shop #${cart.cartGroupId}';
-      shopInfo[cart.cartGroupId!] = (districtId, wardId, shopName);
+      shopInfo[cart.cartGroupId!] = (districtId, wardId, shopName, shopId);
     }
 
     debugPrint("Shop Info by Group: $shopInfo");
     return shopInfo;
   }
 
-  // TÍNH PHÍ SHIP CHO TỪNG SHOP
+
   Future<void> _calculateShippingFee() async {
     if (!widget.hasPhysical || widget.onlyDigital) {
       setState(() {
@@ -230,7 +238,7 @@ class CheckoutScreenState extends State<CheckoutScreen> {
         final shopInfo = shopInfoByGroup[groupId];
         if (shopInfo == null) continue;
 
-        final (fromDistrictId, fromWardId, shopName) = shopInfo;
+        final (fromDistrictId, fromWardId, shopName, shopId) = shopInfo;
 
         final requestBody = {
           "seller": jsonEncode({
@@ -242,7 +250,7 @@ class CheckoutScreenState extends State<CheckoutScreen> {
           "to_ward_code": toWardCode,
         };
 
-        debugPrint("GHN API Request (Group: $groupId - $shopName): ${jsonEncode(requestBody)}");
+        debugPrint("GHN API Request (Group: $groupId - $shopName - $shopId): ${jsonEncode(requestBody)}");
 
         final response = await http.post(
           Uri.parse('https://vnshop247.com/api/v1/shippingAPI/ghn/calculate-fee'),
@@ -259,8 +267,8 @@ class CheckoutScreenState extends State<CheckoutScreen> {
           final data = jsonDecode(response.body);
           if (data['ok'] == true) {
             final feeVND = (data['totalShippingCost'] ?? 0).toDouble();
-            _shopShippingFeesVND[groupId] = feeVND;
-            _shopNames[groupId] = shopName;
+            _shopShippingFeesVND[shopId.toString()] = feeVND;
+            _shopNames[shopId.toString()] = shopName;
             totalShippingCostVND += feeVND;
           } else {
             setState(() {
@@ -365,6 +373,8 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                                       double finalShippingFee = widget.hasPhysical ? _calculatedShippingFee : 0;
 
                                       if (orderProvider.paymentMethodIndex != -1) {
+                                        final checkedIds = _buildCheckedIds();
+
                                         orderProvider.digitalPaymentPlaceOrder(
                                           orderNote: orderNote,
                                           customerId: Provider.of<AuthController>(context, listen: false).isLoggedIn()
@@ -375,6 +385,7 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                                           couponCode: couponCode,
                                           couponDiscount: couponCodeAmount,
                                           paymentMethod: orderProvider.selectedDigitalPaymentMethodName,
+                                          checkedIds: checkedIds,
                                         );
                                       } else if (orderProvider.isCODChecked && !widget.onlyDigital) {
                                         orderProvider.placeOrder(
@@ -538,7 +549,6 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                                     amount: PriceConverter.convertPrice(context, _order),
                                   ),
 
-                                  // PHÍ SHIP TỔNG + CHI TIẾT TỪNG SHOP
                                   if (widget.hasPhysical)
                                     Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -560,7 +570,6 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                                           ],
                                         ),
 
-                                        // HIỂN THỊ PHÍ TỪNG SHOP
                                         if (!_isCalculatingShipping && _shippingError == null && _shopNames.isNotEmpty)
                                           Padding(
                                             padding: const EdgeInsets.only(left: 16, top: 4),
