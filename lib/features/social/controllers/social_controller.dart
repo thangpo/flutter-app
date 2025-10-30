@@ -21,7 +21,11 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/
 class SocialController with ChangeNotifier {
   final SocialServiceInterface service;
   SocialController({required this.service});
+  //follow user in profile
+  final Set<String> _followBusy = {};
+  bool _updatingProfile = false;
 
+  bool isFollowBusy(String userId) => _followBusy.contains(userId);
   // ========== NEWS FEED STATE ==========
   bool _loading = false;
   bool get loading => _loading;
@@ -182,6 +186,121 @@ class SocialController with ChangeNotifier {
       notifyListeners();
     }
   }
+
+  //follow user in profile
+  Future<bool> toggleFollowUser({String? targetUserId}) async {
+    // Xác định userId mục tiêu
+    final header = _profileHeaderUser;
+    final id = (targetUserId ?? header?.id);
+
+    if (id == null || id.isEmpty) {
+      throw Exception('Không xác định được userId để follow.');
+    }
+    if (_currentUser?.id == id) {
+      // Không cho follow chính mình
+      return _profileHeaderUser?.isFollowing ?? false;
+    }
+
+    // Chống double-tap
+    if (_followBusy.contains(id)) {
+      return _profileHeaderUser?.isFollowing ?? false;
+    }
+    _followBusy.add(id);
+    notifyListeners();
+
+    try {
+      // service.toggleFollow phải trả về bool:
+      // true = "followed", false = "unfollowed"
+      final bool followed = await service.toggleFollow(targetUserId: id);
+
+      // Cập nhật ngay UI header nếu đang mở profile người đó
+      if (_profileHeaderUser?.id == id) {
+        final cur = _profileHeaderUser!;
+        final newCount = followed
+            ? cur.followersCount + 1
+            : (cur.followersCount > 0 ? cur.followersCount - 1 : 0);
+
+        _profileHeaderUser = cur.copyWith(
+          isFollowing: followed,
+          followersCount: newCount,
+        );
+      }
+
+      // Nếu bạn có list followers/recentFollowers => cập nhật đồng bộ ở đây
+      // (ví dụ: add/remove user trong danh sách)
+
+      notifyListeners();
+      return followed;
+    } catch (e) {
+      // Có thể log hoặc show SnackBar ở UI
+      rethrow;
+    } finally {
+      _followBusy.remove(id);
+      notifyListeners();
+    }
+  }
+
+  //edit prodile user by aoanhan
+  // Trong SocialController
+  Future<SocialUserProfile> updateDataUserFromEdit(SocialUserProfile edited) async {
+    if (_updatingProfile) {
+      throw Exception('Đang cập nhật hồ sơ, vui lòng đợi xíu...');
+    }
+    _updatingProfile = true;
+    notifyListeners();
+
+    // helper nhỏ để bóc path local
+    String? _localPath(String? s) {
+      if (s == null || s.isEmpty) return null;
+      if (s.startsWith('file://')) return s.substring(7);
+      if (s.startsWith('/')) return s;
+      return null;
+    }
+
+    try {
+      final String? avatarLocal = _localPath(edited.avatarUrl);
+      final String? coverLocal  = _localPath(edited.coverUrl);
+
+      // Gọi Service: chú ý chữ ký có `required String? displayName`
+      final updated = await service.updateDataUser(
+        displayName     : edited.displayName,       // required (có thể null, nhưng phải truyền tên tham số)
+        about           : edited.about,
+        genderText      : edited.genderText,
+        birthdayIso     : edited.birthday,          // yyyy-MM-dd
+        address         : edited.address,           // chỉ dùng address (không còn city/country ở UI)
+        website         : edited.website,
+        relationshipText: edited.relationshipStatus,
+        avatarFilePath  : avatarLocal,              // path local (nếu có)
+        coverFilePath   : coverLocal,               // path local (nếu có)
+      );
+
+      // Đồng bộ lại header/current user
+      if (_profileHeaderUser?.id == updated.id) {
+        _profileHeaderUser = updated;
+      }
+      if (_currentUser?.id == updated.id) {
+        _currentUser = SocialUser(
+          id         : _currentUser!.id,
+          displayName: updated.displayName ?? _currentUser!.displayName,
+          userName   : updated.userName    ?? _currentUser!.userName,
+          avatarUrl  : updated.avatarUrl   ?? _currentUser!.avatarUrl,
+          coverUrl   : updated.coverUrl    ?? _currentUser!.coverUrl,
+        );
+      }
+
+      notifyListeners();
+      return updated;
+    } catch (e) {
+      showCustomSnackBar(e.toString(), Get.context!, isError: true);
+      rethrow;
+    } finally {
+      _updatingProfile = false;
+      notifyListeners();
+    }
+  }
+
+
+
 
   Future<void> loadUserGroups({bool forceRefresh = false}) async {
     if (_loadingUserGroups) return;

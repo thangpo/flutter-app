@@ -4,6 +4,8 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_feed_page.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user_profile.dart';
+
 
 abstract class SocialServiceInterface {
   Future<List<SocialPost>> getNewsFeed({int limit, String? afterPostId});
@@ -79,4 +81,22 @@ abstract class SocialServiceInterface {
     int limit,
     int offset,
   });
+
+  //30/10 follow profile user
+  // tên, kiểu trả về và named param phải khớp y hệt với Service
+  Future<bool> toggleFollow({required String targetUserId});
+  Future<SocialUserProfile> updateDataUser({
+    required String? displayName,
+    String? about,
+    String? genderText,
+    String? birthdayIso,
+    String? address,
+    String? website,
+    String? relationshipText,
+    String? avatarFilePath,
+    String? coverFilePath,
+  });
+
+
+
 }

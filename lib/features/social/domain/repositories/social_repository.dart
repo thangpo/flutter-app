@@ -187,6 +187,115 @@ class SocialRepository {
   }
 
   //thêm
+
+  //30/10  thêm follow trong profile
+  // social_repository.dart
+  Future<ApiResponseModel<Response>> toggleFollow({
+    required String targetUserId,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      final url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialFollowUser}?access_token=$token'; // nhớ đúng tên hằng
+
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'user_id': targetUserId,
+        // Toggle API của WoWonder thường CHỈ cần user_id
+      });
+
+      final res = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: Headers.multipartFormDataContentType),
+      );
+      return ApiResponseModel<Response>.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel<Response>.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+  //edit profile user
+  Future<ApiResponseModel<Response>> updateDataUser({
+    String? displayName,
+    String? about,
+    String? genderText,       // 'Nam' | 'Nữ' | 'Khác'
+    String? birthdayIso,      // yyyy-MM-dd
+    String? address,
+    String? website,
+    String? relationshipText, // nếu backend cần mã thì bạn map riêng
+    String? avatarFilePath,   // file local (có thể là "file://..."), KHÔNG phải URL
+    String? coverFilePath,    // file local (có thể là "file://...")
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError('Please log in to your social network account');
+      }
+
+      // Ghép URL an toàn
+      final base = '${AppConstants.socialBaseUrl}${AppConstants.socialUpdateDataUser}';
+      final sep  = base.contains('?') ? '&' : '?';
+      final url  = '$base${sep}access_token=$token';
+
+      // Map field tuỳ chọn
+      final Map<String, dynamic> fields = {
+        'server_key': AppConstants.socialServerKey,
+        if ((displayName ?? '').trim().isNotEmpty) 'username': displayName!.trim(),
+        if ((about ?? '').trim().isNotEmpty)       'about': about!.trim(),
+        if ((genderText ?? '').isNotEmpty)         'gender': _genderToServer(genderText),
+        if ((birthdayIso ?? '').isNotEmpty)        'birthday': birthdayIso,
+        if ((address ?? '').trim().isNotEmpty) ...{
+          // tuỳ backend: nhiều nơi đọc khác key, đẩy cùng 1 giá trị để tương thích
+          'address' : address!.trim(),
+          'city'    : address.trim(),
+        },
+        if ((website ?? '').trim().isNotEmpty)     'website': website!.trim(),
+        if ((relationshipText ?? '').trim().isNotEmpty)
+          'relationship': relationshipText!.trim(), // hoặc 'relationship_id' tuỳ API
+      };
+
+      // Files (strip "file://")
+      if (avatarFilePath != null && avatarFilePath.isNotEmpty) {
+        final p = _stripFileScheme(avatarFilePath);
+        fields['avatar'] = await MultipartFile.fromFile(p, filename: _fileName(p));
+      }
+      if (coverFilePath != null && coverFilePath.isNotEmpty) {
+        final p = _stripFileScheme(coverFilePath);
+        fields['cover'] = await MultipartFile.fromFile(p, filename: _fileName(p));
+      }
+
+      final form = FormData.fromMap(fields);
+
+      final res = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+// ========== Helpers (private) ==========
+  String _genderToServer(String? genderText) {
+    final s = (genderText ?? '').trim().toLowerCase();
+    if (s == 'nam' || s == 'male' || s == 'm') return 'male';
+    if (s == 'nữ'  || s == 'female' || s == 'f') return 'female';
+    return 'other';
+  }
+
+  String _stripFileScheme(String path) =>
+      path.startsWith('file://') ? path.substring(7) : path;
+
+  String _fileName(String path) {
+    final i = path.lastIndexOf(RegExp(r'[\/\\]'));
+    return i >= 0 ? path.substring(i + 1) : path;
+  }
+
+
   // THÊM vào class SocialRepository
   Future<ApiResponseModel<Response>> fetchUserProfile({
     String? targetUserId, // null = lấy của mình
