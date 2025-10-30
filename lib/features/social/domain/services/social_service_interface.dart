@@ -2,6 +2,8 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_comment.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_feed_page.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group.dart';
 
 abstract class SocialServiceInterface {
   Future<List<SocialPost>> getNewsFeed({int limit, String? afterPostId});
@@ -63,6 +65,18 @@ abstract class SocialServiceInterface {
     String? videoThumbnailPath,
     int privacy = 0,
     String? backgroundColorId,
+    String? groupId,
   });
   Future<SocialPost> sharePost({required String postId, String? text});
+  Future<SocialFeedPage> getGroupFeed({
+    required String groupId,
+    int limit,
+    String? afterPostId,
+  });
+  Future<List<SocialGroup>> searchGroups({String keyword = ''});
+  Future<List<SocialGroup>> getMyGroups({
+    required String type,
+    int limit,
+    int offset,
+  });
 }

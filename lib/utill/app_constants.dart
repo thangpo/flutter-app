@@ -11,7 +11,7 @@ class AppConstants {
   ///Flutter SDK 3.32.8
   static const LocalCachesTypeEnum cachesType = LocalCachesTypeEnum.all;
 
-  static const String baseUrl = 'https://vnshop247.com/';
+  static const String baseUrl = 'https://vnshop247.com';
 
   static const String socialBaseUrl = 'https://social.vnshop247.com';
   static const String socialServerKey =
@@ -32,22 +32,30 @@ class AppConstants {
   static const String socialGetStoryReactionsUri = '/api/get-reactions';
   static const String socialGetPostDataUri = '/api/get-post-data';
   static const String socialCommentsUri = '/api/comments';
-
+  static const String socialCreateGroupUri = '/api/create-group';
+  static const String socialUpdateGroupUri = '/api/update-group-data';
+  static const String socialJoinGroupUri = '/api/join-group';
+  static const String socialGetMyGroupsUri = '/api/get-my-groups';
+  static const String socialGetCommunityUri = '/api/get-community';
+  static const String socialGetGroupMembersUri = '/api/get_group_members';
+  static const String socialGetNotInGroupMembersUri =
+      '/api/not_in_group_member';
+  static const String socialMakeGroupAdminUri = '/api/make_group_admin';
+  static const String socialGetGroupDataUri = '/api/get-group-data';
+  static const String socialSearch = '/api/search';
   static const String socialFetchRecommendedUri = '/api/fetch-recommended';
   static const String socialGetUserDataInfoUri = '/api/get-user-data';
   static const String socialCheckUsernameUri = '/api/check_username';
   static const String socialGetUsername = '/api/get-user-data-username';
-  
-  static const String socialGetFriendsUri    = '/api/get-friends';
-  static const String socialGetFollowersUri  = '/api/get-followers';
-  static const String socialGetFollowingUri  = '/api/get-following';
+
+  static const String socialGetFriendsUri = '/api/get-friends';
+  static const String socialGetFollowersUri = '/api/get-followers';
+  static const String socialGetFollowingUri = '/api/get-following';
 
   // Chat APIs – dùng đúng path theo WoWonder
   static const String socialChatSendMessageUri = '/api/send-message';
   static const String socialChatGetUserMessagesUri = '/api/get_user_messages';
   static const String socialChatReadChatsUri = '/api/read_chats';
-
-
 
   static const String googleServerClientId = 'client_id here';
   static const String userId = 'userId';

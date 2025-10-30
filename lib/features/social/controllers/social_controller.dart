@@ -5,6 +5,8 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_feed_page.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user_profile.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_service_interface.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_service.dart';
@@ -46,20 +48,37 @@ class SocialController with ChangeNotifier {
   String? _accessToken;
   String? get accessToken => _accessToken;
 
- bool _creatingLive = false;
+  bool _creatingLive = false;
   bool get creatingLive => _creatingLive;
 
   final List<SocialStory> _stories = [];
   List<SocialStory> get stories => List.unmodifiable(_stories);
   int _storiesOffset = 0;
   final Map<String, Queue<_PendingStoryReaction>> _queuedStoryReactions =
-  <String, Queue<_PendingStoryReaction>>{};
+      <String, Queue<_PendingStoryReaction>>{};
+  final List<SocialGroup> _suggestedGroups = <SocialGroup>[];
+  List<SocialGroup> get suggestedGroups => List.unmodifiable(_suggestedGroups);
+  bool _loadingSuggestedGroups = false;
+  bool get loadingSuggestedGroups => _loadingSuggestedGroups;
+  bool _suggestedGroupsFetched = false;
+  String _lastSuggestedKeyword = '';
+  final List<SocialGroup> _userGroups = <SocialGroup>[];
+  List<SocialGroup> get userGroups => List.unmodifiable(_userGroups);
+  bool _loadingUserGroups = false;
+  bool get loadingUserGroups => _loadingUserGroups;
+  bool _userGroupsFetched = false;
+  final List<SocialPost> _groupPosts = <SocialPost>[];
+  List<SocialPost> get groupPosts => List.unmodifiable(_groupPosts);
+  bool _loadingGroupPosts = false;
+  bool get loadingGroupPosts => _loadingGroupPosts;
+  bool _groupPostsFetched = false;
+  bool get groupPostsFetched => _groupPostsFetched;
 
   String? _afterId;
   final Set<String> _storyReactionLoading = <String>{};
   static const int _storyViewersPageSize = 50;
   final Map<String, StoryViewersState> _storyViewers =
-  <String, StoryViewersState>{};
+      <String, StoryViewersState>{};
   final Set<String> _sharingPosts = <String>{};
   bool isSharing(String id) => _sharingPosts.contains(id);
   bool _pendingLoadMore = false;
@@ -92,6 +111,16 @@ class SocialController with ChangeNotifier {
     _currentUserStory = null;
     _posts.clear();
     _stories.clear();
+    _suggestedGroups.clear();
+    _loadingSuggestedGroups = false;
+    _suggestedGroupsFetched = false;
+    _lastSuggestedKeyword = '';
+    _userGroups.clear();
+    _loadingUserGroups = false;
+    _userGroupsFetched = false;
+    _groupPosts.clear();
+    _loadingGroupPosts = false;
+    _groupPostsFetched = false;
     _afterId = null;
     _storiesOffset = 0;
     _storyReactionLoading.clear();
@@ -111,7 +140,142 @@ class SocialController with ChangeNotifier {
     }
   }
 
-  // ========== STORY HELPERS ==========
+  Future<void> loadSuggestedGroups({
+    String keyword = '',
+    bool forceRefresh = false,
+  }) async {
+    final String normalizedKeyword = keyword.trim();
+    if (_loadingSuggestedGroups) return;
+    if (!forceRefresh &&
+        _suggestedGroupsFetched &&
+        normalizedKeyword == _lastSuggestedKeyword) {
+      return;
+    }
+
+    _loadingSuggestedGroups = true;
+    notifyListeners();
+
+    try {
+      final List<SocialGroup> groups =
+          await service.searchGroups(keyword: normalizedKeyword);
+      _suggestedGroups
+        ..clear()
+        ..addAll(groups);
+      _suggestedGroupsFetched = true;
+      _lastSuggestedKeyword = normalizedKeyword;
+    } catch (e) {
+      final ctx = Get.context;
+      if (ctx != null) {
+        showCustomSnackBar(e.toString(), ctx, isError: true);
+      }
+    } finally {
+      _loadingSuggestedGroups = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadUserGroups({bool forceRefresh = false}) async {
+    if (_loadingUserGroups) return;
+    if (!forceRefresh && _userGroupsFetched) return;
+
+    _loadingUserGroups = true;
+    notifyListeners();
+
+    try {
+      final List<SocialGroup> joined =
+          await service.getMyGroups(type: 'joined_groups');
+      final List<SocialGroup> mine =
+          await service.getMyGroups(type: 'my_groups');
+
+      final Map<String, SocialGroup> merged = <String, SocialGroup>{};
+      for (final SocialGroup group in joined) {
+        merged[group.id] = group;
+      }
+      for (final SocialGroup group in mine) {
+        merged[group.id] = group;
+      }
+
+      final List<SocialGroup> ordered = merged.values.toList()
+        ..sort((a, b) {
+          final DateTime aTime = a.updatedAt ??
+              a.createdAt ??
+              DateTime.fromMillisecondsSinceEpoch(0);
+          final DateTime bTime = b.updatedAt ??
+              b.createdAt ??
+              DateTime.fromMillisecondsSinceEpoch(0);
+          return bTime.compareTo(aTime);
+        });
+
+      _userGroups
+        ..clear()
+        ..addAll(ordered);
+      _userGroupsFetched = true;
+      _groupPosts.clear();
+      _groupPostsFetched = false;
+    } catch (e) {
+      final ctx = Get.context;
+      if (ctx != null) {
+        showCustomSnackBar(e.toString(), ctx, isError: true);
+      }
+    } finally {
+      _loadingUserGroups = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadGroupPosts({bool forceRefresh = false}) async {
+    if (_loadingGroupPosts) return;
+    if (!forceRefresh && _groupPostsFetched) return;
+
+    if (_userGroups.isEmpty && !_loadingUserGroups) {
+      await loadUserGroups(forceRefresh: forceRefresh);
+    }
+    if (_userGroups.isEmpty) {
+      _groupPosts.clear();
+      _groupPostsFetched = true;
+      notifyListeners();
+      return;
+    }
+
+    _loadingGroupPosts = true;
+    notifyListeners();
+
+    try {
+      final List<SocialPost> aggregated = <SocialPost>[];
+      for (final SocialGroup group in _userGroups) {
+        try {
+          final SocialFeedPage page =
+              await service.getGroupFeed(groupId: group.id, limit: 10);
+          for (final SocialPost post in page.posts) {
+            aggregated.add(post.copyWith(
+              isGroupPost: true,
+              groupId: group.id,
+              groupName: group.name,
+              groupTitle: group.title ?? post.groupTitle,
+              groupUrl: group.url ?? post.groupUrl,
+              groupAvatar: group.avatarUrl ?? post.groupAvatar,
+              groupCover: group.coverUrl ?? post.groupCover,
+            ));
+          }
+        } catch (e) {
+          debugPrint('Failed to load posts for group ${group.id}: $e');
+        }
+      }
+      _groupPosts
+        ..clear()
+        ..addAll(aggregated);
+      _groupPostsFetched = true;
+    } catch (e) {
+      final ctx = Get.context;
+      if (ctx != null) {
+        showCustomSnackBar(e.toString(), ctx, isError: true);
+      }
+    } finally {
+      _loadingGroupPosts = false;
+      notifyListeners();
+    }
+  }
+
   String _storyKey(SocialStory story) {
     final userKey = story.userId;
     if (userKey != null && userKey.isNotEmpty) {
@@ -207,7 +371,7 @@ class SocialController with ChangeNotifier {
     }
     final SocialStory story = _stories[storyIndex];
     final List<SocialStoryItem> updatedItems =
-    List<SocialStoryItem>.from(story.items);
+        List<SocialStoryItem>.from(story.items);
     updatedItems[itemIndex] = newItem;
     _stories[storyIndex] = story.copyWith(items: updatedItems);
     _syncCurrentUserStoryFrom(_stories);
@@ -253,23 +417,31 @@ class SocialController with ChangeNotifier {
   }
 
   void _updatePost(String id, SocialPost newPost) {
-     bool changed = false;
-    final i = _posts.indexWhere((e) => e.id == id);
-    if (i != -1) {
-      _posts[i] = newPost;
+    bool changed = false;
+    final int feedIndex = _posts.indexWhere((e) => e.id == id);
+    if (feedIndex != -1) {
+      _posts[feedIndex] = newPost;
+      changed = true;
+    }
+    final int groupIndex = _groupPosts.indexWhere((e) => e.id == id);
+    if (groupIndex != -1) {
+      _groupPosts[groupIndex] = newPost;
+      changed = true;
+    }
+    if (changed) {
       notifyListeners();
     }
     // Cập nhật trong danh sách profile (_profilePosts)
-  final int profileIndex = _profilePosts.indexWhere((p) => p.id == id);
-  if (profileIndex != -1) {
-    _profilePosts[profileIndex] = newPost;
-    changed = true;
-  }
+    final int profileIndex = _profilePosts.indexWhere((p) => p.id == id);
+    if (profileIndex != -1) {
+      _profilePosts[profileIndex] = newPost;
+      changed = true;
+    }
 
-  // Nếu có thay đổi ở ít nhất 1 nơi thì thông báo UI rebuild
-  if (changed) {
-    notifyListeners();
-  }
+    // Nếu có thay đổi ở ít nhất 1 nơi thì thông báo UI rebuild
+    if (changed) {
+      notifyListeners();
+    }
   }
 
   // ========== POST CREATION ==========
@@ -280,6 +452,7 @@ class SocialController with ChangeNotifier {
     String? videoThumbnailPath,
     int privacy = 0,
     String? backgroundColorId,
+    String? groupId,
   }) async {
     if (_creatingPost) return null;
     _creatingPost = true;
@@ -292,9 +465,16 @@ class SocialController with ChangeNotifier {
         videoThumbnailPath: videoThumbnailPath,
         privacy: privacy,
         backgroundColorId: backgroundColorId,
+        groupId: groupId,
       );
-      _posts.insert(0, post);
-      return post;
+      final SocialPost normalized = groupId != null
+          ? post.copyWith(
+              isGroupPost: true,
+              groupId: groupId,
+            )
+          : post;
+      _posts.insert(0, normalized);
+      return normalized;
     } catch (e) {
       showCustomSnackBar(e.toString(), Get.context!, isError: true);
       rethrow;
@@ -340,10 +520,12 @@ class SocialController with ChangeNotifier {
       notifyListeners();
     }
   }
+
   void setAccessToken(String token) {
     _accessToken = token;
     notifyListeners();
   }
+
   Future<Map<String, dynamic>?> createLive() async {
     if (_accessToken == null) throw Exception('Thiếu accessToken');
 
@@ -353,7 +535,8 @@ class SocialController with ChangeNotifier {
 
       final repo = SocialLiveRepository(
         apiBaseUrl: 'https://social.vnshop247.com',
-        serverKey: 'f6e69c898ddd643154c9bd4b152555842e26a868-d195c100005dddb9f1a30a67a5ae42d4-19845955',
+        serverKey:
+            'f6e69c898ddd643154c9bd4b152555842e26a868-d195c100005dddb9f1a30a67a5ae42d4-19845955',
       );
 
       final data = await repo.createLive(_accessToken!);
@@ -463,7 +646,7 @@ class SocialController with ChangeNotifier {
     if (storyIndex == -1) return;
     final SocialStory targetStory = _stories[storyIndex];
     final int itemIndex =
-    targetStory.items.indexWhere((element) => element.id == item.id);
+        targetStory.items.indexWhere((element) => element.id == item.id);
     if (itemIndex == -1) return;
 
     final SocialStoryItem currentItem = targetStory.items[itemIndex];
@@ -513,13 +696,13 @@ class SocialController with ChangeNotifier {
     );
 
     final _PendingStoryReaction pending =
-    _PendingStoryReaction(reaction: sendingReaction);
+        _PendingStoryReaction(reaction: sendingReaction);
 
     if (_storyReactionLoading.contains(currentItem.id)) {
       final Queue<_PendingStoryReaction> queue =
-      _queuedStoryReactions.putIfAbsent(
+          _queuedStoryReactions.putIfAbsent(
         currentItem.id,
-            () => Queue<_PendingStoryReaction>(),
+        () => Queue<_PendingStoryReaction>(),
       );
       queue.add(pending);
       _replaceStoryItem(
@@ -557,20 +740,20 @@ class SocialController with ChangeNotifier {
     } finally {
       _storyReactionLoading.remove(currentItem.id);
       final Queue<_PendingStoryReaction>? queue =
-      _queuedStoryReactions[currentItem.id];
+          _queuedStoryReactions[currentItem.id];
       final _PendingStoryReaction? queued =
-      queue != null && queue.isNotEmpty ? queue.removeFirst() : null;
+          queue != null && queue.isNotEmpty ? queue.removeFirst() : null;
       if (queue != null && queue.isEmpty) {
         _queuedStoryReactions.remove(currentItem.id);
       }
       if (queued != null) {
         final String storyKey = _storyKey(targetStory);
         final int refreshedStoryIndex =
-        _stories.indexWhere((element) => _storyKey(element) == storyKey);
+            _stories.indexWhere((element) => _storyKey(element) == storyKey);
         if (refreshedStoryIndex != -1) {
           final SocialStory refreshedStory = _stories[refreshedStoryIndex];
           final SocialStoryItem refreshedItem = refreshedStory.items.firstWhere(
-                (element) => element.id == currentItem.id,
+            (element) => element.id == currentItem.id,
             orElse: () => currentItem,
           );
           await reactOnStoryItem(
@@ -586,9 +769,9 @@ class SocialController with ChangeNotifier {
 
   // ========== STORY VIEWERS ==========
   Future<void> fetchStoryViewers(
-      SocialStoryItem item, {
-        bool refresh = false,
-      }) async {
+    SocialStoryItem item, {
+    bool refresh = false,
+  }) async {
     final String key = item.id;
     final StoryViewersState previous =
         _storyViewers[key] ?? const StoryViewersState();
@@ -620,10 +803,10 @@ class SocialController with ChangeNotifier {
 
       for (final SocialStoryViewer viewer in page.viewers) {
         final String viewerKey =
-        viewer.userId.isNotEmpty ? viewer.userId : viewer.id;
+            viewer.userId.isNotEmpty ? viewer.userId : viewer.id;
         final int existingIndex = merged.indexWhere((existing) {
           final String existingKey =
-          existing.userId.isNotEmpty ? existing.userId : existing.id;
+              existing.userId.isNotEmpty ? existing.userId : existing.id;
           return existingKey == viewerKey;
         });
         if (existingIndex >= 0) {
@@ -645,7 +828,7 @@ class SocialController with ChangeNotifier {
           ? page.nextOffset
           : offset + page.viewers.length;
       final int total =
-      page.total != 0 ? page.total : (item.viewCount ?? merged.length);
+          page.total != 0 ? page.total : (item.viewCount ?? merged.length);
 
       _storyViewers[key] = StoryViewersState(
         viewers: merged,
@@ -678,7 +861,7 @@ class SocialController with ChangeNotifier {
     notifyListeners();
     try {
       final fetchedStories =
-      await service.getMyStories(limit: 10, offset: _storiesOffset);
+          await service.getMyStories(limit: 10, offset: _storiesOffset);
       if (fetchedStories.isNotEmpty) {
         _mergeStories(fetchedStories);
         _storiesOffset += fetchedStories.length;
@@ -689,13 +872,12 @@ class SocialController with ChangeNotifier {
     }
   }
 
-  // ========== POST REACTIONS ==========
-  Future<void> reactOnPost(SocialPost post, String reaction) async {
+  Future<SocialPost> reactOnPost(SocialPost post, String reaction) async {
     final was = post.myReaction;
 
     if (was.isNotEmpty && (reaction.isEmpty || reaction == 'Like')) {
       final updatedBreakdown =
-      _adjustReactionBreakdown(post.reactionBreakdown, remove: was);
+          _adjustReactionBreakdown(post.reactionBreakdown, remove: was);
       final optimistic = post.copyWith(
         myReaction: '',
         reactionCount: (post.reactionCount - 1).clamp(0, 1 << 31),
@@ -705,11 +887,12 @@ class SocialController with ChangeNotifier {
       try {
         await service.reactToPost(
             postId: post.id, reaction: was, action: 'dislike');
+        return optimistic;
       } catch (e) {
         _updatePost(post.id, post);
         showCustomSnackBar(e.toString(), Get.context!, isError: true);
+        return post;
       }
-      return;
     }
     final now = reaction;
     int delta = 0;
@@ -730,10 +913,12 @@ class SocialController with ChangeNotifier {
     try {
       await service.reactToPost(
           postId: post.id, reaction: reaction, action: 'reaction');
+      return optimistic;
     } catch (e) {
       _updatePost(post.id, post);
       final msg = e.toString();
       showCustomSnackBar(msg, Get.context!, isError: true);
+      return post;
     }
   }
 
@@ -744,12 +929,12 @@ class SocialController with ChangeNotifier {
     notifyListeners();
 
     final SocialPost optimistic =
-    post.copyWith(shareCount: post.shareCount + 1);
+        post.copyWith(shareCount: post.shareCount + 1);
     _updatePost(post.id, optimistic);
 
     try {
       final SocialPost shared =
-      await service.sharePost(postId: post.id, text: text);
+          await service.sharePost(postId: post.id, text: text);
       _posts.insert(0, shared);
       notifyListeners();
       final ctx = Get.context!;
@@ -768,10 +953,10 @@ class SocialController with ChangeNotifier {
   }
 
   Map<String, int> _adjustReactionBreakdown(
-      Map<String, int> base, {
-        String? remove,
-        String? add,
-      }) {
+    Map<String, int> base, {
+    String? remove,
+    String? add,
+  }) {
     if ((remove == null || remove.isEmpty) && (add == null || add.isEmpty))
       return base;
     final Map<String, int> next = Map<String, int>.from(base);
@@ -795,8 +980,7 @@ class SocialController with ChangeNotifier {
 
   /// Load profile đầy đủ (user + followers + following + liked_pages + posts)
   Future<void> loadUserProfile({String? targetUserId}) async {
-    if (_loadingProfile &&
-        targetUserId == _profileHeaderUser?.id) {
+    if (_loadingProfile && targetUserId == _profileHeaderUser?.id) {
       return;
     }
 
@@ -809,7 +993,6 @@ class SocialController with ChangeNotifier {
     _lastProfilePostId = null;
 
     notifyListeners();
-
 
     try {
       if (service is! SocialService) {
@@ -870,7 +1053,6 @@ class SocialController with ChangeNotifier {
       notifyListeners();
     }
   }
-
 
   /// Load more profile posts (pagination)
   Future<void> loadMoreProfilePosts({

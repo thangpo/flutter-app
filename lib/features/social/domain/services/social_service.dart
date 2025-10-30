@@ -3,8 +3,9 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_comment.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_feed_page.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user_profile.dart';
-
 import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:dio/dio.dart';
@@ -26,17 +27,6 @@ class SocialProfileBundle {
   });
 }
 
-/// Kết quả phân trang post
-class SocialFeedPage {
-  final List<SocialPost> posts;
-  final String? lastId;
-
-  const SocialFeedPage({
-    required this.posts,
-    required this.lastId,
-  });
-}
-
 class SocialService implements SocialServiceInterface {
   final SocialRepository socialRepository;
   SocialService({required this.socialRepository});
@@ -54,9 +44,9 @@ class SocialService implements SocialServiceInterface {
 
     final base = AppConstants.socialBaseUrl.endsWith('/')
         ? AppConstants.socialBaseUrl.substring(
-      0,
-      AppConstants.socialBaseUrl.length - 1,
-    )
+            0,
+            AppConstants.socialBaseUrl.length - 1,
+          )
         : AppConstants.socialBaseUrl;
 
     if (trimmed.startsWith('/')) {
@@ -79,8 +69,7 @@ class SocialService implements SocialServiceInterface {
       user['cover'] = _absoluteUrl(user['cover']?.toString());
     }
     if (user['cover_picture'] != null) {
-      user['cover_picture'] =
-          _absoluteUrl(user['cover_picture']?.toString());
+      user['cover_picture'] = _absoluteUrl(user['cover_picture']?.toString());
     }
 
     return user;
@@ -138,7 +127,83 @@ class SocialService implements SocialServiceInterface {
     return [];
   }
 
-  // ========== STORIES ==========
+  @override
+  Future<SocialFeedPage> getGroupFeed({
+    required String groupId,
+    int limit = 10,
+    String? afterPostId,
+  }) async {
+    final resp = await socialRepository.fetchGroupFeed(
+      groupId: groupId,
+      limit: limit,
+      afterPostId: afterPostId,
+    );
+    if (resp.isSuccess &&
+        resp.response != null &&
+        resp.response!.statusCode == 200) {
+      return socialRepository.parseNewsFeed(resp.response!);
+    }
+    ApiChecker.checkApi(resp);
+    return const SocialFeedPage(posts: <SocialPost>[], lastId: null);
+  }
+
+  @override
+  Future<List<SocialGroup>> searchGroups({String keyword = ''}) async {
+    final resp = await socialRepository.searchSocial(searchKey: keyword);
+    if (resp.isSuccess && resp.response != null) {
+      final dynamic data = resp.response!.data;
+      final int status = int.tryParse(
+            '${data is Map ? (data['api_status'] ?? 200) : 200}',
+          ) ??
+          200;
+      if (status == 200) {
+        final groups = socialRepository.parseGroups(resp.response!);
+        return groups.where((group) => !group.isJoined).toList();
+      }
+      if (data is Map) {
+        final dynamic errors = data['errors'];
+        final dynamic errorText = errors is Map ? errors['error_text'] : null;
+        final dynamic message = errorText ?? data['message'];
+        throw Exception((message ?? 'Search groups failed').toString());
+      }
+      throw Exception('Search groups failed');
+    }
+    ApiChecker.checkApi(resp);
+    return [];
+  }
+
+  @override
+  Future<List<SocialGroup>> getMyGroups({
+    required String type,
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    final resp = await socialRepository.fetchMyGroups(
+      type: type,
+      limit: limit,
+      offset: offset,
+    );
+    if (resp.isSuccess && resp.response != null) {
+      final dynamic data = resp.response!.data;
+      final int status =
+          int.tryParse('${data is Map ? (data['api_status'] ?? 200) : 200}') ??
+              200;
+      if (status == 200) {
+        return socialRepository.parseGroups(resp.response!);
+      }
+      if (data is Map) {
+        final dynamic errors = data['errors'];
+        final dynamic errorText = errors is Map ? errors['error_text'] : null;
+        final dynamic message = errorText ?? data['message'];
+        throw Exception((message ?? 'Fetch groups failed').toString());
+      }
+      throw Exception('Fetch groups failed');
+    }
+    ApiChecker.checkApi(resp);
+    return [];
+  }
+
+  // Stories
   @override
   Future<List<SocialStory>> getStories({
     int limit = 10,
@@ -209,7 +274,7 @@ class SocialService implements SocialServiceInterface {
                 int.tryParse('${detailData?['api_status'] ?? 200}') ?? 200;
             if (detailStatus == 200) {
               final SocialStory? story =
-              socialRepository.parseStoryDetail(detailResp.response!);
+                  socialRepository.parseStoryDetail(detailResp.response!);
               if (story != null) {
                 return story;
               }
@@ -217,13 +282,13 @@ class SocialService implements SocialServiceInterface {
           }
         }
         final SocialStory? inline =
-        socialRepository.parseStoryDetail(resp.response!);
+            socialRepository.parseStoryDetail(resp.response!);
         return inline;
       }
 
       final msg = (data?['errors']?['error_text'] ??
-          data?['message'] ??
-          'Create story failed')
+              data?['message'] ??
+              'Create story failed')
           .toString();
       throw Exception(msg);
     }
@@ -249,7 +314,7 @@ class SocialService implements SocialServiceInterface {
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status == 200) {
         final SocialStoryViewersPage viewsPage =
-        socialRepository.parseStoryViews(
+            socialRepository.parseStoryViews(
           resp.response!,
           currentOffset: offset,
           limit: limit,
@@ -297,7 +362,7 @@ class SocialService implements SocialServiceInterface {
         }
 
         final Map<String, SocialStoryViewer> reactionLookup =
-        <String, SocialStoryViewer>{
+            <String, SocialStoryViewer>{
           for (final SocialStoryViewer viewer in reactionsPage.viewers)
             viewerKeyFor(viewer): viewer,
         };
@@ -366,8 +431,8 @@ class SocialService implements SocialServiceInterface {
         );
       }
       final msg =
-      (data?['errors']?['error_text'] ?? 'Load story viewers failed')
-          .toString();
+          (data?['errors']?['error_text'] ?? 'Load story viewers failed')
+              .toString();
       throw Exception(msg);
     }
 
@@ -393,7 +458,7 @@ class SocialService implements SocialServiceInterface {
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status != 200) {
         final msg =
-        (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
+            (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
         throw Exception(msg);
       }
       return;
@@ -418,7 +483,7 @@ class SocialService implements SocialServiceInterface {
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status == 200) return;
       final msg =
-      (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
+          (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
       throw Exception(msg);
     }
 
@@ -441,7 +506,7 @@ class SocialService implements SocialServiceInterface {
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status == 200) return;
       final msg =
-      (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
+          (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
       throw Exception(msg);
     }
 
@@ -464,7 +529,7 @@ class SocialService implements SocialServiceInterface {
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status == 200) return;
       final msg =
-      (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
+          (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
       throw Exception(msg);
     }
 
@@ -483,7 +548,7 @@ class SocialService implements SocialServiceInterface {
         return socialRepository.parseCurrentUser(resp.response!);
       }
       final msg =
-      (data?['errors']?['error_text'] ?? 'Load profile failed').toString();
+          (data?['errors']?['error_text'] ?? 'Load profile failed').toString();
       throw Exception(msg);
     }
     ApiChecker.checkApi(resp);
@@ -515,7 +580,7 @@ class SocialService implements SocialServiceInterface {
     // 1. user chính (header profile)
     // parseUserProfile(res) trả về SocialUserProfile?
     final SocialUserProfile? profileHeader =
-    socialRepository.parseUserProfile(res);
+        socialRepository.parseUserProfile(res);
 
     // 2. followers / following (danh sách rút gọn)
     final List<SocialUser> followersList = [];
@@ -553,13 +618,12 @@ class SocialService implements SocialServiceInterface {
 
     // 3. trả bundle
     return SocialProfileBundle(
-      user: profileHeader,        // <- giờ đúng kiểu SocialUserProfile?
-      followers: followersList,   // List<SocialUser>
-      following: followingList,   // List<SocialUser>
+      user: profileHeader, // <- giờ đúng kiểu SocialUserProfile?
+      followers: followersList, // List<SocialUser>
+      following: followingList, // List<SocialUser>
       likedPages: likedPagesRaw,
     );
   }
-
 
   /// Lấy danh sách post của user, có phân trang
   Future<SocialFeedPage> getUserPosts({
@@ -620,7 +684,7 @@ class SocialService implements SocialServiceInterface {
         return socialRepository.parsePostData(resp.response!);
       }
       final msg =
-      (data?['errors']?['error_text'] ?? 'Load post failed').toString();
+          (data?['errors']?['error_text'] ?? 'Load post failed').toString();
       throw Exception(msg);
     }
     ApiChecker.checkApi(resp);
@@ -635,6 +699,7 @@ class SocialService implements SocialServiceInterface {
     String? videoThumbnailPath,
     int privacy = 0,
     String? backgroundColorId,
+    String? groupId,
   }) async {
     final resp = await socialRepository.createPost(
       text: text,
@@ -653,8 +718,8 @@ class SocialService implements SocialServiceInterface {
         throw Exception('Create post failed: Missing post data.');
       }
       final msg = (data?['errors']?['error_text'] ??
-          data?['message'] ??
-          'Create post failed')
+              data?['message'] ??
+              'Create post failed')
           .toString();
       throw Exception(msg);
     }
@@ -677,7 +742,7 @@ class SocialService implements SocialServiceInterface {
         throw Exception('Share failed: Missing post data.');
       }
       final msg =
-      (data?['errors']?['error_text'] ?? 'Share post failed').toString();
+          (data?['errors']?['error_text'] ?? 'Share post failed').toString();
       throw Exception(msg);
     }
     ApiChecker.checkApi(resp);
@@ -703,7 +768,7 @@ class SocialService implements SocialServiceInterface {
         return socialRepository.parsePostComments(resp.response!);
       }
       final msg =
-      (data?['errors']?['error_text'] ?? 'Load comments failed').toString();
+          (data?['errors']?['error_text'] ?? 'Load comments failed').toString();
       throw Exception(msg);
     }
     ApiChecker.checkApi(resp);
@@ -724,7 +789,7 @@ class SocialService implements SocialServiceInterface {
         return socialRepository.parseCommentReplies(resp.response!);
       }
       final msg =
-      (data?['errors']?['error_text'] ?? 'Load replies failed').toString();
+          (data?['errors']?['error_text'] ?? 'Load replies failed').toString();
       throw Exception(msg);
     }
     ApiChecker.checkApi(resp);
@@ -778,7 +843,7 @@ class SocialService implements SocialServiceInterface {
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status == 200) return;
       final msg =
-      (data?['errors']?['error_text'] ?? 'Create reply failed').toString();
+          (data?['errors']?['error_text'] ?? 'Create reply failed').toString();
       throw Exception(msg);
     }
     ApiChecker.checkApi(resp);
