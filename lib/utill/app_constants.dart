@@ -35,12 +35,17 @@ class AppConstants {
   static const String socialCreateGroupUri = '/api/create-group';
   static const String socialUpdateGroupUri = '/api/update-group-data';
   static const String socialJoinGroupUri = '/api/join-group';
+  static const String socialGroupsUri = '/api/groups';
+  static const String socialNotificationsUri = '/api/notifications';
   static const String socialGetMyGroupsUri = '/api/get-my-groups';
   static const String socialGetCommunityUri = '/api/get-community';
   static const String socialGetGroupMembersUri = '/api/get_group_members';
   static const String socialGetNotInGroupMembersUri =
       '/api/not_in_group_member';
   static const String socialMakeGroupAdminUri = '/api/make_group_admin';
+  static const String socialDeleteGroupMemberUri = '/api/delete_group_member';
+  static const String socialReportGroupUri = '/api/report_group';
+  static const String socialDeleteGroupUri = '/api/delete_group';
   static const String socialGetGroupDataUri = '/api/get-group-data';
   static const String socialSearch = '/api/search';
   static const String socialFetchRecommendedUri = '/api/fetch-recommended';

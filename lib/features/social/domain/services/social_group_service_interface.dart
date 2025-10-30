@@ -1,5 +1,6 @@
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group_join_request.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_feed_page.dart';
 
 enum SocialGroupQueryType {
@@ -47,6 +48,39 @@ abstract class SocialGroupServiceInterface {
     required String groupId,
     int limit,
     int offset,
+  });
+
+  Future<List<SocialGroupJoinRequest>> getGroupJoinRequests({
+    required String groupId,
+    int limit,
+    int offset,
+  });
+
+  Future<void> inviteGroupMember({
+    required String groupId,
+    required String userId,
+  });
+
+  Future<void> removeGroupMember({
+    required String groupId,
+    required String userId,
+  });
+
+  Future<void> reportGroup({
+    required String groupId,
+    required String text,
+  });
+
+  Future<void> deleteGroup({
+    required String groupId,
+    required String password,
+  });
+
+  Future<void> respondToJoinRequest({
+    required String groupId,
+    required String userId,
+    String? requestId,
+    required bool accept,
   });
 
   Future<List<SocialUser>> getGroupNonMembers({

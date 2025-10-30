@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_sixvalley_ecommerce/data/model/api_response.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group_join_request.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_feed_page.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_repository.dart';
@@ -223,6 +224,174 @@ class SocialGroupService implements SocialGroupServiceInterface {
     }
     ApiChecker.checkApi(resp);
     return <SocialUser>[];
+  }
+
+  @override
+  Future<List<SocialGroupJoinRequest>> getGroupJoinRequests({
+    required String groupId,
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    final resp = await socialRepository.fetchGroupJoinRequests(
+      groupId: groupId,
+      limit: limit,
+      offset: offset,
+    );
+    if (resp.isSuccess && resp.response != null) {
+      final dynamic data = resp.response!.data;
+      final int status =
+          int.tryParse('${data?['api_status'] ?? data?['status'] ?? 200}') ??
+              200;
+      if (status == 200) {
+        return socialRepository.parseGroupJoinRequests(resp.response!);
+      }
+      final String message = (data?['errors']?['error_text'] ??
+              data?['message'] ??
+              'Failed to load join requests')
+          .toString();
+      throw Exception(message);
+    }
+    ApiChecker.checkApi(resp);
+    return <SocialGroupJoinRequest>[];
+  }
+
+  @override
+  Future<void> inviteGroupMember({
+    required String groupId,
+    required String userId,
+  }) async {
+    final resp = await socialRepository.inviteGroupMember(
+      groupId: groupId,
+      userId: userId,
+    );
+    if (resp.isSuccess && resp.response != null) {
+      final dynamic data = resp.response!.data;
+      final int status =
+          int.tryParse('${data?['api_status'] ?? data?['status'] ?? 200}') ??
+              200;
+      if (status == 200) {
+        return;
+      }
+      final String message = (data?['errors']?['error_text'] ??
+              data?['message'] ??
+              'Failed to send invite')
+          .toString();
+      throw Exception(message);
+    }
+    ApiChecker.checkApi(resp);
+    throw Exception('Failed to send invite');
+  }
+
+  @override
+  Future<void> removeGroupMember({
+    required String groupId,
+    required String userId,
+  }) async {
+    final resp = await socialRepository.deleteGroupMember(
+      groupId: groupId,
+      userId: userId,
+    );
+    if (resp.isSuccess && resp.response != null) {
+      final dynamic data = resp.response!.data;
+      final int status =
+          int.tryParse('${data?['api_status'] ?? data?['status'] ?? 200}') ??
+              200;
+      if (status == 200) {
+        return;
+      }
+      final String message = (data?['errors']?['error_text'] ??
+              data?['message'] ??
+              'Failed to remove member')
+          .toString();
+      throw Exception(message);
+    }
+    ApiChecker.checkApi(resp);
+    throw Exception('Failed to remove member');
+  }
+
+  @override
+  Future<void> reportGroup({
+    required String groupId,
+    required String text,
+  }) async {
+    final resp = await socialRepository.reportGroup(
+      groupId: groupId,
+      text: text,
+    );
+    if (resp.isSuccess && resp.response != null) {
+      final dynamic data = resp.response!.data;
+      final int status =
+          int.tryParse('${data?['api_status'] ?? data?['status'] ?? 200}') ??
+              200;
+      if (status == 200) {
+        return;
+      }
+      final String message = (data?['errors']?['error_text'] ??
+              data?['message'] ??
+              'Failed to report group')
+          .toString();
+      throw Exception(message);
+    }
+    ApiChecker.checkApi(resp);
+    throw Exception('Failed to report group');
+  }
+
+  @override
+  Future<void> deleteGroup({
+    required String groupId,
+    required String password,
+  }) async {
+    final resp = await socialRepository.deleteGroup(
+      groupId: groupId,
+      password: password,
+    );
+    if (resp.isSuccess && resp.response != null) {
+      final dynamic data = resp.response!.data;
+      final int status =
+          int.tryParse('${data?['api_status'] ?? data?['status'] ?? 200}') ??
+              200;
+      if (status == 200) {
+        return;
+      }
+      final String message = (data?['errors']?['error_text'] ??
+              data?['message'] ??
+              'Failed to delete group')
+          .toString();
+      throw Exception(message);
+    }
+    ApiChecker.checkApi(resp);
+    throw Exception('Failed to delete group');
+  }
+
+  @override
+  Future<void> respondToJoinRequest({
+    required String groupId,
+    required String userId,
+    String? requestId,
+    required bool accept,
+  }) async {
+    final resp = await socialRepository.respondGroupJoinRequest(
+      groupId: groupId,
+      userId: userId,
+      requestId: requestId,
+      accept: accept,
+    );
+    if (resp.isSuccess && resp.response != null) {
+      final dynamic data = resp.response!.data;
+      final int status =
+          int.tryParse('${data?['api_status'] ?? data?['status'] ?? 200}') ??
+              200;
+      if (status == 200) {
+        return;
+      }
+      final String message = (data?['errors']?['error_text'] ??
+              data?['message'] ??
+              'Failed to update join request')
+          .toString();
+      throw Exception(message);
+    }
+    ApiChecker.checkApi(resp);
+    throw Exception('Failed to update join request');
   }
 
   @override
