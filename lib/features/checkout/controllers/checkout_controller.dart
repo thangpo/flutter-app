@@ -246,11 +246,11 @@ class CheckoutController with ChangeNotifier {
     String? addressId, String? billingAddressId,
     String? couponCode,
     String? couponDiscount,
-    String? paymentMethod}) async {
+    String? paymentMethod, Map<String, dynamic>? checkedIds,}) async {
     _isLoading =true;
     notifyListeners();
 
-    ApiResponseModel apiResponse = await checkoutServiceInterface.digitalPaymentPlaceOrder(orderNote, customerId, addressId, billingAddressId, couponCode, couponDiscount, paymentMethod, _isCheckCreateAccount, passwordController.text.trim());
+    ApiResponseModel apiResponse = await checkoutServiceInterface.digitalPaymentPlaceOrder(orderNote, customerId, addressId, billingAddressId, couponCode, couponDiscount, paymentMethod, _isCheckCreateAccount, passwordController.text.trim(), checkedIds: checkedIds,);
 
     if (apiResponse.response != null && apiResponse.response?.statusCode == 200) {
       _addressIndex = null;

@@ -54,7 +54,6 @@ class CheckoutRepository implements CheckoutRepositoryInterface{
     }
   }
 
-
   @override
   Future<ApiResponseModel> offlinePaymentPlaceOrder(String? addressID, String? couponCode, String? couponDiscountAmount, String? billingAddressId, String? orderNote, List <String?> typeKey, List<String> typeValue, int? id, String name, String? paymentNote, bool? isCheckCreateAccount, String? password) async {
     try {
@@ -89,7 +88,6 @@ class CheckoutRepository implements CheckoutRepositoryInterface{
     }
   }
 
-
   @override
   Future<ApiResponseModel> walletPaymentPlaceOrder(String? addressID, String? couponCode,String? couponDiscountAmount, String? billingAddressId, String? orderNote, bool? isCheckCreateAccount, String? password) async {
     int isCheckAccount = isCheckCreateAccount! ? 1: 0;
@@ -100,7 +98,6 @@ class CheckoutRepository implements CheckoutRepositoryInterface{
       return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
     }
   }
-
 
   @override
   Future<ApiResponseModel> offlinePaymentList() async {
@@ -122,33 +119,38 @@ class CheckoutRepository implements CheckoutRepositoryInterface{
       String? couponDiscount,
       String? paymentMethod,
       bool? isCheckCreateAccount,
-      String? password
-      ) async {
-
+      String? password, {
+        Map<String, dynamic>? checkedIds,
+      }) async {
     try {
-      int isCheckAccount = isCheckCreateAccount! ? 1: 0;
+      int isCheckAccount = isCheckCreateAccount! ? 1 : 0;
       final response = await dioClient!.post(AppConstants.digitalPayment, data: {
         "order_note": orderNote,
-        "customer_id":  customerId,
+        "customer_id": customerId,
         "address_id": addressId,
         "billing_address_id": billingAddressId,
         "coupon_code": couponCode,
         "coupon_discount": couponDiscount,
-        "payment_platform" : "app",
-        "payment_method" : paymentMethod,
-        "callback" : null,
-        "payment_request_from" : "app",
-        'guest_id' : Provider.of<AuthController>(Get.context!, listen: false).getGuestToken(),
+        "payment_platform": "app",
+        "payment_method": paymentMethod,
+        "callback": null,
+        "payment_request_from": "app",
+        'guest_id': Provider.of<AuthController>(Get.context!, listen: false).getGuestToken(),
         'is_guest': !Provider.of<AuthController>(Get.context!, listen: false).isLoggedIn(),
-        'is_check_create_account' : isCheckAccount.toString(),
-        'password' : password,
+        'is_check_create_account': isCheckAccount.toString(),
+        'password': password,
+        'checkedIds': checkedIds, // ✅ gửi checkedIds
       });
       return ApiResponseModel.withSuccess(response);
     } catch (e) {
       final error = e as DioException;
-      return ApiResponseModel.withError( ApiErrorHandler.getMessage(e), responseValue: (error.response) );
+      return ApiResponseModel.withError(
+        ApiErrorHandler.getMessage(e),
+        responseValue: error.response,
+      );
     }
   }
+
 
   @override
   Future<ApiResponseModel> getReferralAmount(String? amount) async {

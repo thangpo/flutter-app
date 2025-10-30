@@ -331,6 +331,9 @@ class CartScreenState extends State<CartScreen> {
                                 List<int?> fromDistrictIds = [];
                                 List<String?> fromWardIds = [];
                                 List<int> selectedCartIds = [];
+                                Map<String, int> groupToIndex = {};
+
+                                int locationIndex = 0;
 
                                 for (int index = 0; index < sellerGroupList.length; index++) {
                                   final seller = sellerGroupList[index];
@@ -339,7 +342,9 @@ class CartScreenState extends State<CartScreen> {
                                   bool hasCheckedItem = items.any((c) => c.isChecked == true);
                                   if (!hasCheckedItem) continue;
 
-                                  sellerGroupLength++;
+                                  if (groupToIndex.containsKey(seller.cartGroupId)) continue;
+
+                                  groupToIndex[seller.cartGroupId!] = locationIndex++;
 
                                   if (seller.sellerIs == 'admin') {
                                     fromDistrictIds.add(configProvider.configModel?.inHouseShop?.fromDistrictId);
@@ -357,6 +362,8 @@ class CartScreenState extends State<CartScreen> {
                                       }
                                     }
                                   }
+
+                                  sellerGroupLength++;
                                 }
 
                                 if (selectedCartIds.isEmpty) {
@@ -368,12 +375,12 @@ class CartScreenState extends State<CartScreen> {
                                   context,
                                   MaterialPageRoute(
                                     builder: (_) => CheckoutScreen(
-                                      quantity: totalQuantity,
                                       cartList: cartList,
                                       totalOrderAmount: amount,
                                       shippingFee: shippingAmount - freeDeliveryAmountDiscount,
                                       discount: discount,
                                       tax: tax,
+                                      quantity: totalQuantity,
                                       onlyDigital: sellerGroupLength > 0 && totalPhysical == 0,
                                       hasPhysical: totalPhysical > 0,
                                       fromDistrictIds: fromDistrictIds,
