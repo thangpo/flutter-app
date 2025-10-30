@@ -181,7 +181,6 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                         }
 
                         final success = await groupCtrl.createGroup(
-                          accessToken: widget.accessToken,
                           name: name,
                           memberIds: selectedIds.toList(),
                           avatarFile: avatarFile,
