@@ -1,137 +1,61 @@
-// 📁 lib/features/social/controllers/group_chat_controller.dart
-import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../domain/repositories/group_chat_repository.dart';
 
 class GroupChatController extends ChangeNotifier {
   final GroupChatRepository repo;
+String? currentUserId;
   GroupChatController({required this.repo});
 
-  // ======= STATE =======
+  /// 🧱 Danh sách nhóm
   bool groupsLoading = false;
+  List<Map<String, dynamic>> groups = [];
+
+  /// 🧱 Tin nhắn nhóm
   bool messagesLoading = false;
+  Map<String, List<Map<String, dynamic>>> messagesByGroup = {};
+
+  /// 🧱 Trạng thái tạo nhóm
   bool creatingGroup = false;
   String? lastError;
 
-  List<Map<String, dynamic>> groups = [];
-  List<Map<String, dynamic>> messages = [];
-
-  Timer? _autoReloadTimer;
-
-  // =============================
-  // 🟢 Danh sách nhóm
-  // =============================
+  // 📦 Lấy danh sách nhóm
   Future<void> loadGroups(String accessToken) async {
+    groupsLoading = true;
+    notifyListeners();
     try {
-      groupsLoading = true;
-      notifyListeners();
       groups = await repo.fetchGroups(accessToken: accessToken);
+      lastError = null;
     } catch (e) {
-      if (kDebugMode) print('❌ loadGroups error: $e');
+      lastError = e.toString();
     } finally {
       groupsLoading = false;
       notifyListeners();
     }
   }
 
-  // =============================
-  // 🟢 Tin nhắn nhóm
-  // =============================
-  Future<void> loadMessages(String accessToken, String groupId) async {
-    try {
-      messagesLoading = true;
-      notifyListeners();
-      final result = await repo.fetchMessages(
-        accessToken: accessToken,
-        groupId: groupId,
-      );
-      messages = result.reversed.toList();
-    } catch (e) {
-      if (kDebugMode) print('❌ loadMessages error: $e');
-    } finally {
-      messagesLoading = false;
-      notifyListeners();
-    }
-  }
-
-  // 🟢 Tự động refresh tin nhắn
-  void startAutoReload(String accessToken, String groupId,
-      {Duration interval = const Duration(seconds: 5)}) {
-    stopAutoReload();
-    _autoReloadTimer = Timer.periodic(interval, (_) {
-      loadMessages(accessToken, groupId);
-    });
-  }
-
-  void stopAutoReload() {
-    _autoReloadTimer?.cancel();
-    _autoReloadTimer = null;
-  }
-
-  // =============================
-  // 🟢 Gửi tin nhắn
-  // =============================
-  Future<void> sendMessage(
-      String accessToken, String groupId, String text) async {
-    if (text.trim().isEmpty) return;
-
-    final tempMsg = {
-      'orginal_text': text,
-      'position': 'right',
-      'onwer': 1,
-      'time_text': '...',
-    };
-    messages.add(tempMsg);
-    notifyListeners();
-
-    try {
-      final success = await repo.sendMessage(
-        accessToken: accessToken,
-        groupId: groupId,
-        text: text,
-      );
-      if (success) {
-        await loadMessages(accessToken, groupId);
-      } else {
-        if (kDebugMode) print('❌ sendMessage failed');
-      }
-    } catch (e) {
-      if (kDebugMode) print('❌ sendMessage error: $e');
-    }
-  }
-
-  // =============================
-  // 🟢 Tạo nhóm
-  // =============================
+  // 🧩 Tạo nhóm mới
   Future<bool> createGroup({
     required String accessToken,
     required String name,
     required List<String> memberIds,
     File? avatarFile,
   }) async {
+    creatingGroup = true;
     lastError = null;
+    notifyListeners();
+
     try {
-      creatingGroup = true;
-      notifyListeners();
-
-      final success = await repo.createGroup(
+      final ok = await repo.createGroup(
         accessToken: accessToken,
-        groupName: name,
+        name: name,
         memberIds: memberIds,
-        avatar: avatarFile,
+        avatarFile: avatarFile,
       );
-
-      if (success) {
-        await loadGroups(accessToken);
-        return true;
-      } else {
-        lastError = 'Không thể tạo nhóm.';
-        return false;
-      }
+      if (ok) await loadGroups(accessToken);
+      return ok;
     } catch (e) {
-      lastError = 'Lỗi tạo nhóm: $e';
-      if (kDebugMode) print(lastError);
+      lastError = e.toString();
       return false;
     } finally {
       creatingGroup = false;
@@ -139,12 +63,60 @@ class GroupChatController extends ChangeNotifier {
     }
   }
 
-  // =============================
-  // 🟢 Dispose
-  // =============================
-  @override
-  void dispose() {
-    stopAutoReload();
-    super.dispose();
+  // 📥 Lấy tin nhắn trong nhóm
+  Future<void> loadMessages(String accessToken, String groupId) async {
+    messagesLoading = true;
+    notifyListeners();
+    try {
+      final messages = await repo.fetchMessages(
+        accessToken: accessToken,
+        groupId: groupId,
+      );
+      messagesByGroup[groupId] = messages;
+      lastError = null;
+    } catch (e) {
+      lastError = e.toString();
+    } finally {
+      messagesLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // 🚀 Gửi tin nhắn — hiển thị ngay mà không cần reload API
+  Future<void> sendMessage(
+    String accessToken,
+    String groupId,
+    String text,
+  ) async {
+    try {
+      // ✅ Gửi lên server
+      await repo.sendMessage(
+        accessToken: accessToken,
+        groupId: groupId,
+        text: text,
+      );
+
+      // ✅ Tự thêm vào danh sách tạm (giúp hiển thị ngay)
+      final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      final localMsg = {
+        'id': 'local_${DateTime.now().millisecondsSinceEpoch}',
+        'from_id': 'me', // tự đánh dấu user hiện tại
+        'text': text,
+        'time': now,
+        'user_data': {
+          'username': 'Bạn',
+          'avatar': '',
+          'user_id': 'me',
+        }
+      };
+
+      final existing = messagesByGroup[groupId] ?? [];
+      existing.add(localMsg);
+      messagesByGroup[groupId] = existing;
+      notifyListeners();
+    } catch (e) {
+      lastError = e.toString();
+      notifyListeners();
+    }
   }
 }
