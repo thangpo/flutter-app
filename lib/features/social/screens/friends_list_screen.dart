@@ -238,17 +238,19 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
   }
 
   void _openChat(SocialFriend u) {
-    Navigator.push(
+   Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => ChatScreen(
-          receiverId: u.id,
           accessToken: widget.accessToken,
-          title: u.name,
-          avatar: u.avatar,
+          peerUserId: u.id.toString(), // hoặc receiverId nếu bạn dùng alias
+          peerName:
+              (u.name != null && u.name!.trim().isNotEmpty) ? u.name! : 'User #${u.id}', // 👈 thay title -> peerName
+          peerAvatar: u.avatar, // nếu có
         ),
       ),
     );
+
   }
 
   /// 🧩 Dialog tạo nhóm chat nhanh

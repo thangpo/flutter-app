@@ -3,6 +3,7 @@ description: A new Flutter setup application for starting a project.
 
 publish_to: 'none'
 version: 1.0.1+2
+
 environment:
   sdk: ^3.6.2
 
@@ -101,6 +102,9 @@ dependencies:
 
   agora_rtc_engine: ^6.3.2
 
+  # Thu âm thay cho 'record'
+  flutter_sound: ^9.2.13
+
 #dependency_overrides:
 #  firebase_core_platform_interface: ^5.4.0
 
@@ -112,8 +116,6 @@ dev_dependencies:
 
   flutter_test:
     sdk: flutter
-
-
 
 flutter:
   uses-material-design: true
@@ -133,4 +135,3 @@ flutter:
           weight: 500
         - asset: assets/fonts/ubuntu/SF-Pro-Rounded-Regular.ttf
           weight: 600
-
