@@ -1,13 +1,13 @@
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:get/get.dart';
+import 'package:provider/provider.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_friends_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_friends_repository.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_friend.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_chat_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_friend.dart';
 
 class CreateGroupScreen extends StatefulWidget {
   final String accessToken;
@@ -50,52 +50,219 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Tạo nhóm chat'),
-        centerTitle: true,
+        title: const Text(
+          'Nhóm mới',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        actions: [
+          TextButton(
+            onPressed: groupCtrl.creatingGroup
+                ? null
+                : () async {
+                    final name = nameCtrl.text.trim();
+                    if (name.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Nhập tên nhóm')),
+                      );
+                      return;
+                    }
+                    if (selectedIds.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text('Chọn ít nhất 1 thành viên')),
+                      );
+                      return;
+                    }
+
+                    final success = await groupCtrl.createGroup(
+                      name: name,
+                      memberIds: selectedIds.toList(),
+                      avatarFile: avatarFile,
+                    );
+
+                    if (!mounted) return;
+                    if (success) {
+                      Navigator.pop(context, true);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                            content: Text(
+                                groupCtrl.lastError ?? 'Tạo nhóm thất bại')),
+                      );
+                    }
+                  },
+            child: groupCtrl.creatingGroup
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text(
+                    'TẠO',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue,
+                      fontSize: 16,
+                    ),
+                  ),
+          ),
+        ],
       ),
       body: Column(
         children: [
-          // 🧱 Nhập tên nhóm
+          // 🔹 Avatar nhóm & tên nhóm
           Padding(
-            padding: const EdgeInsets.all(12),
-            child: TextField(
-              controller: nameCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Tên nhóm',
-                hintText: 'VD: Nhóm lập trình Flutter',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ),
-
-          // 🖼️ Chọn ảnh nhóm
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: Row(
               children: [
-                ElevatedButton.icon(
-                  onPressed: _pickImage,
-                  icon: const Icon(Icons.image),
-                  label: const Text('Chọn ảnh nhóm'),
-                ),
-                const SizedBox(width: 8),
-                if (avatarFile != null)
-                  CircleAvatar(
-                    backgroundImage: FileImage(avatarFile!),
-                    radius: 20,
+                GestureDetector(
+                  onTap: _pickImage,
+                  child: Stack(
+                    children: [
+                      CircleAvatar(
+                        radius: 30,
+                        backgroundColor: Colors.grey[300],
+                        backgroundImage:
+                            avatarFile != null ? FileImage(avatarFile!) : null,
+                        child: avatarFile == null
+                            ? const Icon(Icons.camera_alt, color: Colors.white)
+                            : null,
+                      ),
+                      if (avatarFile != null)
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
+                            padding: const EdgeInsets.all(2),
+                            child: const Icon(
+                              Icons.edit,
+                              size: 14,
+                              color: Colors.blueAccent,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: TextField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(
+                      hintText: 'Tên nhóm (không bắt buộc)',
+                      border: InputBorder.none,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
 
-          const SizedBox(height: 12),
-          Divider(thickness: 0.5, color: cs.outlineVariant.withOpacity(.6)),
-          const SizedBox(height: 4),
-          const Text('Chọn thành viên',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 4),
+          // 🔹 Thanh hiển thị thành viên đã chọn
+          if (selectedIds.isNotEmpty)
+            SizedBox(
+              height: 100,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                children: friendsCtrl.filtered
+                    .where((f) => selectedIds.contains(f.id))
+                    .map((f) => Padding(
+                          padding: const EdgeInsets.only(right: 12),
+                          child: Column(
+                            children: [
+                              Stack(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 24,
+                                    backgroundImage:
+                                        (f.avatar?.isNotEmpty ?? false)
+                                            ? NetworkImage(f.avatar!)
+                                            : null,
+                                    child: (f.avatar?.isEmpty ?? true)
+                                        ? Text(
+                                            f.name.isNotEmpty
+                                                ? f.name[0].toUpperCase()
+                                                : '?',
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.bold),
+                                          )
+                                        : null,
+                                  ),
+                                  Positioned(
+                                    top: 0,
+                                    right: 0,
+                                    child: GestureDetector(
+                                      onTap: () {
+                                        setState(() {
+                                          selectedIds.remove(f.id);
+                                        });
+                                      },
+                                      child: Container(
+                                        decoration: const BoxDecoration(
+                                          color: Colors.black54,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        padding: const EdgeInsets.all(2),
+                                        child: const Icon(
+                                          Icons.close,
+                                          color: Colors.white,
+                                          size: 14,
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                f.name,
+                                style: const TextStyle(fontSize: 12),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ))
+                    .toList(),
+              ),
+            ),
 
-          // 👥 Danh sách bạn bè
+          // 🔹 Ô tìm kiếm bạn bè
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: TextField(
+              onChanged: friendsCtrl.search,
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search),
+                hintText: 'Tìm kiếm',
+                filled: true,
+                fillColor: Colors.grey[200],
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+              ),
+            ),
+          ),
+
+          const Padding(
+            padding: EdgeInsets.only(left: 16, top: 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Gợi ý',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+
+          // 🔹 Danh sách bạn bè
           Expanded(
             child: Obx(() {
               final list = friendsCtrl.filtered;
@@ -106,38 +273,29 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                 return const Center(child: Text('Không có bạn bè nào để chọn'));
               }
 
-              return ListView.separated(
+              return ListView.builder(
                 itemCount: list.length,
-                separatorBuilder: (_, __) => Divider(
-                    height: 1, color: cs.outlineVariant.withOpacity(.4)),
                 itemBuilder: (_, i) {
                   final friend = list[i];
                   final isSelected = selectedIds.contains(friend.id);
+
                   return ListTile(
                     leading: CircleAvatar(
                       backgroundImage: (friend.avatar?.isNotEmpty ?? false)
-                          ? NetworkImage(friend.avatar ?? '')
+                          ? NetworkImage(friend.avatar!)
                           : null,
                       child: (friend.avatar?.isEmpty ?? true)
-                          ? Text(friend.name.isNotEmpty ? friend.name[0] : '?')
+                          ? Text(friend.name.isNotEmpty
+                              ? friend.name[0].toUpperCase()
+                              : '?')
                           : null,
                     ),
-
                     title: Text(friend.name),
-                    subtitle: Text(friend.isOnline
-                        ? 'Đang hoạt động'
-                        : (friend.lastSeen ?? '')),
-                    trailing: Checkbox(
-                      value: isSelected,
-                      onChanged: (_) {
-                        setState(() {
-                          if (isSelected) {
-                            selectedIds.remove(friend.id);
-                          } else {
-                            selectedIds.add(friend.id);
-                          }
-                        });
-                      },
+                    trailing: Icon(
+                      isSelected
+                          ? Icons.check_circle_rounded
+                          : Icons.circle_outlined,
+                      color: isSelected ? Colors.blue : Colors.grey,
                     ),
                     onTap: () {
                       setState(() {
@@ -152,64 +310,6 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                 },
               );
             }),
-          ),
-
-          // 🧩 Nút tạo nhóm
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: SizedBox(
-              width: double.infinity,
-              height: 46,
-              child: ElevatedButton.icon(
-                onPressed: groupCtrl.creatingGroup
-                    ? null
-                    : () async {
-                        final name = nameCtrl.text.trim();
-                        if (name.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text('Vui lòng nhập tên nhóm')),
-                          );
-                          return;
-                        }
-                        if (selectedIds.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text('Chọn ít nhất 1 thành viên')),
-                          );
-                          return;
-                        }
-
-                        final success = await groupCtrl.createGroup(
-                          name: name,
-                          memberIds: selectedIds.toList(),
-                          avatarFile: avatarFile,
-                        );
-
-                        if (!mounted) return;
-                        if (success) {
-                          Navigator.pop(context, true);
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                                content: Text(groupCtrl.lastError ??
-                                    'Tạo nhóm thất bại')),
-                          );
-                        }
-                      },
-                icon: groupCtrl.creatingGroup
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(Icons.check),
-                label: const Text('Tạo nhóm'),
-              ),
-            ),
           ),
         ],
       ),
