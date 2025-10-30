@@ -345,7 +345,6 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
 
                       final success =
                           await context.read<GroupChatController>().createGroup(
-                                accessToken: widget.accessToken,
                                 name: name,
                                 memberIds: ids,
                                 avatarFile: avatarFile,
