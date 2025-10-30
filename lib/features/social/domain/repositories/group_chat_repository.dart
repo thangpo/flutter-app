@@ -1,19 +1,29 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/constants/wowonder_api.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/message_decryptor.dart';
-
 
 class GroupChatRepository {
   final String _base = AppConstants.socialBaseUrl;
   final String _serverKey = AppConstants.socialServerKey;
 
+  /// 🧩 Lấy access token hiện tại của user
+  Future<String> _getAccessToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString(AppConstants.socialAccessToken);
+    if (token == null || token.isEmpty) {
+      throw Exception('❌ Chưa đăng nhập mạng xã hội');
+    }
+    return token;
+  }
+
   /// 🧱 Lấy danh sách nhóm chat
-  Future<List<Map<String, dynamic>>> fetchGroups({
-    required String accessToken,
-  }) async {
+  Future<List<Map<String, dynamic>>> fetchGroups() async {
+    final accessToken = await _getAccessToken();
+
     final uri =
         Uri.parse('$_base${WowonderAPI.groupChat}?access_token=$accessToken');
     final res = await http.post(uri, body: {
@@ -26,20 +36,22 @@ class GroupChatRepository {
     }
 
     final data = json.decode(res.body);
-    if (data['api_status'] == 200 && data['data'] != null) {
+    if (data['api_status'] == 200 && data['data'] is List) {
       return List<Map<String, dynamic>>.from(data['data']);
     } else {
-      throw Exception('Không thể lấy danh sách nhóm');
+      throw Exception(
+          data['errors']?['error_text'] ?? 'Không thể lấy danh sách nhóm');
     }
   }
 
   /// 🧩 Tạo nhóm chat mới
   Future<bool> createGroup({
-    required String accessToken,
     required String name,
     required List<String> memberIds,
     File? avatarFile,
   }) async {
+    final accessToken = await _getAccessToken();
+
     final uri =
         Uri.parse('$_base${WowonderAPI.groupChat}?access_token=$accessToken');
     final req = http.MultipartRequest('POST', uri)
@@ -65,11 +77,10 @@ class GroupChatRepository {
     }
   }
 
-  /// 💬 Lấy tin nhắn trong nhóm (giải mã Base64)
-  Future<List<Map<String, dynamic>>> fetchMessages({
-    required String accessToken,
-    required String groupId,
-  }) async {
+  /// 💬 Lấy tin nhắn trong nhóm (tự động giải mã Base64/AES)
+  Future<List<Map<String, dynamic>>> fetchMessages(String groupId) async {
+    final accessToken = await _getAccessToken();
+
     final uri =
         Uri.parse('$_base${WowonderAPI.groupChat}?access_token=$accessToken');
     final res = await http.post(uri, body: {
@@ -79,41 +90,41 @@ class GroupChatRepository {
     });
 
     if (res.statusCode != 200) throw Exception('Lỗi mạng (${res.statusCode})');
-    final data = json.decode(res.body);
 
+    final data = json.decode(res.body);
     if (data['api_status'] != 200) {
       throw Exception('API lỗi: ${data['api_status']}');
     }
 
-    // ✅ WoWonder trả data.messages
     final msgs = (data['data']?['messages'] ?? []) as List;
 
-    // ✅ Giải mã Base64 nếu có
-    final decoded = msgs.map<Map<String, dynamic>>((m) {
+    return msgs.map<Map<String, dynamic>>((m) {
       final msg = Map<String, dynamic>.from(m);
       final raw = msg['text'] ?? '';
-      try {
-        if (raw is String && raw.isNotEmpty) {
-          final timeKey = msg['time']?.toString() ?? '';
-          msg['text'] = MessageDecryptor.decryptAES128ECB(raw, timeKey);
-        }
+      if (raw is! String || raw.isEmpty) return msg;
 
+      try {
+        final timeKey = msg['time']?.toString() ?? '';
+        msg['text'] = MessageDecryptor.decryptAES128ECB(raw, timeKey);
       } catch (_) {
-        msg['text'] = raw;
+        try {
+          msg['text'] = utf8.decode(base64.decode(raw));
+        } catch (_) {
+          msg['text'] = raw;
+        }
       }
       return msg;
     }).toList();
-
-    return decoded;
   }
 
   /// 🚀 Gửi tin nhắn nhóm (text / image)
   Future<void> sendMessage({
-    required String accessToken,
     required String groupId,
     required String text,
     String? imageUrl,
   }) async {
+    final accessToken = await _getAccessToken();
+
     final uri =
         Uri.parse('$_base${WowonderAPI.groupChat}?access_token=$accessToken');
     final body = {
@@ -121,18 +132,19 @@ class GroupChatRepository {
       'type': 'send',
       'id': groupId,
       'text': text,
-      'message_type': 'code', // ⚠️ quan trọng
+      'message_type': 'code', // ⚠️ "code" để WoWonder hiểu là tin mã hóa
     };
+
     if (imageUrl != null && imageUrl.isNotEmpty) {
       body['image_url'] = imageUrl;
     }
 
     final res = await http.post(uri, body: body);
     if (res.statusCode != 200) throw Exception('Lỗi mạng (${res.statusCode})');
-    final data = json.decode(res.body);
 
+    final data = json.decode(res.body);
     if (data['api_status'] != 200) {
-      throw Exception('Gửi tin nhắn thất bại');
+      throw Exception(data['errors']?['error_text'] ?? 'Gửi tin nhắn thất bại');
     }
   }
 }
