@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:ui';
-
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_repository.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/chat_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_repository_ext.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/dimensions.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/edit_profile_screen.dart';
@@ -550,40 +554,49 @@ class _ProfileHeaderSection extends StatelessWidget {
               ] else ...[
                 // =========== TRANG CỦA NGƯỜI KHÁC ===========
 
+                // =========== TRANG CỦA NGƯỜI KHÁC ===========
                 Row(
                   children: [
                     // THEO DÕI / ĐANG THEO DÕI
                     Expanded(
                       flex: 3,
-                      child: FilledButton.icon(
-                        onPressed: () {
-                          // TODO: follow/unfollow
+                      child: Consumer<SocialController>(
+                        builder: (context, sc, __) {
+                          final bool busy = sc.isFollowBusy(user.id);
+                          // lấy trạng thái follow mới nhất (controller sẽ cập nhật profileHeaderUser)
+                          final bool following =
+                          sc.profileHeaderUser?.id == user.id
+                              ? (sc.profileHeaderUser?.isFollowing ?? user.isFollowing)
+                              : user.isFollowing;
+
+                          return FilledButton.icon(
+                            onPressed: busy
+                                ? null
+                                : () async {
+                              // gọi toggle trong controller: sẽ khóa nút, gọi API và cập nhật header
+                              await context
+                                  .read<SocialController>()
+                                  .toggleFollowUser();
+                            },
+                            icon: busy
+                                ? const SizedBox(
+                              width: 16, height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                                : Icon(following ? Icons.check : Icons.person_add_alt_1, size: 18),
+                            label: Text(
+                              following ? 'Đang theo dõi' : 'Theo dõi',
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
+                            ),
+                            style: FilledButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                              elevation: 1,
+                            ),
+                          );
                         },
-                        icon: Icon(
-                          user.isFollowing
-                              ? Icons.check
-                              : Icons.person_add_alt_1,
-                          size: 18,
-                        ),
-                        label: Text(
-                          user.isFollowing ? 'Đang theo dõi' : 'Theo dõi',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13.5,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 16,
-                            horizontal: 12,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          elevation: 1,
-                        ),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -592,37 +605,49 @@ class _ProfileHeaderSection extends StatelessWidget {
                     Expanded(
                       flex: 2,
                       child: OutlinedButton.icon(
-                        onPressed: () {
-                          // TODO: mở chat với user.id
+                        onPressed: () async {
+                          // Lấy access token từ SharedPreferences
+                          final sp = await SharedPreferences.getInstance();
+                          final token = sp.getString(AppConstants.socialAccessToken);
+
+                          if (token == null || token.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Bạn chưa đăng nhập MXH')),
+                            );
+                            return;
+                          }
+
+                          // Điều hướng sang ChatScreen với đúng người nhận
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ChatScreen(
+                                peerUserId : user.id, // đảm bảo là String, nếu int: user.id.toString()
+                                accessToken: token,
+                                peerName      : user.displayName ?? user.userName ?? 'Đoạn chat',
+                                peerAvatar     : user.avatarUrl,
+                              ),
+                            ),
+                          );
                         },
                         icon: const Icon(Icons.chat_bubble_outline, size: 18),
                         label: const Text(
                           'Nhắn tin',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13.5,
-                          ),
+                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
                         ),
                         style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 14,
-                            horizontal: 12,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          side: BorderSide(
-                            color: theme.dividerColor,
-                            width: 1.2,
-                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                          side: BorderSide(color: Theme.of(context).dividerColor, width: 1.2),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
 
+                    const SizedBox(width: 10),
                     const _MoreCircleButton(),
                   ],
                 ),
+
               ],
             ],
           ),

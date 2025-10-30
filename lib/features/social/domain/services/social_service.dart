@@ -555,6 +555,143 @@ class SocialService implements SocialServiceInterface {
     return null;
   }
 
+  //30/10 thêm service follow
+  // social_service.dart
+  @override
+  Future<bool> toggleFollow({required String targetUserId}) async {
+    final resp = await socialRepository.toggleFollow(targetUserId: targetUserId);
+
+    if (resp.isSuccess && resp.response != null) {
+      final data = resp.response!.data;
+      final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
+      if (status == 200) {
+        final String raw = '${data?['follow_status'] ?? ''}'.toLowerCase().trim();
+
+        // API của bạn trả "followed" | "unfollowed"
+        switch (raw) {
+          case 'followed':
+            return true;   // đang follow
+          case 'unfollowed':
+            return false;  // đã hủy follow
+          default:
+          // fallback an toàn nếu server đổi format
+            throw Exception('Unknown follow_status: $raw');
+        }
+      }
+
+      final msg = (data?['errors']?['error_text'] ??
+          data?['message'] ?? 'Toggle follow failed').toString();
+      throw Exception(msg);
+    }
+
+    ApiChecker.checkApi(resp);
+    throw Exception('Toggle follow failed');
+  }
+
+  //edit profile user by aoanhan
+  @override
+  Future<SocialUserProfile> updateDataUser({
+    required String? displayName,
+    String? about,
+    String? genderText,
+    String? birthdayIso,
+    String? address,
+    String? website,
+    String? relationshipText,
+    String? avatarFilePath,
+    String? coverFilePath,
+  }) async {
+    final resp = await socialRepository.updateDataUser(
+      displayName   : displayName,
+      about         : about,
+      genderText    : genderText,
+      birthdayIso   : birthdayIso,
+      address       : address,
+      website       : website,
+      relationshipText: relationshipText,
+      avatarFilePath: avatarFilePath,
+      coverFilePath : coverFilePath,
+    );
+
+    if (resp.isSuccess && resp.response != null) {
+      final data   = resp.response!.data;
+      final status = int.tryParse('${data?['api_status'] ?? data?['status'] ?? 200}') ?? 200;
+      if (status == 200) {
+        // 1) Thử lấy user ngay trong payload (nếu API có trả)
+        final Map<String, dynamic>? userJson = _pickUserJson(data);
+        if (userJson != null) {
+          return SocialUserProfile.fromJson(userJson);
+        }
+
+        // 2) Lấy các field lẻ như avatar/cover nếu có
+        final String? newAvatar = data?['avatar_full'] ?? data?['avatar'];
+        final String? newCover  = data?['cover_full']  ?? data?['cover'];
+
+        // 3) Fallback: refetch profile hiện tại rồi patch các trường vừa cập nhật
+        try {
+          final me = await getCurrentUser(); // trả SocialUser? có id
+          if (me != null && me.id.isNotEmpty) {
+            final bundle = await getUserProfile(targetUserId: me.id);
+            if (bundle.user != null) {
+              final u = bundle.user!;
+              return u.copyWith(
+                displayName: displayName ?? u.displayName,
+                about      : about       ?? u.about,
+                address    : address     ?? u.address,
+                website    : website     ?? u.website,
+                birthday   : birthdayIso ?? u.birthday,
+                genderText : genderText  ?? u.genderText,
+                relationshipStatus: relationshipText ?? u.relationshipStatus,
+                avatarUrl  : newAvatar ?? u.avatarUrl,
+                coverUrl   : newCover  ?? u.coverUrl,
+              );
+            }
+          }
+        } catch (_) {
+          // bỏ qua, dùng bước 4
+        }
+
+        // 4) Last resort: trả bản tối thiểu dựa trên những gì biết được
+        final me = await getCurrentUser();
+        return SocialUserProfile(
+          id: me?.id ?? '',
+          displayName: displayName,
+          about: about,
+          address: address,
+          website: website,
+          birthday: birthdayIso,
+          relationshipStatus: relationshipText,
+          genderText: genderText,
+          avatarUrl: newAvatar,
+          coverUrl : newCover,
+        );
+      }
+
+      final msg = (data?['errors']?['error_text'] ?? data?['message'] ?? 'Update profile failed').toString();
+      throw Exception(msg);
+    }
+    ApiChecker.checkApi(resp);
+    throw Exception('Update profile failed');
+  }
+
+
+  /// Ưu tiên các khoá hay gặp: user_data, user, data.user, data.user_data, data
+  Map<String, dynamic>? _pickUserJson(dynamic root) {
+    final candidates = <dynamic>[
+      root?['user_data'],
+      root?['user'],
+      root?['data']?['user'],
+      root?['data']?['user_data'],
+      root?['data'],
+    ];
+    for (final c in candidates) {
+      if (c is Map<String, dynamic>) return c;
+    }
+    return null;
+  }
+
+
+
   /// Lấy thông tin profile đầy đủ của user (followers, following, liked_pages)
   Future<SocialProfileBundle> getUserProfile({String? targetUserId}) async {
     final apiRes = await socialRepository.fetchUserProfile(

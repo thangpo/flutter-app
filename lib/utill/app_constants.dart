@@ -62,6 +62,10 @@ class AppConstants {
   static const String socialChatGetUserMessagesUri = '/api/get_user_messages';
   static const String socialChatReadChatsUri = '/api/read_chats';
 
+  //follow
+  static const String socialFollowUser='/api/follow-user';
+  static const String socialUpdateDataUser='/api/update-user-data';
+
   static const String googleServerClientId = 'client_id here';
   static const String userId = 'userId';
   static const String name = 'name';
