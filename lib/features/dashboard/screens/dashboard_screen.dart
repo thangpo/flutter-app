@@ -22,8 +22,9 @@ import 'package:flutter_sixvalley_ecommerce/features/home/screens/home_screens.d
 import 'package:flutter_sixvalley_ecommerce/features/more/screens/more_screen_view.dart';
 import 'package:flutter_sixvalley_ecommerce/features/order/screens/order_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/main_home/screens/main_home_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/notifications_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/travel_screen.dart';
 import 'package:provider/provider.dart';
 
@@ -120,7 +121,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       NavigationModel(
           name: 'notifications',
           icon: Images.notification,
-          screen: const InboxScreen(isBackButtonExist: false)),
+          screen: const NotificationsScreen(isBackButtonExist: false)),
 
       // NavigationModel(name: 'inbox', icon: Images.messageImage, screen: const InboxScreen(isBackButtonExist: false)),
       // NavigationModel(name: 'cart', icon: Images.cartArrowDownImage, screen: const CartScreen(showBackButton: false), showCartIcon: true),
