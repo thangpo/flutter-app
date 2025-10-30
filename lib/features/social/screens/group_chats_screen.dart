@@ -16,13 +16,8 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final ctrl = context.read<GroupChatController>();
-      ctrl.loadGroups(widget.accessToken);
+      context.read<GroupChatController>().loadGroups(widget.accessToken);
     });
-  }
-
-  Future<void> _refreshGroups() async {
-    await context.read<GroupChatController>().loadGroups(widget.accessToken);
   }
 
   @override
@@ -37,7 +32,6 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
         ),
         centerTitle: true,
         elevation: 0,
-        backgroundColor: Colors.blueAccent,
       ),
       body: Consumer<GroupChatController>(
         builder: (context, ctrl, _) {
@@ -45,108 +39,77 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (ctrl.groups.isEmpty) {
-            return RefreshIndicator(
-              onRefresh: _refreshGroups,
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: const [
-                  SizedBox(height: 80),
-                  Center(
-                    child: Text(
-                      'Chưa có nhóm nào.',
-                      style: TextStyle(fontSize: 16),
-                    ),
-                  ),
-                ],
-              ),
+          final groups = ctrl.groups;
+          if (groups.isEmpty) {
+            return const Center(
+              child: Text('Chưa tham gia nhóm nào'),
             );
           }
 
           return RefreshIndicator(
-            onRefresh: _refreshGroups,
+            onRefresh: () => ctrl.loadGroups(widget.accessToken),
             child: ListView.separated(
-              physics: const AlwaysScrollableScrollPhysics(),
-              itemCount: ctrl.groups.length,
+              itemCount: groups.length,
               separatorBuilder: (_, __) => Divider(
                 height: 1,
-                color: cs.outlineVariant.withOpacity(.4),
-                indent: 72,
+                color: cs.outlineVariant.withOpacity(.3),
               ),
-              itemBuilder: (context, index) {
-                final g = ctrl.groups[index];
+              itemBuilder: (_, i) {
+                 final group = ctrl.groups[i];
+                final g = groups[i];
+                final groupId = g['group_id']?.toString() ?? '';
+                final groupName = g['group_name'] ?? 'Không tên';
                 final avatar = g['avatar'] ?? '';
-                final name = g['group_name'] ?? 'Nhóm không tên';
-                final lastMsg = g['last_message'] ?? '';
-                final time = g['time_text'] ?? '';
 
-                return InkWell(
+                return ListTile(
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  leading: CircleAvatar(
+                    radius: 26,
+                    backgroundImage:
+                        avatar.isNotEmpty ? NetworkImage(avatar) : null,
+                    backgroundColor: cs.surfaceVariant,
+                    child: avatar.isEmpty
+                        ? Text(
+                            groupName.isNotEmpty ? groupName[0] : '?',
+                            style: TextStyle(
+                                color: cs.onSurface,
+                                fontWeight: FontWeight.bold),
+                          )
+                        : null,
+                  ),
+                  title: Text(
+                    groupName,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: cs.onSurface,
+                      fontSize: 16,
+                    ),
+                  ),
+                  subtitle: Text(
+                    g['time'] != null
+                        ? 'Tạo lúc: ${g['time']}'
+                        : 'Không rõ thời gian',
+                    style: TextStyle(
+                      color: cs.onSurface.withOpacity(.7),
+                      fontSize: 13.5,
+                    ),
+                  ),
                   onTap: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => GroupChatScreen(
                           accessToken: widget.accessToken,
-                          groupId: g['group_id'].toString(),
-                          groupName: name,
+                          groupId: group['group_id'].toString(),
+                          groupName: group['group_name'],
+                          currentUserId:
+                              ctrl.currentUserId ?? '', // 🆕 thêm dòng này
                         ),
                       ),
                     );
+
                   },
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 26,
-                          backgroundImage:
-                              avatar.isNotEmpty ? NetworkImage(avatar) : null,
-                          backgroundColor: cs.surfaceVariant,
-                          child: avatar.isEmpty
-                              ? const Icon(Icons.groups, size: 24)
-                              : null,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                name,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 16,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                lastMsg.isNotEmpty
-                                    ? lastMsg
-                                    : 'Chưa có tin nhắn',
-                                style: TextStyle(
-                                  color: cs.onSurface.withOpacity(.7),
-                                  fontSize: 13.5,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          time,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: cs.onSurface.withOpacity(.6),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 );
               },
             ),
