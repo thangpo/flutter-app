@@ -4,17 +4,13 @@ import 'package:provider/provider.dart';
 import '../controllers/group_chat_controller.dart';
 
 class GroupChatScreen extends StatefulWidget {
-  final String accessToken;
   final String groupId;
   final String groupName;
-  final String currentUserId; // 🆕 thêm để phân biệt ai đang đăng nhập
 
   const GroupChatScreen({
     super.key,
-    required this.accessToken,
     required this.groupId,
     required this.groupName,
-    required this.currentUserId,
   });
 
   @override
@@ -24,14 +20,18 @@ class GroupChatScreen extends StatefulWidget {
 class _GroupChatScreenState extends State<GroupChatScreen> {
   final _inputCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
+  Timer? _autoRefresh;
 
   @override
   void initState() {
     super.initState();
     final ctrl = context.read<GroupChatController>();
-    ctrl
-        .loadMessages(widget.accessToken, widget.groupId)
-        .then((_) => _scrollToBottom());
+    ctrl.loadMessages(widget.groupId).then((_) => _scrollToBottom());
+
+    // 🔁 Tự động reload 5s
+    _autoRefresh = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (mounted) ctrl.loadMessages(widget.groupId);
+    });
   }
 
   void _scrollToBottom() {
@@ -44,6 +44,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
   @override
   void dispose() {
+    _autoRefresh?.cancel();
     _inputCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
@@ -51,8 +52,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final ctrl = context.watch<GroupChatController>();
+    final currentUserId = ctrl.currentUserId ?? '';
+    final cs = Theme.of(context).colorScheme;
 
     final messages = (ctrl.messagesByGroup[widget.groupId] ?? [])
       ..sort((a, b) {
@@ -69,12 +71,13 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
+        elevation: 0.5,
       ),
       body: Column(
         children: [
           // 🧱 Danh sách tin nhắn
           Expanded(
-            child: ctrl.messagesLoading
+            child: ctrl.messagesLoading && messages.isEmpty
                 ? const Center(child: CircularProgressIndicator())
                 : ListView.builder(
                     controller: _scrollCtrl,
@@ -92,10 +95,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                       final time =
                           DateTime.fromMillisecondsSinceEpoch(timeInt * 1000);
 
-                      final isMine =
-                          userId == widget.currentUserId || userId == 'me';
+                      final isMine = userId == currentUserId || userId == 'me';
 
-                      // 🧩 Kiểm tra tin trước để gộp nhóm
+                      // Gộp tin cùng người
                       bool showAvatar = true;
                       if (i > 0) {
                         final prev = messages[i - 1];
@@ -124,6 +126,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                           children: [
                             if (showAvatar && !isMine)
                               Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
                                   CircleAvatar(
                                     radius: 18,
@@ -140,13 +143,17 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                                         : null,
                                   ),
                                   const SizedBox(width: 8),
-                                  Text(username,
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        color: cs.onSurface.withOpacity(0.7),
-                                      )),
+                                  Text(
+                                    username,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: cs.onSurface.withOpacity(0.7),
+                                    ),
+                                  ),
                                 ],
                               ),
+
+                            // 💬 Bong bóng tin nhắn
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               mainAxisAlignment: isMine
@@ -157,55 +164,54 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                                 Flexible(
                                   child: Container(
                                     margin: EdgeInsets.only(
-                                        left: isMine ? 60 : 0,
-                                        right: isMine ? 0 : 60),
+                                      left: isMine ? 80 : 0,
+                                      right: isMine ? 8 : 80,
+                                    ),
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 12, vertical: 8),
                                     decoration: BoxDecoration(
                                       color: isMine
-                                          ? Colors.blue[200]
+                                          ? Colors.blue[600]
                                           : Colors.white,
                                       borderRadius: BorderRadius.only(
-                                        topLeft: const Radius.circular(14),
-                                        topRight: const Radius.circular(14),
+                                        topLeft: const Radius.circular(16),
+                                        topRight: const Radius.circular(16),
                                         bottomLeft: isMine
-                                            ? const Radius.circular(14)
-                                            : Radius.zero,
+                                            ? const Radius.circular(16)
+                                            : const Radius.circular(4),
                                         bottomRight: isMine
-                                            ? Radius.zero
-                                            : const Radius.circular(14),
+                                            ? const Radius.circular(4)
+                                            : const Radius.circular(16),
                                       ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.05),
-                                          blurRadius: 3,
-                                          offset: const Offset(0, 1),
-                                        )
-                                      ],
                                     ),
                                     child: Text(
                                       text,
                                       style: TextStyle(
                                         fontSize: 15,
                                         color: isMine
-                                            ? Colors.black87
-                                            : cs.onSurface,
+                                            ? Colors.white
+                                            : Colors.black87,
+                                        height: 1.4,
                                       ),
                                     ),
                                   ),
                                 ),
-                                if (isMine) const SizedBox(width: 40),
                               ],
                             ),
+
+                            // ⏰ Thời gian
                             if (showTime)
                               Padding(
-                                padding: const EdgeInsets.only(
-                                    top: 3, left: 10, right: 10),
+                                padding: EdgeInsets.only(
+                                  top: 3,
+                                  right: isMine ? 12 : 0,
+                                  left: isMine ? 0 : 50,
+                                ),
                                 child: Text(
                                   "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}",
                                   style: TextStyle(
                                     fontSize: 11,
-                                    color: cs.onSurface.withOpacity(0.6),
+                                    color: cs.onSurface.withOpacity(0.5),
                                   ),
                                 ),
                               ),
@@ -216,7 +222,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                   ),
           ),
 
-          // 🧩 Khung nhập tin nhắn
+          // ✏️ Ô nhập tin nhắn
           SafeArea(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -255,8 +261,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                     onPressed: () async {
                       final text = _inputCtrl.text.trim();
                       if (text.isEmpty) return;
-                      await ctrl.sendMessage(
-                          widget.accessToken, widget.groupId, text);
+                      await ctrl.sendMessage(widget.groupId, text);
                       _inputCtrl.clear();
                       _scrollToBottom();
                     },
