@@ -61,8 +61,26 @@ class _LiveScreenState extends State<LiveScreen> {
       ),
     );
 
+    // ✅ Bật video và đặt vai trò phát sóng
     await _engine!.enableVideo();
     await _engine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
+
+    // ✅ Cấu hình hướng hiển thị (sửa lỗi xoay ngược)
+    await _engine!.setVideoEncoderConfiguration(
+      const VideoEncoderConfiguration(
+        dimensions: VideoDimensions(width: 720, height: 1280),
+        orientationMode: OrientationMode.orientationModeFixedPortrait,
+        mirrorMode: VideoMirrorModeType.videoMirrorModeEnabled,
+      ),
+    );
+
+    // ✅ Thiết lập khung video cục bộ (local)
+    await _engine!.setupLocalVideo(const VideoCanvas(
+      uid: 0,
+      mirrorMode: VideoMirrorModeType.videoMirrorModeEnabled,
+      renderMode: RenderModeType.renderModeHidden,
+    ));
+
     await _engine!.startPreview();
 
     print('🎫 [DEBUG] Token đang dùng joinChannel: $_currentToken');
@@ -73,8 +91,8 @@ class _LiveScreenState extends State<LiveScreen> {
       uid: 316,
       options: const ChannelMediaOptions(
         clientRoleType: ClientRoleType.clientRoleBroadcaster,
-        publishCameraTrack: true, // ✅ đảm bảo phát hình
-        publishMicrophoneTrack: true, // ✅ đảm bảo có tiếng
+        publishCameraTrack: true,
+        publishMicrophoneTrack: true,
       ),
     );
   }
@@ -89,43 +107,43 @@ class _LiveScreenState extends State<LiveScreen> {
       );
 
       final res = await http.post(url, body: {
-        'server_key': 'f6e69c898ddd643154c9bd4b152555842e26a868-d195c100005dddb9f1a30a67a5ae42d4-19845955',
+        'server_key':
+        'f6e69c898ddd643154c9bd4b152555842e26a868-d195c100005dddb9f1a30a67a5ae42d4-19845955',
         'channelName': widget.channelName,
         'uid': '316',
         'role': 'publisher',
       });
+
       print('🎫 Channel join: ${widget.channelName}');
       final rawBody = res.body;
       print('🧾 [DEBUG] Raw response from server:\n$rawBody');
 
-// 🧹 Làm sạch phản hồi JSON (cắt bỏ [] và ký tự thừa ở cuối)
       String cleanBody = rawBody
-          .replaceAll(RegExp(r'[\r\n]+'), '') // bỏ xuống dòng
-          .replaceAll(RegExp(r'\s+'), ' ') // bỏ khoảng trắng dư
-          .replaceAll(RegExp(r'\}\s*\[\]\s*$'), '}') // bỏ pattern "} []"
+          .replaceAll(RegExp(r'[\r\n]+'), '')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .replaceAll(RegExp(r'\}\s*\[\]\s*$'), '}')
           .trim();
 
       print('🧩 [DEBUG] Cleaned JSON body:\n$cleanBody');
 
-// ✅ Thử parse an toàn
       Map<String, dynamic>? jsonData;
       try {
         jsonData = jsonDecode(cleanBody);
-        // ✅ Kiểm tra có token thật sự hay không
-        final token = jsonData!['token_agora']?.toString();
+        final token = (jsonData != null && jsonData is Map<String, dynamic>)
+            ? jsonData['token_agora']?.toString()
+            : null;
+
         if (token != null && token.isNotEmpty) {
           print('🎫 Token Agora mới: $token');
           setState(() => _currentToken = token);
-          await _initAgora(); // 🔥 Bắt đầu joinChannel với token thật
+          await _initAgora();
         } else {
           _showMsg('Không thể lấy token hợp lệ từ server');
         }
-
       } on FormatException catch (e) {
         print('❌ [DEBUG] FormatException khi parse JSON: $e');
         print('❌ [DEBUG] Raw (lỗi) JSON content:\n$cleanBody');
 
-        // Nếu vẫn lỗi, thử regex tìm phần JSON hợp lệ trong chuỗi
         final match = RegExp(r'\{.*\}').firstMatch(cleanBody);
         if (match != null) {
           final jsonPart = match.group(0)!;
@@ -146,8 +164,6 @@ class _LiveScreenState extends State<LiveScreen> {
         _showMsg('Không thể xử lý phản hồi từ server');
         return;
       }
-
-
     } catch (e) {
       _showMsg('Lỗi tạo token: $e');
     } finally {

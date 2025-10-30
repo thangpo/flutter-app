@@ -2,6 +2,7 @@
 import 'package:provider/provider.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_group_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
@@ -59,8 +60,7 @@ class _SocialGroupsScreenState extends State<SocialGroupsScreen>
   }
 
   Future<void> _openCreateGroup() async {
-    final SocialGroup? created =
-        await Navigator.of(context).push<SocialGroup>(
+    final SocialGroup? created = await Navigator.of(context).push<SocialGroup>(
       MaterialPageRoute<SocialGroup>(
         builder: (_) => const SocialGroupFormScreen(),
         fullscreenDialog: true,
@@ -69,9 +69,7 @@ class _SocialGroupsScreenState extends State<SocialGroupsScreen>
 
     if (!mounted || created == null) return;
 
-    await context
-        .read<SocialController>()
-        .loadUserGroups(forceRefresh: true);
+    await context.read<SocialController>().loadUserGroups(forceRefresh: true);
 
     if (!mounted) return;
 
@@ -175,69 +173,86 @@ class _SocialGroupsScreenState extends State<SocialGroupsScreen>
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final controller = context.watch<SocialController>();
-    final List<SocialGroup> groups = controller.suggestedGroups;
+    final List<SocialGroup> groups = controller.suggestedGroups
+        .where((group) => !group.isJoined && group.joinRequestStatus != 2)
+        .toList();
     final bool loading = controller.loadingSuggestedGroups;
 
-    return ListView(
-      padding: const EdgeInsets.all(12),
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Text(
-            'Gợi ý cho bạn',
-            style: theme.textTheme.titleMedium?.copyWith(
-                  color: colorScheme.onSurface,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ) ??
-                TextStyle(
-                  color: colorScheme.onSurface,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-          ),
-        ),
-        if (loading && groups.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 48),
-            child: Center(child: CircularProgressIndicator()),
-          ),
-        if (!loading && groups.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: theme.cardColor,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: colorScheme.outline.withValues(alpha: 0.12),
-              ),
-            ),
+    return RefreshIndicator(
+      onRefresh: () => context
+          .read<SocialController>()
+          .loadSuggestedGroups(forceRefresh: true),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(12),
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
             child: Text(
-              'Chưa có nhóm nào để gợi ý.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurface.withValues(alpha: 0.7),
+              'Gợi ý cho bạn',
+              style: theme.textTheme.titleMedium?.copyWith(
+                    color: colorScheme.onSurface,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
                   ) ??
                   TextStyle(
-                    color: colorScheme.onSurface.withValues(alpha: 0.7),
-                    fontSize: 13,
+                    color: colorScheme.onSurface,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
                   ),
             ),
           ),
-        if (groups.isNotEmpty)
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 0.85,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
+          if (loading && groups.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 48),
+              child: Center(child: CircularProgressIndicator()),
             ),
-            itemCount: groups.length,
-            itemBuilder: (context, index) =>
-                _buildGroupCard(context, groups[index]),
-          ),
-      ],
+          if (!loading && groups.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: theme.cardColor,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: colorScheme.outline.withValues(alpha: 0.12),
+                ),
+              ),
+              child: Text(
+                'Chưa có nhóm nào gợi ý',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurface.withValues(alpha: 0.7),
+                    ) ??
+                    TextStyle(
+                      color: colorScheme.onSurface.withValues(alpha: 0.7),
+                      fontSize: 13,
+                    ),
+              ),
+            ),
+          if (loading && groups.isNotEmpty)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: LinearProgressIndicator(minHeight: 2),
+            ),
+          if (groups.isNotEmpty)
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: 0.85,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+              ),
+              itemCount: groups.length,
+              itemBuilder: (context, index) {
+                final group = groups[index];
+                return Builder(
+                  builder: (innerCtx) => _buildGroupCard(innerCtx, group),
+                );
+              },
+            ),
+        ],
+      ),
     );
   }
 
@@ -262,6 +277,14 @@ class _SocialGroupsScreenState extends State<SocialGroupsScreen>
         : group.name;
     final String subtitle = _buildGroupSubtitle(group);
 
+    final bool isJoining = context.select<SocialGroupController, bool>(
+      (controller) => controller.joiningGroup(group.id),
+    );
+    final bool isJoined = group.isJoined || group.isOwner;
+    final bool pendingApproval =
+        !isJoined && (group.joinRequestStatus == 2 || group.requiresApproval);
+    final bool disableJoin = isJoining || isJoined || pendingApproval;
+
     void openGroupDetail() {
       Navigator.of(context).push(
         MaterialPageRoute(
@@ -272,6 +295,61 @@ class _SocialGroupsScreenState extends State<SocialGroupsScreen>
         ),
       );
     }
+
+    Future<void> handleJoin() async {
+      final SocialGroupController groupController =
+          context.read<SocialGroupController>();
+      final SocialController socialController =
+          context.read<SocialController>();
+      try {
+        final SocialGroup? updated = await groupController.joinGroup(group.id);
+        if (!mounted) return;
+        socialController.removeSuggestedGroupById(group.id);
+        await socialController.loadUserGroups(forceRefresh: true);
+        final SocialGroup effective = updated ?? group;
+        final bool approvalNeeded =
+            effective.joinRequestStatus == 2 || effective.requiresApproval;
+        final String message = approvalNeeded
+            ? 'Join request submitted for approval'
+            : 'Joined group successfully';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: colorScheme.error,
+          ),
+        );
+      }
+    }
+
+    final String buttonLabel = isJoined
+        ? 'Da tham gia'
+        : (pendingApproval ? 'Dang cho duyet' : 'Tham gia');
+    final Widget buttonChild = isJoining
+        ? SizedBox(
+            height: 16,
+            width: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(colorScheme.onPrimary),
+            ),
+          )
+        : Text(
+            buttonLabel,
+            style: theme.textTheme.labelLarge?.copyWith(
+                  color: colorScheme.onPrimary,
+                  fontWeight: FontWeight.w600,
+                ) ??
+                TextStyle(
+                  color: colorScheme.onPrimary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+          );
 
     return Material(
       color: Colors.transparent,
@@ -354,7 +432,7 @@ class _SocialGroupsScreenState extends State<SocialGroupsScreen>
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: openGroupDetail,
+                        onPressed: disableJoin ? null : handleJoin,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: colorScheme.primary,
                           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -362,18 +440,7 @@ class _SocialGroupsScreenState extends State<SocialGroupsScreen>
                             borderRadius: BorderRadius.circular(6),
                           ),
                         ),
-                        child: Text(
-                          'Tham gia',
-                          style: theme.textTheme.labelLarge?.copyWith(
-                                color: colorScheme.onPrimary,
-                                fontWeight: FontWeight.w600,
-                              ) ??
-                              TextStyle(
-                                color: colorScheme.onPrimary,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                        ),
+                        child: buttonChild,
                       ),
                     ),
                   ],
@@ -387,15 +454,15 @@ class _SocialGroupsScreenState extends State<SocialGroupsScreen>
   }
 
   String _buildGroupSubtitle(SocialGroup group) {
-    final String privacy = (group.privacy ?? '').toLowerCase();
-    final bool isPrivate = privacy == '1' ||
+    final String privacy = (group.privacy ?? '').trim().toLowerCase();
+    final bool isPrivate = privacy == '2' ||
         privacy.contains('private') ||
-        privacy.contains('riêng');
-    final String privacyLabel = isPrivate ? 'Nhóm riêng tư' : 'Nhóm công khai';
+        privacy.contains('closed');
+    final String privacyLabel = isPrivate ? 'Private group' : 'Public group';
     final int count = group.memberCount;
     final String memberLabel =
-        count > 0 ? '$count thành viên' : 'Chưa có thành viên';
-    return '$privacyLabel • $memberLabel';
+        count > 0 ? '${count} members' : 'No members yet';
+    return '$privacyLabel | $memberLabel';
   }
 
   Widget _buildYourGroupsTab(BuildContext context) {
@@ -480,14 +547,16 @@ class _SocialGroupsScreenState extends State<SocialGroupsScreen>
                 spacing: 12,
                 runSpacing: 12,
                 children: [
-                  const _QuickAction(icon: Icons.explore, label: 'Tìm nhóm mới'),
+                  const _QuickAction(
+                      icon: Icons.explore, label: 'Tìm nhóm mới'),
                   _QuickAction(
                     icon: Icons.group_add,
                     label: 'Tạo nhóm',
                     onTap: _openCreateGroup,
                   ),
                   const _QuickAction(icon: Icons.bookmark, label: 'Đã lưu'),
-                  const _QuickAction(icon: Icons.settings, label: 'Cài đặt nhóm'),
+                  const _QuickAction(
+                      icon: Icons.settings, label: 'Cài đặt nhóm'),
                 ],
               ),
             ],
