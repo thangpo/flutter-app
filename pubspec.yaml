@@ -71,7 +71,7 @@ dependencies:
   dropdown_button2: ^2.3.9
   gradient_borders: ^1.0.0
   flutter_spinkit: ^5.2.1
-  open_file: ^3.5.10
+  open_filex: ^4.4.0
   flutter_pdfview: ^1.2.7
   readmore: ^3.0.0
   open_file_manager: ^1.0.2
