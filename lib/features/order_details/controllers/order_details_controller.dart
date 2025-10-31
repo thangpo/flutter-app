@@ -14,7 +14,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:open_file/open_file.dart';
+// import 'package:open_file/open_file.dart';
+import 'package:open_filex/open_filex.dart';
+
 import 'package:open_file_manager/open_file_manager.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
@@ -106,7 +108,9 @@ class OrderDetailsController with ChangeNotifier {
 
       final file = File(filePath);
       await file.writeAsBytes(intList);
-      await OpenFile.open(filePath);
+      // await OpenFile.open(filePath);
+      await OpenFilex.open(filePath);
+
       showCustomSnackBar(getTranslated('invoice_downloaded_successfully', context), context, isError: false);
     } else {
       showCustomSnackBar(getTranslated('invoice_download_failed', context), context);
@@ -278,7 +282,7 @@ class OrderDetailsController with ChangeNotifier {
          showCustomSnackBar(getTranslated('product_downloaded_successfully', Get.context!), Get.context!, isError: false);
        }
        _isDownloaodLoading = false;
-       await OpenFile.open(filePathName);
+       await OpenFilex.open(filePathName);
        Navigator.of(Get.context!).pop();
 
      } else {
