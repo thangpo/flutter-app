@@ -10,7 +10,6 @@ import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/widget
 
 
 
-
 class TravelScreen extends StatelessWidget {
   final bool isBackButtonExist;
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import '../services/hotel_service.dart';
 import '../screens/hotel_detail_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/hotel_flip_transition.dart';
 
 class HotelListWidget extends StatefulWidget {
   const HotelListWidget({super.key});
@@ -63,28 +64,18 @@ class _HotelListWidgetState extends State<HotelListWidget>
             ).createShader(bounds),
             child: Text(
               getTranslated("featured_hotels", context) ?? "Khách sạn nổi bật",
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
             ),
           ),
           const SizedBox(height: 16),
 
           _isLoading
-              ? _buildSkeletonLoader()
+              ? const _SkeletonHotelList()
               : _hotels.isEmpty
               ? _buildEmptyState()
               : _buildHotelList(isDark),
         ],
       ),
-    );
-  }
-
-  Widget _buildSkeletonLoader() {
-    return Column(
-      children: List.generate(3, (_) => const _SkeletonHotelCard()),
     );
   }
 
@@ -121,8 +112,7 @@ class _HotelListWidgetState extends State<HotelListWidget>
             return FadeTransition(
               opacity: animation,
               child: SlideTransition(
-                position: Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero)
-                    .animate(animation),
+                position: Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(animation),
                 child: _HotelCardItem(hotel: hotel, isDark: isDark),
               ),
             );
@@ -133,6 +123,7 @@ class _HotelListWidgetState extends State<HotelListWidget>
   }
 }
 
+// === HOTEL CARD ===
 class _HotelCardItem extends StatefulWidget {
   final dynamic hotel;
   final bool isDark;
@@ -170,8 +161,8 @@ class _HotelCardItemState extends State<_HotelCardItem> {
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (context) => HotelDetailScreen(slug: widget.hotel['slug']),
+          IOSAppOpenTransition(
+            page: HotelDetailScreen(slug: widget.hotel['slug']),
           ),
         );
       },
@@ -185,16 +176,8 @@ class _HotelCardItemState extends State<_HotelCardItem> {
             borderRadius: BorderRadius.circular(20),
             color: widget.isDark ? const Color(0xFF2A2A2A) : Colors.white,
             boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-              BoxShadow(
-                color: Colors.blue.withOpacity(_isTapped ? 0.6 : 0.3),
-                blurRadius: _isTapped ? 30 : 20,
-                spreadRadius: _isTapped ? 2 : 0,
-              ),
+              BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 20, offset: const Offset(0, 8)),
+              BoxShadow(color: Colors.blue.withOpacity(_isTapped ? 0.6 : 0.3), blurRadius: _isTapped ? 30 : 20, spreadRadius: _isTapped ? 2 : 0),
             ],
           ),
           child: ClipRRect(
@@ -205,10 +188,7 @@ class _HotelCardItemState extends State<_HotelCardItem> {
                   height: 100,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [
-                        Colors.blue.withOpacity(0.05),
-                        Colors.transparent,
-                      ],
+                      colors: [Colors.blue.withOpacity(0.05), Colors.transparent],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
@@ -242,13 +222,8 @@ class _HotelCardItemState extends State<_HotelCardItem> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              widget.hotel['title'] ??
-                                  getTranslated("no_title", context) ??
-                                  "Không có tiêu đề",
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
+                              widget.hotel['title'] ?? getTranslated("no_title", context) ?? "Không có tiêu đề",
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -272,11 +247,7 @@ class _HotelCardItemState extends State<_HotelCardItem> {
                                 const SizedBox(width: 8),
                                 Text(
                                   widget.hotel['review_score'] ?? '0.0',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.grey[700],
-                                    fontSize: 14,
-                                  ),
+                                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey[700], fontSize: 14),
                                 ),
                               ],
                             )
@@ -286,18 +257,12 @@ class _HotelCardItemState extends State<_HotelCardItem> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Colors.blue, Colors.purple],
-                          ),
+                          gradient: const LinearGradient(colors: [Colors.blue, Colors.purple]),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
                           "${widget.hotel['price'] ?? '??'} ₫",
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                         ),
                       ),
                     ],
@@ -312,6 +277,18 @@ class _HotelCardItemState extends State<_HotelCardItem> {
   }
 }
 
+// === SKELETON LOADING ===
+class _SkeletonHotelList extends StatelessWidget {
+  const _SkeletonHotelList();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: List.generate(3, (_) => const _SkeletonHotelCard()),
+    );
+  }
+}
+
 class _SkeletonHotelCard extends StatelessWidget {
   const _SkeletonHotelCard();
 
@@ -319,44 +296,100 @@ class _SkeletonHotelCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10),
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 20, offset: const Offset(0, 8))],
       ),
-      child: Row(
-        children: [
-          _shimmer(Container(width: 76, height: 76, color: Colors.grey[300])),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _shimmer(Container(width: 180, height: 16, color: Colors.grey[300])),
-                const SizedBox(height: 8),
-                _shimmer(Container(width: 120, height: 12, color: Colors.grey[300])),
-                const SizedBox(height: 12),
-                _shimmer(Container(width: 80, height: 12, color: Colors.grey[300])),
-              ],
-            ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              _ShimmerBox(height: 76, width: 76, borderRadius: 16),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _ShimmerBox(height: 16, width: 180),
+                    const SizedBox(height: 8),
+                    _ShimmerBox(height: 12, width: 120),
+                    const SizedBox(height: 12),
+                    _ShimmerBox(height: 12, width: 80),
+                  ],
+                ),
+              ),
+              _ShimmerBox(height: 32, width: 70, borderRadius: 20),
+            ],
           ),
-          _shimmer(Container(width: 60, height: 30, color: Colors.grey[300])),
-        ],
+        ),
       ),
     );
   }
+}
 
-  Widget _shimmer(Widget child) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 1000),
+// === SHIMMER BOX ===
+class _ShimmerBox extends StatelessWidget {
+  final double height;
+  final double width;
+  final double borderRadius;
+
+  const _ShimmerBox({required this.height, required this.width, this.borderRadius = 4});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: height,
+      width: width,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: child is Container ? (child).color : Colors.grey[300],
+        color: Colors.grey[300],
+        borderRadius: BorderRadius.circular(borderRadius),
       ),
-      child: child,
+      child: const _Shimmer(),
+    );
+  }
+}
+
+// === SHIMMER EFFECT ===
+class _Shimmer extends StatefulWidget {
+  const _Shimmer();
+
+  @override
+  State<_Shimmer> createState() => _ShimmerState();
+}
+
+class _ShimmerState extends State<_Shimmer> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (_, __) {
+        return Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment(-1.0 + _controller.value * 3, 0),
+              end: Alignment(1.0 + _controller.value * 3, 0),
+              colors: [Colors.transparent, Colors.white.withOpacity(0.4), Colors.transparent],
+            ),
+          ),
+        );
+      },
     );
   }
 }
