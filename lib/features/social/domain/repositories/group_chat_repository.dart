@@ -1,150 +1,265 @@
+// G:\flutter-app\lib\features\social\domain\repositories\group_chat_repository.dart
+
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/constants/wowonder_api.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/utils/message_decryptor.dart';
 
 class GroupChatRepository {
-  final String _base = AppConstants.socialBaseUrl;
-  final String _serverKey = AppConstants.socialServerKey;
+  GroupChatRepository();
 
-  /// 🧩 Lấy access token hiện tại của user
-  Future<String> _getAccessToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString(AppConstants.socialAccessToken);
+  Future<String> _getAccessTokenOrThrow() async {
+    final sp = await SharedPreferences.getInstance();
+    final token = sp.getString(AppConstants.socialAccessToken);
     if (token == null || token.isEmpty) {
-      throw Exception('❌ Chưa đăng nhập mạng xã hội');
+      throw Exception('Chưa đăng nhập mạng xã hội');
     }
     return token;
   }
 
-  /// 🧱 Lấy danh sách nhóm chat
-  Future<List<Map<String, dynamic>>> fetchGroups() async {
-    final accessToken = await _getAccessToken();
+  String _groupChatEndpoint() {
+    final base = AppConstants.socialBaseUrl.endsWith('/')
+        ? AppConstants.socialBaseUrl
+            .substring(0, AppConstants.socialBaseUrl.length - 1)
+        : AppConstants.socialBaseUrl;
+    return '$base/api/group_chat';
+  }
 
-    final uri =
-        Uri.parse('$_base${WowonderAPI.groupChat}?access_token=$accessToken');
-    final res = await http.post(uri, body: {
-      'server_key': _serverKey,
-      'type': 'get_list',
-    });
-
-    if (res.statusCode != 200) {
-      throw Exception('Lỗi mạng (${res.statusCode})');
-    }
-
-    final data = json.decode(res.body);
-    if (data['api_status'] == 200 && data['data'] is List) {
-      return List<Map<String, dynamic>>.from(data['data']);
-    } else {
-      throw Exception(
-          data['errors']?['error_text'] ?? 'Không thể lấy danh sách nhóm');
+  String _fieldNameFor(String? type) {
+    switch (type) {
+      case 'image':
+        return 'image';
+      case 'video':
+        return 'video';
+      case 'voice':
+        return 'audio';
+      default:
+        return 'file';
     }
   }
 
-  /// 🧩 Tạo nhóm chat mới
+  MediaType? _contentTypeFor(String filePath) {
+    final ext = p.extension(filePath).toLowerCase();
+    switch (ext) {
+      case '.jpg':
+      case '.jpeg':
+        return MediaType('image', 'jpeg');
+      case '.png':
+        return MediaType('image', 'png');
+      case '.gif':
+        return MediaType('image', 'gif');
+      case '.webp':
+        return MediaType('image', 'webp');
+      case '.mp4':
+        return MediaType('video', 'mp4');
+      case '.mov':
+        return MediaType('video', 'quicktime');
+      case '.mkv':
+        return MediaType('video', 'x-matroska');
+      case '.m4a':
+        return MediaType('audio', 'mp4');
+      case '.aac':
+        return MediaType('audio', 'aac');
+      case '.mp3':
+        return MediaType('audio', 'mpeg');
+      case '.wav':
+        return MediaType('audio', 'wav');
+      case '.pdf':
+        return MediaType('application', 'pdf');
+      default:
+        return null;
+    }
+  }
+
+  // -------------------- Groups --------------------
+
+  Future<List<Map<String, dynamic>>> fetchGroups() async {
+    final token = await _getAccessTokenOrThrow();
+    final uri = Uri.parse('${_groupChatEndpoint()}?access_token=$token');
+
+    final res = await http.post(
+      uri,
+      body: {
+        'server_key': AppConstants.socialServerKey,
+        'type': 'get_list',
+      },
+    ).timeout(const Duration(seconds: 25));
+
+    if (res.statusCode != 200) {
+      throw Exception('Không lấy được danh sách nhóm (HTTP ${res.statusCode})');
+    }
+    final json = jsonDecode(res.body);
+    if (json['api_status'] != 200) {
+      throw Exception(
+          'Không lấy được danh sách nhóm: ${json['errors'] ?? res.body}');
+    }
+    final data = (json['data'] ?? []) as List;
+    return data.cast<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
   Future<bool> createGroup({
     required String name,
     required List<String> memberIds,
     File? avatarFile,
   }) async {
-    final accessToken = await _getAccessToken();
+    final token = await _getAccessTokenOrThrow();
+    final uri = Uri.parse('${_groupChatEndpoint()}?access_token=$token');
 
-    final uri =
-        Uri.parse('$_base${WowonderAPI.groupChat}?access_token=$accessToken');
-    final req = http.MultipartRequest('POST', uri)
-      ..fields['server_key'] = _serverKey
-      ..fields['type'] = 'create'
-      ..fields['group_name'] = name
-      ..fields['parts'] = memberIds.join(',');
+    final req = http.MultipartRequest('POST', uri);
+    req.fields['server_key'] = AppConstants.socialServerKey;
+    req.fields['type'] = 'create';
+    req.fields['group_name'] = name;
+    req.fields['parts'] = memberIds.join(',');
 
     if (avatarFile != null) {
-      final fileName = avatarFile.path.split('/').last;
-      req.files.add(await http.MultipartFile.fromPath('avatar', avatarFile.path,
-          filename: fileName));
+      final ct = _contentTypeFor(avatarFile.path);
+      req.files.add(await http.MultipartFile.fromPath(
+        'avatar',
+        avatarFile.path,
+        contentType: ct,
+        filename: p.basename(avatarFile.path),
+      ));
     }
 
-    final res = await req.send();
-    final body = await res.stream.bytesToString();
-    final data = json.decode(body);
-
-    if (res.statusCode == 200 && data['api_status'] == 200) {
-      return true;
-    } else {
-      throw Exception(data['errors']?['error_text'] ?? 'Tạo nhóm thất bại');
+    final streamed = await req.send().timeout(const Duration(seconds: 40));
+    final body = await streamed.stream.bytesToString();
+    if (streamed.statusCode != 200) {
+      throw Exception('Tạo nhóm thất bại (HTTP ${streamed.statusCode}): $body');
     }
+    final json = jsonDecode(body);
+    if (json['api_status'] != 200) {
+      throw Exception('Tạo nhóm thất bại: ${json['errors'] ?? body}');
+    }
+    return true;
   }
 
-  /// 💬 Lấy tin nhắn trong nhóm (tự động giải mã Base64/AES)
-  Future<List<Map<String, dynamic>>> fetchMessages(String groupId) async {
-    final accessToken = await _getAccessToken();
+  // -------------------- Messages --------------------
 
-    final uri =
-        Uri.parse('$_base${WowonderAPI.groupChat}?access_token=$accessToken');
-    final res = await http.post(uri, body: {
-      'server_key': _serverKey,
-      'type': 'fetch_messages',
-      'id': groupId,
-    });
-
-    if (res.statusCode != 200) throw Exception('Lỗi mạng (${res.statusCode})');
-
-    final data = json.decode(res.body);
-    if (data['api_status'] != 200) {
-      throw Exception('API lỗi: ${data['api_status']}');
-    }
-
-    final msgs = (data['data']?['messages'] ?? []) as List;
-
-    return msgs.map<Map<String, dynamic>>((m) {
-      final msg = Map<String, dynamic>.from(m);
-      final raw = msg['text'] ?? '';
-      if (raw is! String || raw.isEmpty) return msg;
-
-      try {
-        final timeKey = msg['time']?.toString() ?? '';
-        msg['text'] = MessageDecryptor.decryptAES128ECB(raw, timeKey);
-      } catch (_) {
-        try {
-          msg['text'] = utf8.decode(base64.decode(raw));
-        } catch (_) {
-          msg['text'] = raw;
-        }
-      }
-      return msg;
-    }).toList();
-  }
-
-  /// 🚀 Gửi tin nhắn nhóm (text / image)
-  Future<void> sendMessage({
-    required String groupId,
-    required String text,
-    String? imageUrl,
+  Future<List<Map<String, dynamic>>> fetchMessages(
+    String groupId, {
+    int limit = 200,
   }) async {
-    final accessToken = await _getAccessToken();
+    final token = await _getAccessTokenOrThrow();
+    final uri = Uri.parse('${_groupChatEndpoint()}?access_token=$token');
 
-    final uri =
-        Uri.parse('$_base${WowonderAPI.groupChat}?access_token=$accessToken');
+    final res = await http.post(
+      uri,
+      body: {
+        'server_key': AppConstants.socialServerKey,
+        'type': 'get_messages',
+        'id': groupId,
+        'limit': '$limit',
+      },
+    ).timeout(const Duration(seconds: 25));
+
+    if (res.statusCode != 200) {
+      throw Exception('Không lấy được tin nhắn (HTTP ${res.statusCode})');
+    }
+    final json = jsonDecode(res.body);
+    if (json['api_status'] != 200) {
+      throw Exception('Không lấy được tin nhắn: ${json['errors'] ?? res.body}');
+    }
+    final msgs = ((json['data'] ?? {})['messages'] ?? []) as List;
+    return msgs.cast<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> fetchOlderMessages(
+    String groupId, {
+    required String beforeMessageId,
+    int limit = 200,
+  }) async {
+    final token = await _getAccessTokenOrThrow();
+    final uri = Uri.parse('${_groupChatEndpoint()}?access_token=$token');
+
     final body = {
-      'server_key': _serverKey,
-      'type': 'send',
+      'server_key': AppConstants.socialServerKey,
+      'type': 'get_messages',
       'id': groupId,
-      'text': text,
-      'message_type': 'code', // ⚠️ "code" để WoWonder hiểu là tin mã hóa
+      'limit': '$limit',
+      'before_id': beforeMessageId,
+      'last_id': beforeMessageId,
+      'old': '1',
     };
 
-    if (imageUrl != null && imageUrl.isNotEmpty) {
-      body['image_url'] = imageUrl;
+    final res =
+        await http.post(uri, body: body).timeout(const Duration(seconds: 25));
+    if (res.statusCode != 200) {
+      throw Exception('Không lấy được tin nhắn cũ (HTTP ${res.statusCode})');
+    }
+    final json = jsonDecode(res.body);
+    if (json['api_status'] != 200) {
+      throw Exception(
+          'Không lấy được tin nhắn cũ: ${json['errors'] ?? res.body}');
+    }
+    final msgs = ((json['data'] ?? {})['messages'] ?? []) as List;
+    return msgs.cast<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  /// Trả về **message server** (nếu backend trả), để thay thế placeholder ngay lập tức.
+  Future<Map<String, dynamic>?> sendMessage({
+    required String groupId,
+    required String text,
+    File? file,
+    String? type, // 'image' | 'video' | 'voice' | 'file' | null
+  }) async {
+    final token = await _getAccessTokenOrThrow();
+    final uri = Uri.parse('${_groupChatEndpoint()}?access_token=$token');
+
+    if (file == null) {
+      final res = await http.post(
+        uri,
+        body: {
+          'server_key': AppConstants.socialServerKey,
+          'type': 'send',
+          'id': groupId,
+          'text': text.isEmpty ? ' ' : text,
+          'message_type': 'code',
+        },
+      ).timeout(const Duration(seconds: 25));
+
+      if (res.statusCode != 200) {
+        throw Exception('Gửi text thất bại (HTTP ${res.statusCode})');
+      }
+      final json = jsonDecode(res.body);
+      if (json['api_status'] != 200) {
+        throw Exception('Gửi text thất bại: ${json['errors'] ?? res.body}');
+      }
+      final data = json['data'] ?? json['message'] ?? json['msg'];
+      return (data is Map) ? Map<String, dynamic>.from(data) : null;
     }
 
-    final res = await http.post(uri, body: body);
-    if (res.statusCode != 200) throw Exception('Lỗi mạng (${res.statusCode})');
+    final req = http.MultipartRequest('POST', uri);
+    req.fields['server_key'] = AppConstants.socialServerKey;
+    req.fields['type'] = 'send';
+    req.fields['id'] = groupId;
+    req.fields['text'] = text.isEmpty ? ' ' : text;
+    req.fields['message_type'] = 'code';
 
-    final data = json.decode(res.body);
-    if (data['api_status'] != 200) {
-      throw Exception(data['errors']?['error_text'] ?? 'Gửi tin nhắn thất bại');
+    final field = _fieldNameFor(type);
+    final ct = _contentTypeFor(file.path);
+    req.files.add(await http.MultipartFile.fromPath(
+      field,
+      file.path,
+      contentType: ct,
+      filename: p.basename(file.path),
+    ));
+
+    final streamed = await req.send().timeout(const Duration(seconds: 60));
+    final body = await streamed.stream.bytesToString();
+    if (streamed.statusCode != 200) {
+      throw Exception(
+          'Gửi $field thất bại (HTTP ${streamed.statusCode}): $body');
     }
+    final json = jsonDecode(body);
+    if (json['api_status'] != 200) {
+      throw Exception('Gửi $field thất bại: ${json['errors'] ?? body}');
+    }
+    final data = json['data'] ?? json['message'] ?? json['msg'];
+    return (data is Map) ? Map<String, dynamic>.from(data) : null;
   }
 }
