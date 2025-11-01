@@ -125,6 +125,42 @@ class SocialRepository {
     }
   }
 
+  Future<ApiResponseModel<Response>> fetchSavedPosts({
+    int limit = 10,
+    String? afterPostId,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError(
+            'Please log in to your social network account');
+      }
+
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialPostsUri}?access_token=$token';
+
+      final Map<String, dynamic> payload = {
+        'server_key': AppConstants.socialServerKey,
+        'type': 'saved',
+        'limit': limit.toString(),
+      };
+
+      if (afterPostId != null && afterPostId.isNotEmpty) {
+        payload['after_post_id'] = afterPostId;
+      }
+
+      final Response res = await dioClient.post(
+        url,
+        data: FormData.fromMap(payload),
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
   Future<ApiResponseModel<Response>> fetchGroupFeed({
     required String groupId,
     int limit = 10,
@@ -1303,6 +1339,13 @@ class SocialRepository {
 
     final String text =
         (map['postText_API'] ?? map['postText'] ?? '').toString();
+    final String? originalText = _normalizeString(
+      map['OrginaltextDecoded'] ??
+          map['Orginaltext'] ??
+          map['original_text'] ??
+          map['originalText'] ??
+          map['Orginal_text'],
+    );
     final String timeText =
         (map['post_time'] ?? map['time_text'] ?? '').toString();
 
@@ -1467,6 +1510,14 @@ class SocialRepository {
         ? map['postType'].toString()
         : null;
 
+    final String? pageId = () {
+      final String? normalized = _normalizeString(map['page_id']);
+      if (normalized == null || normalized == '0') return null;
+      return normalized;
+    }();
+    final int? privacyType =
+        _coerceInt(map['postPrivacy'] ?? map['privacy_type'] ?? map['privacy']);
+
     SocialPost? sharedPost;
     if (includeSharedInfo) {
       final sharedRaw = map['shared_info'];
@@ -1509,14 +1560,17 @@ class SocialRepository {
       hasProduct: hasProduct,
       productTitle: productName.isNotEmpty ? productName : null,
       productImages: productImages.isNotEmpty ? productImages : null,
-      productPrice: productPrice,
-      productCurrency: productCurrency,
-      productDescription: productDescription,
-      ecommerceProductId: ecommerceProductId,
-      productSlug: productSlug,
-      pollOptions: (map['options'] is List)
-          ? List<Map<String, dynamic>>.from(map['options'])
-          : null,
+        productPrice: productPrice,
+        productCurrency: productCurrency,
+        productDescription: productDescription,
+        ecommerceProductId: ecommerceProductId,
+        productSlug: productSlug,
+        pollOptions: (map['options'] is List)
+            ? List<Map<String, dynamic>>.from(map['options'])
+            : null,
+        rawText: originalText,
+        pageId: pageId,
+        privacyType: privacyType,
     );
   }
 
@@ -1986,6 +2040,70 @@ class SocialRepository {
         data: form,
         options: Options(contentType: 'multipart/form-data'),
       );
+      return ApiResponseModel.withSuccess(resp);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+  Future<ApiResponseModel<Response>> performPostAction({
+    required String postId,
+    required String action,
+    Map<String, dynamic>? extraFields,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError(
+            'Please log in to your social network account');
+      }
+
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialReactUri}?access_token=$token';
+
+      final Map<String, dynamic> payload = {
+        'server_key': AppConstants.socialServerKey,
+        'post_id': postId,
+        'action': action,
+      };
+      if (extraFields != null && extraFields.isNotEmpty) {
+        payload.addAll(extraFields);
+      }
+
+      final resp = await dioClient.post(
+        url,
+        data: FormData.fromMap(payload),
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
+      return ApiResponseModel.withSuccess(resp);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+  Future<ApiResponseModel<Response>> hidePost({
+    required String postId,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError(
+            'Please log in to your social network account');
+      }
+
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialHidePostUri}?access_token=$token';
+
+      final resp = await dioClient.post(
+        url,
+        data: FormData.fromMap({
+          'server_key': AppConstants.socialServerKey,
+          'post_id': postId,
+        }),
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
       return ApiResponseModel.withSuccess(resp);
     } catch (e) {
       return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));

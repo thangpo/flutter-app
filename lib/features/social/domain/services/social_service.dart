@@ -137,9 +137,38 @@ class SocialService implements SocialServiceInterface {
   }
 
   @override
-  Future<SocialFeedPage> getGroupFeed({required String groupId, int limit = 10, String? afterPostId}) async {
-    final resp = await socialRepository.fetchGroupFeed(groupId: groupId, limit: limit, afterPostId: afterPostId);
-    if (resp.isSuccess && resp.response != null && resp.response!.statusCode == 200) {
+  Future<List<SocialPost>> getSavedPosts({
+    int limit = 10,
+    String? afterPostId,
+  }) async {
+    final resp = await socialRepository.fetchSavedPosts(
+      limit: limit,
+      afterPostId: afterPostId,
+    );
+    if (resp.isSuccess &&
+        resp.response != null &&
+        resp.response!.statusCode == 200) {
+      final page = socialRepository.parseNewsFeed(resp.response!);
+      return page.posts;
+    }
+    ApiChecker.checkApi(resp);
+    return [];
+  }
+
+  @override
+  Future<SocialFeedPage> getGroupFeed({
+    required String groupId,
+    int limit = 10,
+    String? afterPostId,
+  }) async {
+    final resp = await socialRepository.fetchGroupFeed(
+      groupId: groupId,
+      limit: limit,
+      afterPostId: afterPostId,
+    );
+    if (resp.isSuccess &&
+        resp.response != null &&
+        resp.response!.statusCode == 200) {
       return socialRepository.parseNewsFeed(resp.response!);
     }
     ApiChecker.checkApi(resp);
@@ -373,6 +402,29 @@ class SocialService implements SocialServiceInterface {
     throw Exception('Load story viewers failed');
   }
 
+  @override
+  Future<SocialStory?> getStoryById({required String storyId}) async {
+    final resp = await socialRepository.fetchStoryById(id: storyId);
+    if (resp.isSuccess && resp.response != null) {
+      final dynamic data = resp.response!.data;
+      if (resp.response!.statusCode == 200) {
+        final int status =
+            int.tryParse('${data is Map ? (data['api_status'] ?? 200) : 200}') ??
+                200;
+        if (status == 200) {
+          return socialRepository.parseStoryDetail(resp.response!);
+        }
+        if (data is Map) {
+          final dynamic message =
+              data['errors']?['error_text'] ?? data['message'];
+          throw Exception((message ?? 'Failed to record view').toString());
+        }
+      }
+    }
+    ApiChecker.checkApi(resp);
+    throw Exception('Failed to load story');
+  }
+
   // ========== REACTIONS ==========
   @override
   Future<void> reactToPost({required String postId, required String reaction, String action = 'reaction'}) async {
@@ -393,8 +445,60 @@ class SocialService implements SocialServiceInterface {
   }
 
   @override
-  Future<void> reactToStory({required String storyId, required String reaction}) async {
-    final resp = await socialRepository.reactToStory(storyId: storyId, reaction: reaction);
+  Future<String> performPostAction({
+    required String postId,
+    required String action,
+    Map<String, dynamic>? extraFields,
+  }) async {
+    final resp = await socialRepository.performPostAction(
+      postId: postId,
+      action: action,
+      extraFields: extraFields,
+    );
+
+    if (resp.isSuccess && resp.response != null) {
+      final data = resp.response!.data;
+      final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
+      if (status != 200) {
+        final msg =
+            (data?['errors']?['error_text'] ?? 'Post action failed').toString();
+        throw Exception(msg);
+      }
+      return (data?['action'] ?? 'Success').toString();
+    }
+
+    ApiChecker.checkApi(resp);
+    throw Exception('Post action failed');
+  }
+
+  @override
+  Future<String> hidePost({required String postId}) async {
+    final resp = await socialRepository.hidePost(postId: postId);
+
+    if (resp.isSuccess && resp.response != null) {
+      final data = resp.response!.data;
+      final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
+      if (status != 200) {
+        final msg =
+            (data?['errors']?['error_text'] ?? 'Hide post failed').toString();
+        throw Exception(msg);
+      }
+      return (data?['message'] ?? 'Post hidden').toString();
+    }
+
+    ApiChecker.checkApi(resp);
+    throw Exception('Hide post failed');
+  }
+
+  @override
+  Future<void> reactToStory({
+    required String storyId,
+    required String reaction,
+  }) async {
+    final resp = await socialRepository.reactToStory(
+      storyId: storyId,
+      reaction: reaction,
+    );
 
     if (resp.isSuccess && resp.response != null) {
       final data = resp.response!.data;

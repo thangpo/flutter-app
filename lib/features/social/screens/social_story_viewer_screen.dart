@@ -179,6 +179,12 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
       return;
     }
 
+    final SocialStory storySnapshot = _currentStory;
+    unawaited(_socialController?.markStoryItemViewed(
+      story: storySnapshot,
+      item: item,
+    ));
+
     if (item.isVideo && item.mediaUrl != null && item.mediaUrl!.isNotEmpty) {
       if (_nextVideoController != null &&
           _nextVideoUrl == item.mediaUrl &&

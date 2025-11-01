@@ -269,8 +269,61 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
     final cs = Theme.of(context).colorScheme;
     final onSurface = cs.onSurface;
     return Scaffold(
-      appBar:
-          AppBar(title: Text(getTranslated('post_detail', context) ?? 'Post')),
+      appBar: AppBar(
+        centerTitle: false,
+        toolbarHeight: 68, // 64–72 cho thoáng 2 dòng
+        titleSpacing: 12,
+        title: FutureBuilder<SocialPost?>(
+          future: _postFuture,
+          builder: (ctx, snap) {
+            final post = snap.data ?? p; // p = widget.post
+            final onSurface = Theme.of(ctx).colorScheme.onSurface;
+
+            return Row(
+              children: [
+                CircleAvatar(
+                  radius: 18,
+                  backgroundImage:
+                      (post.userAvatar != null && post.userAvatar!.isNotEmpty)
+                          ? NetworkImage(post.userAvatar!)
+                          : null,
+                  child: (post.userAvatar == null || post.userAvatar!.isEmpty)
+                      ? const Icon(Icons.person, size: 18)
+                      : null,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Tên người dùng (1 dòng)
+                      Text(
+                        post.userName ?? (getTranslated('user', ctx) ?? 'User'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                      // Thời gian (nếu có)
+                      if ((post.timeText ?? '').isNotEmpty)
+                        Text(
+                          post.timeText!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                                color: onSurface.withOpacity(.6),
+                              ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
       body: Column(
         children: [
           Expanded(
@@ -299,80 +352,24 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                           builder: (context, snap) {
                             final post = snap.data ?? p;
                             final ctrl = context.watch<SocialController>();
-                            final idx =
-                                ctrl.posts.indexWhere((e) => e.id == post.id);
-                            final effective =
-                                idx != -1 ? ctrl.posts[idx] : post;
-                            final myReaction = effective.myReaction;
-                            final reactionCount = effective.reactionCount;
-                            final bool isSharing =
-                                ctrl.isSharing(effective.id);
+                            final SocialPost current =
+                                ctrl.findPostById(post.id) ?? post;
+                            final myReaction = current.myReaction;
+                            final bool isSharing = ctrl.isSharing(current.id);
+                            final List<String> topReactions =
+                                _topReactionLabels(current);
+                            final int commentCount = current.commentCount;
+                            final int shareCount = current.shareCount;
+                            final int reactionCount = current.reactionCount;
+                            final bool showReactions = reactionCount > 0;
+                            final bool showComments = commentCount > 0;
+                            final bool showShares = shareCount > 0;
+                            final bool showStats =
+                                showReactions || showComments || showShares;
+
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 20,
-                                      backgroundImage:
-                                          (post.userAvatar != null &&
-                                                  post.userAvatar!.isNotEmpty)
-                                              ? NetworkImage(post.userAvatar!)
-                                              : null,
-                                      child: (post.userAvatar == null ||
-                                              post.userAvatar!.isEmpty)
-                                          ? const Icon(Icons.person)
-                                          : null,
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            post.userName ??
-                                                (getTranslated(
-                                                        'user', context) ??
-                                                    'User'),
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .titleMedium,
-                                          ),
-                                          if ((post.timeText ?? '').isNotEmpty)
-                                            Text(
-                                              post.timeText!,
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodySmall
-                                                  ?.copyWith(
-                                                    color: onSurface
-                                                        .withOpacity(.6),
-                                                  ),
-                                            ),
-                                          if (post.sharedPost != null)
-                                            Padding(
-                                              padding:
-                                                  const EdgeInsets.only(top: 2),
-                                              child: Text(
-                                                _sharedSubtitleDetail(
-                                                    context, post),
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .bodySmall
-                                                    ?.copyWith(
-                                                      color: onSurface
-                                                          .withOpacity(.7),
-                                                    ),
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
                                 if ((post.text ?? '').isNotEmpty)
                                   const SizedBox(height: 8),
                                 if (post.sharedPost != null)
@@ -397,13 +394,10 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                       slug: post.productSlug,
                                     ),
                                   ),
-                                const SizedBox(height: 12),
                                 Padding(
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 4, vertical: 4),
+                                      horizontal: 12, vertical: 8),
                                   child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceAround,
                                     children: [
                                       Expanded(
                                         child: Builder(
@@ -412,12 +406,9 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                               final was = myReaction;
                                               final now =
                                                   (was == 'Like') ? '' : 'Like';
-                                              final target = idx != -1
-                                                  ? ctrl.posts[idx]
-                                                  : post;
                                               itemCtx
                                                   .read<SocialController>()
-                                                  .reactOnPost(target, now);
+                                                  .reactOnPost(current, now);
                                             },
                                             onLongPress: () {
                                               final overlayBox =
@@ -440,12 +431,10 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                 itemCtx,
                                                 centerGlobal,
                                                 onSelect: (val) {
-                                                  final target = idx != -1
-                                                      ? ctrl.posts[idx]
-                                                      : post;
                                                   itemCtx
                                                       .read<SocialController>()
-                                                      .reactOnPost(target, val);
+                                                      .reactOnPost(
+                                                          current, val);
                                                 },
                                               );
                                             },
@@ -460,7 +449,8 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                   _reactionIcon(myReaction),
                                                   const SizedBox(width: 6),
                                                   Text(
-                                                    reactionCount.toString(),
+                                                    _reactionActionLabel(
+                                                        context, myReaction),
                                                     style: Theme.of(context)
                                                         .textTheme
                                                         .bodyMedium,
@@ -495,11 +485,86 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                         loading: isSharing,
                                         onTap: isSharing
                                             ? null
-                                            : () => _handleSharePost(effective),
+                                            : () => _handleSharePost(current),
                                       ),
                                     ],
                                   ),
                                 ),
+                                if (showStats)
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 8),
+                                    child: Row(
+                                      children: [
+                                        if (showReactions)
+                                          Expanded(
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                if (topReactions.isNotEmpty)
+                                                  _ReactionIconStack(
+                                                      labels: topReactions),
+                                                if (topReactions.isNotEmpty)
+                                                  const SizedBox(width: 6),
+                                                Text(
+                                                  _formatSocialCount(
+                                                      reactionCount),
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .bodySmall
+                                                      ?.copyWith(
+                                                        color: onSurface
+                                                            .withOpacity(.85),
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                ),
+                                              ],
+                                            ),
+                                          )
+                                        else
+                                          const Expanded(
+                                              child: SizedBox.shrink()),
+                                        const SizedBox(width: 12),
+                                        Flexible(
+                                          child: Align(
+                                            alignment: Alignment.centerRight,
+                                            child: Wrap(
+                                              spacing: 12,
+                                              children: [
+                                                // if (showComments)
+                                                //   Text(
+                                                //     '${_formatSocialCount(commentCount)} ${getTranslated("comments", context) ?? "comments"}',
+                                                //     style: Theme.of(context)
+                                                //         .textTheme
+                                                //         .bodySmall
+                                                //         ?.copyWith(
+                                                //           color: onSurface
+                                                //               .withOpacity(.7),
+                                                //         ),
+                                                //     overflow:
+                                                //         TextOverflow.ellipsis,
+                                                //   ),
+                                                if (showShares)
+                                                  Text(
+                                                    '${_formatSocialCount(shareCount)} ${getTranslated("share_plural", context) ?? "shares"}',
+                                                    style: Theme.of(context)
+                                                        .textTheme
+                                                        .bodySmall
+                                                        ?.copyWith(
+                                                          color: onSurface
+                                                              .withOpacity(.7),
+                                                        ),
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                               ],
                             );
                           },
@@ -509,13 +574,6 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                         const SizedBox(height: 8),
                         Row(
                           children: [
-                            Expanded(
-                              child: Text(
-                                '${getTranslated('comments', context) ?? 'Comments'} '
-                                '(${_comments.length}${_hasMore ? '+' : ''})',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                            ),
                             PopupMenuButton<CommentSortOrder>(
                               tooltip: getTranslated('arrange', context) ??
                                   'Arrange',
@@ -670,6 +728,78 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                     top: 6),
                                                 child: Row(
                                                   children: [
+                                                    // TRÁI: Reply + số lượng reaction
+                                                    Expanded(
+                                                      child: Row(
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
+                                                        children: [
+                                                          TextButton(
+                                                            onPressed: () {
+                                                              setState(() {
+                                                                _replyingTo = c;
+                                                                _showInput =
+                                                                    true;
+                                                                _commentImagePath =
+                                                                    null;
+                                                                _commentImageUrl =
+                                                                    null;
+                                                                _commentAudioPath =
+                                                                    null;
+                                                              });
+                                                              FocusScope.of(
+                                                                      context)
+                                                                  .requestFocus(
+                                                                      _commentFocus);
+                                                            },
+                                                            child: Text(
+                                                              getTranslated(
+                                                                      'reply',
+                                                                      context) ??
+                                                                  'Reply',
+                                                              style:
+                                                                  replyActionStyle,
+                                                            ),
+                                                          ),
+                                                          const SizedBox(
+                                                              width: 12),
+
+                                                          // 👉 ICON LIKE CỐ ĐỊNH + SỐ LƯỢNG
+                                                          if (c.reactionCount >
+                                                              0) ...[
+                                                            const SizedBox(
+                                                                width: 12),
+                                                            Row(
+                                                              mainAxisSize:
+                                                                  MainAxisSize
+                                                                      .min,
+                                                              children: [
+                                                                _reactionIcon(
+                                                                    'Like',
+                                                                    size: 18),
+                                                                const SizedBox(
+                                                                    width: 4),
+                                                                Text(
+                                                                  _formatSocialCount(
+                                                                      c.reactionCount),
+                                                                  style: Theme.of(
+                                                                          context)
+                                                                      .textTheme
+                                                                      .bodySmall
+                                                                      ?.copyWith(
+                                                                        color: onSurface
+                                                                            .withOpacity(.6),
+                                                                        fontWeight:
+                                                                            FontWeight.w600,
+                                                                      ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ],
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    // PHẢI: nút Reaction (icon + nhãn), tap/long-press như cũ
                                                     Builder(
                                                       builder: (reactCtx) {
                                                         final reacted = c
@@ -693,6 +823,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                                           .w600
                                                                       : null,
                                                                 );
+
                                                         return GestureDetector(
                                                           behavior:
                                                               HitTestBehavior
@@ -731,6 +862,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                                     .size
                                                                     .center(Offset
                                                                         .zero);
+
                                                             _showReactionsOverlay(
                                                               reactCtx,
                                                               centerGlobal,
@@ -746,42 +878,25 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                             children: [
                                                               _reactionIcon(
                                                                   c.myReaction,
-                                                                  size: 20),
+                                                                  size: 18),
                                                               const SizedBox(
-                                                                  width: 4),
-                                                              Text(
-                                                                c.reactionCount
-                                                                    .toString(),
-                                                                style: style,
-                                                              ),
+                                                                  width: 6),
+                                                              // Text(
+                                                              //   // nhãn của nút reaction (giống postcard)
+                                                              //   c.myReaction
+                                                              //           .isNotEmpty
+                                                              //       ? c
+                                                              //           .myReaction
+                                                              //       : (getTranslated(
+                                                              //               'like',
+                                                              //               context) ??
+                                                              //           'Like'),
+                                                              //   style: style,
+                                                              // ),
                                                             ],
                                                           ),
                                                         );
                                                       },
-                                                    ),
-                                                    const SizedBox(width: 12),
-                                                    TextButton(
-                                                      onPressed: () {
-                                                        setState(() {
-                                                          _replyingTo = c;
-                                                          _showInput = true;
-                                                          _commentImagePath =
-                                                              null;
-                                                          _commentImageUrl =
-                                                              null;
-                                                          _commentAudioPath =
-                                                              null;
-                                                        });
-                                                        FocusScope.of(context)
-                                                            .requestFocus(
-                                                                _commentFocus);
-                                                      },
-                                                      child: Text(
-                                                        getTranslated('reply',
-                                                                context) ??
-                                                            'Reply',
-                                                        style: replyActionStyle,
-                                                      ),
                                                     ),
                                                   ],
                                                 ),
@@ -1324,6 +1439,110 @@ class _ProductBlock extends StatelessWidget {
   }
 }
 
+List<String> _topReactionLabels(SocialPost post, {int limit = 3}) {
+  final entries = post.reactionBreakdown.entries.toList()
+    ..sort((a, b) => b.value.compareTo(a.value));
+  if (entries.isEmpty) {
+    if (post.reactionCount > 0 || post.myReaction.isNotEmpty) {
+      return <String>[
+        post.myReaction.isNotEmpty ? post.myReaction : 'Like',
+      ];
+    }
+    return const <String>[];
+  }
+  return entries.take(limit).map((e) => e.key).toList();
+}
+
+String _reactionActionLabel(BuildContext context, String reaction) {
+  final String defaultLabel = getTranslated('like', context) ?? 'Like';
+  if (reaction.isEmpty || reaction == 'Like') return defaultLabel;
+  switch (reaction) {
+    case 'Love':
+      return getTranslated('love', context) ?? 'Love';
+    case 'HaHa':
+      return 'HaHa';
+    case 'Wow':
+      return 'Wow';
+    case 'Sad':
+      return getTranslated('sad', context) ?? 'Sad';
+    case 'Angry':
+      return getTranslated('angry', context) ?? 'Angry';
+    default:
+      return reaction;
+  }
+}
+
+class _ReactionIconStack extends StatelessWidget {
+  final List<String> labels;
+  final double size;
+  const _ReactionIconStack({
+    required this.labels,
+    this.size = 20,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (labels.isEmpty) return const SizedBox.shrink();
+    final double overlap = size * 0.67;
+    final double width =
+        size + (labels.length > 1 ? (labels.length - 1) * overlap : 0);
+    final Color borderColor = Theme.of(context).scaffoldBackgroundColor;
+    return SizedBox(
+      height: size,
+      width: width,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          for (int i = labels.length - 1; i >= 0; i--)
+            Positioned(
+              left: i * overlap,
+              child: Container(
+                width: size,
+                height: size,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: borderColor, width: 1),
+                ),
+                child: _reactionIcon(labels[i], size: size),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+String _formatSocialCount(int value) {
+  if (value <= 0) return '0';
+  if (value < 1000) return value.toString();
+  const units = [
+    _CountUnit(threshold: 1000000000, suffix: 'B'),
+    _CountUnit(threshold: 1000000, suffix: 'M'),
+    _CountUnit(threshold: 1000, suffix: 'K'),
+  ];
+  for (final unit in units) {
+    if (value >= unit.threshold) {
+      final double scaled = value / unit.threshold;
+      final int precision = scaled >= 100 ? 0 : 1;
+      final String formatted =
+          _trimTrailingZeros(scaled.toStringAsFixed(precision));
+      return '$formatted${unit.suffix}';
+    }
+  }
+  return value.toString();
+}
+
+String _trimTrailingZeros(String input) {
+  if (!input.contains('.')) return input;
+  return input.replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
+}
+
+class _CountUnit {
+  final int threshold;
+  final String suffix;
+  const _CountUnit({required this.threshold, required this.suffix});
+}
+
 class _ImagesCarousel extends StatefulWidget {
   final List<String> urls;
   const _ImagesCarousel({required this.urls});
@@ -1624,6 +1843,50 @@ class _RepliesLazyState extends State<_RepliesLazy> {
                         padding: const EdgeInsets.only(top: 6),
                         child: Row(
                           children: [
+                            // TRÁI: nút Reply + (icon Like cố định + reactionCount)
+                            Expanded(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        widget.onRequestReply(widget.comment),
+                                    // Nếu muốn reply trực tiếp vào reply hiện tại:
+                                    // onPressed: () => widget.onRequestReply(r),
+                                    child: Text(
+                                      getTranslated('reply', context) ??
+                                          'Reply',
+                                      style: replyActionStyle,
+                                    ),
+                                  ),
+
+                                  // Chỉ chèn khoảng cách & cụm (👍 + count) khi count > 0
+                                  if (r.reactionCount > 0) ...[
+                                    const SizedBox(width: 12),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        _reactionIcon('Like', size: 18),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          _formatSocialCount(r.reactionCount),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall
+                                              ?.copyWith(
+                                                color:
+                                                    onSurface.withOpacity(.6),
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+
+                            // PHẢI: nút Reaction (icon theo myReaction + NHÃN), tap/long-press
                             Builder(
                               builder: (reactCtx) {
                                 final reacted = r.myReaction.isNotEmpty;
@@ -1639,6 +1902,7 @@ class _RepliesLazyState extends State<_RepliesLazy> {
                                       fontWeight:
                                           reacted ? FontWeight.w600 : null,
                                     );
+
                                 return GestureDetector(
                                   behavior: HitTestBehavior.opaque,
                                   onTap: () {
@@ -1656,8 +1920,10 @@ class _RepliesLazyState extends State<_RepliesLazy> {
                                     final Offset centerGlobal = box != null
                                         ? box.localToGlobal(
                                             box.size.center(Offset.zero),
-                                            ancestor: overlayBox)
+                                            ancestor: overlayBox,
+                                          )
                                         : overlayBox.size.center(Offset.zero);
+
                                     _showReactionsOverlay(
                                       reactCtx,
                                       centerGlobal,
@@ -1668,11 +1934,7 @@ class _RepliesLazyState extends State<_RepliesLazy> {
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       _reactionIcon(r.myReaction, size: 18),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        r.reactionCount.toString(),
-                                        style: style,
-                                      ),
+                                      const SizedBox(width: 6),
                                     ],
                                   ),
                                 );
@@ -1700,11 +1962,11 @@ class _RepliesLazyState extends State<_RepliesLazy> {
                         'Collapse replies',
                     style: replyActionStyle),
               ),
-              TextButton(
-                onPressed: () => widget.onRequestReply(widget.comment),
-                child: Text(getTranslated('reply', context) ?? 'Reply',
-                    style: replyActionStyle),
-              ),
+              // TextButton(
+              //   onPressed: () => widget.onRequestReply(widget.comment),
+              //   child: Text(getTranslated('reply', context) ?? 'Reply',
+              //       style: replyActionStyle),
+              // ),
             ],
           ),
         ),

@@ -5,6 +5,9 @@ class SocialPost {
   final String? userName;
   final String? userAvatar;
   final String? timeText;
+  final String? rawText;
+  final String? pageId;
+  final int? privacyType;
   // Media
   final List<String> imageUrls; // multi or single image
   final String? imageUrl; // convenience: first image
@@ -54,6 +57,9 @@ class SocialPost {
     this.userName,
     this.userAvatar,
     this.timeText,
+    this.rawText,
+    this.pageId,
+    this.privacyType,
     this.imageUrls = const <String>[],
     this.imageUrl,
     this.fileUrl,
@@ -93,6 +99,9 @@ class SocialPost {
     String? userName,
     String? userAvatar,
     String? timeText,
+    String? rawText,
+    String? pageId,
+    int? privacyType,
     List<String>? imageUrls,
     String? imageUrl,
     String? fileUrl,
@@ -131,6 +140,9 @@ class SocialPost {
       userName: userName ?? this.userName,
       userAvatar: userAvatar ?? this.userAvatar,
       timeText: timeText ?? this.timeText,
+      rawText: rawText ?? this.rawText,
+      pageId: pageId ?? this.pageId,
+      privacyType: privacyType ?? this.privacyType,
       imageUrls: imageUrls ?? this.imageUrls,
       imageUrl: imageUrl ?? this.imageUrl,
       fileUrl: fileUrl ?? this.fileUrl,
