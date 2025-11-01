@@ -198,22 +198,14 @@ class _ProfileAppBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    final displayNamePart = user.displayName?.trim().isNotEmpty == true
-        ? user.displayName!.trim()
-        : null;
+    // Ưu tiên họ + tên; nếu thiếu cả hai thì dùng username
+    final hasFirst = user.firstName?.trim().isNotEmpty == true;
+    final hasLast  = user.lastName?.trim().isNotEmpty == true;
+    final hasFullName = hasFirst || hasLast;
 
-    final usernamePart = user.userName?.trim().isNotEmpty == true
-        ? user.userName!.trim()
-        : null;
-
-    final nameFromFirstLast =
-    '${user.firstName ?? ''} ${user.lastName ?? ''}'.trim().isNotEmpty ==
-        true
+    final primaryTitle = hasFullName
         ? '${user.firstName ?? ''} ${user.lastName ?? ''}'.trim()
-        : null;
-
-    final titleText =
-        displayNamePart ?? usernamePart ?? nameFromFirstLast ?? 'Profile';
+        : (user.userName ?? 'Profile');
 
     return SliverAppBar(
       pinned: true,
@@ -227,7 +219,7 @@ class _ProfileAppBar extends StatelessWidget {
         children: [
           Expanded(
             child: Text(
-              titleText,
+              primaryTitle,
               style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -240,13 +232,13 @@ class _ProfileAppBar extends StatelessWidget {
             ),
         ],
       ),
-      actions: [
-        IconButton(onPressed: () {}, icon: const Icon(Icons.search)),
-        IconButton(onPressed: () {}, icon: const Icon(Icons.more_vert)),
+      actions: const [
+        // tuỳ ý
       ],
     );
   }
 }
+
 
 // ==============================
 // HEADER – Cover, Avatar, Stats, Buttons, Tabs
@@ -358,15 +350,29 @@ class _ProfileHeaderSection extends StatelessWidget {
         const SizedBox(height: 70),
 
         // ===== NAME + VERIFIED BADGE =====
+        // ===== NAME (HỌ + TÊN) + VERIFIED BADGE =====
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text(
-                fullName,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
+              Expanded(
+                child: Text(
+                  // Họ + Tên nếu có, ngược lại dùng username
+                  (() {
+                    final hasFirst = user.firstName?.trim().isNotEmpty == true;
+                    final hasLast  = user.lastName?.trim().isNotEmpty == true;
+                    if (hasFirst || hasLast) {
+                      return '${user.firstName ?? ''} ${user.lastName ?? ''}'.trim();
+                    }
+                    return user.userName ?? 'Người dùng';
+                  })(),
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               const SizedBox(width: 6),
@@ -379,16 +385,43 @@ class _ProfileHeaderSection extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                   alignment: Alignment.center,
-                  child: const Icon(
-                    Icons.check,
-                    size: 14,
-                    color: Colors.white,
-                  ),
+                  child: const Icon(Icons.check, size: 14, color: Colors.white),
                 ),
+              const SizedBox(width: 4),
               const Icon(Icons.keyboard_arrow_down, size: 20),
             ],
           ),
         ),
+
+// ===== USERNAME NHỎ BÊN DƯỚI (chỉ hiện khi có HỌ + TÊN) =====
+        Builder(
+          builder: (_) {
+            final hasFirst = user.firstName?.trim().isNotEmpty == true;
+            final hasLast  = user.lastName?.trim().isNotEmpty == true;
+            final hasFullName = hasFirst || hasLast;
+            final handle = (user.userName?.trim().isNotEmpty == true)
+                ? (user.userName!.startsWith('@') ? user.userName! : '@${user.userName!}')
+                : null;
+
+            if (hasFullName && handle != null) {
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                child: Text(
+                  handle,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).hintColor,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }
+            return const SizedBox.shrink();
+          },
+        ),
+
 
         const SizedBox(height: 4),
 
