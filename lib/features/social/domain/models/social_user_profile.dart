@@ -37,6 +37,10 @@ class SocialUserProfile {
   final bool isFollowing;
   final bool isFollowingMe;
 
+  // ===== Trường phục vụ cập nhật (KHÔNG lấy từ API, KHÔNG lưu local) =====
+  final String? currentPassword;    // <-- NEW: chỉ dùng khi đổi mật khẩu
+  final String? newPassword;        // <-- NEW: chỉ dùng khi đổi mật khẩu
+
   const SocialUserProfile({
     required this.id,
     this.displayName,
@@ -53,7 +57,7 @@ class SocialUserProfile {
     this.about,
     this.work,
     this.education,
-    this.address,     // <-- new
+    this.address,
     this.city,
     this.country,
     this.website,
@@ -63,6 +67,8 @@ class SocialUserProfile {
     this.lastSeenText,
     this.isFollowing = false,
     this.isFollowingMe = false,
+    this.currentPassword,           // <-- NEW
+    this.newPassword,               // <-- NEW
   });
 
   factory SocialUserProfile.fromJson(Map<String, dynamic> json) {
@@ -95,7 +101,7 @@ class SocialUserProfile {
       displayName: _toCleanString(json['displayName'] ?? json['name']) ??
           _toCleanString([
             _toCleanString(json['firstName'] ?? json['first_name']),
-            _toCleanString(json['lastName'] ?? json['last_name']),
+            _toCleanString(json['lastName']  ?? json['last_name']),
           ].whereType<String>().join(' ')) ??
           _toCleanString(json['username']) ??
           _toCleanString(json['userName']),
@@ -120,7 +126,7 @@ class SocialUserProfile {
       about      : _toCleanString(json['about']),
       work       : _toCleanString(json['work'] ?? json['working'] ?? json['currently_working']),
       education  : _toCleanString(json['education'] ?? json['school']),
-      address    : _toCleanString(json['address'] ?? json['location']), // <-- ưu tiên address; có thể fallback 'location'
+      address    : _toCleanString(json['address'] ?? json['location']),
       city       : _toCleanString(json['city']),
       country    : _toCleanString(json['country'] ?? json['country_id']),
       website    : _toCleanString(json['website']),
@@ -132,6 +138,10 @@ class SocialUserProfile {
       lastSeenText   : _toCleanString(json['lastSeenText'] ?? json['lastseen_time_text']),
       isFollowing    : _toBool(json['isFollowing'] ?? json['is_following']),
       isFollowingMe  : _toBool(json['isFollowingMe'] ?? json['is_following_me']),
+
+      // Các trường mật khẩu KHÔNG đọc từ server
+      currentPassword: null,
+      newPassword   : null,
     );
   }
 
@@ -152,7 +162,7 @@ class SocialUserProfile {
       'about'           : about,
       'work'            : work,
       'education'       : education,
-      'address'         : address,   // <-- new
+      'address'         : address,
       'city'            : city,
       'country'         : country,
       'website'         : website,
@@ -162,6 +172,7 @@ class SocialUserProfile {
       'lastSeenText'    : lastSeenText,
       'isFollowing'     : isFollowing,
       'isFollowingMe'   : isFollowingMe,
+      // CHÚ Ý: Không serialize currentPassword/newPassword để tránh lưu trữ nhạy cảm
     };
   }
 
@@ -182,7 +193,7 @@ class SocialUserProfile {
     String? about,
     String? work,
     String? education,
-    String? address,        // <-- new
+    String? address,
     String? city,
     String? country,
     String? website,
@@ -192,6 +203,8 @@ class SocialUserProfile {
     String? lastSeenText,
     bool? isFollowing,
     bool? isFollowingMe,
+    String? currentPassword,   // <-- NEW
+    String? newPassword,       // <-- NEW
   }) {
     return SocialUserProfile(
       id: id ?? this.id,
@@ -209,7 +222,7 @@ class SocialUserProfile {
       about     : about     ?? this.about,
       work      : work      ?? this.work,
       education : education ?? this.education,
-      address   : address   ?? this.address,   // <-- new
+      address   : address   ?? this.address,
       city      : city      ?? this.city,
       country   : country   ?? this.country,
       website   : website   ?? this.website,
@@ -219,6 +232,8 @@ class SocialUserProfile {
       lastSeenText: lastSeenText ?? this.lastSeenText,
       isFollowing: isFollowing ?? this.isFollowing,
       isFollowingMe: isFollowingMe ?? this.isFollowingMe,
+      currentPassword: currentPassword ?? this.currentPassword, // <-- NEW
+      newPassword   : newPassword    ?? this.newPassword,       // <-- NEW
     );
   }
 }

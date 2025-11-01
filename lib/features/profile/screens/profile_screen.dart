@@ -62,66 +62,83 @@ class ProfileScreenState extends State<ProfileScreen> {
     String password = _passwordController.text.trim();
     String confirmPassword = _confirmPasswordController.text.trim();
 
-    if(Provider.of<ProfileController>(context, listen: false).userInfoModel!.fName == _firstNameController.text
-        && Provider.of<ProfileController>(context, listen: false).userInfoModel!.lName == _lastNameController.text
-        && Provider.of<ProfileController>(context, listen: false).userInfoModel!.phone == _phoneController.text && file == null
+    final profileCtrl = Provider.of<ProfileController>(context, listen: false);
+
+    if (profileCtrl.userInfoModel!.fName == _firstNameController.text
+        && profileCtrl.userInfoModel!.lName == _lastNameController.text
+        && profileCtrl.userInfoModel!.phone == _phoneController.text && file == null
         && _passwordController.text.isEmpty && _confirmPasswordController.text.isEmpty) {
 
-    showCustomSnackBar(getTranslated('change_something_to_update', context), context);
+      showCustomSnackBar(getTranslated('change_something_to_update', context), context);
 
-    }
-
-    else if (firstName.isEmpty) {
+    } else if (firstName.isEmpty) {
       showCustomSnackBar(getTranslated('first_name_is_required', context), context);
-    }
 
-    else if(lastName.isEmpty) {
+    } else if (lastName.isEmpty) {
       showCustomSnackBar(getTranslated('last_name_is_required', context), context);
-    }
 
-    else if (email.isEmpty) {
+    } else if (email.isEmpty) {
       showCustomSnackBar(getTranslated('email_is_required', context), context);
 
-    }
-
-    else if (phoneNumber.isEmpty) {
+    } else if (phoneNumber.isEmpty) {
       showCustomSnackBar(getTranslated('phone_must_be_required', context), context);
-    }
 
-    else if((password.isNotEmpty && password.length < 8) || (confirmPassword.isNotEmpty && confirmPassword.length < 8)) {
+    } else if ((password.isNotEmpty && password.length < 8) ||
+        (confirmPassword.isNotEmpty && confirmPassword.length < 8)) {
       showCustomSnackBar(getTranslated('minimum_password_is_8_character', context), context);
-    }
 
-    else if(password != confirmPassword) {
+    } else if (password != confirmPassword) {
       showCustomSnackBar(getTranslated('confirm_password_not_matched', context), context);
-    }
 
-    else {
-      ProfileModel updateUserInfoModel = Provider.of<ProfileController>(context, listen: false).userInfoModel!;
+    } else {
+      // 1) Cập nhật E-com
+      ProfileModel updateUserInfoModel = profileCtrl.userInfoModel!;
       updateUserInfoModel.method = 'put';
-      updateUserInfoModel.fName = _firstNameController.text;
-      updateUserInfoModel.lName = _lastNameController.text;
-      updateUserInfoModel.phone = _phoneController.text;
+      updateUserInfoModel.fName  = _firstNameController.text;
+      updateUserInfoModel.lName  = _lastNameController.text;
+      updateUserInfoModel.phone  = _phoneController.text;
       String pass = _passwordController.text;
 
-      await Provider.of<ProfileController>(context, listen: false).updateUserInfo(
-        updateUserInfoModel, pass, file, Provider.of<AuthController>(context, listen: false).getUserToken(),
-      ).then((response) {
-        if(response.isSuccess) {
-          if(context.mounted) {
-            Provider.of<ProfileController>(Get.context!, listen: false).getUserInfo(Get.context!);
-            showCustomSnackBar(getTranslated('profile_info_updated_successfully', Get.context!), Get.context!, isError: false);
-          }
+      final response = await profileCtrl.updateUserInfo(
+        updateUserInfoModel,
+        pass,
+        file,
+        Provider.of<AuthController>(context, listen: false).getUserToken(),
+        // popOnSuccess: false, // <-- KHÔNG pop ở đây, chờ sync Social xong
+      );
 
-          _passwordController.clear();
-          _confirmPasswordController.clear();
-          setState(() {});
-        }else {
-          showCustomSnackBar(response.message??'', Get.context!, isError: true);
+      if (response.isSuccess) {
+        // Đồng bộ họ tên sang Social (KHÔNG đổi handle / username)
+        await profileCtrl.syncEcomToSocial(
+          context,
+          source: updateUserInfoModel,
+          currentPwd: null,
+          newPwd: null,
+        );
+
+        if (context.mounted) {
+          // Refresh lại thông tin E-com (nếu cần)
+          await Provider.of<ProfileController>(Get.context!, listen: false).getUserInfo(Get.context!);
+
+          showCustomSnackBar(
+            getTranslated('profile_info_updated_successfully', Get.context!),
+            Get.context!,
+            isError: false,
+          );
+
+          // Pop SAU KHI sync Social xong
+          Navigator.of(context).pop();
         }
-      });
+
+        _passwordController.clear();
+        _confirmPasswordController.clear();
+        setState(() {});
+      } else {
+        showCustomSnackBar(response.message ?? '', Get.context!, isError: true);
+      }
     }
   }
+
 
 
 

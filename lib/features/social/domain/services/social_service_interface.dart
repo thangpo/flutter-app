@@ -86,15 +86,20 @@ abstract class SocialServiceInterface {
   // tên, kiểu trả về và named param phải khớp y hệt với Service
   Future<bool> toggleFollow({required String targetUserId});
   Future<SocialUserProfile> updateDataUser({
-    required String? displayName,
+    required String? displayName, // vẫn giữ kiểu required String?
+    String? firstName,            // <-- mới
+    String? lastName,             // <-- mới
     String? about,
-    String? genderText,
-    String? birthdayIso,
+    String? genderText,           // 'Nam' | 'Nữ' | 'Khác' -> map về male/female/other ở repo
+    String? birthdayIso,          // yyyy-MM-dd
     String? address,
     String? website,
     String? relationshipText,
+    String? currentPassword,      // <-- mới (đổi mật khẩu)
+    String? newPassword,          // <-- mới (đổi mật khẩu)
     String? avatarFilePath,
     String? coverFilePath,
+    String? ecomToken,
   });
 
 
