@@ -217,15 +217,19 @@ class SocialRepository {
 
   //edit profile user
   Future<ApiResponseModel<Response>> updateDataUser({
-    String? displayName,
+    String? displayName,        // đang map sang 'username' (xem lưu ý bên dưới)
+    String? firstName,          // <-- mới
+    String? lastName,           // <-- mới
     String? about,
-    String? genderText,       // 'Nam' | 'Nữ' | 'Khác'
-    String? birthdayIso,      // yyyy-MM-dd
+    String? genderText,         // 'Nam' | 'Nữ' | 'Khác'
+    String? birthdayIso,        // yyyy-MM-dd
     String? address,
     String? website,
-    String? relationshipText, // nếu backend cần mã thì bạn map riêng
-    String? avatarFilePath,   // file local (có thể là "file://..."), KHÔNG phải URL
-    String? coverFilePath,    // file local (có thể là "file://...")
+    String? relationshipText,
+    String? currentPassword,    // <-- mới
+    String? newPassword,        // <-- mới
+    String? avatarFilePath,
+    String? coverFilePath,
   }) async {
     try {
       final token = _getSocialAccessToken();
@@ -233,26 +237,37 @@ class SocialRepository {
         return ApiResponseModel.withError('Please log in to your social network account');
       }
 
-      // Ghép URL an toàn
       final base = '${AppConstants.socialBaseUrl}${AppConstants.socialUpdateDataUser}';
       final sep  = base.contains('?') ? '&' : '?';
       final url  = '$base${sep}access_token=$token';
 
-      // Map field tuỳ chọn
       final Map<String, dynamic> fields = {
         'server_key': AppConstants.socialServerKey,
+
+        // -------- tên / hiển thị --------
+        if ((firstName ?? '').trim().isNotEmpty) 'first_name': firstName!.trim(),   // <-- thêm
+        if ((lastName ?? '').trim().isNotEmpty)  'last_name' : lastName!.trim(),    // <-- thêm
+
+        // LƯU Ý: hiện tại bạn đang dùng displayName để map vào 'username' (handle).
+        // Nếu backend của bạn có field 'display_name' riêng, đổi key này thành 'display_name'.
         if ((displayName ?? '').trim().isNotEmpty) 'username': displayName!.trim(),
+
+        // -------- info khác --------
         if ((about ?? '').trim().isNotEmpty)       'about': about!.trim(),
         if ((genderText ?? '').isNotEmpty)         'gender': _genderToServer(genderText),
         if ((birthdayIso ?? '').isNotEmpty)        'birthday': birthdayIso,
         if ((address ?? '').trim().isNotEmpty) ...{
-          // tuỳ backend: nhiều nơi đọc khác key, đẩy cùng 1 giá trị để tương thích
-          'address' : address!.trim(),
-          'city'    : address.trim(),
+          'address': address!.trim(),
+          'city'   : address.trim(), // để tương thích vài backend
         },
         if ((website ?? '').trim().isNotEmpty)     'website': website!.trim(),
         if ((relationshipText ?? '').trim().isNotEmpty)
-          'relationship': relationshipText!.trim(), // hoặc 'relationship_id' tuỳ API
+          'relationship': relationshipText!.trim(),
+
+        // -------- đổi mật khẩu --------
+        // Hầu hết backend (như WoWonder) yêu cầu CẢ 2 field khi đổi mật khẩu
+        if ((currentPassword ?? '').isNotEmpty) 'current_password': currentPassword,
+        if ((newPassword ?? '').isNotEmpty)     'new_password'    : newPassword,
       };
 
       // Files (strip "file://")
@@ -278,6 +293,7 @@ class SocialRepository {
       return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
     }
   }
+
 
 // ========== Helpers (private) ==========
   String _genderToServer(String? genderText) {
@@ -430,19 +446,24 @@ class SocialRepository {
     String? userName  = _cleanStr(map['username'] ?? map['user_name']);
 
     // displayName ưu tiên: name -> first+last -> username
-    String? displayName = _cleanStr(map['name']);
+    String? displayName = _cleanStr(map['username'] ?? map['user_name']);
+    displayName ??= _cleanStr(map['name']);
+
     if (displayName == null || displayName.isEmpty) {
       final combined = [
         if (firstName != null && firstName.isNotEmpty) firstName,
-        if (lastName  != null && lastName.isNotEmpty) lastName,
+        if (lastName  != null && lastName.isNotEmpty)  lastName,
       ].join(' ').trim();
 
       if (combined.isNotEmpty) {
         displayName = combined;
       } else if (userName != null && userName.isNotEmpty) {
         displayName = userName;
+      } else {
+        displayName = id; // <— thêm fallback an toàn
       }
     }
+
 
     // avatar & cover
     final avatarRaw = (map['avatar_full'] ??

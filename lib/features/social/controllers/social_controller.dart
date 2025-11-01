@@ -241,15 +241,19 @@ class SocialController with ChangeNotifier {
   }
 
   //edit prodile user by aoanhan
-  // Trong SocialController
-  Future<SocialUserProfile> updateDataUserFromEdit(SocialUserProfile edited) async {
+  Future<SocialUserProfile> updateDataUserFromEdit(
+      SocialUserProfile edited, {
+        String? currentPassword,
+        String? newPassword,
+        String? ecomToken,
+      }) async {
     if (_updatingProfile) {
       throw Exception('Đang cập nhật hồ sơ, vui lòng đợi xíu...');
     }
     _updatingProfile = true;
     notifyListeners();
 
-    // helper nhỏ để bóc path local
+    // helper nhỏ để bóc path local (nếu bạn chưa dùng extension avatarLocalPath/coverLocalPath)
     String? _localPath(String? s) {
       if (s == null || s.isEmpty) return null;
       if (s.startsWith('file://')) return s.substring(7);
@@ -257,24 +261,56 @@ class SocialController with ChangeNotifier {
       return null;
     }
 
+    // Ưu tiên password truyền từ tham số; fallback sang field trong model (nếu bạn có giữ tạm)
+    String? cp = (currentPassword ?? edited.currentPassword)?.trim();
+    String? np = (newPassword ?? edited.newPassword)?.trim();
+
+    // Nếu chỉ nhập 1 trong 2 -> báo lỗi sớm
+    if ((cp?.isNotEmpty ?? false) ^ (np?.isNotEmpty ?? false)) {
+      _updatingProfile = false;
+      notifyListeners();
+      throw Exception('Vui lòng nhập đủ Mật khẩu hiện tại và Mật khẩu mới');
+    }
+    // Rule cơ bản cho mật khẩu mới
+    if ((np?.isNotEmpty ?? false) && (np!.length < 6)) {
+      _updatingProfile = false;
+      notifyListeners();
+      throw Exception('Mật khẩu mới phải từ 6 ký tự trở lên');
+    }
+
     try {
+      // Nếu bạn đã thêm extension SocialUserProfileX, có thể dùng:
+      // final avatarLocal = edited.avatarLocalPath;
+      // final coverLocal  = edited.coverLocalPath;
       final String? avatarLocal = _localPath(edited.avatarUrl);
       final String? coverLocal  = _localPath(edited.coverUrl);
 
-      // Gọi Service: chú ý chữ ký có `required String? displayName`
+      // Gọi Service: thêm first_name, last_name, current/new_password
       final updated = await service.updateDataUser(
-        displayName     : edited.displayName,       // required (có thể null, nhưng phải truyền tên tham số)
+        // --- tên ---
+        displayName     : edited.displayName,   // required String? (có thể null)
+        firstName       : edited.firstName,
+        lastName        : edited.lastName,
+
+        // --- thông tin khác ---
         about           : edited.about,
         genderText      : edited.genderText,
-        birthdayIso     : edited.birthday,          // yyyy-MM-dd
-        address         : edited.address,           // chỉ dùng address (không còn city/country ở UI)
+        birthdayIso     : edited.birthday,      // yyyy-MM-dd
+        address         : edited.address,
         website         : edited.website,
         relationshipText: edited.relationshipStatus,
-        avatarFilePath  : avatarLocal,              // path local (nếu có)
-        coverFilePath   : coverLocal,               // path local (nếu có)
+
+        // --- mật khẩu (chỉ gửi khi cả 2 đều có giá trị) ---
+        currentPassword : (cp?.isNotEmpty ?? false) ? cp : null,
+        newPassword     : (np?.isNotEmpty ?? false) ? np : null,
+
+        // --- file ảnh ---
+        avatarFilePath  : avatarLocal,
+        coverFilePath   : coverLocal,
+        ecomToken       : ecomToken,
       );
 
-      // Đồng bộ lại header/current user
+      // Đồng bộ lại header/current user (giữ nguyên như cũ)
       if (_profileHeaderUser?.id == updated.id) {
         _profileHeaderUser = updated;
       }
@@ -298,6 +334,8 @@ class SocialController with ChangeNotifier {
       notifyListeners();
     }
   }
+
+
 
 
 

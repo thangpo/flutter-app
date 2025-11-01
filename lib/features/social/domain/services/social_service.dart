@@ -1,14 +1,23 @@
-import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_repository.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
+import 'dart:io';
+
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+
+import 'package:flutter_sixvalley_ecommerce/data/model/api_response.dart';
+import 'package:flutter_sixvalley_ecommerce/features/profile/domain/models/profile_model.dart';
+import 'package:flutter_sixvalley_ecommerce/features/profile/domain/services/profile_service_interface.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_comment.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_feed_page.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user_profile.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
-import 'package:dio/dio.dart';
 
 import 'social_service_interface.dart';
 
@@ -27,9 +36,21 @@ class SocialProfileBundle {
   });
 }
 
+/// gói thông tin của ecom khi cập nhật profile của user
+class _EcomContact {
+  final String email;
+  final String phone;
+  _EcomContact(this.email, this.phone);
+}
+
 class SocialService implements SocialServiceInterface {
   final SocialRepository socialRepository;
-  SocialService({required this.socialRepository});
+  final ProfileServiceInterface? ecomService;
+
+  SocialService({
+    required this.socialRepository,
+    this.ecomService,
+  });
 
   // ========== PRIVATE HELPERS ==========
   String? _absoluteUrl(String? raw) {
@@ -43,10 +64,7 @@ class SocialService implements SocialServiceInterface {
     }
 
     final base = AppConstants.socialBaseUrl.endsWith('/')
-        ? AppConstants.socialBaseUrl.substring(
-            0,
-            AppConstants.socialBaseUrl.length - 1,
-          )
+        ? AppConstants.socialBaseUrl.substring(0, AppConstants.socialBaseUrl.length - 1)
         : AppConstants.socialBaseUrl;
 
     if (trimmed.startsWith('/')) {
@@ -62,8 +80,7 @@ class SocialService implements SocialServiceInterface {
       user['avatar'] = _absoluteUrl(user['avatar']?.toString());
     }
     if (user['profile_picture'] != null) {
-      user['profile_picture'] =
-          _absoluteUrl(user['profile_picture']?.toString());
+      user['profile_picture'] = _absoluteUrl(user['profile_picture']?.toString());
     }
     if (user['cover'] != null) {
       user['cover'] = _absoluteUrl(user['cover']?.toString());
@@ -109,17 +126,9 @@ class SocialService implements SocialServiceInterface {
 
   // ========== FEEDS ==========
   @override
-  Future<List<SocialPost>> getNewsFeed({
-    int limit = 10,
-    String? afterPostId,
-  }) async {
-    final resp = await socialRepository.fetchNewsFeed(
-      limit: limit,
-      afterPostId: afterPostId,
-    );
-    if (resp.isSuccess &&
-        resp.response != null &&
-        resp.response!.statusCode == 200) {
+  Future<List<SocialPost>> getNewsFeed({int limit = 10, String? afterPostId}) async {
+    final resp = await socialRepository.fetchNewsFeed(limit: limit, afterPostId: afterPostId);
+    if (resp.isSuccess && resp.response != null && resp.response!.statusCode == 200) {
       final page = socialRepository.parseNewsFeed(resp.response!);
       return page.posts;
     }
@@ -128,19 +137,9 @@ class SocialService implements SocialServiceInterface {
   }
 
   @override
-  Future<SocialFeedPage> getGroupFeed({
-    required String groupId,
-    int limit = 10,
-    String? afterPostId,
-  }) async {
-    final resp = await socialRepository.fetchGroupFeed(
-      groupId: groupId,
-      limit: limit,
-      afterPostId: afterPostId,
-    );
-    if (resp.isSuccess &&
-        resp.response != null &&
-        resp.response!.statusCode == 200) {
+  Future<SocialFeedPage> getGroupFeed({required String groupId, int limit = 10, String? afterPostId}) async {
+    final resp = await socialRepository.fetchGroupFeed(groupId: groupId, limit: limit, afterPostId: afterPostId);
+    if (resp.isSuccess && resp.response != null && resp.response!.statusCode == 200) {
       return socialRepository.parseNewsFeed(resp.response!);
     }
     ApiChecker.checkApi(resp);
@@ -152,10 +151,7 @@ class SocialService implements SocialServiceInterface {
     final resp = await socialRepository.searchSocial(searchKey: keyword);
     if (resp.isSuccess && resp.response != null) {
       final dynamic data = resp.response!.data;
-      final int status = int.tryParse(
-            '${data is Map ? (data['api_status'] ?? 200) : 200}',
-          ) ??
-          200;
+      final int status = int.tryParse('${data is Map ? (data['api_status'] ?? 200) : 200}') ?? 200;
       if (status == 200) {
         final groups = socialRepository.parseGroups(resp.response!);
         return groups.where((group) => !group.isJoined).toList();
@@ -173,21 +169,11 @@ class SocialService implements SocialServiceInterface {
   }
 
   @override
-  Future<List<SocialGroup>> getMyGroups({
-    required String type,
-    int limit = 20,
-    int offset = 0,
-  }) async {
-    final resp = await socialRepository.fetchMyGroups(
-      type: type,
-      limit: limit,
-      offset: offset,
-    );
+  Future<List<SocialGroup>> getMyGroups({required String type, int limit = 20, int offset = 0}) async {
+    final resp = await socialRepository.fetchMyGroups(type: type, limit: limit, offset: offset);
     if (resp.isSuccess && resp.response != null) {
       final dynamic data = resp.response!.data;
-      final int status =
-          int.tryParse('${data is Map ? (data['api_status'] ?? 200) : 200}') ??
-              200;
+      final int status = int.tryParse('${data is Map ? (data['api_status'] ?? 200) : 200}') ?? 200;
       if (status == 200) {
         return socialRepository.parseGroups(resp.response!);
       }
@@ -205,17 +191,9 @@ class SocialService implements SocialServiceInterface {
 
   // Stories
   @override
-  Future<List<SocialStory>> getStories({
-    int limit = 10,
-    int offset = 0,
-  }) async {
-    final resp = await socialRepository.fetchStories(
-      limit: limit,
-      offset: offset,
-    );
-    if (resp.isSuccess &&
-        resp.response != null &&
-        resp.response!.statusCode == 200) {
+  Future<List<SocialStory>> getStories({int limit = 10, int offset = 0}) async {
+    final resp = await socialRepository.fetchStories(limit: limit, offset: offset);
+    if (resp.isSuccess && resp.response != null && resp.response!.statusCode == 200) {
       return socialRepository.parseStories(resp.response!);
     }
     ApiChecker.checkApi(resp);
@@ -223,17 +201,9 @@ class SocialService implements SocialServiceInterface {
   }
 
   @override
-  Future<List<SocialStory>> getMyStories({
-    int limit = 10,
-    int offset = 0,
-  }) async {
-    final resp = await socialRepository.fetchUserStories(
-      limit: limit,
-      offset: offset,
-    );
-    if (resp.isSuccess &&
-        resp.response != null &&
-        resp.response!.statusCode == 200) {
+  Future<List<SocialStory>> getMyStories({int limit = 10, int offset = 0}) async {
+    final resp = await socialRepository.fetchUserStories(limit: limit, offset: offset);
+    if (resp.isSuccess && resp.response != null && resp.response!.statusCode == 200) {
       return socialRepository.parseStories(resp.response!);
     }
     ApiChecker.checkApi(resp);
@@ -265,31 +235,21 @@ class SocialService implements SocialServiceInterface {
       if (status == 200) {
         final dynamic storyIdRaw = data?['story_id'] ?? data?['id'];
         if (storyIdRaw != null && '$storyIdRaw'.isNotEmpty) {
-          final detailResp = await socialRepository.fetchStoryById(
-            id: '$storyIdRaw',
-          );
+          final detailResp = await socialRepository.fetchStoryById(id: '$storyIdRaw');
           if (detailResp.isSuccess && detailResp.response != null) {
             final detailData = detailResp.response!.data;
-            final detailStatus =
-                int.tryParse('${detailData?['api_status'] ?? 200}') ?? 200;
+            final detailStatus = int.tryParse('${detailData?['api_status'] ?? 200}') ?? 200;
             if (detailStatus == 200) {
-              final SocialStory? story =
-                  socialRepository.parseStoryDetail(detailResp.response!);
-              if (story != null) {
-                return story;
-              }
+              final SocialStory? story = socialRepository.parseStoryDetail(detailResp.response!);
+              if (story != null) return story;
             }
           }
         }
-        final SocialStory? inline =
-            socialRepository.parseStoryDetail(resp.response!);
+        final SocialStory? inline = socialRepository.parseStoryDetail(resp.response!);
         return inline;
       }
 
-      final msg = (data?['errors']?['error_text'] ??
-              data?['message'] ??
-              'Create story failed')
-          .toString();
+      final msg = (data?['errors']?['error_text'] ?? data?['message'] ?? 'Create story failed').toString();
       throw Exception(msg);
     }
 
@@ -298,23 +258,14 @@ class SocialService implements SocialServiceInterface {
   }
 
   @override
-  Future<SocialStoryViewersPage> getStoryViews({
-    required String storyId,
-    int limit = 20,
-    int offset = 0,
-  }) async {
-    final resp = await socialRepository.fetchStoryViews(
-      storyId: storyId,
-      limit: limit,
-      offset: offset,
-    );
+  Future<SocialStoryViewersPage> getStoryViews({required String storyId, int limit = 20, int offset = 0}) async {
+    final resp = await socialRepository.fetchStoryViews(storyId: storyId, limit: limit, offset: offset);
 
     if (resp.isSuccess && resp.response != null) {
       final data = resp.response!.data;
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status == 200) {
-        final SocialStoryViewersPage viewsPage =
-            socialRepository.parseStoryViews(
+        final SocialStoryViewersPage viewsPage = socialRepository.parseStoryViews(
           resp.response!,
           currentOffset: offset,
           limit: limit,
@@ -331,8 +282,7 @@ class SocialService implements SocialServiceInterface {
           );
           if (respReactions.isSuccess && respReactions.response != null) {
             final dynamic reactionsData = respReactions.response!.data;
-            final int reactionsStatus =
-                int.tryParse('${reactionsData?['api_status'] ?? 200}') ?? 200;
+            final int reactionsStatus = int.tryParse('${reactionsData?['api_status'] ?? 200}') ?? 200;
             if (reactionsStatus == 200) {
               reactionsPage = socialRepository.parseStoryViews(
                 respReactions.response!,
@@ -356,15 +306,14 @@ class SocialService implements SocialServiceInterface {
         List<String> extractedReactions(SocialStoryViewer viewer) {
           if (viewer.reactions.isNotEmpty) return viewer.reactions;
           if (viewer.reaction.isNotEmpty) {
+            // hàm normalizeSocialReaction được giữ nguyên như project của bạn
             return <String>[normalizeSocialReaction(viewer.reaction)];
           }
           return const <String>[];
         }
 
-        final Map<String, SocialStoryViewer> reactionLookup =
-            <String, SocialStoryViewer>{
-          for (final SocialStoryViewer viewer in reactionsPage.viewers)
-            viewerKeyFor(viewer): viewer,
+        final Map<String, SocialStoryViewer> reactionLookup = <String, SocialStoryViewer>{
+          for (final SocialStoryViewer viewer in reactionsPage.viewers) viewerKeyFor(viewer): viewer,
         };
 
         final List<SocialStoryViewer> mergedViewers = <SocialStoryViewer>[];
@@ -376,20 +325,13 @@ class SocialService implements SocialServiceInterface {
             final List<String> reactionsList = extractedReactions(reaction);
             mergedViewers.add(
               viewer.copyWith(
-                name: (viewer.name?.isNotEmpty ?? false)
-                    ? viewer.name
-                    : reaction.name,
-                avatar: (viewer.avatar?.isNotEmpty ?? false)
-                    ? viewer.avatar
-                    : reaction.avatar,
+                name: (viewer.name?.isNotEmpty ?? false) ? viewer.name : reaction.name,
+                avatar: (viewer.avatar?.isNotEmpty ?? false) ? viewer.avatar : reaction.avatar,
                 isVerified: viewer.isVerified || reaction.isVerified,
                 viewedAt: viewer.viewedAt ?? reaction.viewedAt,
                 reactions: reactionsList,
-                reactionCount: reaction.reactionCount ??
-                    (reactionsList.isNotEmpty ? reactionsList.length : null),
-                reaction: reactionsList.isNotEmpty
-                    ? reactionsList.last
-                    : reaction.reaction,
+                reactionCount: reaction.reactionCount ?? (reactionsList.isNotEmpty ? reactionsList.length : null),
+                reaction: reactionsList.isNotEmpty ? reactionsList.last : reaction.reaction,
               ),
             );
           } else {
@@ -403,36 +345,27 @@ class SocialService implements SocialServiceInterface {
               final List<String> reactionsList = extractedReactions(reaction);
               return reaction.copyWith(
                 reactions: reactionsList,
-                reaction: reactionsList.isNotEmpty
-                    ? reactionsList.last
-                    : reaction.reaction,
-                reactionCount: reaction.reactionCount ??
-                    (reactionsList.isNotEmpty ? reactionsList.length : null),
+                reaction: reactionsList.isNotEmpty ? reactionsList.last : reaction.reaction,
+                reactionCount: reaction.reactionCount ?? (reactionsList.isNotEmpty ? reactionsList.length : null),
               );
             }),
           );
         }
 
         mergedViewers.sort((a, b) {
-          final DateTime aTime =
-              a.viewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-          final DateTime bTime =
-              b.viewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final DateTime aTime = a.viewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final DateTime bTime = b.viewedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
           return bTime.compareTo(aTime);
         });
 
-        final int mergedTotal = mergedViewers.length > viewsPage.total
-            ? mergedViewers.length
-            : viewsPage.total;
+        final int mergedTotal = mergedViewers.length > viewsPage.total ? mergedViewers.length : viewsPage.total;
 
         return viewsPage.copyWith(
           viewers: mergedViewers,
           total: mergedTotal,
         );
       }
-      final msg =
-          (data?['errors']?['error_text'] ?? 'Load story viewers failed')
-              .toString();
+      final msg = (data?['errors']?['error_text'] ?? 'Load story viewers failed').toString();
       throw Exception(msg);
     }
 
@@ -442,23 +375,14 @@ class SocialService implements SocialServiceInterface {
 
   // ========== REACTIONS ==========
   @override
-  Future<void> reactToPost({
-    required String postId,
-    required String reaction,
-    String action = 'reaction',
-  }) async {
-    final resp = await socialRepository.reactToPostWithAction(
-      postId: postId,
-      reaction: reaction,
-      action: action,
-    );
+  Future<void> reactToPost({required String postId, required String reaction, String action = 'reaction'}) async {
+    final resp = await socialRepository.reactToPostWithAction(postId: postId, reaction: reaction, action: action);
 
     if (resp.isSuccess && resp.response != null) {
       final data = resp.response!.data;
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status != 200) {
-        final msg =
-            (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
+        final msg = (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
         throw Exception(msg);
       }
       return;
@@ -469,21 +393,14 @@ class SocialService implements SocialServiceInterface {
   }
 
   @override
-  Future<void> reactToStory({
-    required String storyId,
-    required String reaction,
-  }) async {
-    final resp = await socialRepository.reactToStory(
-      storyId: storyId,
-      reaction: reaction,
-    );
+  Future<void> reactToStory({required String storyId, required String reaction}) async {
+    final resp = await socialRepository.reactToStory(storyId: storyId, reaction: reaction);
 
     if (resp.isSuccess && resp.response != null) {
       final data = resp.response!.data;
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status == 200) return;
-      final msg =
-          (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
+      final msg = (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
       throw Exception(msg);
     }
 
@@ -492,21 +409,14 @@ class SocialService implements SocialServiceInterface {
   }
 
   @override
-  Future<void> reactToComment({
-    required String commentId,
-    required String reaction,
-  }) async {
-    final resp = await socialRepository.reactToComment(
-      commentId: commentId,
-      reaction: reaction,
-    );
+  Future<void> reactToComment({required String commentId, required String reaction}) async {
+    final resp = await socialRepository.reactToComment(commentId: commentId, reaction: reaction);
 
     if (resp.isSuccess && resp.response != null) {
       final data = resp.response!.data;
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status == 200) return;
-      final msg =
-          (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
+      final msg = (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
       throw Exception(msg);
     }
 
@@ -515,21 +425,14 @@ class SocialService implements SocialServiceInterface {
   }
 
   @override
-  Future<void> reactToReply({
-    required String replyId,
-    required String reaction,
-  }) async {
-    final resp = await socialRepository.reactToReply(
-      replyId: replyId,
-      reaction: reaction,
-    );
+  Future<void> reactToReply({required String replyId, required String reaction}) async {
+    final resp = await socialRepository.reactToReply(replyId: replyId, reaction: reaction);
 
     if (resp.isSuccess && resp.response != null) {
       final data = resp.response!.data;
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status == 200) return;
-      final msg =
-          (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
+      final msg = (data?['errors']?['error_text'] ?? 'Reaction failed').toString();
       throw Exception(msg);
     }
 
@@ -547,8 +450,7 @@ class SocialService implements SocialServiceInterface {
       if (status == 200) {
         return socialRepository.parseCurrentUser(resp.response!);
       }
-      final msg =
-          (data?['errors']?['error_text'] ?? 'Load profile failed').toString();
+      final msg = (data?['errors']?['error_text'] ?? 'Load profile failed').toString();
       throw Exception(msg);
     }
     ApiChecker.checkApi(resp);
@@ -556,7 +458,6 @@ class SocialService implements SocialServiceInterface {
   }
 
   //30/10 thêm service follow
-  // social_service.dart
   @override
   Future<bool> toggleFollow({required String targetUserId}) async {
     final resp = await socialRepository.toggleFollow(targetUserId: targetUserId);
@@ -566,21 +467,17 @@ class SocialService implements SocialServiceInterface {
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status == 200) {
         final String raw = '${data?['follow_status'] ?? ''}'.toLowerCase().trim();
-
-        // API của bạn trả "followed" | "unfollowed"
         switch (raw) {
           case 'followed':
-            return true;   // đang follow
+            return true;
           case 'unfollowed':
-            return false;  // đã hủy follow
+            return false;
           default:
-          // fallback an toàn nếu server đổi format
             throw Exception('Unknown follow_status: $raw');
         }
       }
 
-      final msg = (data?['errors']?['error_text'] ??
-          data?['message'] ?? 'Toggle follow failed').toString();
+      final msg = (data?['errors']?['error_text'] ?? data?['message'] ?? 'Toggle follow failed').toString();
       throw Exception(msg);
     }
 
@@ -588,92 +485,208 @@ class SocialService implements SocialServiceInterface {
     throw Exception('Toggle follow failed');
   }
 
-  //edit profile user by aoanhan
+  // ========== EDIT PROFILE (SOCIAL) + SYNC E-COM ==========
   @override
   Future<SocialUserProfile> updateDataUser({
     required String? displayName,
+    String? firstName,
+    String? lastName,
     String? about,
     String? genderText,
     String? birthdayIso,
     String? address,
     String? website,
     String? relationshipText,
+    String? currentPassword,
+    String? newPassword,
     String? avatarFilePath,
     String? coverFilePath,
+    String? ecomToken, // <-- thêm để đồng bộ E-com
   }) async {
+    // Gọi repo update hồ sơ MXH
     final resp = await socialRepository.updateDataUser(
-      displayName   : displayName,
-      about         : about,
-      genderText    : genderText,
-      birthdayIso   : birthdayIso,
-      address       : address,
-      website       : website,
+      displayName     : displayName,
+      firstName       : firstName,
+      lastName        : lastName,
+      about           : about,
+      genderText      : genderText,
+      birthdayIso     : birthdayIso,
+      address         : address,
+      website         : website,
       relationshipText: relationshipText,
-      avatarFilePath: avatarFilePath,
-      coverFilePath : coverFilePath,
+      currentPassword : currentPassword,
+      newPassword     : newPassword,
+      avatarFilePath  : avatarFilePath,
+      coverFilePath   : coverFilePath,
     );
 
     if (resp.isSuccess && resp.response != null) {
       final data   = resp.response!.data;
       final status = int.tryParse('${data?['api_status'] ?? data?['status'] ?? 200}') ?? 200;
+
       if (status == 200) {
-        // 1) Thử lấy user ngay trong payload (nếu API có trả)
+        // ---- Dựng output thống nhất ----
+        SocialUserProfile? out;
+
+        // 1) Ưu tiên payload có user
         final Map<String, dynamic>? userJson = _pickUserJson(data);
         if (userJson != null) {
-          return SocialUserProfile.fromJson(userJson);
-        }
-
-        // 2) Lấy các field lẻ như avatar/cover nếu có
-        final String? newAvatar = data?['avatar_full'] ?? data?['avatar'];
-        final String? newCover  = data?['cover_full']  ?? data?['cover'];
-
-        // 3) Fallback: refetch profile hiện tại rồi patch các trường vừa cập nhật
-        try {
-          final me = await getCurrentUser(); // trả SocialUser? có id
-          if (me != null && me.id.isNotEmpty) {
-            final bundle = await getUserProfile(targetUserId: me.id);
-            if (bundle.user != null) {
-              final u = bundle.user!;
-              return u.copyWith(
-                displayName: displayName ?? u.displayName,
-                about      : about       ?? u.about,
-                address    : address     ?? u.address,
-                website    : website     ?? u.website,
-                birthday   : birthdayIso ?? u.birthday,
-                genderText : genderText  ?? u.genderText,
-                relationshipStatus: relationshipText ?? u.relationshipStatus,
-                avatarUrl  : newAvatar ?? u.avatarUrl,
-                coverUrl   : newCover  ?? u.coverUrl,
-              );
+          out = SocialUserProfile.fromJson(userJson);
+        } else {
+          // 2) Fallback: refetch rồi patch các field vừa cập nhật
+          try {
+            final me = await getCurrentUser();
+            if (me != null && me.id.isNotEmpty) {
+              final bundle = await getUserProfile(targetUserId: me.id);
+              if (bundle.user != null) {
+                final u = bundle.user!;
+                out = u.copyWith(
+                  // tên
+                  firstName  : firstName   ?? u.firstName,
+                  lastName   : lastName    ?? u.lastName,
+                  displayName: displayName ?? u.displayName,
+                  // info khác
+                  about      : about       ?? u.about,
+                  address    : address     ?? u.address,
+                  website    : website     ?? u.website,
+                  birthday   : birthdayIso ?? u.birthday,
+                  genderText : genderText  ?? u.genderText,
+                  relationshipStatus: relationshipText ?? u.relationshipStatus,
+                  // ảnh
+                  avatarUrl  : (data?['avatar_full'] ?? data?['avatar']) ?? u.avatarUrl,
+                  coverUrl   : (data?['cover_full']  ?? data?['cover'])  ?? u.coverUrl,
+                );
+              }
             }
+          } catch (_) {
+            // ignore
           }
-        } catch (_) {
-          // bỏ qua, dùng bước 4
         }
 
-        // 4) Last resort: trả bản tối thiểu dựa trên những gì biết được
-        final me = await getCurrentUser();
-        return SocialUserProfile(
-          id: me?.id ?? '',
+        // 3) Last resort: vẫn chưa có out thì dựng tối thiểu
+        out ??= SocialUserProfile(
+          id: (await getCurrentUser())?.id ?? '',
+          firstName  : firstName,
+          lastName   : lastName,
           displayName: displayName,
-          about: about,
-          address: address,
-          website: website,
-          birthday: birthdayIso,
+          about      : about,
+          address    : address,
+          website    : website,
+          birthday   : birthdayIso,
           relationshipStatus: relationshipText,
-          genderText: genderText,
-          avatarUrl: newAvatar,
-          coverUrl : newCover,
+          genderText : genderText,
+          avatarUrl  : data?['avatar_full'] ?? data?['avatar'],
+          coverUrl   : data?['cover_full']  ?? data?['cover'],
         );
+
+        // ---- Đồng bộ E-com nếu có ecomService ----
+        if (ecomService != null) {
+          await _syncEcomAfterSocialUpdate(
+            ecomService   : ecomService!,
+            updated       : out,
+            firstName     : firstName,
+            lastName      : lastName,
+            newPassword   : newPassword,
+            avatarFilePath: avatarFilePath,
+            ecomToken     : ecomToken, // truyền thẳng token lấy từ UI
+          );
+        }
+
+        return out;
       }
 
+      // Lỗi từ server MXH
       final msg = (data?['errors']?['error_text'] ?? data?['message'] ?? 'Update profile failed').toString();
       throw Exception(msg);
     }
+
+    // Lỗi HTTP/transport, dùng checker cũ
     ApiChecker.checkApi(resp);
     throw Exception('Update profile failed');
   }
 
+
+  ///profile user in ecom
+  Future<_EcomContact?> _ensureEcomContact(ProfileServiceInterface ecomService) async {
+    final sp = await SharedPreferences.getInstance();
+
+    // 1) Ưu tiên cache
+    final cachedEmail = sp.getString('ecom_email');
+    final cachedPhone = sp.getString('ecom_phone');
+    if ((cachedEmail?.isNotEmpty ?? false) && (cachedPhone?.isNotEmpty ?? false)) {
+      return _EcomContact(cachedEmail!, cachedPhone!);
+    }
+
+    // 2) Nếu cache trống, gọi API E-com
+    final resp = await ecomService.getProfileInfo();
+    try {
+      if (resp is ApiResponseModel && resp.isSuccess && resp.response != null) {
+        final raw = resp.response!.data;
+        final Map<String, dynamic> payload = (raw['data'] ?? raw) as Map<String, dynamic>;
+        final prof = ProfileModel.fromJson(payload);
+
+        final email = prof.email?.trim();
+        final phone = prof.phone?.trim();
+        if ((email?.isNotEmpty ?? false) && (phone?.isNotEmpty ?? false)) {
+          // 3) Lưu cache
+          await sp.setString('ecom_email', email!);
+          await sp.setString('ecom_phone', phone!);
+          return _EcomContact(email, phone!);
+        }
+      }
+    } catch (e) {
+      debugPrint('[EcomContact] parse fail: $e');
+    }
+    return null;
+  }
+
+  Future<void> _syncEcomAfterSocialUpdate({
+    required ProfileServiceInterface ecomService,
+    required SocialUserProfile updated,
+    String? firstName,
+    String? lastName,
+    String? newPassword,
+    String? avatarFilePath,
+    String? ecomToken, // <-- nhận từ UI
+  }) async {
+    // BẮT BUỘC có token truyền xuống, nếu không có -> bỏ qua
+    if (ecomToken == null || ecomToken.isEmpty) {
+      debugPrint('[SYNC ECOM] skip: missing ecomToken from UI');
+      return;
+    }
+
+    // Đảm bảo có email/phone từ E-com (cache hoặc gọi getProfileInfo)
+    final c = await _ensureEcomContact(ecomService);
+    if (c == null) {
+      debugPrint('[SYNC ECOM] skip: missing email/phone');
+      return;
+    }
+
+    final model = ProfileModel(
+      fName: (firstName?.trim().isNotEmpty ?? false) ? firstName!.trim() : (updated.firstName ?? ''),
+      lName: (lastName ?.trim().isNotEmpty ?? false) ? lastName!.trim()  : (updated.lastName  ?? ''),
+      email: c.email,
+      phone: c.phone,
+    );
+
+    File? file;
+    if (avatarFilePath != null && avatarFilePath.isNotEmpty) {
+      final p = avatarFilePath.startsWith('file://') ? avatarFilePath.substring(7) : avatarFilePath;
+      final f = File(p);
+      if (await f.exists()) file = f;
+    }
+
+    final pass = (newPassword?.trim().isNotEmpty ?? false) ? newPassword!.trim() : '';
+
+    try {
+      final http.StreamedResponse res = await ecomService.updateProfile(model, pass, file, ecomToken);
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        await _ensureEcomContact(ecomService); // làm tươi cache
+      }
+    } catch (e) {
+      debugPrint('[SYNC ECOM] fail: $e');
+    }
+  }
 
   /// Ưu tiên các khoá hay gặp: user_data, user, data.user, data.user_data, data
   Map<String, dynamic>? _pickUserJson(dynamic root) {
@@ -690,34 +703,23 @@ class SocialService implements SocialServiceInterface {
     return null;
   }
 
-
-
   /// Lấy thông tin profile đầy đủ của user (followers, following, liked_pages)
   Future<SocialProfileBundle> getUserProfile({String? targetUserId}) async {
-    final apiRes = await socialRepository.fetchUserProfile(
-      targetUserId: targetUserId,
-    );
+    final apiRes = await socialRepository.fetchUserProfile(targetUserId: targetUserId);
 
     // fallback rỗng nếu lỗi API
     if (apiRes.isSuccess != true ||
         apiRes.response == null ||
         apiRes.response is! Response ||
         apiRes.response!.statusCode != 200) {
-      return const SocialProfileBundle(
-        user: null,
-        followers: [],
-        following: [],
-        likedPages: [],
-      );
+      return const SocialProfileBundle(user: null, followers: [], following: [], likedPages: []);
     }
 
     final Response res = apiRes.response!;
     final body = res.data;
 
     // 1. user chính (header profile)
-    // parseUserProfile(res) trả về SocialUserProfile?
-    final SocialUserProfile? profileHeader =
-        socialRepository.parseUserProfile(res);
+    final SocialUserProfile? profileHeader = socialRepository.parseUserProfile(res);
 
     // 2. followers / following (danh sách rút gọn)
     final List<SocialUser> followersList = [];
@@ -729,9 +731,7 @@ class SocialService implements SocialServiceInterface {
       if (body['followers'] is List) {
         for (final f in (body['followers'] as List)) {
           if (f is! Map<String, dynamic>) continue;
-          final normalizedFollower = _normalizeUserMap(
-            Map<String, dynamic>.from(f),
-          );
+          final normalizedFollower = _normalizeUserMap(Map<String, dynamic>.from(f));
           followersList.add(_mapToSocialUser(normalizedFollower));
         }
       }
@@ -740,9 +740,7 @@ class SocialService implements SocialServiceInterface {
       if (body['following'] is List) {
         for (final f in (body['following'] as List)) {
           if (f is! Map<String, dynamic>) continue;
-          final normalizedFollowing = _normalizeUserMap(
-            Map<String, dynamic>.from(f),
-          );
+          final normalizedFollowing = _normalizeUserMap(Map<String, dynamic>.from(f));
           followingList.add(_mapToSocialUser(normalizedFollowing));
         }
       }
@@ -755,9 +753,9 @@ class SocialService implements SocialServiceInterface {
 
     // 3. trả bundle
     return SocialProfileBundle(
-      user: profileHeader, // <- giờ đúng kiểu SocialUserProfile?
-      followers: followersList, // List<SocialUser>
-      following: followingList, // List<SocialUser>
+      user: profileHeader,
+      followers: followersList,
+      following: followingList,
       likedPages: likedPagesRaw,
     );
   }
@@ -793,9 +791,7 @@ class SocialService implements SocialServiceInterface {
       if (rawPosts is List) {
         for (final raw in rawPosts) {
           if (raw is! Map<String, dynamic>) continue;
-          final post = socialRepository.mapToSocialPost(
-            Map<String, dynamic>.from(raw),
-          );
+          final post = socialRepository.mapToSocialPost(Map<String, dynamic>.from(raw));
           if (post != null) {
             postsResult.add(post);
             lastId = post.id;
@@ -804,10 +800,7 @@ class SocialService implements SocialServiceInterface {
       }
     }
 
-    return SocialFeedPage(
-      posts: postsResult,
-      lastId: lastId,
-    );
+    return SocialFeedPage(posts: postsResult, lastId: lastId);
   }
 
   // ========== POSTS ==========
@@ -820,8 +813,7 @@ class SocialService implements SocialServiceInterface {
       if (status == 200) {
         return socialRepository.parsePostData(resp.response!);
       }
-      final msg =
-          (data?['errors']?['error_text'] ?? 'Load post failed').toString();
+      final msg = (data?['errors']?['error_text'] ?? 'Load post failed').toString();
       throw Exception(msg);
     }
     ApiChecker.checkApi(resp);
@@ -855,10 +847,7 @@ class SocialService implements SocialServiceInterface {
         if (post != null) return post;
         throw Exception('Create post failed: Missing post data.');
       }
-      final msg = (data?['errors']?['error_text'] ??
-              data?['message'] ??
-              'Create post failed')
-          .toString();
+      final msg = (data?['errors']?['error_text'] ?? data?['message'] ?? 'Create post failed').toString();
       throw Exception(msg);
     }
     ApiChecker.checkApi(resp);
@@ -867,10 +856,7 @@ class SocialService implements SocialServiceInterface {
 
   @override
   Future<SocialPost> sharePost({required String postId, String? text}) async {
-    final resp = await socialRepository.sharePostOnTimeline(
-      postId: postId,
-      text: text,
-    );
+    final resp = await socialRepository.sharePostOnTimeline(postId: postId, text: text);
     if (resp.isSuccess && resp.response != null) {
       final data = resp.response!.data;
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
@@ -879,8 +865,7 @@ class SocialService implements SocialServiceInterface {
         if (post != null) return post;
         throw Exception('Share failed: Missing post data.');
       }
-      final msg =
-          (data?['errors']?['error_text'] ?? 'Share post failed').toString();
+      final msg = (data?['errors']?['error_text'] ?? 'Share post failed').toString();
       throw Exception(msg);
     }
     ApiChecker.checkApi(resp);
@@ -889,24 +874,15 @@ class SocialService implements SocialServiceInterface {
 
   // ========== COMMENTS ==========
   @override
-  Future<List<SocialComment>> getPostComments({
-    required String postId,
-    int? limit,
-    int? offset,
-  }) async {
-    final resp = await socialRepository.fetchComments(
-      postId: postId,
-      limit: limit,
-      offset: offset,
-    );
+  Future<List<SocialComment>> getPostComments({required String postId, int? limit, int? offset}) async {
+    final resp = await socialRepository.fetchComments(postId: postId, limit: limit, offset: offset);
     if (resp.isSuccess && resp.response != null) {
       final data = resp.response!.data;
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status == 200) {
         return socialRepository.parsePostComments(resp.response!);
       }
-      final msg =
-          (data?['errors']?['error_text'] ?? 'Load comments failed').toString();
+      final msg = (data?['errors']?['error_text'] ?? 'Load comments failed').toString();
       throw Exception(msg);
     }
     ApiChecker.checkApi(resp);
@@ -914,20 +890,15 @@ class SocialService implements SocialServiceInterface {
   }
 
   @override
-  Future<List<SocialComment>> getCommentReplies({
-    required String commentId,
-  }) async {
-    final resp = await socialRepository.fetchCommentReplies(
-      commentId: commentId,
-    );
+  Future<List<SocialComment>> getCommentReplies({required String commentId}) async {
+    final resp = await socialRepository.fetchCommentReplies(commentId: commentId);
     if (resp.isSuccess && resp.response != null) {
       final data = resp.response!.data;
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status == 200) {
         return socialRepository.parseCommentReplies(resp.response!);
       }
-      final msg =
-          (data?['errors']?['error_text'] ?? 'Load replies failed').toString();
+      final msg = (data?['errors']?['error_text'] ?? 'Load replies failed').toString();
       throw Exception(msg);
     }
     ApiChecker.checkApi(resp);
@@ -953,8 +924,7 @@ class SocialService implements SocialServiceInterface {
       final data = resp.response!.data;
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status == 200) return;
-      final msg = (data?['errors']?['error_text'] ?? 'Create comment failed')
-          .toString();
+      final msg = (data?['errors']?['error_text'] ?? 'Create comment failed').toString();
       throw Exception(msg);
     }
     ApiChecker.checkApi(resp);
@@ -980,8 +950,7 @@ class SocialService implements SocialServiceInterface {
       final data = resp.response!.data;
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status == 200) return;
-      final msg =
-          (data?['errors']?['error_text'] ?? 'Create reply failed').toString();
+      final msg = (data?['errors']?['error_text'] ?? 'Create reply failed').toString();
       throw Exception(msg);
     }
     ApiChecker.checkApi(resp);
