@@ -3,14 +3,14 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/chat_message_bubble.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_chat_repository.dart';
 
 class ChatScreen extends StatefulWidget {
   final String accessToken;
-  final String peerUserId; // id người nhận (recipient_id)
-  final String? receiverId; // để tương thích chỗ gọi cũ (không còn dùng)
+  final String peerUserId; // id người nhận
   final String? peerName;
   final String? peerAvatar;
 
@@ -18,7 +18,6 @@ class ChatScreen extends StatefulWidget {
     super.key,
     required this.accessToken,
     required this.peerUserId,
-    this.receiverId,
     this.peerName,
     this.peerAvatar,
   });
@@ -36,14 +35,10 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _loading = false;
   bool _sending = false;
   bool _hasMore = true;
-
-  /// Lấy thêm cũ hơn sẽ dùng `before_message_id = _beforeId`
   String? _beforeId;
-
-  /// Luôn giữ **tăng dần theo id** (cũ → mới)
   List<Map<String, dynamic>> _messages = [];
 
-  // ====== FlutterSound (ghi âm) ======
+  // ===== Recorder =====
   final _recorder = FlutterSoundRecorder();
   bool _recReady = false;
   bool _recOn = false;
@@ -54,7 +49,6 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    // peerUserId là required nên dùng trực tiếp, không cần ?? receiverId
     _peerId = widget.peerUserId;
     _initRecorder();
     _loadInit();
@@ -64,6 +58,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     _inputCtrl.dispose();
     _scroll.dispose();
+    if (_recOn) _recorder.stopRecorder();
     _recorder.closeRecorder();
     super.dispose();
   }
@@ -79,14 +74,9 @@ class _ChatScreenState extends State<ChatScreen> {
     list.sort((a, b) => _msgId(a).compareTo(_msgId(b)));
   }
 
-  /// Merge + dedupe; giữ thứ tự tăng dần theo id.
-  /// - toTail=true: thường dùng khi push tin mới (append nếu id lớn hơn).
-  /// - toTail=false: thường dùng khi prepend older (id nhỏ hơn).
   void _mergeIncoming(List<Map<String, dynamic>> incoming,
       {required bool toTail}) {
     if (incoming.isEmpty) return;
-
-    // sắp xếp incoming trước cho chắc
     _sortAscById(incoming);
 
     if (_messages.isEmpty) {
@@ -94,50 +84,43 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
 
-    final exist = _messages.map(_msgIdStr).where((e) => e.isNotEmpty).toSet();
-    final filtered = <Map<String, dynamic>>[];
-    for (final m in incoming) {
-      final idStr = _msgIdStr(m);
-      if (idStr.isEmpty || exist.contains(idStr)) continue;
-      filtered.add(m);
-    }
+    final exist = _messages.map(_msgIdStr).toSet();
+    final filtered = incoming.where((m) {
+      final id = _msgIdStr(m);
+      return id.isNotEmpty && !exist.contains(id);
+    }).toList();
+
     if (filtered.isEmpty) return;
 
-    final curMin = _msgId(_messages.first);
-    final curMax = _msgId(_messages.last);
-    final incMin = _msgId(filtered.first);
-    final incMax = _msgId(filtered.last);
-
     if (toTail) {
-      // tất cả đều mới hơn
-      if (incMin > curMax) {
-        _messages.addAll(filtered);
-        return;
-      }
+      _messages.addAll(filtered);
     } else {
-      // tất cả đều cũ hơn
-      if (incMax < curMin) {
-        _messages.insertAll(0, filtered);
-        return;
-      }
+      _messages.insertAll(0, filtered);
     }
-
-    // fallback: có id chen giữa → gộp rồi sort 1 lần
-    _messages.addAll(filtered);
     _sortAscById(_messages);
   }
 
   // ===== recorder =====
   Future<void> _initRecorder() async {
+    final micOk = await _ensureMic();
+    if (!micOk) return;
+
     await _recorder.openRecorder();
+    await _recorder.setSubscriptionDuration(const Duration(milliseconds: 100));
     _recReady = true;
     setState(() {});
   }
 
+  Future<bool> _ensureMic() async {
+    final st = await Permission.microphone.status;
+    if (st.isGranted) return true;
+    final rs = await Permission.microphone.request();
+    return rs.isGranted;
+  }
+
   // ===== data =====
   Future<void> _loadInit() async {
-    await _fetchNew(); // lấy tin mới nhất (page đầu)
-    // mark read
+    await _fetchNew();
     await repo.readChats(token: widget.accessToken, peerUserId: _peerId);
   }
 
@@ -152,10 +135,8 @@ class _ChatScreenState extends State<ChatScreen> {
       );
       _sortAscById(list);
       _messages = list;
-
       if (list.isNotEmpty) _beforeId = _msgIdStr(list.first);
       _hasMore = list.length >= 30;
-
       setState(() {});
       _jumpToBottom();
     } catch (e) {
@@ -180,11 +161,9 @@ class _ChatScreenState extends State<ChatScreen> {
       if (older.isNotEmpty) {
         _sortAscById(older);
         _beforeId = _msgIdStr(older.first);
+        _mergeIncoming(older, toTail: false);
 
-        // giữ viewport: chèn lên đầu nhưng không nhảy vị trí
         if (_scroll.hasClients) {
-          _mergeIncoming(older, toTail: false);
-          setState(() {});
           WidgetsBinding.instance.addPostFrameCallback((_) {
             final newMax = _scroll.position.maxScrollExtent;
             final delta = newMax - oldMax;
@@ -194,13 +173,9 @@ class _ChatScreenState extends State<ChatScreen> {
               _scroll.position.maxScrollExtent,
             ));
           });
-        } else {
-          _mergeIncoming(older, toTail: false);
-          setState(() {});
         }
       } else {
         _hasMore = false;
-        setState(() {});
       }
     } catch (e) {
       debugPrint('load older error: $e');
@@ -270,9 +245,13 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _toggleRecord() async {
-    if (!_recReady) return;
+    if (!_recReady) {
+      await _initRecorder();
+      if (!_recReady) return;
+    }
+
     if (_recOn) {
-      // stop & gửi
+      // Stop & gửi file
       final path = await _recorder.stopRecorder();
       _recOn = false;
       setState(() {});
@@ -282,7 +261,7 @@ class _ChatScreenState extends State<ChatScreen> {
           final sent = await repo.sendMessage(
             token: widget.accessToken,
             peerUserId: _peerId,
-            filePath: path, // repo sẽ đoán content-type audio/*
+            filePath: path,
           );
           if (sent != null) {
             _mergeIncoming([sent], toTail: true);
@@ -296,10 +275,19 @@ class _ChatScreenState extends State<ChatScreen> {
         }
       }
     } else {
-      // start
+      // Start ghi âm
       final dir = await getTemporaryDirectory();
-      _recPath = '${dir.path}/${DateTime.now().millisecondsSinceEpoch}.m4a';
-      await _recorder.startRecorder(toFile: _recPath!, codec: Codec.aacMP4);
+      final filename = 'voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      final fullPath = '${dir.path}/$filename';
+
+      await _recorder.startRecorder(
+        toFile: fullPath,
+        codec: Codec.aacMP4,
+        bitRate: 64000,
+        sampleRate: 44100,
+        numChannels: 1,
+      );
+
       _recOn = true;
       setState(() {});
     }
@@ -323,7 +311,6 @@ class _ChatScreenState extends State<ChatScreen> {
           if (_loading && _messages.isEmpty)
             const LinearProgressIndicator(minHeight: 2),
 
-          // ====== List messages (mới ở dưới) ======
           Expanded(
             child: NotificationListener<ScrollNotification>(
               onNotification: (n) {
@@ -336,7 +323,6 @@ class _ChatScreenState extends State<ChatScreen> {
                 onRefresh: _onRefresh,
                 child: ListView.builder(
                   controller: _scroll,
-                  reverse: false, // rất quan trọng: mới ở BOTTOM
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   itemCount: _messages.length,
                   itemBuilder: (ctx, i) {
@@ -352,7 +338,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
 
-          // ====== Input bar ======
+          // Input bar
           SafeArea(
             top: false,
             minimum: const EdgeInsets.fromLTRB(8, 6, 8, 8),
@@ -378,7 +364,6 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
                 const SizedBox(width: 6),
-                // Mic
                 IconButton(
                   onPressed: _sending ? null : _toggleRecord,
                   icon: Icon(
@@ -387,7 +372,6 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                   tooltip: _recOn ? 'Dừng & gửi' : 'Ghi âm',
                 ),
-                // Send
                 IconButton(
                   onPressed: _sending ? null : _sendText,
                   icon: const Icon(Icons.send),
