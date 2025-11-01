@@ -1,7 +1,8 @@
 // G:\flutter-app\lib\features\social\widgets\group_chat_message_bubble.dart
-
 import 'dart:async';
 import 'dart:io';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:chewie/chewie.dart';
@@ -11,26 +12,25 @@ import 'package:just_audio/just_audio.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
+import 'package:encrypt/encrypt.dart' as enc;
 
-class GroupChatMessageBubble extends StatefulWidget {
+class ChatMessageBubble extends StatefulWidget {
   final Map<String, dynamic> message;
   final bool isMe;
 
-  const GroupChatMessageBubble({
+  const ChatMessageBubble({
     super.key,
     required this.message,
     required this.isMe,
   });
 
   @override
-  State<GroupChatMessageBubble> createState() => _GroupChatMessageBubbleState();
+  State<ChatMessageBubble> createState() => _ChatMessageBubbleState();
 }
 
-class _GroupChatMessageBubbleState extends State<GroupChatMessageBubble> {
+class _ChatMessageBubbleState extends State<ChatMessageBubble> {
   Map<String, dynamic> get message => widget.message;
   bool get isMe => widget.isMe;
-
-  String get _media => (message['media'] ?? '').toString();
 
   bool _isLocalUri(String? uri) {
     if (uri == null) return false;
@@ -43,58 +43,119 @@ class _GroupChatMessageBubbleState extends State<GroupChatMessageBubble> {
     return uri.startsWith('file://') ? Uri.parse(uri).toFilePath() : uri;
   }
 
-  bool get _looksImageByExt {
-    final m = _media.toLowerCase();
-    return m.endsWith('.jpg') ||
-        m.endsWith('.jpeg') ||
-        m.endsWith('.png') ||
-        m.endsWith('.gif') ||
-        m.endsWith('.webp') ||
-        m.contains('mime=image');
+  String get _media {
+    final m = (message['media'] ?? '').toString();
+    if (m.isNotEmpty) return m;
+    return (message['media_url'] ?? '').toString();
   }
 
-  bool get _looksVideoByExt {
-    final m = _media.toLowerCase();
-    return m.endsWith('.mp4') || m.endsWith('.mov') || m.endsWith('.mkv');
-  }
-
-  bool get _looksAudioByExt {
-    final m = _media.toLowerCase();
-    return m.endsWith('.mp3') ||
-        m.endsWith('.m4a') ||
-        m.endsWith('.aac') ||
-        m.endsWith('.wav');
-  }
-
-  bool get _isImage =>
-      message['is_image'] == true || (_looksImageByExt && !_looksVideoByExt);
-  bool get _isVideo =>
-      message['is_video'] == true || (_looksVideoByExt && !_looksAudioByExt);
+  bool get _isImage => message['is_image'] == true;
+  bool get _isVideo => message['is_video'] == true;
   bool get _isAudio =>
-      message['is_audio'] == true ||
-      (message['type_two']?.toString() == 'voice') ||
-      (_looksAudioByExt && !_looksVideoByExt);
+      (message['is_audio'] == true) ||
+      (message['type_two']?.toString() == 'voice');
   bool get _isFile =>
       message['is_file'] == true ||
       ((!_isImage && !_isVideo && !_isAudio) && _media.isNotEmpty);
-
   bool get _uploading => message['uploading'] == true;
   bool get _failed => message['failed'] == true;
 
-  // video
+  // ---------- Decrypt WoWonder ----------
+  static final RegExp _maybeBase64 = RegExp(r'^[A-Za-z0-9+/=]+$');
+
+  Uint8List _keyBytes16(String keyStr) {
+    final src = utf8.encode(keyStr); // decimal string of time()
+    final out = Uint8List(16);
+    final n = src.length > 16 ? 16 : src.length;
+    for (int i = 0; i < n; i++) {
+      out[i] = src[i];
+    }
+    // phần còn lại auto zero-pad
+    return out;
+  }
+
+  String _cleanB64(String s) {
+    // chuẩn hoá base64: đổi URL-safe, strip khoảng trắng/xuống dòng
+    return s
+        .replaceAll('-', '+')
+        .replaceAll('_', '/')
+        .replaceAll(' ', '+')
+        .replaceAll('\n', '');
+  }
+
+  String _stripZeroBytes(String s) {
+    // loại bỏ \x00 ở cuối nếu có (zero padding)
+    final bytes = utf8.encode(s);
+    int end = bytes.length;
+    while (end > 0 && bytes[end - 1] == 0) end--;
+    return utf8.decode(bytes.sublist(0, end), allowMalformed: true);
+  }
+
+  String _tryDecryptText(String encText, dynamic timeVal) {
+    if (encText.isEmpty) return encText;
+
+    final keyStr = '${timeVal ?? ''}';
+    if (keyStr.isEmpty) return encText;
+
+    final b64 = _cleanB64(encText);
+    if (!_maybeBase64.hasMatch(b64) || b64.length % 4 != 0) {
+      return encText;
+    }
+
+    final key = enc.Key(_keyBytes16(keyStr));
+    final encData = enc.Encrypted.fromBase64(b64);
+
+    // 1) PKCS7
+    try {
+      final e =
+          enc.Encrypter(enc.AES(key, mode: enc.AESMode.ecb, padding: 'PKCS7'));
+      return e.decrypt(encData, iv: enc.IV.fromLength(0));
+    } catch (_) {}
+
+    // 2) No padding
+    try {
+      final e =
+          enc.Encrypter(enc.AES(key, mode: enc.AESMode.ecb, padding: null));
+      final out = e.decrypt(encData, iv: enc.IV.fromLength(0));
+      if (out.isNotEmpty) return out;
+    } catch (_) {}
+
+    // 3) Zero padding (giải mã no-padding rồi strip \x00)
+    try {
+      final e =
+          enc.Encrypter(enc.AES(key, mode: enc.AESMode.ecb, padding: null));
+      final out = e.decrypt(encData, iv: enc.IV.fromLength(0));
+      return _stripZeroBytes(out);
+    } catch (_) {}
+
+    // nếu vẫn fail -> trả nguyên
+    return encText;
+  }
+
+  String _resolvedText() {
+    final display = (message['display_text'] ?? '').toString();
+    if (display.isNotEmpty) return display;
+
+    final raw = (message['text'] ?? '').toString();
+    final timeVal = message['time'];
+    if (raw.isEmpty) return '';
+
+    return _tryDecryptText(raw, timeVal);
+  }
+
+  // ---------------- video ----------------
   VideoPlayerController? _vp;
   ChewieController? _chewie;
 
   Future<void> _initVideo() async {
     _disposeVideo();
-    final src = _media;
-    if (src.isEmpty) return;
+    if (_media.isEmpty) return;
 
     try {
-      if (_isLocalUri(src)) {
-        _vp = VideoPlayerController.file(File(_toLocalPath(src)));
+      if (_isLocalUri(_media)) {
+        _vp = VideoPlayerController.file(File(_toLocalPath(_media)));
       } else {
-        _vp = VideoPlayerController.networkUrl(Uri.parse(src));
+        _vp = VideoPlayerController.networkUrl(Uri.parse(_media));
       }
       await _vp!.initialize();
       _chewie = ChewieController(
@@ -116,13 +177,15 @@ class _GroupChatMessageBubbleState extends State<GroupChatMessageBubble> {
     _vp = null;
   }
 
-  // audio
+  // ---------------- audio/voice ----------------
   AudioPlayer? _ap;
   Duration _pos = Duration.zero, _dur = Duration.zero;
   bool _vLoading = false, _vPlaying = false;
 
   Future<void> _initVoice() async {
     _disposeVoice();
+    if (_media.isEmpty) return;
+
     _ap = AudioPlayer();
     _ap!.positionStream
         .listen((d) => mounted ? setState(() => _pos = d) : null);
@@ -133,15 +196,12 @@ class _GroupChatMessageBubbleState extends State<GroupChatMessageBubble> {
       if (mounted) setState(() => _vPlaying = playing);
     });
 
-    final src = _media;
-    if (src.isEmpty) return;
-
     setState(() => _vLoading = true);
     try {
-      if (_isLocalUri(src)) {
-        await _ap!.setAudioSource(AudioSource.uri(Uri.parse(src)));
+      if (_isLocalUri(_media)) {
+        await _ap!.setAudioSource(AudioSource.uri(Uri.parse(_media)));
       } else {
-        await _ap!.setUrl(src);
+        await _ap!.setUrl(_media);
       }
     } finally {
       if (mounted) setState(() => _vLoading = false);
@@ -156,7 +216,7 @@ class _GroupChatMessageBubbleState extends State<GroupChatMessageBubble> {
     _vPlaying = false;
   }
 
-  // file open/download
+  // ---------------- file open/download ----------------
   double _dlProgress = 0;
   bool _downloading = false;
 
@@ -179,7 +239,9 @@ class _GroupChatMessageBubbleState extends State<GroupChatMessageBubble> {
       await for (final chunk in req.stream) {
         received += chunk.length;
         sink.add(chunk);
-        if (total > 0) setState(() => _dlProgress = received / total);
+        if (total > 0) {
+          setState(() => _dlProgress = received / total);
+        }
       }
       await sink.close();
       return file;
@@ -191,20 +253,22 @@ class _GroupChatMessageBubbleState extends State<GroupChatMessageBubble> {
   }
 
   Future<void> _openFileAttachment() async {
-    final uri = _media;
     final name = (message['mediaFileName'] ?? '').toString();
-    if (uri.isEmpty) return;
+    if (_media.isEmpty) return;
 
-    if (_isLocalUri(uri)) {
-      await OpenFilex.open(_toLocalPath(uri));
+    if (_isLocalUri(_media)) {
+      final path = _toLocalPath(_media);
+      await OpenFilex.open(path);
       return;
     }
 
-    final f = await _downloadToTemp(uri, filename: name.isEmpty ? null : name);
+    final f =
+        await _downloadToTemp(_media, filename: name.isEmpty ? null : name);
     if (f == null) return;
     await OpenFilex.open(f.path);
   }
 
+  // ---------------- lifecycle ----------------
   @override
   void initState() {
     super.initState();
@@ -213,7 +277,7 @@ class _GroupChatMessageBubbleState extends State<GroupChatMessageBubble> {
   }
 
   @override
-  void didUpdateWidget(covariant GroupChatMessageBubble oldWidget) {
+  void didUpdateWidget(covariant ChatMessageBubble oldWidget) {
     super.didUpdateWidget(oldWidget);
 
     final oldSrc = (oldWidget.message['media'] ?? '').toString();
@@ -248,6 +312,7 @@ class _GroupChatMessageBubbleState extends State<GroupChatMessageBubble> {
     super.dispose();
   }
 
+  // ---------------- UI builders ----------------
   @override
   Widget build(BuildContext context) {
     final bubbleColor =
@@ -293,7 +358,7 @@ class _GroupChatMessageBubbleState extends State<GroupChatMessageBubble> {
   }
 
   Widget _buildText() {
-    final text = (message['display_text'] ?? message['text'] ?? '').toString();
+    final text = _resolvedText();
     return SelectableText(
       text.isEmpty ? ' ' : text,
       style: const TextStyle(fontSize: 15, height: 1.35),
@@ -301,36 +366,28 @@ class _GroupChatMessageBubbleState extends State<GroupChatMessageBubble> {
   }
 
   Widget _buildImage() {
-    final uri = _media;
-
-    Widget child;
-    if (_isLocalUri(uri)) {
-      final f = File(_toLocalPath(uri));
-      child = f.existsSync()
-          ? Image.file(f, fit: BoxFit.cover)
-          : const Center(child: Icon(Icons.image_outlined));
-    } else {
-      child = CachedNetworkImage(imageUrl: uri, fit: BoxFit.cover);
-    }
+    final child = _isLocalUri(_media)
+        ? Image.file(File(_toLocalPath(_media)), fit: BoxFit.cover)
+        : CachedNetworkImage(imageUrl: _media, fit: BoxFit.cover);
 
     return Stack(
       alignment: Alignment.center,
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(10),
-          child: AspectRatio(aspectRatio: 4 / 3, child: child),
+          child: AspectRatio(
+            aspectRatio: 4 / 3,
+            child: child,
+          ),
         ),
         if (_uploading)
           Positioned.fill(
-            child: IgnorePointer(
-              ignoring: true,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.black26,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Center(child: CircularProgressIndicator()),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.black26,
+                borderRadius: BorderRadius.circular(10),
               ),
+              child: const Center(child: CircularProgressIndicator()),
             ),
           ),
       ],
@@ -352,12 +409,9 @@ class _GroupChatMessageBubbleState extends State<GroupChatMessageBubble> {
               const Center(child: CircularProgressIndicator()),
             if (_uploading)
               Positioned.fill(
-                child: IgnorePointer(
-                  ignoring: true,
-                  child: Container(
-                    color: Colors.black26,
-                    child: const Center(child: CircularProgressIndicator()),
-                  ),
+                child: Container(
+                  color: Colors.black26,
+                  child: const Center(child: CircularProgressIndicator()),
                 ),
               ),
           ],
@@ -399,7 +453,8 @@ class _GroupChatMessageBubbleState extends State<GroupChatMessageBubble> {
                 onChanged: _ap == null
                     ? null
                     : (v) async {
-                        await _ap!.seek(Duration(milliseconds: v.toInt()));
+                        final seek = Duration(milliseconds: v.toInt());
+                        await _ap!.seek(seek);
                       },
               ),
             ),

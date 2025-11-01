@@ -1,5 +1,3 @@
-// G:\flutter-app\lib\features\social\controllers\group_chat_controller.dart
-
 import 'dart:io';
 import 'dart:math';
 
@@ -17,6 +15,7 @@ class GroupChatController extends ChangeNotifier {
 
   final GroupChatRepository repo;
 
+  // ---------- User ----------
   String? currentUserId;
   Future<void> _reloadCurrentUser() async {
     try {
@@ -26,6 +25,7 @@ class GroupChatController extends ChangeNotifier {
     } catch (_) {}
   }
 
+  // ---------- Groups ----------
   bool groupsLoading = false;
   List<Map<String, dynamic>> groups = [];
 
@@ -59,7 +59,9 @@ class GroupChatController extends ChangeNotifier {
         memberIds: memberIds,
         avatarFile: avatarFile,
       );
-      if (ok) await loadGroups();
+      if (ok) {
+        await loadGroups();
+      }
       return ok;
     } catch (e) {
       lastError = e.toString();
@@ -70,10 +72,9 @@ class GroupChatController extends ChangeNotifier {
     }
   }
 
-  // ---------- Messages + Pagination ----------
+  // ---------- Messages & pagination ----------
   final Map<String, List<Map<String, dynamic>>> _messagesByGroup = {};
   final Map<String, bool> _messagesLoadingByGroup = {};
-  final Map<String, bool> _hasMoreByGroup = {};
   String? lastError;
 
   List<Map<String, dynamic>> messagesOf(String groupId) =>
@@ -82,12 +83,22 @@ class GroupChatController extends ChangeNotifier {
   bool messagesLoading(String groupId) =>
       _messagesLoadingByGroup[groupId] == true;
 
-  bool hasMore(String groupId) => _hasMoreByGroup[groupId] ?? true;
+  void _setMessages(String groupId, List<Map<String, dynamic>> items) {
+    // sort theo time tăng dần (seconds)
+    items.sort((a, b) {
+      final ta = int.tryParse('${a['time'] ?? 0}') ?? 0;
+      final tb = int.tryParse('${b['time'] ?? 0}') ?? 0;
+      return ta.compareTo(tb);
+    });
+    _messagesByGroup[groupId] = items;
+  }
 
-  Map<String, dynamic> _normalizeServerMsg(Map m) {
+  Map<String, dynamic> _normalizeServerMessage(Map raw) {
+    final m = Map<String, dynamic>.from(raw);
     final typeTwo = (m['type_two'] ?? '').toString();
     final media = (m['media'] ?? '').toString();
     final fileName = (m['mediaFileName'] ?? '').toString();
+    final text = (m['text'] ?? '').toString();
 
     final isImage = (m['is_image'] == true) ||
         media.endsWith('.jpg') ||
@@ -105,7 +116,8 @@ class GroupChatController extends ChangeNotifier {
 
     return {
       ...m,
-      'display_text': m['display_text'] ?? m['text'],
+      'display_text':
+          m['display_text'] ?? text, // có thể vẫn mã hoá, hiển thị nguyên trạng
       'media': media,
       'mediaFileName': fileName.isNotEmpty
           ? fileName
@@ -120,43 +132,22 @@ class GroupChatController extends ChangeNotifier {
     };
   }
 
-  void _sortByTimeAsc(List<Map<String, dynamic>> items) {
-    items.sort((a, b) {
-      final ta = int.tryParse('${a['time'] ?? 0}') ?? 0;
-      final tb = int.tryParse('${b['time'] ?? 0}') ?? 0;
-      return ta.compareTo(tb);
-    });
-  }
-
-  void _setMessages(String groupId, List<Map<String, dynamic>> items) {
-    _sortByTimeAsc(items);
-    _messagesByGroup[groupId] = items;
-  }
-
-  Future<void> loadMessages(String groupId, {int limit = 200}) async {
+  Future<void> loadMessages(String groupId) async {
     _messagesLoadingByGroup[groupId] = true;
     lastError = null;
     notifyListeners();
     try {
-      final serverList = await repo.fetchMessages(groupId, limit: limit);
+      final serverList = await repo.fetchMessages(groupId);
 
-      // chỉ giữ local FAILED để retry – tránh overlay "đang gửi" dai dẳng
-      final localFailed = (_messagesByGroup[groupId] ?? [])
-          .where((m) => m['is_local'] == true && m['failed'] == true)
+      // Giữ các tin local chưa sync (is_local == true)
+      final localList = (_messagesByGroup[groupId] ?? [])
+          .where((m) => m['is_local'] == true)
           .toList();
 
-      final normalized =
-          serverList.map<Map<String, dynamic>>(_normalizeServerMsg).toList();
+      final normalized = serverList.map(_normalizeServerMessage).toList();
 
-      final merged = <String, Map<String, dynamic>>{};
-      for (final m in [...normalized, ...localFailed]) {
-        final id = (m['id'] ?? '').toString();
-        merged[id.isEmpty ? UniqueKey().toString() : id] =
-            Map<String, dynamic>.from(m);
-      }
-
-      _setMessages(groupId, merged.values.toList());
-      _hasMoreByGroup[groupId] = serverList.length >= limit;
+      // Gộp local + server
+      _setMessages(groupId, [...normalized, ...localList]);
     } catch (e) {
       lastError = e.toString();
     } finally {
@@ -165,58 +156,42 @@ class GroupChatController extends ChangeNotifier {
     }
   }
 
-  Future<void> loadOlder(String groupId, {int limit = 200}) async {
-    if (messagesLoading(groupId) || !hasMore(groupId)) return;
-    _messagesLoadingByGroup[groupId] = true;
-    notifyListeners();
-
+  /// Tải thêm tin cũ (prepend)
+  Future<void> loadOlderMessages(String groupId, String beforeMessageId) async {
+    // Nếu đang loading chính thì thôi
+    if (messagesLoading(groupId)) return;
+    lastError = null;
     try {
-      final current = List<Map<String, dynamic>>.from(messagesOf(groupId));
-      String? oldestId;
-      if (current.isNotEmpty) {
-        oldestId = (current.first['id'] ?? '').toString();
-      }
-      if (oldestId == null || oldestId.isEmpty) {
-        await loadMessages(groupId, limit: limit);
-        return;
-      }
-
       final older = await repo.fetchOlderMessages(
         groupId,
-        beforeMessageId: oldestId,
-        limit: limit,
+        beforeMessageId: beforeMessageId,
       );
+      if (older.isEmpty) return;
 
-      final normalized =
-          older.map<Map<String, dynamic>>(_normalizeServerMsg).toList();
-
-      final byId = <String, Map<String, dynamic>>{};
-      for (final m in [...normalized, ...current]) {
-        final id = (m['id'] ?? '').toString();
-        byId[id.isEmpty ? UniqueKey().toString() : id] =
-            Map<String, dynamic>.from(m);
-      }
-
-      _setMessages(groupId, byId.values.toList());
-      _hasMoreByGroup[groupId] = older.length >= limit;
+      final normalized = older.map(_normalizeServerMessage).toList();
+      final current = List<Map<String, dynamic>>.from(messagesOf(groupId));
+      // prepend: vì current đang tăng dần, các older có time nhỏ hơn -> chèn trước rồi sort lại trong _setMessages
+      _setMessages(groupId, [...normalized, ...current]);
+      notifyListeners();
     } catch (e) {
       lastError = e.toString();
-    } finally {
-      _messagesLoadingByGroup[groupId] = false;
       notifyListeners();
     }
   }
 
-  // ---------- Send ----------
+  // ---------- Send message (text / image / video / voice / file) ----------
   final _rng = Random();
   String _tempId() =>
       'local_${DateTime.now().millisecondsSinceEpoch}_${_rng.nextInt(999999)}';
+  String _tempHash() =>
+      'hash_${DateTime.now().millisecondsSinceEpoch}_${_rng.nextInt(999999)}';
 
   Map<String, dynamic> _makeLocalMessage({
     required String groupId,
     required String text,
     File? file,
-    String? type,
+    String? type, // image | video | voice | file | null
+    required String msgHash,
   }) {
     final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final isImage = type == 'image';
@@ -242,9 +217,10 @@ class GroupChatController extends ChangeNotifier {
       'is_audio': isAudio,
       'is_file': isFile,
       'is_local': true,
-      'uploading': file != null,
+      'uploading': file != null, // có file thì hiển thị loading
       'failed': false,
       'time': nowSec,
+      'message_hash_id': msgHash, // để map với server khi trả về
       'user_data': {
         'user_id': currentUserId,
       },
@@ -255,31 +231,34 @@ class GroupChatController extends ChangeNotifier {
     String groupId,
     String text, {
     File? file,
-    String? type,
+    String? type, // 'image' | 'video' | 'voice' | 'file' | null
   }) async {
     lastError = null;
+    final msgHash = _tempHash();
 
-    // 1) Placeholder
+    // 1) Optimistic UI: thêm local trước
     final local = _makeLocalMessage(
       groupId: groupId,
       text: text,
       file: file,
       type: type,
+      msgHash: msgHash,
     );
     final cur = [...messagesOf(groupId), local];
     _setMessages(groupId, cur);
     notifyListeners();
 
-    // 2) API
-    Map<String, dynamic>? serverMsg;
+    // 2) Gửi API
     try {
-      serverMsg = await repo.sendMessage(
+      await repo.sendMessage(
         groupId: groupId,
         text: text,
         file: file,
         type: type,
+        messageHashId: msgHash,
       );
     } catch (e) {
+      // đánh dấu lỗi lên local message
       final list = _messagesByGroup[groupId];
       if (list != null) {
         final idx = list.indexWhere((m) => m['id'] == local['id']);
@@ -297,86 +276,11 @@ class GroupChatController extends ChangeNotifier {
       return;
     }
 
-    // 3) Thay thế 1-1 nếu có message server
-    if (serverMsg != null) {
-      final normalized = _normalizeServerMsg(serverMsg);
-      final list = _messagesByGroup[groupId] ?? [];
-      final idx = list.indexWhere((m) => m['id'] == local['id']);
-      if (idx != -1) {
-        list[idx] = {
-          ...normalized,
-          'failed': false,
-          'is_local': false,
-          'uploading': false,
-        };
-        _setMessages(groupId, List<Map<String, dynamic>>.from(list));
-        notifyListeners();
-      } else {
-        _setMessages(groupId, [...list, normalized]);
-        notifyListeners();
-      }
-      await loadMessages(groupId, limit: 200);
-      return;
-    }
-
-    // 4) Backend không trả message: tắt uploading nhưng không xoá placeholder
-    final list = _messagesByGroup[groupId] ?? [];
-    final idx = list.indexWhere((m) => m['id'] == local['id']);
-    if (idx != -1) {
-      list[idx] = {
-        ...list[idx],
-        'uploading': false,
-        'failed': false,
-      };
-      _setMessages(groupId, List<Map<String, dynamic>>.from(list));
-      notifyListeners();
-    }
-    await loadMessages(groupId, limit: 200);
+    // 3) Đồng bộ lại từ server (lấy đủ URL media, remove bản local)
+    await loadMessages(groupId);
   }
 
-  Future<void> retryFailedLocal(String groupId, String localId) async {
-    final list = _messagesByGroup[groupId];
-    if (list == null) return;
-    final idx = list.indexWhere((m) => m['id'] == localId);
-    if (idx == -1) return;
-
-    final m = list[idx];
-    if (m['failed'] != true || m['is_local'] != true) return;
-
-    final String text = (m['text'] ?? '').toString();
-    final String? type = m['is_image'] == true
-        ? 'image'
-        : m['is_video'] == true
-            ? 'video'
-            : m['is_audio'] == true
-                ? 'voice'
-                : m['is_file'] == true
-                    ? 'file'
-                    : null;
-
-    File? file;
-    final media = (m['media'] ?? '').toString();
-    if (media.startsWith('file://') || media.startsWith('/')) {
-      file = File(
-          media.startsWith('file://') ? Uri.parse(media).toFilePath() : media);
-      if (!file.existsSync()) {
-        lastError = 'Tệp đính kèm không còn tồn tại để gửi lại';
-        notifyListeners();
-        return;
-      }
-    }
-
-    list[idx] = {
-      ...m,
-      'uploading': file != null,
-      'failed': false,
-    };
-    _setMessages(groupId, List<Map<String, dynamic>>.from(list));
-    notifyListeners();
-
-    await sendMessage(groupId, text, file: file, type: type);
-  }
-
+  // ---------- Utils ----------
   bool isMyMessage(Map<String, dynamic> message) {
     final fromId = message['from_id']?.toString();
     final me = currentUserId?.toString();
