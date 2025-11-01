@@ -769,7 +769,6 @@
   "password_hint": "Enter 7+ Character",
   "create_an_account": "Don't have an account ?",
   "signup_here": "Sign Up",
-
   "continue_with_google": "Continue with Google",
   "continue_with_facebook": "Continue with Facebook",
   "continue_with_apple": "Continue with Apple",
@@ -821,7 +820,6 @@
   "you_cant_place_order_of_digital_product_without_billing_address": "You can't place order of only digital product without billing address",
   "maintenance_title": "We are Working On Something Special!",
   "maintenance_body": "We apologize for any inconvenience. For immediate assistance, please contact with our support team",
-
   "paid_amount": "Paid Amount",
   "change_amount": "Change Amount",
   "request_restock": "Request Restock",
@@ -866,9 +864,6 @@
   "can_not_select_more_than": "Cannot select more than",
   "total_images_size_can_not_be_more_than": "Total image size can not be more than",
   "single_file_size_can_not_be_more_than": "Single file size can not be more than",
-
-
-
   "filter_by": "Filter By",
   "order_transactions": "Order Transactions",
   "filter_data": "Filter Data",
@@ -888,8 +883,6 @@
   "enter_order_id": "Enter Order ID",
   "please_include_your": "Please include your country code before the phone number",
   "view_all_products": "View all products",
-
-
   "order_type": "Order Type",
   "pos_order_small": "POS Order",
   "regular": "Regular",
@@ -908,12 +901,10 @@
   "best": "Best!",
   "referral_discount": "Referral discount",
   "resend_code_successful": "Resend code successful",
-
   "forgot_password_configuration_is_not": "Forgot Password configuration is not available right now. To reset your password please contact us with our support.",
   "i_have_read_and_agree_to_the_website": "I HAVE READ AND AGREE TO THE WEBSITE'S ",
   "modify_review_before_resubmitting": "You need to modify your review before resubmitting.",
   "shop_available_message": "Sorry ! Currently we are not available. We will get back to you soon. Thank you for your patience..",
-
   "same_as_shipping_address": "Same as shipping address",
   "enter_valid_phone_number": "Enter valid phone number",
   "grab_this_deal": "Grab this deal",
@@ -925,20 +916,17 @@
   "tour": "Tour",
   "ecommerce": "Ecommerce",
   "flight": "Flight",
-
   "loading_products": "Loading products",
   "error_loading_products": "Error loading products",
   "no_products_found": "No products found",
   "explore_more": "Explore more",
   "more_choices": "More choices",
   "special_offers": "Special offers",
-
   "draft": "Draft",
   "unpaid": "Unpaid",
   "completed": "Completed",
   "partial_payment": "Partial Payment",
   "cancelled": "Cancelled",
-
   "already_scanned": "Already scanned",
   "scan_success": "Scan success",
   "invalid_qr_code": "Invalid qr code",
@@ -954,7 +942,6 @@
   "no_scanned_bookings": "No scanned bookings",
   "start_date": "Start date",
   "status": "status",
-
   "tour_details": "Tour details",
   "tour_information": "Tour information",
   "tour_name": "Tour name",
@@ -963,7 +950,6 @@
   "customer_information": "Customer information",
   "notes_special_requests": "Notes special requests",
   "no_notes": "No notes",
-  
   "add_photo": "Add photo",
   "add_video": "Add video",
   "remove_video_before_adding_images": "You already picked a video, remove it before adding photos.",
@@ -1007,12 +993,10 @@
   "story_boomerang_coming_soon": "Boomerang feature coming soon.",
   "capture_photo": "Take photo",
   "record_video": "Record video",
-
   "new_tours": "New tours",
   "social_stories": "Stories",
   "featured_flights": "Feature flights",
   "top_social_posts": "Top posts",
-
   "arrange": "Arrange",
   "audio": "Audio",
   "collapse": "Collapse",
@@ -1069,6 +1053,8 @@
   "years_ago": "Years ago",
   "your_story": "Your story",
   "groups": "Groups",
+  "saved_posts": "Saved posts",
+  "no_saved_posts": "You have not saved any posts yet.",
   "my_groups": "Your groups",
   "joined_groups": "Joined groups",
   "discover_groups": "Discover",
@@ -1141,7 +1127,6 @@
   "empty_discover_groups": "No group suggestions right now.",
   "retry": "Retry",
   "field_required": "This field is required",
-
   "hotel": "hotel",
   "popular_destinations": "popular destinations",
   "no_tours_found": "no tours found",
@@ -1151,5 +1136,33 @@
   "departure": "Departure",
   "no_flights": "No flights available",
   "after_tax_price": "After-tax price",
-  "airline": "Airline"
+  "airline": "Airline",
+  "travel": "Travel",
+  "post_options": "Post options",
+  "save_post": "Save post",
+  "edit_post": "Edit post",
+  "delete_post": "Delete post",
+  "hide_post": "Hide post",
+
+  "for_you": "For You",
+  "your_groups": "Your Groups",
+  "posts": "Posts",
+  "suggested_for_you": "Suggested for You",
+  "no_suggested_groups": "No suggested groups available",
+  "recent_activity": "Recently Joined",
+  "join": "Join",
+  "members": "Members",
+  "public_group": "Public Group",
+  "private_group": "Private Group",
+  "no_members": "No members",
+  "member_count": "Member count",
+  "highlight_content": "Highlighted content",
+  "group_admin": "Group Admin",
+  "group_owner": "Group Owner",
+  "join_group": "Join Group",
+  "join_group_pending_short": "Join group pending short",
+  "photos": "Photos",
+  "events": "Events",
+  "video": "Video",
+  "no_group_posts": "Không có bài viết"
 }

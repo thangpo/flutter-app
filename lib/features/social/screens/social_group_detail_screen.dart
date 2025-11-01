@@ -376,19 +376,6 @@ class _SocialGroupDetailScreenState extends State<SocialGroupDetailScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                t('highlight_content', 'Noi dung noi bat'),
-                style: theme.textTheme.titleSmall?.copyWith(
-                      color: colorScheme.onSurface,
-                      fontWeight: FontWeight.w600,
-                    ) ??
-                    TextStyle(
-                      color: colorScheme.onSurface,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
-              const SizedBox(height: 12),
               if (canCompose) ...[
                 _buildGroupComposer(
                   theme: theme,
@@ -424,16 +411,15 @@ class _SocialGroupDetailScreenState extends State<SocialGroupDetailScreen>
           indicatorColor: colorScheme.primary,
           labelColor: colorScheme.primary,
           unselectedLabelColor: colorScheme.onSurface.withValues(alpha: 0.6),
-          labelStyle: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-          tabs: const [
-            Tab(text: 'Bai viet'),
-            Tab(text: 'Gioi thieu'),
-            Tab(text: 'Anh'),
-            Tab(text: 'Su kien'),
+          labelStyle:
+              theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+          tabs: [
+            Tab(text: t('posts', 'Posts')),
+            Tab(text: t('about', 'About')),
+            Tab(text: t('photos', 'Photos')),
+            Tab(text: t('events', 'Events')),
           ],
-        ),
+        )
       ],
     );
   }
@@ -1043,7 +1029,8 @@ class _SocialGroupDetailScreenState extends State<SocialGroupDetailScreen>
       context: context,
       builder: (BuildContext dialogContext) {
         return StatefulBuilder(
-          builder: (BuildContext context, void Function(void Function()) setStateDialog) {
+          builder: (BuildContext context,
+              void Function(void Function()) setStateDialog) {
             final bool canSubmit = controller.text.trim().isNotEmpty;
             return AlertDialog(
               title: Text(t('report_group', 'Report group')),
@@ -1052,7 +1039,8 @@ class _SocialGroupDetailScreenState extends State<SocialGroupDetailScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    t('report_group_hint', 'Let us know why you are reporting this group.'),
+                    t('report_group_hint',
+                        'Let us know why you are reporting this group.'),
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Theme.of(context)
                               .colorScheme
@@ -1067,7 +1055,8 @@ class _SocialGroupDetailScreenState extends State<SocialGroupDetailScreen>
                     maxLines: 4,
                     textInputAction: TextInputAction.newline,
                     decoration: InputDecoration(
-                      hintText: t('report_group_placeholder', 'Enter your reason'),
+                      hintText:
+                          t('report_group_placeholder', 'Enter your reason'),
                       border: const OutlineInputBorder(),
                     ),
                     onChanged: (_) => setStateDialog(() {}),
@@ -1140,8 +1129,8 @@ class _SocialGroupDetailScreenState extends State<SocialGroupDetailScreen>
       context: context,
       builder: (BuildContext dialogContext) {
         return StatefulBuilder(
-          builder:
-              (BuildContext context, void Function(void Function()) setStateDialog) {
+          builder: (BuildContext context,
+              void Function(void Function()) setStateDialog) {
             final bool canSubmit = controller.text.trim().isNotEmpty;
             return AlertDialog(
               title: Text(t('delete_group', 'Delete group')),
@@ -1474,8 +1463,7 @@ class _SocialGroupDetailScreenState extends State<SocialGroupDetailScreen>
     if (group == null) return;
     String? currentUserId;
     try {
-      currentUserId =
-          context.read<SocialController>().currentUser?.id;
+      currentUserId = context.read<SocialController>().currentUser?.id;
     } catch (_) {
       currentUserId = null;
     }
@@ -1630,8 +1618,7 @@ class _GroupMembersSheetState extends State<_GroupMembersSheet> {
 
   Future<void> _removeMember(SocialUser member) async {
     if (_removing.contains(member.id)) return;
-    if (widget.currentUserId != null &&
-        widget.currentUserId == member.id) {
+    if (widget.currentUserId != null && widget.currentUserId == member.id) {
       return;
     }
     setState(() {

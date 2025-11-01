@@ -24,6 +24,12 @@ abstract class SocialServiceInterface {
     required String reaction,
     String action = 'reaction',
   });
+  Future<String> performPostAction({
+    required String postId,
+    required String action,
+    Map<String, dynamic>? extraFields,
+  });
+  Future<String> hidePost({required String postId});
   Future<void> reactToStory({
     required String storyId,
     required String reaction,
@@ -33,6 +39,7 @@ abstract class SocialServiceInterface {
     int limit,
     int offset,
   });
+  Future<SocialStory?> getStoryById({required String storyId});
   Future<void> reactToComment({
     required String commentId,
     required String reaction,
@@ -72,6 +79,10 @@ abstract class SocialServiceInterface {
   Future<SocialPost> sharePost({required String postId, String? text});
   Future<SocialFeedPage> getGroupFeed({
     required String groupId,
+    int limit,
+    String? afterPostId,
+  });
+  Future<List<SocialPost>> getSavedPosts({
     int limit,
     String? afterPostId,
   });
