@@ -1,88 +1,37 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
+import '../models/social_notification.dart';
+import '../services/social_notification_service.dart';
 
 class SocialNotificationsRepository {
-  Future<List<Map<String, dynamic>>> getNotifications(
-      String accessToken) async {
-    try {
-      if (kDebugMode) debugPrint('🔑 Access Token: $accessToken');
+  final SocialNotificationsService service = SocialNotificationsService();
 
-      final url = Uri.parse(
-        '${AppConstants.socialBaseUrl}/api/notifications?access_token=$accessToken',
-      );
+  /// 🔹 Lấy danh sách thông báo
+  Future<List<SocialNotification>> getNotifications(String accessToken) async {
+    final res = await service.fetchNotifications(accessToken);
+    final Map<String, dynamic> data = jsonDecode(res.body) as Map<String, dynamic>;
 
-      final request = http.MultipartRequest('POST', url)
-        ..fields.addAll({
-          'server_key': AppConstants.socialServerKey,
-          'type': 'get',
-        });
-
-      final streamedResponse = await request.send();
-      final res = await http.Response.fromStream(streamedResponse);
-
-      if (res.statusCode != 200) {
-        throw Exception('HTTP ${res.statusCode}');
-      }
-
-      final data = jsonDecode(res.body);
-
-      // ✅ Chuyển đổi về int an toàn
-      final status = data['api_status'].toString();
-      if (status != '200') {
-        if (kDebugMode) {
-          debugPrint('⚠️ API Error: ${data['errors'] ?? 'Unknown'}');
-        }
-        return [];
-      }
-
-      // ✅ Lấy danh sách thông báo (nếu có)
-      final notifications = data['notifications'];
-      if (notifications is List) {
-        return List<Map<String, dynamic>>.from(notifications);
-      } else {
-        return [];
-      }
-    } catch (e, stack) {
-      if (kDebugMode) {
-        debugPrint('❌ getNotifications() failed: $e\n$stack');
-      }
-      return [];
+    // WoWonder thường dùng api_status = 200/400
+    final apiStatus = data['api_status'] ?? data['status'];
+    if (apiStatus == 400) {
+      final err = data['errors']?.toString() ?? 'Lỗi API';
+      throw Exception(err);
     }
+
+    final List list = (data['notifications'] as List?) ?? const [];
+    return list
+        .map((e) => SocialNotification.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
+
+  /// 🗑️ Xoá thông báo
   Future<Map<String, dynamic>?> deleteNotification(
       String accessToken, String id) async {
-    try {
-      final url = Uri.parse(
-        '${AppConstants.socialBaseUrl}/api/notifications?access_token=$accessToken',
-      );
-
-      final request = http.MultipartRequest('POST', url)
-        ..fields.addAll({
-          'server_key': AppConstants.socialServerKey,
-          'id': id,
-          'type': 'delete',
-        });
-
-      final streamedResponse = await request.send();
-      final res = await http.Response.fromStream(streamedResponse);
-
-      if (kDebugMode) {
-        debugPrint('🗑 Delete Status: ${res.statusCode}');
-        debugPrint('🗑 Delete Body: ${res.body}');
-      }
-
-      if (res.statusCode == 200) {
-        return jsonDecode(res.body);
-      }
-      return null;
-    } catch (e, stack) {
-      if (kDebugMode) {
-        debugPrint('❌ deleteNotification() failed: $e\n$stack');
-      }
-      return null; // ✅ đúng kiểu trả về Map<String, dynamic>?
+    final res = await service.deleteNotification(accessToken, id);
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body);
     }
+    return null;
   }
+
 }

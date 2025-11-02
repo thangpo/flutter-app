@@ -173,3 +173,39 @@ String _abs(String maybeUrl) {
   final path = u.startsWith('/') ? u : '/$u';
   return '$base$path';
 }
+
+/// ✅ Trả về mô tả tiếng Việt thân thiện cho loại thông báo của WoWonder
+String wowonderNotificationText(String type, String text, [String? type2]) {
+  if (type == 'reaction') {
+    final reactionMap = {
+      '1': 'đã 👍 bài viết của bạn',
+      '2': 'đã ❤️ bài viết của bạn ',
+      '3': 'đã 😂 bài viết của bạn ',
+      '4': 'đã 😮 bài viết của bạn',
+      '5': 'đã 😢 bài viết của bạn ',
+      '6': 'đã 😡 bài viết của bạn ',
+    };
+    return reactionMap[type2] ?? 'đã bày tỏ cảm xúc với bài viết của bạn';
+  }
+  switch (type) {
+    case 'added_you_to_group':
+      return 'đã thêm bạn vào nhóm';
+    case 'invited_you_to_the_group':
+      return 'đã mời bạn vào nhóm';
+    case 'reaction':
+      return 'đã bày tỏ cảm xúc với bài viết của bạn';
+    case 'comment':
+      return 'đã bình luận về bài viết của bạn';
+    case 'following':
+      return 'đã bắt đầu theo dõi bạn';
+    case 'mention_post':
+      return 'đã nhắc đến bạn trong một bài viết';
+    case 'liked_page':
+      return 'đã thích trang của bạn';
+    case 'joined_group':
+      return 'đã tham gia nhóm';
+    default:
+      return 'đã tương tác với bạn';
+  }
+}
+
