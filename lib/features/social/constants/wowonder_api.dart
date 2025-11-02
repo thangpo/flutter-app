@@ -21,4 +21,7 @@ class WowonderAPI {
 
   // 🔹 Cấu hình / thông tin user
   static const String me = '/api/me';
+
+  // Tác vụ thông báo (lấy tất cả, xóa)
+  static const String taskNotification= '/api/notifications';
 }

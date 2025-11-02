@@ -63,6 +63,7 @@ import 'features/social/controllers/group_chat_controller.dart';
 import 'features/social/domain/repositories/group_chat_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_notifications_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_notifications_repository.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_notification_service.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
