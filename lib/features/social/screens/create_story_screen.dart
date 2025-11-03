@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -787,26 +787,26 @@ class _StoryFeatureBar extends StatelessWidget {
               onTap: () => onSelect(_StoryComposeMode.text),
             ),
             const SizedBox(width: 8),
-            _StoryFeatureChip(
-              icon: Icons.music_note,
-              label: t('story_feature_music'),
-              selected: false,
-              onTap: () => showCustomSnackBar(
-                t('story_music_coming_soon'),
-                context,
-              ),
-            ),
-            const SizedBox(width: 8),
-            _StoryFeatureChip(
-              icon: Icons.all_inclusive,
-              label: t('story_feature_boomerang'),
-              selected: false,
-              onTap: () => showCustomSnackBar(
-                t('story_boomerang_coming_soon'),
-                context,
-              ),
-            ),
-            const SizedBox(width: 12),
+            // _StoryFeatureChip(
+            //   icon: Icons.music_note,
+            //   label: t('story_feature_music'),
+            //   selected: false,
+            //   onTap: () => showCustomSnackBar(
+            //     t('story_music_coming_soon'),
+            //     context,
+            //   ),
+            // ),
+            // const SizedBox(width: 8),
+            // _StoryFeatureChip(
+            //   icon: Icons.all_inclusive,
+            //   label: t('story_feature_boomerang'),
+            //   selected: false,
+            //   onTap: () => showCustomSnackBar(
+            //     t('story_boomerang_coming_soon'),
+            //     context,
+            //   ),
+            // ),
+            // const SizedBox(width: 12),
             IconButton(
               tooltip: t('capture_photo'),
               icon: const Icon(Icons.camera_alt_outlined),

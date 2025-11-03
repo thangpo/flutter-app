@@ -36,9 +36,14 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
   Widget build(BuildContext context) {
     final String title =
         getTranslated('saved_posts', context) ?? 'Saved posts';
+    final Color appBarColor = Theme.of(context).colorScheme.surface;
 
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: appBarColor,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        elevation: 0,
         title: Text(title),
       ),
       body: Consumer<SocialController>(
