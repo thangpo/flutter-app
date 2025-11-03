@@ -380,4 +380,77 @@ class GroupChatRepository {
     }
     return null;
   }
+
+
+// G:\flutter-app\lib\features\social\domain\repositories\group_chat_repository.dart
+
+  // G:\flutter-app\lib\features\social\domain\repositories\group_chat_repository.dart
+
+  Future<Map<String, dynamic>> editGroup({
+    required String groupId,
+    String? name,
+    File? avatarFile,
+  }) async {
+    final token = await _getAccessTokenOrThrow();
+    final uri = Uri.parse('${_groupChatEndpoint()}?access_token=$token');
+
+    // Nếu không đổi gì thì coi như ok để UI không chờ
+    if ((name == null || name.trim().isEmpty) && avatarFile == null) {
+      return {'group_id': groupId, 'group_name': name ?? ''};
+    }
+
+    final req = http.MultipartRequest('POST', uri);
+    req.fields['server_key'] = AppConstants.socialServerKey;
+    req.fields['type'] = 'edit';
+    req.fields['id'] = groupId;
+    if (name != null && name.trim().isNotEmpty) {
+      req.fields['group_name'] = name.trim();
+    }
+    if (avatarFile != null) {
+      final ct = _contentTypeFor(avatarFile.path);
+      req.files.add(await http.MultipartFile.fromPath(
+        'avatar',
+        avatarFile.path,
+        filename: p.basename(avatarFile.path),
+        contentType: ct,
+      ));
+    }
+
+    final streamed = await req.send().timeout(const Duration(seconds: 40));
+    final body = await streamed.stream.bytesToString();
+
+    if (streamed.statusCode != 200) {
+      throw Exception(
+          'Edit group thất bại (HTTP ${streamed.statusCode}): $body');
+    }
+
+    // WoWonder có thể trả nhiều dạng: {api_status, data:{...}}, hoặc {api_status, message: "..."},
+    // hoặc nhét thẳng fields ra ngoài.
+    Map<String, dynamic> json;
+    try {
+      json = jsonDecode(body) as Map<String, dynamic>;
+    } catch (_) {
+      throw Exception('Edit group: phản hồi không phải JSON: $body');
+    }
+
+    if (json['api_status'] != 200) {
+      throw Exception('Edit group thất bại: ${json['errors'] ?? body}');
+    }
+
+    final objRaw = (json['data'] ?? json['group'] ?? json['message'] ?? json);
+    final obj = (objRaw is Map)
+        ? Map<String, dynamic>.from(objRaw)
+        : <String, dynamic>{};
+
+    // Chuẩn hoá output để controller dễ dùng
+    return {
+      'group_id': obj['group_id']?.toString() ?? groupId,
+      'group_name': (obj['group_name'] ?? obj['name'] ?? name ?? '').toString(),
+      // server có thể trả avatar_full hoặc avatar/group_avatar
+      'avatar':
+          (obj['avatar_full'] ?? obj['avatar'] ?? obj['group_avatar'] ?? '')
+              .toString(),
+    };
+  }
+
 }
