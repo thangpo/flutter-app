@@ -337,4 +337,67 @@ class GroupChatController extends ChangeNotifier {
     final me = currentUserId?.toString();
     return (fromId != null && me != null && fromId == me);
   }
+
+
+
+// G:\flutter-app\lib\features\social\controllers\group_chat_controller.dart
+
+  // --- Edit group ---
+  bool editingGroup = false;
+
+  Future<bool> editGroup({
+    required String groupId,
+    String? name,
+    File? avatarFile,
+  }) async {
+    editingGroup = true;
+    lastError = null;
+    notifyListeners();
+
+    try {
+      final updated = await repo.editGroup(
+        groupId: groupId,
+        name: name,
+        avatarFile: avatarFile,
+      );
+
+      final idx =
+          groups.indexWhere((g) => '${g['group_id'] ?? g['id']}' == groupId);
+      if (idx != -1) {
+        final cur = Map<String, dynamic>.from(groups[idx]);
+
+        final newName = (updated['group_name'] ?? name ?? '').toString().trim();
+        if (newName.isNotEmpty) {
+          cur['group_name'] = newName;
+          cur['name'] = newName;
+        }
+
+        var newAvatar = (updated['avatar'] ?? '').toString();
+        if (newAvatar.isNotEmpty &&
+            (newAvatar.startsWith('http://') ||
+                newAvatar.startsWith('https://'))) {
+          // phá cache để thấy ngay
+          final sep = newAvatar.contains('?') ? '&' : '?';
+          newAvatar =
+              '$newAvatar${sep}cb=${DateTime.now().millisecondsSinceEpoch}';
+          cur['avatar'] = newAvatar;
+          cur['group_avatar'] = newAvatar;
+        }
+        // nếu server không trả avatar mới: giữ avatar cũ; UI vẫn thấy ảnh local ngay chỗ màn đổi ảnh
+
+        groups[idx] = cur;
+      }
+
+      notifyListeners();
+      return true;
+    } catch (e) {
+      lastError = e.toString();
+      notifyListeners();
+      return false;
+    } finally {
+      editingGroup = false;
+      notifyListeners();
+    }
+  }
+
 }
