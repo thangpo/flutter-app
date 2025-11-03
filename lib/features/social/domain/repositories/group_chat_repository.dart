@@ -14,7 +14,6 @@ import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 class GroupChatRepository {
   GroupChatRepository();
 
-  // -------------------- auth + endpoint --------------------
   Future<String> _getAccessTokenOrThrow() async {
     final sp = await SharedPreferences.getInstance();
     final token = sp.getString(AppConstants.socialAccessToken);
@@ -32,7 +31,6 @@ class GroupChatRepository {
     return '$base/api/group_chat';
   }
 
-  // -------------------- mime helper --------------------
   MediaType? _contentTypeFor(String filePath) {
     final ext = p.extension(filePath).toLowerCase();
     switch (ext) {
@@ -52,7 +50,7 @@ class GroupChatRepository {
       case '.mkv':
         return MediaType('video', 'x-matroska');
       case '.m4a':
-        return MediaType('audio', 'mp4'); // AAC in MP4 (m4a)
+        return MediaType('audio', 'mp4');
       case '.aac':
         return MediaType('audio', 'aac');
       case '.mp3':
@@ -66,23 +64,18 @@ class GroupChatRepository {
     }
   }
 
-  // -------------------- WoWonder text decrypt --------------------
   static final RegExp _maybeBase64 = RegExp(r'^[A-Za-z0-9+/=]+$');
-
   String _cleanB64(String s) => s
       .replaceAll('-', '+')
       .replaceAll('_', '/')
       .replaceAll(' ', '+')
       .replaceAll('\n', '');
-
   Uint8List _keyBytes16(String keyStr) {
     final src = utf8.encode(keyStr);
     final out = Uint8List(16);
     final n = src.length > 16 ? 16 : src.length;
-    for (int i = 0; i < n; i++) {
-      out[i] = src[i];
-    }
-    return out; // phần còn lại là 0 (zero-pad)
+    for (int i = 0; i < n; i++) out[i] = src[i];
+    return out;
   }
 
   String _stripTrailingZeros(String s) {
@@ -92,40 +85,31 @@ class GroupChatRepository {
     return utf8.decode(bytes.sublist(0, end), allowMalformed: true);
   }
 
-  /// Giải mã theo PHP: openssl_encrypt($text, "AES-128-ECB", $time)
   String _decryptIfNeeded(String raw, dynamic timeVal) {
     if (raw.isEmpty) return '';
     final b64 = _cleanB64(raw);
-    if (!_maybeBase64.hasMatch(b64) || b64.length % 4 != 0) {
-      return raw; // không phải base64
-    }
+    if (!_maybeBase64.hasMatch(b64) || b64.length % 4 != 0) return raw;
     final keyStr = '${timeVal ?? ''}';
     if (keyStr.isEmpty) return raw;
 
     final key = enc.Key(_keyBytes16(keyStr));
     final encrypted = enc.Encrypted.fromBase64(b64);
 
-    // 1) PKCS7 (OpenSSL mặc định)
     try {
       final e =
           enc.Encrypter(enc.AES(key, mode: enc.AESMode.ecb, padding: 'PKCS7'));
       return e.decrypt(encrypted, iv: enc.IV.fromLength(0));
     } catch (_) {}
-
-    // 2) No padding
     try {
       final e = enc.Encrypter(enc.AES(key, mode: enc.AESMode.ecb));
       final out = e.decrypt(encrypted, iv: enc.IV.fromLength(0));
       if (out.isNotEmpty) return out;
     } catch (_) {}
-
-    // 3) Zero padding (fallback)
     try {
       final e = enc.Encrypter(enc.AES(key, mode: enc.AESMode.ecb));
       final out = e.decrypt(encrypted, iv: enc.IV.fromLength(0));
       return _stripTrailingZeros(out);
     } catch (_) {}
-
     return raw;
   }
 
@@ -174,7 +158,7 @@ class GroupChatRepository {
       throw Exception('Không lấy được danh sách nhóm (HTTP ${res.statusCode})');
     }
     final json = jsonDecode(res.body);
-    if (json['api_status'] != 200) {
+    if (!(_isOk(json))) {
       throw Exception(
           'Không lấy được danh sách nhóm: ${json['errors'] ?? res.body}');
     }
@@ -206,13 +190,13 @@ class GroupChatRepository {
       ));
     }
 
-    final streamed = await req.send().timeout(const Duration(seconds: 40));
+    final streamed = await req.send().timeout(const Duration(seconds: 60));
     final body = await streamed.stream.bytesToString();
     if (streamed.statusCode != 200) {
       throw Exception('Tạo nhóm thất bại (HTTP ${streamed.statusCode}): $body');
     }
     final json = jsonDecode(body);
-    if (json['api_status'] != 200) {
+    if (!(_isOk(json))) {
       throw Exception('Tạo nhóm thất bại: ${json['errors'] ?? body}');
     }
     return true;
@@ -237,7 +221,7 @@ class GroupChatRepository {
       throw Exception('Không lấy được tin nhắn (HTTP ${res.statusCode})');
     }
     final json = jsonDecode(res.body);
-    if (json['api_status'] != 200) {
+    if (!(_isOk(json))) {
       throw Exception('Không lấy được tin nhắn: ${json['errors'] ?? res.body}');
     }
 
@@ -268,7 +252,7 @@ class GroupChatRepository {
       throw Exception('Không lấy được tin nhắn cũ (HTTP ${res.statusCode})');
     }
     final json = jsonDecode(res.body);
-    if (json['api_status'] != 200) {
+    if (!(_isOk(json))) {
       throw Exception(
           'Không lấy được tin nhắn cũ: ${json['errors'] ?? res.body}');
     }
@@ -299,7 +283,7 @@ class GroupChatRepository {
       throw Exception('Không lấy được tin nhắn mới (HTTP ${res.statusCode})');
     }
     final json = jsonDecode(res.body);
-    if (json['api_status'] != 200) {
+    if (!(_isOk(json))) {
       throw Exception(
           'Không lấy được tin nhắn mới: ${json['errors'] ?? res.body}');
     }
@@ -315,7 +299,7 @@ class GroupChatRepository {
     required String groupId,
     required String text,
     File? file,
-    String? type, // UI only
+    String? type,
     String? messageHashId,
   }) async {
     final token = await _getAccessTokenOrThrow();
@@ -339,15 +323,11 @@ class GroupChatRepository {
         throw Exception('Gửi text thất bại (HTTP ${res.statusCode})');
       }
       final json = jsonDecode(res.body);
-      if (json['api_status'] != 200) {
+      if (!(_isOk(json))) {
         throw Exception('Gửi text thất bại: ${json['errors'] ?? res.body}');
       }
-      final data = json['data'] ?? json['message'] ?? json['msg'];
-      if (data is Map) {
-        final m = Map<String, dynamic>.from(data);
-        return _normalizeMsg(m);
-      }
-      return null;
+      final m = _extractMessageMap(json);
+      return m == null ? null : _normalizeMsg(m);
     }
 
     // multipart
@@ -362,13 +342,13 @@ class GroupChatRepository {
 
     final ct = _contentTypeFor(file.path);
     req.files.add(await http.MultipartFile.fromPath(
-      'file', // endpoint yêu cầu tên field 'file' cho mọi loại
+      'file',
       file.path,
       contentType: ct,
       filename: p.basename(file.path),
     ));
 
-    final streamed = await req.send().timeout(const Duration(seconds: 60));
+    final streamed = await req.send().timeout(const Duration(seconds: 120));
     final bodyStr = await streamed.stream.bytesToString();
 
     if (streamed.statusCode != 200) {
@@ -376,13 +356,27 @@ class GroupChatRepository {
           'Gửi file thất bại (HTTP ${streamed.statusCode}): $bodyStr');
     }
     final json = jsonDecode(bodyStr);
-    if (json['api_status'] != 200) {
+    if (!(_isOk(json))) {
       throw Exception('Gửi file thất bại: ${json['errors'] ?? bodyStr}');
     }
-    final data = json['data'] ?? json['message'] ?? json['msg'];
+    final m = _extractMessageMap(json);
+    return m == null ? null : _normalizeMsg(m);
+  }
+
+  // -------- helpers for response --------
+  bool _isOk(Map json) {
+    final s = json['api_status'] ?? json['status'] ?? json['code'];
+    return '$s' == '200';
+    // một số bản trả 'api_status':200, số khác 'status':200 hoặc 'code':200
+  }
+
+  Map<String, dynamic>? _extractMessageMap(Map json) {
+    dynamic data = json['data'];
+    if (data is Map && data['message'] is Map) data = data['message'];
+    data ??= json['message'] ?? json['msg'] ?? json['messages'];
+
     if (data is Map) {
-      final m = Map<String, dynamic>.from(data);
-      return _normalizeMsg(m);
+      return Map<String, dynamic>.from(data);
     }
     return null;
   }

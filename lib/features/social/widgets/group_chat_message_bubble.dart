@@ -39,9 +39,8 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
         uri.startsWith('content://');
   }
 
-  String _toLocalPath(String uri) {
-    return uri.startsWith('file://') ? Uri.parse(uri).toFilePath() : uri;
-  }
+  String _toLocalPath(String uri) =>
+      uri.startsWith('file://') ? Uri.parse(uri).toFilePath() : uri;
 
   String get _media {
     final m = (message['media'] ?? '').toString();
@@ -60,31 +59,24 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
   bool get _uploading => message['uploading'] == true;
   bool get _failed => message['failed'] == true;
 
-  // ---------- Decrypt WoWonder ----------
+  // ---------- Decrypt ----------
   static final RegExp _maybeBase64 = RegExp(r'^[A-Za-z0-9+/=]+$');
 
   Uint8List _keyBytes16(String keyStr) {
-    final src = utf8.encode(keyStr); // decimal string of time()
+    final src = utf8.encode(keyStr);
     final out = Uint8List(16);
     final n = src.length > 16 ? 16 : src.length;
-    for (int i = 0; i < n; i++) {
-      out[i] = src[i];
-    }
-    // phần còn lại auto zero-pad
+    for (int i = 0; i < n; i++) out[i] = src[i];
     return out;
   }
 
-  String _cleanB64(String s) {
-    // chuẩn hoá base64: đổi URL-safe, strip khoảng trắng/xuống dòng
-    return s
-        .replaceAll('-', '+')
-        .replaceAll('_', '/')
-        .replaceAll(' ', '+')
-        .replaceAll('\n', '');
-  }
+  String _cleanB64(String s) => s
+      .replaceAll('-', '+')
+      .replaceAll('_', '/')
+      .replaceAll(' ', '+')
+      .replaceAll('\n', '');
 
   String _stripZeroBytes(String s) {
-    // loại bỏ \x00 ở cuối nếu có (zero padding)
     final bytes = utf8.encode(s);
     int end = bytes.length;
     while (end > 0 && bytes[end - 1] == 0) end--;
@@ -93,64 +85,54 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
 
   String _tryDecryptText(String encText, dynamic timeVal) {
     if (encText.isEmpty) return encText;
-
     final keyStr = '${timeVal ?? ''}';
     if (keyStr.isEmpty) return encText;
 
     final b64 = _cleanB64(encText);
-    if (!_maybeBase64.hasMatch(b64) || b64.length % 4 != 0) {
-      return encText;
-    }
+    if (!_maybeBase64.hasMatch(b64) || b64.length % 4 != 0) return encText;
 
     final key = enc.Key(_keyBytes16(keyStr));
     final encData = enc.Encrypted.fromBase64(b64);
 
-    // 1) PKCS7
     try {
       final e =
           enc.Encrypter(enc.AES(key, mode: enc.AESMode.ecb, padding: 'PKCS7'));
       return e.decrypt(encData, iv: enc.IV.fromLength(0));
     } catch (_) {}
-
-    // 2) No padding
     try {
       final e =
           enc.Encrypter(enc.AES(key, mode: enc.AESMode.ecb, padding: null));
       final out = e.decrypt(encData, iv: enc.IV.fromLength(0));
       if (out.isNotEmpty) return out;
     } catch (_) {}
-
-    // 3) Zero padding (giải mã no-padding rồi strip \x00)
     try {
       final e =
           enc.Encrypter(enc.AES(key, mode: enc.AESMode.ecb, padding: null));
       final out = e.decrypt(encData, iv: enc.IV.fromLength(0));
       return _stripZeroBytes(out);
     } catch (_) {}
-
-    // nếu vẫn fail -> trả nguyên
     return encText;
   }
 
   String _resolvedText() {
     final display = (message['display_text'] ?? '').toString();
     if (display.isNotEmpty) return display;
-
     final raw = (message['text'] ?? '').toString();
     final timeVal = message['time'];
     if (raw.isEmpty) return '';
-
     return _tryDecryptText(raw, timeVal);
   }
 
   // ---------------- video ----------------
   VideoPlayerController? _vp;
   ChewieController? _chewie;
+  bool _videoReady = false;
+  bool _videoInitializing = false;
 
-  Future<void> _initVideo() async {
-    _disposeVideo();
-    if (_media.isEmpty) return;
-
+  Future<void> _initVideo({bool autoPlay = false}) async {
+    if (_videoInitializing || _videoReady || _media.isEmpty) return;
+    _videoInitializing = true;
+    if (mounted) setState(() {});
     try {
       if (_isLocalUri(_media)) {
         _vp = VideoPlayerController.file(File(_toLocalPath(_media)));
@@ -160,14 +142,19 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
       await _vp!.initialize();
       _chewie = ChewieController(
         videoPlayerController: _vp!,
-        autoPlay: false,
+        autoPlay: autoPlay,
         looping: false,
         allowFullScreen: true,
         allowMuting: true,
         materialProgressColors: ChewieProgressColors(),
       );
+      _videoReady = true;
+    } catch (_) {
+      _videoReady = false;
+    } finally {
+      _videoInitializing = false;
       if (mounted) setState(() {});
-    } catch (_) {}
+    }
   }
 
   void _disposeVideo() {
@@ -175,6 +162,8 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
     _vp?.dispose();
     _chewie = null;
     _vp = null;
+    _videoReady = false;
+    _videoInitializing = false;
   }
 
   // ---------------- audio/voice ----------------
@@ -268,12 +257,55 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
     await OpenFilex.open(f.path);
   }
 
+  // ---------------- image preview ----------------
+  void _openImagePreview() {
+    if (_media.isEmpty) return;
+    final tag = _media;
+    final isLocal = _isLocalUri(_media);
+    final imgWidget = isLocal
+        ? Image.file(File(_toLocalPath(_media)))
+        : CachedNetworkImage(imageUrl: _media);
+
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.black.withOpacity(0.95),
+        pageBuilder: (_, __, ___) {
+          return GestureDetector(
+            onTap: () => Navigator.of(context).pop(),
+            child: Scaffold(
+              backgroundColor: Colors.black,
+              body: SafeArea(
+                child: Center(
+                  child: Hero(
+                    tag: tag,
+                    child: InteractiveViewer(
+                      panEnabled: true,
+                      minScale: 0.8,
+                      maxScale: 5,
+                      child: imgWidget,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   // ---------------- lifecycle ----------------
   @override
   void initState() {
     super.initState();
-    if (_isVideo) _initVideo();
-    if (_isAudio) _initVoice();
+    // Khởi tạo VIDEO ngay khi render để "hiển thị luôn"
+    if (_isVideo) {
+      scheduleMicrotask(() => _initVideo(autoPlay: false));
+    }
+    if (_isAudio) {
+      _initVoice();
+    }
   }
 
   @override
@@ -298,7 +330,8 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
     final curIsAudio = _isAudio;
 
     if (curIsVideo && (!oldIsVideo || oldSrc != curSrc)) {
-      _initVideo();
+      _disposeVideo();
+      _initVideo(autoPlay: false);
     }
     if (curIsAudio && (!oldIsAudio || oldSrc != curSrc)) {
       _initVoice();
@@ -312,11 +345,16 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
     super.dispose();
   }
 
-  // ---------------- UI builders ----------------
+  // ---------------- UI ----------------
   @override
   Widget build(BuildContext context) {
-    final bubbleColor =
-        isMe ? const Color(0xFFE7F3FF) : const Color(0xFFF2F2F2);
+    // Bong bóng media (image/video) phải trong suốt để không có viền/nền xanh
+    final isMediaBubble = _isImage || _isVideo;
+
+    final bubbleColor = (_isAudio || _isFile || isMediaBubble)
+        ? Colors.transparent
+        : (isMe ? const Color(0xFF0084FF) : const Color(0xFFF0F2F5));
+
     final radius = BorderRadius.only(
       topLeft: const Radius.circular(14),
       topRight: const Radius.circular(14),
@@ -342,7 +380,7 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
           isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
         Container(
-          padding: EdgeInsets.all(_isImage || _isVideo ? 4 : 10),
+          padding: EdgeInsets.all(isMediaBubble ? 0 : 10),
           decoration: BoxDecoration(color: bubbleColor, borderRadius: radius),
           child: content,
         ),
@@ -361,7 +399,11 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
     final text = _resolvedText();
     return SelectableText(
       text.isEmpty ? ' ' : text,
-      style: const TextStyle(fontSize: 15, height: 1.35),
+      style: TextStyle(
+        fontSize: 15,
+        height: 1.35,
+        color: isMe ? Colors.white : const Color(0xFF050505),
+      ),
     );
   }
 
@@ -370,47 +412,28 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
         ? Image.file(File(_toLocalPath(_media)), fit: BoxFit.cover)
         : CachedNetworkImage(imageUrl: _media, fit: BoxFit.cover);
 
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: AspectRatio(
-            aspectRatio: 4 / 3,
-            child: child,
-          ),
-        ),
-        if (_uploading)
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.black26,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Center(child: CircularProgressIndicator()),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildVideo() {
-    final hasController =
-        _vp != null && _vp!.value.isInitialized && _chewie != null;
-    return SizedBox(
-      width: 240,
-      child: AspectRatio(
-        aspectRatio: hasController ? _vp!.value.aspectRatio : 16 / 9,
+    // Không có nền/viền xanh: bọc trực tiếp bằng ClipRRect, không padding/khung màu
+    return GestureDetector(
+      onTap: _openImagePreview,
+      child: Hero(
+        tag: _media,
         child: Stack(
+          alignment: Alignment.center,
           children: [
-            if (hasController)
-              Chewie(controller: _chewie!)
-            else
-              const Center(child: CircularProgressIndicator()),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: AspectRatio(
+                aspectRatio: 4 / 3,
+                child: child,
+              ),
+            ),
             if (_uploading)
               Positioned.fill(
                 child: Container(
-                  color: Colors.black26,
+                  decoration: BoxDecoration(
+                    color: Colors.black26,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                   child: const Center(child: CircularProgressIndicator()),
                 ),
               ),
@@ -420,49 +443,132 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
     );
   }
 
-  Widget _buildVoice() {
-    final name = (message['mediaFileName'] ?? 'voice.m4a').toString();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
-        const SizedBox(height: 6),
-        if (_vLoading) const LinearProgressIndicator(minHeight: 2),
-        Row(
-          children: [
-            IconButton(
-              icon: Icon(_vPlaying ? Icons.pause_circle : Icons.play_circle),
-              onPressed: _ap == null
-                  ? null
-                  : () async {
-                      if (_vPlaying) {
-                        await _ap!.pause();
-                      } else {
-                        if (_ap!.audioSource == null) await _initVoice();
-                        await _ap!.play();
-                      }
-                    },
-            ),
-            Expanded(
-              child: Slider(
-                value: _pos.inMilliseconds
-                    .clamp(0, _dur.inMilliseconds)
-                    .toDouble(),
-                max: (_dur.inMilliseconds == 0 ? 1 : _dur.inMilliseconds)
-                    .toDouble(),
-                onChanged: _ap == null
-                    ? null
-                    : (v) async {
-                        final seek = Duration(milliseconds: v.toInt());
-                        await _ap!.seek(seek);
-                      },
-              ),
-            ),
-            Text('${_fmt(_pos)} / ${_fmt(_dur)}',
-                style: const TextStyle(fontSize: 12)),
-          ],
+  // VIDEO: hiển thị luôn — nền trong suốt, không viền xanh
+  Widget _buildVideo() {
+    final hasController = _videoReady &&
+        _vp != null &&
+        _vp!.value.isInitialized &&
+        _chewie != null;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: SizedBox(
+        width: 260,
+        child: AspectRatio(
+          aspectRatio: hasController ? _vp!.value.aspectRatio : 16 / 9,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (!hasController)
+                _videoSimplePlaceholder(), // placeholder trung tính
+              if (_videoInitializing)
+                const Center(child: CircularProgressIndicator()),
+              if (hasController) Chewie(controller: _chewie!),
+              if (_uploading)
+                Positioned.fill(
+                  child: Container(
+                    color: Colors.black26,
+                    child: const Center(child: CircularProgressIndicator()),
+                  ),
+                ),
+            ],
+          ),
         ),
-      ],
+      ),
+    );
+  }
+
+  Widget _videoSimplePlaceholder() {
+    return Container(
+      color: Colors.black12, // trung tính, không xanh
+      child: const Center(
+        child: Icon(Icons.play_circle_fill, size: 56, color: Colors.black45),
+      ),
+    );
+  }
+
+  Widget _buildVoice() {
+    final bg = isMe ? const Color(0xFF0084FF) : const Color(0xFFE4E6EB);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      width: 280,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_vLoading)
+            const LinearProgressIndicator(minHeight: 2, color: Colors.white),
+          Row(
+            children: [
+              InkWell(
+                onTap: _ap == null
+                    ? null
+                    : () async {
+                        if (_vPlaying) {
+                          await _ap!.pause();
+                        } else {
+                          if (_ap!.audioSource == null) await _initVoice();
+                          await _ap!.play();
+                        }
+                      },
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    _vPlaying ? Icons.pause : Icons.play_arrow,
+                    color: bg,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 4,
+                    thumbShape:
+                        const RoundSliderThumbShape(enabledThumbRadius: 8),
+                    overlayShape:
+                        const RoundSliderOverlayShape(overlayRadius: 14),
+                    activeTrackColor: Colors.white,
+                    inactiveTrackColor: Colors.white24,
+                    thumbColor: Colors.white,
+                    overlayColor: Colors.white30,
+                  ),
+                  child: Slider(
+                    value: _pos.inMilliseconds
+                        .clamp(0, _dur.inMilliseconds)
+                        .toDouble(),
+                    max: (_dur.inMilliseconds == 0 ? 1 : _dur.inMilliseconds)
+                        .toDouble(),
+                    onChanged: _ap == null
+                        ? null
+                        : (v) async {
+                            final seek = Duration(milliseconds: v.toInt());
+                            await _ap!.seek(seek);
+                          },
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                _fmt(_dur),
+                style: TextStyle(
+                  color: isMe ? Colors.white : Colors.black87,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -473,36 +579,76 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
   }
 
   Widget _buildFile() {
-    final name = (message['mediaFileName'] ?? '').toString();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+    final name = (message['mediaFileName'] ?? '').toString().trim();
+    final sizeAny =
+        message['file_size'] ?? message['size'] ?? message['media_size'];
+    final sizeStr =
+        (sizeAny is int) ? _readableSize(sizeAny) : (sizeAny?.toString() ?? '');
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isMe ? const Color(0xFFDCEAFF) : const Color(0xFFF0F2F5),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      width: 300,
+      child: InkWell(
+        onTap: _openFileAttachment,
+        borderRadius: BorderRadius.circular(18),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const Icon(Icons.insert_drive_file),
-            const SizedBox(width: 8),
+            Container(
+              width: 40,
+              height: 40,
+              decoration: const BoxDecoration(
+                color: Color(0xFFE0E3EB),
+                shape: BoxShape.circle,
+              ),
+              child:
+                  const Icon(Icons.insert_drive_file, color: Color(0xFF6B7280)),
+            ),
+            const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                name.isEmpty ? 'Tệp đính kèm' : name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w600),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name.isEmpty ? 'Tệp đính kèm' : name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                  if (sizeStr.isNotEmpty)
+                    Text(
+                      sizeStr,
+                      style: const TextStyle(
+                        color: Color(0xFF6B7280),
+                        fontSize: 12,
+                      ),
+                    ),
+                ],
               ),
             ),
-            TextButton.icon(
-              onPressed: _openFileAttachment,
-              icon: const Icon(Icons.download),
-              label: const Text('Mở'),
-            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.download_rounded, color: Color(0xFF6B7280)),
           ],
         ),
-        if (_downloading)
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: LinearProgressIndicator(
-                value: _dlProgress == 0 ? null : _dlProgress),
-          ),
-      ],
+      ),
     );
+  }
+
+  String _readableSize(int bytes) {
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    double v = bytes.toDouble();
+    int i = 0;
+    while (v >= 1024 && i < units.length - 1) {
+      v /= 1024;
+      i++;
+    }
+    return '${v.toStringAsFixed(v < 10 && i > 0 ? 1 : 0)} ${units[i]}';
   }
 }
