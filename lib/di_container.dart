@@ -632,7 +632,8 @@ Future<void> init() async {
       () => RestockService(restockRepositoryInterface: sl()));
   sl.registerLazySingleton<SocialServiceInterface>(() => SocialService(
         socialRepository: sl<SocialRepository>(),
-      ));
+        ecomService: sl<ProfileServiceInterface>(),
+  ));
   sl.registerLazySingleton<SocialGroupServiceInterface>(
       () => SocialGroupService(socialRepository: sl<SocialRepository>()));
 }

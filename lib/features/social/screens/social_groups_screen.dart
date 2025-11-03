@@ -6,6 +6,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_g
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 
 import 'social_group_detail_screen.dart';
 import 'social_group_form_screen.dart';
@@ -110,7 +111,7 @@ class _SocialGroupsScreenState extends State<SocialGroupsScreen>
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Nhóm',
+          getTranslated('groups', context) ?? 'Nhóm',
           style: theme.textTheme.titleMedium?.copyWith(
                 color: appBarForeground,
                 fontSize: 18,
@@ -127,14 +128,17 @@ class _SocialGroupsScreenState extends State<SocialGroupsScreen>
           IconButton(
             icon: Icon(Icons.add, color: appBarForeground),
             onPressed: _openCreateGroup,
+            tooltip: getTranslated('create_group', context) ?? 'Tạo nhóm',
           ),
           IconButton(
             icon: Icon(Icons.person, color: appBarForeground),
             onPressed: () {},
+            tooltip: getTranslated('profile', context) ?? 'Hồ sơ',
           ),
           IconButton(
             icon: Icon(Icons.search, color: appBarForeground),
             onPressed: () {},
+            tooltip: getTranslated('search', context) ?? 'Tìm kiếm',
           ),
         ],
       ),
@@ -147,10 +151,12 @@ class _SocialGroupsScreenState extends State<SocialGroupsScreen>
               indicatorColor: colorScheme.primary,
               labelColor: colorScheme.primary,
               unselectedLabelColor: unselectedTabColor,
-              tabs: const [
-                Tab(text: 'Dành cho bạn'),
-                Tab(text: 'Nhóm của bạn'),
-                Tab(text: 'Bài viết'),
+              tabs: [
+                Tab(text: getTranslated('for_you', context) ?? 'Dành cho bạn'),
+                Tab(
+                    text: getTranslated('your_groups', context) ??
+                        'Nhóm của bạn'),
+                Tab(text: getTranslated('posts', context) ?? 'Bài viết'),
               ],
             ),
           ),
@@ -189,7 +195,7 @@ class _SocialGroupsScreenState extends State<SocialGroupsScreen>
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Text(
-              'Gợi ý cho bạn',
+              getTranslated('suggested_for_you', context) ?? 'Gợi ý cho bạn',
               style: theme.textTheme.titleMedium?.copyWith(
                     color: colorScheme.onSurface,
                     fontSize: 16,
@@ -218,7 +224,8 @@ class _SocialGroupsScreenState extends State<SocialGroupsScreen>
                 ),
               ),
               child: Text(
-                'Chưa có nhóm nào gợi ý',
+                getTranslated('no_suggested_groups', context) ??
+                    'Chưa có nhóm nào gợi ý',
                 style: theme.textTheme.bodyMedium?.copyWith(
                       color: colorScheme.onSurface.withValues(alpha: 0.7),
                     ) ??
@@ -310,8 +317,10 @@ class _SocialGroupsScreenState extends State<SocialGroupsScreen>
         final bool approvalNeeded =
             effective.joinRequestStatus == 2 || effective.requiresApproval;
         final String message = approvalNeeded
-            ? 'Join request submitted for approval'
-            : 'Joined group successfully';
+            ? (getTranslated('join_request_submitted', context) ??
+                'Join request submitted for approval')
+            : (getTranslated('joined_group_successfully', context) ??
+                'Joined group successfully');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(message)),
         );
@@ -327,8 +336,10 @@ class _SocialGroupsScreenState extends State<SocialGroupsScreen>
     }
 
     final String buttonLabel = isJoined
-        ? 'Da tham gia'
-        : (pendingApproval ? 'Dang cho duyet' : 'Tham gia');
+        ? (getTranslated('joined', context) ?? 'Đã tham gia')
+        : (pendingApproval
+            ? (getTranslated('pending_approval', context) ?? 'Đang chờ duyệt')
+            : (getTranslated('join', context) ?? 'Tham gia'));
     final Widget buttonChild = isJoining
         ? SizedBox(
             height: 16,
@@ -458,10 +469,15 @@ class _SocialGroupsScreenState extends State<SocialGroupsScreen>
     final bool isPrivate = privacy == '2' ||
         privacy.contains('private') ||
         privacy.contains('closed');
-    final String privacyLabel = isPrivate ? 'Private group' : 'Public group';
+    final String privacyLabel = isPrivate
+        ? (getTranslated('private_group', context) ?? 'Private group')
+        : (getTranslated('public_group', context) ?? 'Public group');
+
     final int count = group.memberCount;
-    final String memberLabel =
-        count > 0 ? '${count} members' : 'No members yet';
+    final String memberLabel = count > 0
+        ? '${count} ${getTranslated('members', context) ?? 'members'}'
+        : (getTranslated('no_members_yet', context) ?? 'No members yet');
+
     return '$privacyLabel | $memberLabel';
   }
 
@@ -488,7 +504,10 @@ class _SocialGroupsScreenState extends State<SocialGroupsScreen>
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Text('Hoạt động gần đây', style: headerStyle),
+          child: Text(
+            getTranslated('recent_activity', context) ?? 'Hoạt động gần đây',
+            style: headerStyle,
+          ),
         ),
         if (loading && groups.isEmpty)
           const Padding(
@@ -506,7 +525,8 @@ class _SocialGroupsScreenState extends State<SocialGroupsScreen>
               ),
             ),
             child: Text(
-              'Bạn chưa tham gia nhóm nào.',
+              getTranslated('you_have_no_groups', context) ??
+                  'Bạn chưa tham gia nhóm nào.',
               style: theme.textTheme.bodyMedium?.copyWith(
                     color: colorScheme.onSurface.withValues(alpha: 0.7),
                   ) ??
@@ -531,7 +551,7 @@ class _SocialGroupsScreenState extends State<SocialGroupsScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Khám phá thêm',
+                getTranslated('explore_more', context) ?? 'Khám phá thêm',
                 style: theme.textTheme.titleSmall?.copyWith(
                       color: colorScheme.onSurface,
                       fontWeight: FontWeight.w600,
@@ -547,16 +567,11 @@ class _SocialGroupsScreenState extends State<SocialGroupsScreen>
                 spacing: 12,
                 runSpacing: 12,
                 children: [
-                  const _QuickAction(
-                      icon: Icons.explore, label: 'Tìm nhóm mới'),
                   _QuickAction(
                     icon: Icons.group_add,
-                    label: 'Tạo nhóm',
+                    label: getTranslated('create_group', context) ?? 'Tạo nhóm',
                     onTap: _openCreateGroup,
                   ),
-                  const _QuickAction(icon: Icons.bookmark, label: 'Đã lưu'),
-                  const _QuickAction(
-                      icon: Icons.settings, label: 'Cài đặt nhóm'),
                 ],
               ),
             ],
@@ -652,19 +667,21 @@ class _SocialGroupsScreenState extends State<SocialGroupsScreen>
 
   String _formatGroupActivity(SocialGroup group) {
     final int members = group.memberCount;
-    final String memberLabel =
-        members > 0 ? '$members thành viên' : 'Chưa có thành viên';
+    final String memberLabel = members > 0
+        ? '$members ${getTranslated('members', context) ?? 'thành viên'}'
+        : (getTranslated('no_members_yet', context) ?? 'Chưa có thành viên');
+
     final DateTime? updated = group.updatedAt ?? group.createdAt;
     if (updated != null) {
       final Duration diff = DateTime.now().difference(updated);
       if (diff.inDays >= 1) {
-        return '$memberLabel • ${diff.inDays} ngày trước';
+        return '$memberLabel • ${diff.inDays} ${getTranslated('days_ago', context) ?? 'ngày trước'}';
       }
       if (diff.inHours >= 1) {
-        return '$memberLabel • ${diff.inHours} giờ trước';
+        return '$memberLabel • ${diff.inHours} ${getTranslated('hours_ago', context) ?? 'giờ trước'}';
       }
       if (diff.inMinutes >= 1) {
-        return '$memberLabel • ${diff.inMinutes} phút trước';
+        return '$memberLabel • ${diff.inMinutes} ${getTranslated('minutes_ago', context) ?? 'phút trước'}';
       }
     }
     return memberLabel;
@@ -727,8 +744,10 @@ class _SocialGroupsScreenState extends State<SocialGroupsScreen>
         ],
       );
     } else if (posts.isEmpty) {
-      listView =
-          buildEmpty(message: 'Chưa có bài viết nào từ các nhóm của bạn.');
+      listView = buildEmpty(
+        message: getTranslated('no_group_posts_yet', context) ??
+            'Chưa có bài viết nào từ các nhóm của bạn.',
+      );
     } else {
       listView = ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),

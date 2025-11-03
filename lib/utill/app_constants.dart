@@ -27,6 +27,7 @@ class AppConstants {
   static const String socialGetUserStoriesUri = '/api/get-user-stories';
   static const String socialGetUserDataUri = '/api/get-user-data';
   static const String socialReactUri = '/api/post-actions';
+  static const String socialHidePostUri = '/api/hide_post';
   static const String socialReactStoryUri = '/api/react_story';
   static const String socialGetStoryViewsUri = '/api/get_story_views';
   static const String socialGetStoryReactionsUri = '/api/get-reactions';
@@ -61,6 +62,10 @@ class AppConstants {
   static const String socialChatSendMessageUri = '/api/send-message';
   static const String socialChatGetUserMessagesUri = '/api/get_user_messages';
   static const String socialChatReadChatsUri = '/api/read_chats';
+
+  //follow
+  static const String socialFollowUser='/api/follow-user';
+  static const String socialUpdateDataUser='/api/update-user-data';
 
   static const String googleServerClientId = 'client_id here';
   static const String userId = 'userId';

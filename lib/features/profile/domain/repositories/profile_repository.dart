@@ -1,3 +1,4 @@
+// lib/features/profile/domain/repositories/profile_repository.dart
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_sixvalley_ecommerce/data/datasource/remote/dio/dio_client.dart';
@@ -9,12 +10,10 @@ import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 
-class ProfileRepository implements ProfileRepositoryInterface{
+class ProfileRepository implements ProfileRepositoryInterface {
   final DioClient? dioClient;
   final SharedPreferences? sharedPreferences;
   ProfileRepository({required this.dioClient, required this.sharedPreferences});
-
-
 
   @override
   Future<ApiResponseModel> getProfileInfo() async {
@@ -26,68 +25,77 @@ class ProfileRepository implements ProfileRepositoryInterface{
     }
   }
 
-
   @override
   Future<ApiResponseModel> delete(int customerId) async {
     try {
-      final response = await dioClient!.get('${AppConstants.deleteCustomerAccount}/$customerId');
+      final response =
+      await dioClient!.get('${AppConstants.deleteCustomerAccount}/$customerId');
       return ApiResponseModel.withSuccess(response);
     } catch (e) {
       return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
     }
   }
 
-
-
-
   @override
-  Future<http.StreamedResponse> updateProfile(ProfileModel userInfoModel, String pass, File? file, String token) async {
-    http.MultipartRequest request = http.MultipartRequest('POST', Uri.parse('${AppConstants.baseUrl}${AppConstants.updateProfileUri}'));
-    request.headers.addAll(<String,String>{'Authorization': 'Bearer $token'});
-    if(file != null){
-      request.files.add(http.MultipartFile('image', file.readAsBytes().asStream(), file.lengthSync(), filename: file.path.split('/').last));
+  Future<http.StreamedResponse> updateProfile(
+      ProfileModel userInfoModel,
+      String pass,
+      File? file,
+      String token,
+      ) async {
+    final uri =
+    Uri.parse('${AppConstants.baseUrl}${AppConstants.updateProfileUri}');
+    final request = http.MultipartRequest('POST', uri);
+    request.headers.addAll(<String, String>{'Authorization': 'Bearer $token'});
+
+    if (file != null) {
+      request.files.add(
+        http.MultipartFile(
+          'image',
+          file.readAsBytes().asStream(),
+          file.lengthSync(),
+          filename: file.path.split('/').last,
+        ),
+      );
     }
-     Map<String, String> fields = {};
-    if(pass.isEmpty) {
+
+    final Map<String, String> fields = {};
+    if (pass.isEmpty) {
       fields.addAll(<String, String>{
-        '_method': 'put', 'f_name': userInfoModel.fName!, 'l_name': userInfoModel.lName!, 'phone': userInfoModel.phone!, 'email': userInfoModel.email!
+        '_method': 'put',
+        'f_name': userInfoModel.fName!,
+        'l_name': userInfoModel.lName!,
+        'phone': userInfoModel.phone!,
+        'email': userInfoModel.email!,
       });
-    }else {
+    } else {
       fields.addAll(<String, String>{
-        '_method': 'put', 'f_name': userInfoModel.fName!, 'l_name': userInfoModel.lName!, 'phone': userInfoModel.phone!, 'password': pass, 'email': userInfoModel.email!
+        '_method': 'put',
+        'f_name': userInfoModel.fName!,
+        'l_name': userInfoModel.lName!,
+        'phone': userInfoModel.phone!,
+        'password': pass,
+        'email': userInfoModel.email!,
       });
     }
     request.fields.addAll(fields);
     if (kDebugMode) {
       print('========>${fields.toString()}');
     }
-    http.StreamedResponse response = await request.send();
+    final response = await request.send();
     return response;
   }
 
   @override
-  Future add(value) {
-    // TODO: implement add
-    throw UnimplementedError();
-  }
-
+  Future add(value) => throw UnimplementedError();
 
   @override
-  Future get(String id) {
-    // TODO: implement get
-    throw UnimplementedError();
-  }
+  Future get(String id) => throw UnimplementedError();
 
   @override
-  Future getList({int? offset = 1}) {
-    // TODO: implement getList
-    throw UnimplementedError();
-  }
+  Future getList({int? offset = 1}) => throw UnimplementedError();
 
   @override
-  Future update(Map<String, dynamic> body, int id) {
-    // TODO: implement update
-    throw UnimplementedError();
-  }
-
+  Future update(Map<String, dynamic> body, int id) =>
+      throw UnimplementedError();
 }
