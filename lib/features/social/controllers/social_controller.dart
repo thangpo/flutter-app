@@ -67,6 +67,19 @@ class SocialController with ChangeNotifier {
   bool _creatingLive = false;
   bool get creatingLive => _creatingLive;
 
+  // ---- STATE ----
+  final List<SocialUser> followersList = [];
+  final List<SocialUser> followingList = [];
+
+  bool loadingFollowers = false;
+  bool loadingFollowing = false;
+
+  String? _followersAfter;   // cursor/offset trang tiếp theo
+  String? _followingAfter;
+
+  bool get hasMoreFollowers => _followersAfter != null && _followersAfter!.isNotEmpty;
+  bool get hasMoreFollowing => _followingAfter != null && _followingAfter!.isNotEmpty;
+
   final List<SocialStory> _stories = [];
   List<SocialStory> get stories => List.unmodifiable(_stories);
   int _storiesOffset = 0;
@@ -357,6 +370,8 @@ class SocialController with ChangeNotifier {
       notifyListeners();
     }
   }
+
+
 
   Future<void> loadUserGroups({bool forceRefresh = false}) async {
     if (_loadingUserGroups) return;
