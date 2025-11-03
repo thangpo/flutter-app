@@ -388,6 +388,7 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                                           checkedIds: checkedIds,
                                         );
                                       } else if (orderProvider.isCODChecked && !widget.onlyDigital) {
+                                        final checkedIds = _buildCheckedIds();
                                         orderProvider.placeOrder(
                                           callback: _callback,
                                           addressID: addressId,
@@ -395,6 +396,7 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                                           couponAmount: couponCodeAmount,
                                           billingAddressId: billingAddressId,
                                           orderNote: orderNote,
+                                          checkedIds: checkedIds,
                                         );
                                       } else if (orderProvider.isOfflineChecked) {
                                         Navigator.of(context).push(MaterialPageRoute(

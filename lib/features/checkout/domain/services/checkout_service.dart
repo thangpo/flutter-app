@@ -17,6 +17,7 @@ class CheckoutService implements CheckoutServiceInterface{
     String? password,
     double? cashChangeAmount,
     String? currentCurrencyCode,
+    Map<String, dynamic>? checkedIds,
   }) async{
     return await checkoutRepositoryInterface.cashOnDeliveryPlaceOrder(
      addressID: addressID,
@@ -28,6 +29,7 @@ class CheckoutService implements CheckoutServiceInterface{
       password: password,
       cashChangeAmount: cashChangeAmount,
       currentCurrencyCode: currentCurrencyCode,
+      checkedIds: checkedIds,
     );
   }
 

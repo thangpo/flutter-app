@@ -28,6 +28,7 @@ class CheckoutRepository implements CheckoutRepositoryInterface{
         String? password,
         double? cashChangeAmount,
         String? currentCurrencyCode,
+        Map<String, dynamic>? checkedIds,
       }) async {
     try {
       // Build query parameters map
@@ -43,6 +44,7 @@ class CheckoutRepository implements CheckoutRepositoryInterface{
         'password': password,
         'bring_change_amount' : cashChangeAmount,
         'current_currency_code': currentCurrencyCode,
+        'checkedIds': checkedIds,
       };
 
       debugPrint('----------(order_place)-----$queryParams');
