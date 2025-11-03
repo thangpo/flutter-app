@@ -1143,6 +1143,7 @@
   "edit_post": "Edit post",
   "delete_post": "Delete post",
   "hide_post": "Hide post",
+  "report_post": "Report post",
 
   "for_you": "For You",
   "your_groups": "Your Groups",
@@ -1164,5 +1165,5 @@
   "photos": "Photos",
   "events": "Events",
   "video": "Video",
-  "no_group_posts": "Không có bài viết"
+  "no_group_posts": "No group posts"
 }

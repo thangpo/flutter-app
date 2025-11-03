@@ -33,6 +33,9 @@ class AppConstants {
   static const String socialGetStoryReactionsUri = '/api/get-reactions';
   static const String socialGetPostDataUri = '/api/get-post-data';
   static const String socialCommentsUri = '/api/comments';
+  static const String socialLiveUri = '/api/live';
+  static const String socialGenerateAgoraTokenUri = '/api/generate_agora_token';
+  static const String socialAgoraAppId = '554e80e2bcfe401cbde32aaf13d48ce5';
   static const String socialCreateGroupUri = '/api/create-group';
   static const String socialUpdateGroupUri = '/api/update-group-data';
   static const String socialJoinGroupUri = '/api/join-group';
@@ -64,8 +67,8 @@ class AppConstants {
   static const String socialChatReadChatsUri = '/api/read_chats';
 
   //follow
-  static const String socialFollowUser='/api/follow-user';
-  static const String socialUpdateDataUser='/api/update-user-data';
+  static const String socialFollowUser = '/api/follow-user';
+  static const String socialUpdateDataUser = '/api/update-user-data';
 
   static const String googleServerClientId = 'client_id here';
   static const String userId = 'userId';
