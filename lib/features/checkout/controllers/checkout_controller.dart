@@ -65,7 +65,7 @@ class CheckoutController with ChangeNotifier {
   Future<void> placeOrder({required Function callback, String? addressID,
         String? couponCode, String? couponAmount,
         String? billingAddressId, String? orderNote, String? transactionId,
-        String? paymentNote, int? id, String? name,bool isfOffline = false, bool wallet = false}) async {
+        String? paymentNote, int? id, String? name,bool isfOffline = false, bool wallet = false, Map<String, dynamic>? checkedIds,}) async {
     for(TextEditingController textEditingController in inputFieldControllerList) {
       inputValueList.add(textEditingController.text.trim());
 
@@ -90,7 +90,9 @@ class CheckoutController with ChangeNotifier {
       password: passwordController.text.trim(),
       cashChangeAmount: _cashChangesAmount,
       currentCurrencyCode: Provider.of<SplashController>(Get.context!, listen: false).myCurrency?.code,
+      checkedIds: checkedIds,
     );
+
 
     if (apiResponse.response != null && apiResponse.response!.statusCode == 200) {
 

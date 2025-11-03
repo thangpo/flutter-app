@@ -26,6 +26,9 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_scree
 // NEW: sheet component (đã tạo file riêng)
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/member_list_bottom_sheet.dart';
 
+// ví
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/wallet_screen.dart';
+
 /// Tab hiện tại
 enum _ProfileTab { posts, about, reels, photos }
 
@@ -345,16 +348,47 @@ class _ProfileHeaderSection extends StatelessWidget {
                       ? child
                       : Container(
                     color: Colors.grey.shade200,
-                    child: const Center(
-                      child: CircularProgressIndicator(),
-                    ),
+                    child: const Center(child: CircularProgressIndicator()),
                   ),
                   errorBuilder: (_, __, ___) => _CoverFallback(),
                 )
                     : _CoverFallback(),
               ),
 
-              // Avatar (đè lên phần dưới)
+              // === NÚT VÍ CÁ NHÂN (MỚI THÊM) ===
+              Positioned(
+                top: 16,
+                right: 16,
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const WalletScreen()),
+                    );
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.9),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.account_balance_wallet,
+                      color: Colors.blue,
+                      size: 22,
+                    ),
+                  ),
+                ),
+              ),
+
+              // Avatar
               Positioned(
                 left: 16,
                 bottom: 0,
