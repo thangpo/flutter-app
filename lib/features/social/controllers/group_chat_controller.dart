@@ -72,7 +72,7 @@ class GroupChatController extends ChangeNotifier {
     }
   }
 
-  // ---------- Messages ----------
+  // ---------- Messages & pagination ----------
   final Map<String, List<Map<String, dynamic>>> _messagesByGroup = {};
   final Map<String, bool> _messagesLoadingByGroup = {};
   String? lastError;
@@ -137,24 +137,13 @@ class GroupChatController extends ChangeNotifier {
     try {
       final serverList = await repo.fetchMessages(groupId);
 
-      // Giữ local chưa sync
       final localList = (_messagesByGroup[groupId] ?? [])
           .where((m) => m['is_local'] == true)
           .toList();
 
-      // FIX: loại local trùng message_hash_id với server
-      final serverHashes = serverList
-          .map((m) => m['message_hash_id']?.toString())
-          .where((h) => h != null && h!.isNotEmpty)
-          .toSet();
-
-      final localFiltered = localList
-          .where(
-              (m) => !serverHashes.contains(m['message_hash_id']?.toString()))
-          .toList();
-
       final normalized = serverList.map(_normalizeServerMessage).toList();
-      _setMessages(groupId, [...normalized, ...localFiltered]);
+
+      _setMessages(groupId, [...normalized, ...localList]);
     } catch (e) {
       lastError = e.toString();
     } finally {
@@ -163,9 +152,7 @@ class GroupChatController extends ChangeNotifier {
     }
   }
 
-  /// 🔼 Tải thêm tin nhắn cũ (prepend)
   Future<void> loadOlderMessages(String groupId, String beforeMessageId) async {
-    // Nếu đang loading chính thì bỏ qua
     if (messagesLoading(groupId)) return;
     lastError = null;
     try {
@@ -177,20 +164,7 @@ class GroupChatController extends ChangeNotifier {
 
       final normalized = older.map(_normalizeServerMessage).toList();
       final current = List<Map<String, dynamic>>.from(messagesOf(groupId));
-
-      // Gộp (older trước, current sau) rồi khử trùng theo 'id'
-      final merged = [...normalized, ...current];
-      final seen = <String>{};
-      final dedup = <Map<String, dynamic>>[];
-      for (final m in merged) {
-        final id = '${m['id'] ?? ''}';
-        if (id.isEmpty || !seen.contains(id)) {
-          dedup.add(m);
-          if (id.isNotEmpty) seen.add(id);
-        }
-      }
-
-      _setMessages(groupId, dedup);
+      _setMessages(groupId, [...normalized, ...current]);
       notifyListeners();
     } catch (e) {
       lastError = e.toString();
@@ -198,7 +172,7 @@ class GroupChatController extends ChangeNotifier {
     }
   }
 
-  // ---------- Send message ----------
+  // ---------- Send message (text / image / video / voice / file) ----------
   final _rng = Random();
   String _tempId() =>
       'local_${DateTime.now().millisecondsSinceEpoch}_${_rng.nextInt(999999)}';
@@ -244,16 +218,16 @@ class GroupChatController extends ChangeNotifier {
     };
   }
 
-  Future<void> sendMessage(
+   Future<void> sendMessage(
     String groupId,
     String text, {
     File? file,
-    String? type,
+    String? type, // 'image' | 'video' | 'voice' | 'file' | null
   }) async {
     lastError = null;
     final msgHash = _tempHash();
 
-    // 1️⃣ Optimistic UI: thêm local trước
+    // 1) Optimistic UI: thêm local trước
     final local = _makeLocalMessage(
       groupId: groupId,
       text: text,
@@ -265,9 +239,10 @@ class GroupChatController extends ChangeNotifier {
     _setMessages(groupId, cur);
     notifyListeners();
 
-    // 2️⃣ Gửi API
+    // 2) Gửi API -> flip trạng thái NGAY khi thành công HTTP,
+    //    rồi GHÉP dữ liệu server (nếu có) vào đúng bubble local (không reload)
     try {
-      await repo.sendMessage(
+      final serverMsg = await repo.sendMessage(
         groupId: groupId,
         text: text,
         file: file,
@@ -275,26 +250,79 @@ class GroupChatController extends ChangeNotifier {
         messageHashId: msgHash,
       );
 
-      // 🟢 FIX: sau khi gửi xong, xóa local message tạm để không bị trùng
       final list = _messagesByGroup[groupId];
-      if (list != null) {
-        list.removeWhere((m) => m['id'] == local['id']);
-        _setMessages(groupId, List<Map<String, dynamic>>.from(list));
+      if (list == null) {
+        notifyListeners();
+        return;
       }
 
-      // 3️⃣ Reload để lấy message thật từ server
-      await loadMessages(groupId);
+      final idx = list.indexWhere(
+        (m) => m['is_local'] == true && m['message_hash_id'] == msgHash,
+      );
+
+      if (idx == -1) {
+        // Không tìm thấy bubble local (hiếm) -> nếu có serverMsg thì thêm vào
+        if (serverMsg != null) {
+          final normalized = _normalizeServerMessage(serverMsg);
+          list.add(normalized);
+          _setMessages(groupId, List<Map<String, dynamic>>.from(list));
+          notifyListeners();
+        }
+        return;
+      }
+
+      // Flip trạng thái NGAY cả khi serverMsg == null
+      final currentLocal = Map<String, dynamic>.from(list[idx]);
+      currentLocal['uploading'] = false;
+      currentLocal['failed'] = false;
+      currentLocal['is_local'] = false;
+
+      if (serverMsg != null) {
+        // Ghép dữ liệu từ server vào bubble local
+        final normalized = _normalizeServerMessage(serverMsg);
+
+        // Ưu tiên field từ server nếu có, fallback sang local sẵn có
+        currentLocal
+          ..addAll({
+            'id': normalized['id'] ?? currentLocal['id'],
+            'display_text':
+                normalized['display_text'] ?? currentLocal['display_text'],
+            'text': normalized['text'] ?? currentLocal['text'],
+            'media': normalized['media']?.toString().isNotEmpty == true
+                ? normalized['media']
+                : currentLocal['media'],
+            'mediaFileName':
+                normalized['mediaFileName'] ?? currentLocal['mediaFileName'],
+            'type_two': normalized['type_two'] ?? currentLocal['type_two'],
+            'is_image': normalized['is_image'] ?? currentLocal['is_image'],
+            'is_video': normalized['is_video'] ?? currentLocal['is_video'],
+            'is_audio': normalized['is_audio'] ?? currentLocal['is_audio'],
+            'is_file': normalized['is_file'] ?? currentLocal['is_file'],
+            'time': normalized['time'] ?? currentLocal['time'],
+            // đảm bảo các cờ trạng thái đã tắt:
+            'uploading': false,
+            'failed': false,
+            'is_local': false,
+          });
+      }
+
+      list[idx] = currentLocal;
+      _setMessages(groupId, List<Map<String, dynamic>>.from(list));
+      notifyListeners();
     } catch (e) {
-      // ❌ Đánh dấu lỗi lên local
+      // 3) HTTP lỗi -> đánh dấu failed cho bubble local
       final list = _messagesByGroup[groupId];
       if (list != null) {
-        final idx = list.indexWhere((m) => m['id'] == local['id']);
+        final idx = list.indexWhere(
+          (m) => m['is_local'] == true && m['message_hash_id'] == msgHash,
+        );
         if (idx != -1) {
-          list[idx] = {
+          final failedMap = {
             ...list[idx],
             'uploading': false,
             'failed': true,
           };
+          list[idx] = failedMap;
           _setMessages(groupId, List<Map<String, dynamic>>.from(list));
         }
       }
