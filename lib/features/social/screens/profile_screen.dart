@@ -19,6 +19,9 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_scree
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_post_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_story_screen.dart';
 
+// ví
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/wallet_screen.dart';
+
 /// Tab hiện tại
 enum _ProfileTab { posts, about }
 
@@ -304,13 +307,44 @@ class _ProfileHeaderSection extends StatelessWidget {
                       ? child
                       : Container(
                     color: Colors.grey.shade200,
-                    child: const Center(
-                      child: CircularProgressIndicator(),
-                    ),
+                    child: const Center(child: CircularProgressIndicator()),
                   ),
                   errorBuilder: (_, __, ___) => _CoverFallback(),
                 )
                     : _CoverFallback(),
+              ),
+
+              // === NÚT VÍ CÁ NHÂN (MỚI THÊM) ===
+              Positioned(
+                top: 16,
+                right: 16,
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const WalletScreen()),
+                    );
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.9),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.account_balance_wallet,
+                      color: Colors.blue,
+                      size: 22,
+                    ),
+                  ),
+                ),
               ),
 
               // Avatar
@@ -338,9 +372,7 @@ class _ProfileHeaderSection extends StatelessWidget {
                           ? Image.network(
                         user.avatarUrl!,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) {
-                          return const _AvatarFallback();
-                        },
+                        errorBuilder: (_, __, ___) => const _AvatarFallback(),
                       )
                           : const _AvatarFallback(),
                     ),
@@ -684,7 +716,6 @@ class _ProfileHeaderSection extends StatelessWidget {
     return count.toString();
   }
 }
-
 
 // Nút tròn dấu "…"
 class _MoreCircleButton extends StatelessWidget {

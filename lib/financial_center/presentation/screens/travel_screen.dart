@@ -36,7 +36,7 @@ class TravelScreen extends StatelessWidget {
             title: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Image.asset(Images.logoWithNameImage, height: 35),
+                Image.asset(Images.logoWithNameImage, height: 50),
                 const MenuWidget(),
               ],
             ),
