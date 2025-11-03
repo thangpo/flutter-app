@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "214738452137",
-    "project_id": "vnsshop-4dd90",
-    "storage_bucket": "vnsshop-4dd90.firebasestorage.app"
+    "project_number": "948810422905",
+    "project_id": "vnshop247-1fb1d",
+    "storage_bucket": "vnshop247-1fb1d.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:214738452137:android:200e9a0dda444496cbb3b8",
+        "mobilesdk_app_id": "1:948810422905:android:e0118faea13be3d29d12a8",
         "android_client_info": {
-          "package_name": "com.vnsshop.ecommerce"
+          "package_name": "com.vnshop247"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDCkykSiD6cytHyHPiWzrUKcXkGYGDM20k"
+          "current_key": "AIzaSyCGsaNtMwBGlqphpTXuI02-LrU3DRWXq0c"
         }
       ],
       "services": {

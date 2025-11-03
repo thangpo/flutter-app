@@ -28,6 +28,7 @@ import 'package:flutter_sixvalley_ecommerce/helper/country_code_helper.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/app_localization.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_notifications_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/controllers/localization_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -403,6 +404,7 @@ class AuthController with ChangeNotifier {
       // ========== END EXTERNAL SOCIAL LOGOUT ==========
 
       await authServiceInterface.clearSharedData();
+      Provider.of<SocialNotificationsController>(Get.context!, listen: false).reset();
       // Nếu có ProfileController thì clear luôn
       // Get.find<ProfileController>().clearProfileData();
     }
