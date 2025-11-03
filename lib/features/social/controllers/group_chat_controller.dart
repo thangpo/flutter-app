@@ -72,7 +72,7 @@ class GroupChatController extends ChangeNotifier {
     }
   }
 
-  // ---------- Messages & pagination ----------
+  // ---------- Messages ----------
   final Map<String, List<Map<String, dynamic>>> _messagesByGroup = {};
   final Map<String, bool> _messagesLoadingByGroup = {};
   String? lastError;
@@ -84,7 +84,6 @@ class GroupChatController extends ChangeNotifier {
       _messagesLoadingByGroup[groupId] == true;
 
   void _setMessages(String groupId, List<Map<String, dynamic>> items) {
-    // sort theo time tăng dần (seconds)
     items.sort((a, b) {
       final ta = int.tryParse('${a['time'] ?? 0}') ?? 0;
       final tb = int.tryParse('${b['time'] ?? 0}') ?? 0;
@@ -116,8 +115,7 @@ class GroupChatController extends ChangeNotifier {
 
     return {
       ...m,
-      'display_text':
-          m['display_text'] ?? text, // có thể vẫn mã hoá, hiển thị nguyên trạng
+      'display_text': m['display_text'] ?? text,
       'media': media,
       'mediaFileName': fileName.isNotEmpty
           ? fileName
@@ -139,15 +137,24 @@ class GroupChatController extends ChangeNotifier {
     try {
       final serverList = await repo.fetchMessages(groupId);
 
-      // Giữ các tin local chưa sync (is_local == true)
+      // Giữ local chưa sync
       final localList = (_messagesByGroup[groupId] ?? [])
           .where((m) => m['is_local'] == true)
           .toList();
 
-      final normalized = serverList.map(_normalizeServerMessage).toList();
+      // FIX: loại local trùng message_hash_id với server
+      final serverHashes = serverList
+          .map((m) => m['message_hash_id']?.toString())
+          .where((h) => h != null && h!.isNotEmpty)
+          .toSet();
 
-      // Gộp local + server
-      _setMessages(groupId, [...normalized, ...localList]);
+      final localFiltered = localList
+          .where(
+              (m) => !serverHashes.contains(m['message_hash_id']?.toString()))
+          .toList();
+
+      final normalized = serverList.map(_normalizeServerMessage).toList();
+      _setMessages(groupId, [...normalized, ...localFiltered]);
     } catch (e) {
       lastError = e.toString();
     } finally {
@@ -156,9 +163,9 @@ class GroupChatController extends ChangeNotifier {
     }
   }
 
-  /// Tải thêm tin cũ (prepend)
+  /// 🔼 Tải thêm tin nhắn cũ (prepend)
   Future<void> loadOlderMessages(String groupId, String beforeMessageId) async {
-    // Nếu đang loading chính thì thôi
+    // Nếu đang loading chính thì bỏ qua
     if (messagesLoading(groupId)) return;
     lastError = null;
     try {
@@ -170,8 +177,20 @@ class GroupChatController extends ChangeNotifier {
 
       final normalized = older.map(_normalizeServerMessage).toList();
       final current = List<Map<String, dynamic>>.from(messagesOf(groupId));
-      // prepend: vì current đang tăng dần, các older có time nhỏ hơn -> chèn trước rồi sort lại trong _setMessages
-      _setMessages(groupId, [...normalized, ...current]);
+
+      // Gộp (older trước, current sau) rồi khử trùng theo 'id'
+      final merged = [...normalized, ...current];
+      final seen = <String>{};
+      final dedup = <Map<String, dynamic>>[];
+      for (final m in merged) {
+        final id = '${m['id'] ?? ''}';
+        if (id.isEmpty || !seen.contains(id)) {
+          dedup.add(m);
+          if (id.isNotEmpty) seen.add(id);
+        }
+      }
+
+      _setMessages(groupId, dedup);
       notifyListeners();
     } catch (e) {
       lastError = e.toString();
@@ -179,7 +198,7 @@ class GroupChatController extends ChangeNotifier {
     }
   }
 
-  // ---------- Send message (text / image / video / voice / file) ----------
+  // ---------- Send message ----------
   final _rng = Random();
   String _tempId() =>
       'local_${DateTime.now().millisecondsSinceEpoch}_${_rng.nextInt(999999)}';
@@ -190,7 +209,7 @@ class GroupChatController extends ChangeNotifier {
     required String groupId,
     required String text,
     File? file,
-    String? type, // image | video | voice | file | null
+    String? type,
     required String msgHash,
   }) {
     final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
@@ -217,13 +236,11 @@ class GroupChatController extends ChangeNotifier {
       'is_audio': isAudio,
       'is_file': isFile,
       'is_local': true,
-      'uploading': file != null, // có file thì hiển thị loading
+      'uploading': file != null,
       'failed': false,
       'time': nowSec,
-      'message_hash_id': msgHash, // để map với server khi trả về
-      'user_data': {
-        'user_id': currentUserId,
-      },
+      'message_hash_id': msgHash,
+      'user_data': {'user_id': currentUserId},
     };
   }
 
@@ -231,12 +248,12 @@ class GroupChatController extends ChangeNotifier {
     String groupId,
     String text, {
     File? file,
-    String? type, // 'image' | 'video' | 'voice' | 'file' | null
+    String? type,
   }) async {
     lastError = null;
     final msgHash = _tempHash();
 
-    // 1) Optimistic UI: thêm local trước
+    // 1️⃣ Optimistic UI: thêm local trước
     final local = _makeLocalMessage(
       groupId: groupId,
       text: text,
@@ -248,7 +265,7 @@ class GroupChatController extends ChangeNotifier {
     _setMessages(groupId, cur);
     notifyListeners();
 
-    // 2) Gửi API
+    // 2️⃣ Gửi API
     try {
       await repo.sendMessage(
         groupId: groupId,
@@ -257,8 +274,18 @@ class GroupChatController extends ChangeNotifier {
         type: type,
         messageHashId: msgHash,
       );
+
+      // 🟢 FIX: sau khi gửi xong, xóa local message tạm để không bị trùng
+      final list = _messagesByGroup[groupId];
+      if (list != null) {
+        list.removeWhere((m) => m['id'] == local['id']);
+        _setMessages(groupId, List<Map<String, dynamic>>.from(list));
+      }
+
+      // 3️⃣ Reload để lấy message thật từ server
+      await loadMessages(groupId);
     } catch (e) {
-      // đánh dấu lỗi lên local message
+      // ❌ Đánh dấu lỗi lên local
       final list = _messagesByGroup[groupId];
       if (list != null) {
         final idx = list.indexWhere((m) => m['id'] == local['id']);
@@ -273,11 +300,7 @@ class GroupChatController extends ChangeNotifier {
       }
       lastError = e.toString();
       notifyListeners();
-      return;
     }
-
-    // 3) Đồng bộ lại từ server (lấy đủ URL media, remove bản local)
-    await loadMessages(groupId);
   }
 
   // ---------- Utils ----------
