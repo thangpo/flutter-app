@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 // MXH
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_notifications_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/notification_item.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_notification.dart';
 
 class NotificationsScreen extends StatefulWidget {
   final bool isBackButtonExist;

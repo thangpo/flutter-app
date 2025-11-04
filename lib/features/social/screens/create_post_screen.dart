@@ -1,6 +1,4 @@
 ﻿import 'dart:io';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter/material.dart';
@@ -11,7 +9,6 @@ import 'package:flutter_sixvalley_ecommerce/features/profile/domain/models/profi
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_live_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/live_screen.dart';
 
 class SocialCreatePostScreen extends StatefulWidget {
@@ -146,69 +143,68 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
   }
 
   Future<void> _startLiveVideo() async {
+    if (_submitting) return;
+    FocusScope.of(context).unfocus();
+
+    setState(() => _submitting = true);
     try {
-      final sc = context.read<SocialController>();
-      final data = await sc.createLive();
-      print('🎬 Live Data: $data');
-
-      if (!mounted) return;
-
-      if (data == null) {
-        showCustomSnackBar('Không thể tạo Live stream', context, isError: true);
+      final SocialController sc = context.read<SocialController>();
+      final String? accessToken = sc.accessToken;
+      if (accessToken == null || accessToken.isEmpty) {
+        showCustomSnackBar(
+          'Unable to start live stream: missing access token.',
+          context,
+          isError: true,
+        );
         return;
       }
 
-      // 🔹 Nếu /api/live chưa có token, bạn cần tự gọi API generate_agora_token
-      // hoặc nếu bạn đã nhúng token_agora trong data thì đoạn này sẽ hoạt động ngay.
-      final token = data?['token_agora']?.toString() ?? '';
-      final channel = data?['channel']?.toString() ??
-          data?['stream_name']?.toString() ?? '';
+      final int broadcasterUid =
+          DateTime.now().millisecondsSinceEpoch.remainder(1000000);
 
-      print('🎬 [DEBUG] Token: $token, Channel: $channel');
+      final Map<String, dynamic> session =
+          await sc.createLiveSession(broadcasterUid: broadcasterUid);
 
-      // 🔹 Nếu token rỗng -> gọi API /api/generate_agora_token để lấy token mới
-      String finalToken = token;
-      if (finalToken.isEmpty && channel.isNotEmpty) {
-        final url = Uri.parse(
-          'https://social.vnshop247.com/api/generate_agora_token?access_token=${sc.accessToken}',
+      if (!mounted) return;
+
+      final Map<String, dynamic>? postData =
+          session['post_data'] as Map<String, dynamic>?;
+
+      final String? streamName =
+          (session['stream_name'] ?? postData?['stream_name'])?.toString();
+
+      if (streamName == null || streamName.isEmpty) {
+        showCustomSnackBar(
+          'Live API did not return a stream name.',
+          context,
+          isError: true,
         );
-
-        final res = await http.post(url, body: {
-          'server_key': 'f6e69c898ddd643154c9bd4b152555842e26a868-d195c100005dddb9f1a30a67a5ae42d4-19845955',
-          'channelName': channel,
-          'uid': '316',
-          'role': 'publisher',
-        });
-
-        final jsonData = jsonDecode(res.body);
-        print('📡 [DEBUG] Generate Token Response: $jsonData');
-
-        if (jsonData['token_agora'] != null) {
-          finalToken = jsonData['token_agora'];
-        }
+        return;
       }
 
-      // 🚀 Mở LiveScreen
-      Navigator.push(
-        context,
+      final String? token = session['token']?.toString();
+      final String? postId = postData?['post_id']?.toString();
+
+      Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => LiveScreen(
-            appId: '554e80e2bcfe401cbde32aaf13d48ce5',
-            channelName: channel,
-            token: finalToken,
-            accessToken: sc.accessToken!,
+            streamName: streamName,
+            accessToken: accessToken,
+            broadcasterUid: broadcasterUid,
+            initialToken: token,
+            postId: postId,
           ),
         ),
       );
     } catch (e) {
-      print('🔥 [ERROR] Lỗi khi tạo live: $e');
       if (!mounted) return;
-      showCustomSnackBar('Lỗi khi tạo live: $e', context, isError: true);
+      showCustomSnackBar('Failed to start live: $e', context, isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => _submitting = false);
+      }
     }
   }
-
-
-
   bool get _hasContent {
     return _textController.text.trim().isNotEmpty ||
         _images.isNotEmpty ||
@@ -751,3 +747,4 @@ class _ComposeAction {
     required this.onTap,
   });
 }
+

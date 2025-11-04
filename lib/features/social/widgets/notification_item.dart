@@ -131,8 +131,8 @@ class _NotificationItemState extends State<NotificationItem> {
             duration: const Duration(milliseconds: 180),
             curve: Curves.easeOut,
             transform: Matrix4.translationValues(_drag, 0, 0),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            margin: const EdgeInsets.symmetric(vertical: 3),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+            margin: const EdgeInsets.symmetric(vertical: 0),
             color: bgColor,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -153,7 +153,7 @@ class _NotificationItemState extends State<NotificationItem> {
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 1.5),
                         ),
-                        padding: const EdgeInsets.all(2),
+                        padding: const EdgeInsets.all(0),
                         child: Icon(
                           _iconByType(n.type),
                           color: _colorByType(n.type),
@@ -219,6 +219,7 @@ class _NotificationItemState extends State<NotificationItem> {
       ),
     );
   }
+
   // ------------------ tap → mở chi tiết ngay trong widget con ------------------
   Future<void> _handleTap() async {
     if (_dragging) return;
@@ -227,7 +228,11 @@ class _NotificationItemState extends State<NotificationItem> {
       return;
     }
     final n = widget.n;
-    debugPrint('[NOTI] id=${n.id}, post_id=${n.postId}, story_id=${n.storyId}, type=${n.type}, url=${n.url}');
+    await context
+        .read<SocialNotificationsController>()
+        .getNotificationDetail(n.id);
+    debugPrint(
+        '[NOTI] id=${n.id}, post_id=${n.postId}, story_id=${n.storyId}, type=${n.type}, url=${n.url}');
 
     // 🟣 1️⃣ Story trước
     if (n.type == 'viewed_story' ||
@@ -294,8 +299,6 @@ class _NotificationItemState extends State<NotificationItem> {
     }
   }
 
-
-
   // ------------------ helpers ------------------
   static String _messageByType(SocialNotification n) {
     final url = n.url;
@@ -322,7 +325,6 @@ class _NotificationItemState extends State<NotificationItem> {
         return "đã tương tác với bạn.";
     }
   }
-
 
   static IconData _iconByType(String type) {
     switch (type) {

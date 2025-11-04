@@ -14,6 +14,20 @@ class SocialNotificationsService {
     });
     return res;
   }
+  /// 🔹 Lấy chi tiết thông báo & đánh dấu đã xem
+  Future<http.Response> getNotificationDetail(
+      String accessToken, String id) async {
+    final url = Uri.parse(
+      '${AppConstants.socialBaseUrl}${WowonderAPI.taskNotification}?access_token=$accessToken',
+    );
+
+    final res = await http.post(url, body: {
+      'server_key': AppConstants.socialServerKey,
+      'type': 'detail',
+      'id': id,
+    });
+    return res;
+  }
 
   /// 🗑️ Xoá thông báo
   Future<http.Response> deleteNotification(

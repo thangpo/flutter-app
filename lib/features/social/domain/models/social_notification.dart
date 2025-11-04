@@ -21,7 +21,7 @@ class SocialNotification {
   final String text;
   final String url;
   final String fullLink;
-  final String seen;
+  String seen;
   final String time;
   final String timeText;
 
@@ -29,7 +29,7 @@ class SocialNotification {
   final String name;
   final String avatar;
 
-  const SocialNotification({
+   SocialNotification({
     required this.id,
     required this.notifierId,
     required this.recipientId,

@@ -67,6 +67,19 @@ class SocialController with ChangeNotifier {
   bool _creatingLive = false;
   bool get creatingLive => _creatingLive;
 
+  // ---- STATE ----
+  final List<SocialUser> followersList = [];
+  final List<SocialUser> followingList = [];
+
+  bool loadingFollowers = false;
+  bool loadingFollowing = false;
+
+  String? _followersAfter;   // cursor/offset trang tiếp theo
+  String? _followingAfter;
+
+  bool get hasMoreFollowers => _followersAfter != null && _followersAfter!.isNotEmpty;
+  bool get hasMoreFollowing => _followingAfter != null && _followingAfter!.isNotEmpty;
+
   final List<SocialStory> _stories = [];
   List<SocialStory> get stories => List.unmodifiable(_stories);
   int _storiesOffset = 0;
@@ -265,11 +278,11 @@ class SocialController with ChangeNotifier {
   //edit prodile user by aoanhan
 
   Future<SocialUserProfile> updateDataUserFromEdit(
-      SocialUserProfile edited, {
-        String? currentPassword,
-        String? newPassword,
-        String? ecomToken,
-      }) async {
+    SocialUserProfile edited, {
+    String? currentPassword,
+    String? newPassword,
+    String? ecomToken,
+  }) async {
     if (_updatingProfile) {
       throw Exception('Đang cập nhật hồ sơ, vui lòng đợi xíu...');
     }
@@ -311,26 +324,26 @@ class SocialController with ChangeNotifier {
       // Gọi Service: thêm first_name, last_name, current/new_password
       final updated = await service.updateDataUser(
         // --- tên ---
-        displayName     : edited.displayName,   // required String? (có thể null)
-        firstName       : edited.firstName,
-        lastName        : edited.lastName,
+        displayName: edited.displayName, // required String? (có thể null)
+        firstName: edited.firstName,
+        lastName: edited.lastName,
 
         // --- thông tin khác ---
-        about           : edited.about,
-        genderText      : edited.genderText,
-        birthdayIso     : edited.birthday,      // yyyy-MM-dd
-        address         : edited.address,
-        website         : edited.website,
+        about: edited.about,
+        genderText: edited.genderText,
+        birthdayIso: edited.birthday, // yyyy-MM-dd
+        address: edited.address,
+        website: edited.website,
         relationshipText: edited.relationshipStatus,
 
         // --- mật khẩu (chỉ gửi khi cả 2 đều có giá trị) ---
-        currentPassword : (cp?.isNotEmpty ?? false) ? cp : null,
-        newPassword     : (np?.isNotEmpty ?? false) ? np : null,
+        currentPassword: (cp?.isNotEmpty ?? false) ? cp : null,
+        newPassword: (np?.isNotEmpty ?? false) ? np : null,
 
         // --- file ảnh ---
-        avatarFilePath  : avatarLocal,
-        coverFilePath   : coverLocal,
-        ecomToken       : ecomToken,
+        avatarFilePath: avatarLocal,
+        coverFilePath: coverLocal,
+        ecomToken: ecomToken,
       );
 
       // Đồng bộ lại header/current user (giữ nguyên như cũ)
@@ -357,6 +370,8 @@ class SocialController with ChangeNotifier {
       notifyListeners();
     }
   }
+
+
 
   Future<void> loadUserGroups({bool forceRefresh = false}) async {
     if (_loadingUserGroups) return;
@@ -767,10 +782,75 @@ class SocialController with ChangeNotifier {
             'f6e69c898ddd643154c9bd4b152555842e26a868-d195c100005dddb9f1a30a67a5ae42d4-19845955',
       );
 
-      final data = await repo.createLive(_accessToken!);
+      final data = await repo.createLive(
+        accessToken: _accessToken!,
+        streamName: 'live_${DateTime.now().millisecondsSinceEpoch}',
+      );
       return data;
     } catch (e) {
       rethrow;
+    } finally {
+      _creatingLive = false;
+      notifyListeners();
+    }
+  }
+
+  Future<Map<String, dynamic>> createLiveSession({int? broadcasterUid}) async {
+    final String? token = _accessToken;
+    if (token == null || token.isEmpty) {
+      throw Exception('Missing access token');
+    }
+
+    _creatingLive = true;
+    notifyListeners();
+
+    try {
+      final SocialLiveRepository repo = SocialLiveRepository(
+        apiBaseUrl: AppConstants.socialBaseUrl,
+        serverKey: AppConstants.socialServerKey,
+      );
+
+      final String streamNameBase =
+          'live_${DateTime.now().millisecondsSinceEpoch}';
+      final int uid = broadcasterUid ??
+          DateTime.now().millisecondsSinceEpoch.remainder(1000000);
+
+      Map<String, dynamic>? agoraPayload;
+      String? tokenAgora;
+      try {
+        agoraPayload = await repo.generateAgoraToken(
+          accessToken: token,
+          channelName: streamNameBase,
+          uid: uid,
+        );
+        tokenAgora = agoraPayload?['token_agora']?.toString();
+      } catch (error) {
+        debugPrint('generateAgoraToken failed: $error');
+      }
+
+      final Map<String, dynamic> postData = await repo.createLive(
+        accessToken: token,
+        streamName: streamNameBase,
+        token: tokenAgora ?? '',
+      );
+
+      final String streamName =
+          postData['stream_name']?.toString() ?? streamNameBase;
+
+      final Map<String, dynamic> result = <String, dynamic>{
+        'post_data': postData,
+        'stream_name': streamName,
+        'uid': uid,
+      };
+
+      if (agoraPayload != null) {
+        result['agora'] = agoraPayload;
+      }
+      if ((tokenAgora ?? '').isNotEmpty) {
+        result['token'] = tokenAgora;
+      }
+
+      return result;
     } finally {
       _creatingLive = false;
       notifyListeners();

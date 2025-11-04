@@ -71,12 +71,27 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 final database = AppDatabase();
 
+// Handler cho background message (khi app tắt)
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  print("🔔 Background message: ${message.notification?.title}");
+}
+
 Future<void> main() async {
   HttpOverrides.global = MyHttpOverrides();
   WidgetsFlutterBinding.ensureInitialized();
 
   // Khởi tạo Firebase một lần duy nhất.
-  await Firebase.initializeApp();
+  if(Firebase.apps.isEmpty) {
+    if(Platform.isAndroid) {
+      await Firebase.initializeApp(options: const FirebaseOptions(
+          apiKey: "AIzaSyCGsaNtMwBGlqphpTXuI02-LrU3DRWXq0c",
+          appId: "1:948810422905:android:e0118faea13be3d29d12a8",
+          messagingSenderId: "948810422905",
+          projectId: "vnshop247-1fb1d"));
+    }
+  }
+
 
   await FlutterDownloader.initialize(debug: true, ignoreSsl: true);
   await di.init();
@@ -94,7 +109,38 @@ Future<void> main() async {
       body = NotificationHelper.convertNotification(remoteMessage.data);
     }
     await NotificationHelper.initialize(flutterLocalNotificationsPlugin);
+    String? token = await FirebaseMessaging.instance.getToken();
+    print("📱 FCM Device Token: $token");
     FirebaseMessaging.onBackgroundMessage(myBackgroundMessageHandler);
+    // Sau khi FirebaseMessaging.onBackgroundMessage(myBackgroundMessageHandler);
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
+      print('💬 Foreground message: ${message.notification?.title}');
+      navigatorKey.currentState?.pushNamed('/notifications');
+      RemoteNotification? notification = message.notification;
+      AndroidNotification? android = message.notification?.android;
+      if (notification != null && android != null) {
+        const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+          'high_importance_channel',
+          'Thông báo VNShop247',
+          importance: Importance.max,
+          priority: Priority.high,
+          playSound: true,
+          icon: 'notification_icon', // tên icon trắng trong res/drawable/
+        );
+
+        const NotificationDetails notificationDetails =
+        NotificationDetails(android: androidDetails);
+
+        await flutterLocalNotificationsPlugin.show(
+          notification.hashCode,
+          notification.title,
+          notification.body,
+          notificationDetails,
+        );
+      }
+    });
+
   } catch (_) {}
 
   // await NotificationHelper.initialize(flutterLocalNotificationsPlugin);

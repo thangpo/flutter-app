@@ -1,4 +1,4 @@
-﻿import 'package:flutter_sixvalley_ecommerce/features/product_details/controllers/product_details_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/product_details/controllers/product_details_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -18,6 +18,7 @@ import 'package:flutter_sixvalley_ecommerce/features/product_details/screens/pro
 import 'package:flutter_sixvalley_ecommerce/helper/price_converter.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/share_post_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/shared_post_preview.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 enum CommentSortOrder { newest, oldest }
 
@@ -268,26 +269,38 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
     final p = widget.post;
     final cs = Theme.of(context).colorScheme;
     final onSurface = cs.onSurface;
+    final Color appBarColor = cs.surface;
     return Scaffold(
       appBar: AppBar(
         centerTitle: false,
         toolbarHeight: 68, // 64–72 cho thoáng 2 dòng
         titleSpacing: 12,
+        backgroundColor: appBarColor,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        elevation: 0,
         title: FutureBuilder<SocialPost?>(
           future: _postFuture,
           builder: (ctx, snap) {
-            final post = snap.data ?? p; // p = widget.post
+            final basePost = snap.data ?? p;
+            final ctrl = ctx.watch<SocialController>();
+            final SocialPost current =
+                ctrl.findPostById(basePost.id) ?? basePost;
+            final SocialPost displayPost = current.sharedPost != null
+                ? current
+                : (p.sharedPost != null ? p : current);
             final onSurface = Theme.of(ctx).colorScheme.onSurface;
 
             return Row(
               children: [
                 CircleAvatar(
                   radius: 18,
-                  backgroundImage:
-                      (post.userAvatar != null && post.userAvatar!.isNotEmpty)
-                          ? NetworkImage(post.userAvatar!)
-                          : null,
-                  child: (post.userAvatar == null || post.userAvatar!.isEmpty)
+                  backgroundImage: (displayPost.userAvatar != null &&
+                          displayPost.userAvatar!.isNotEmpty)
+                      ? NetworkImage(displayPost.userAvatar!)
+                      : null,
+                  child: (displayPost.userAvatar == null ||
+                          displayPost.userAvatar!.isEmpty)
                       ? const Icon(Icons.person, size: 18)
                       : null,
                 ),
@@ -297,23 +310,32 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Tên người dùng (1 dòng)
                       Text(
-                        post.userName ?? (getTranslated('user', ctx) ?? 'User'),
+                        displayPost.userName ??
+                            (getTranslated('user', ctx) ?? 'User'),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.w600,
                             ),
                       ),
-                      // Thời gian (nếu có)
-                      if ((post.timeText ?? '').isNotEmpty)
+                      if ((displayPost.timeText ?? '').isNotEmpty)
                         Text(
-                          post.timeText!,
+                          displayPost.timeText!,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
                                 color: onSurface.withOpacity(.6),
+                              ),
+                        ),
+                      if (displayPost.sharedPost != null)
+                        Text(
+                          _sharedSubtitleText(ctx, displayPost),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                                color: onSurface.withOpacity(.75),
+                                fontStyle: FontStyle.italic,
                               ),
                         ),
                     ],
@@ -352,8 +374,47 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                           builder: (context, snap) {
                             final post = snap.data ?? p;
                             final ctrl = context.watch<SocialController>();
+                            final Color onSurface =
+                                Theme.of(context).colorScheme.onSurface;
                             final SocialPost current =
                                 ctrl.findPostById(post.id) ?? post;
+                            final SocialPost displayPost =
+                                current.sharedPost != null
+                                    ? current
+                                    : (p.sharedPost != null ? p : current);
+                            final SocialPost? sharedPost =
+                                displayPost.sharedPost ?? p.sharedPost;
+                            final String? postText =
+                                (current.text?.isNotEmpty ?? false)
+                                    ? current.text
+                                    : p.text;
+                            final List<dynamic>? pollOptions =
+                                (current.pollOptions?.isNotEmpty ?? false)
+                                    ? current.pollOptions
+                                    : p.pollOptions;
+                            final bool hasPoll =
+                                pollOptions != null && pollOptions.isNotEmpty;
+                            final Widget? mediaContent = sharedPost != null
+                                ? SharedPostPreviewCard(
+                                    post: sharedPost!,
+                                    compact: true,
+                                    padding: const EdgeInsets.all(10),
+                                    onTap: () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              SocialPostDetailScreen(
+                                                  post: sharedPost!),
+                                        ),
+                                      );
+                                    },
+                                  )
+                                : ((displayPost.videoUrl ?? '').isNotEmpty ||
+                                        (displayPost.audioUrl ?? '')
+                                            .isNotEmpty ||
+                                        displayPost.imageUrls.isNotEmpty)
+                                    ? _DetailMedia(post: displayPost)
+                                    : null;
                             final myReaction = current.myReaction;
                             final bool isSharing = ctrl.isSharing(current.id);
                             final List<String> topReactions =
@@ -370,28 +431,81 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                if ((post.text ?? '').isNotEmpty)
-                                  const SizedBox(height: 8),
-                                if (post.sharedPost != null)
+                                if ((postText ?? '').isNotEmpty) ...[
                                   Padding(
-                                    padding: const EdgeInsets.only(top: 12),
-                                    child: SharedPostPreviewCard(
-                                      post: post.sharedPost!,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12),
+                                    child: Html(
+                                      data: postText!,
+                                      style: {
+                                        'body': Style(
+                                          color: onSurface,
+                                          fontSize: FontSize(15),
+                                          lineHeight: LineHeight(1.35),
+                                          margin: Margins.zero,
+                                          padding: HtmlPaddings.zero,
+                                        ),
+                                      },
+                                      onLinkTap: (url, _, __) async {
+                                        if (url != null) {
+                                          final uri = Uri.parse(url);
+                                          await launchUrl(uri,
+                                              mode: LaunchMode
+                                                  .externalApplication);
+                                        }
+                                      },
                                     ),
-                                  )
-                                else
-                                  _DetailMedia(post: post),
-                                if (post.hasProduct)
+                                  ),
+                                  const SizedBox(height: 12),
+                                ],
+                                if (hasPoll) ...[
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 8),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        for (final opt in pollOptions!) ...[
+                                          Text(opt['text']?.toString() ?? ''),
+                                          const SizedBox(height: 6),
+                                          ClipRRect(
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            child: LinearProgressIndicator(
+                                              value: (((double.tryParse(
+                                                            (opt['percentage_num'] ??
+                                                                    '0')
+                                                                .toString()) ??
+                                                        0.0) /
+                                                    100.0))
+                                                .clamp(0, 1),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 10),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                ],
+                                if (mediaContent != null) ...[
+                                  mediaContent,
+                                  const SizedBox(height: 12),
+                                ],
+                                if (displayPost.hasProduct)
                                   Padding(
                                     padding: const EdgeInsets.only(top: 12),
                                     child: _ProductBlock(
-                                      title: post.productTitle,
-                                      images: post.productImages ?? const [],
-                                      price: post.productPrice,
-                                      currency: post.productCurrency,
-                                      description: post.productDescription,
-                                      productId: post.ecommerceProductId,
-                                      slug: post.productSlug,
+                                      title: displayPost.productTitle,
+                                      images:
+                                          displayPost.productImages ?? const [],
+                                      price: displayPost.productPrice,
+                                      currency: displayPost.productCurrency,
+                                      description:
+                                          displayPost.productDescription,
+                                      productId: displayPost.ecommerceProductId,
+                                      slug: displayPost.productSlug,
                                     ),
                                   ),
                                 Padding(
@@ -1437,6 +1551,16 @@ class _ProductBlock extends StatelessWidget {
     if (lower == 'null' || lower == 'undefined') return null;
     return trimmed;
   }
+}
+
+String _sharedSubtitleText(BuildContext context, SocialPost parent) {
+  final SocialPost? shared = parent.sharedPost;
+  if (shared == null) return '';
+  final String original =
+      shared.userName ?? (getTranslated('user', context) ?? 'User');
+  final String verb =
+      getTranslated('shared_post_from', context) ?? 'shared a post from';
+  return '$verb $original';
 }
 
 List<String> _topReactionLabels(SocialPost post, {int limit = 3}) {

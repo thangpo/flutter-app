@@ -34,7 +34,26 @@ class SocialNotificationsController extends ChangeNotifier {
       _setLoading(false);
     }
   }
-
+  Future<void> getNotificationDetail(String id) async {
+    try {
+      await _ensureAccessToken();
+      final data= await repo.getNotificationDetail(_accessToken!, id);
+      if (data != null && data['api_status'] == 200) {
+        final detail = data['detail'];
+        _currentDetail = detail;
+        // ✅ Cập nhật local list
+        final idx = _notifications.indexWhere((e) => e.id == id);
+        if (idx != -1) {
+          _notifications[idx].seen = detail['seen'].toString();
+          notifyListeners();
+        }
+      } else {
+        _error = data?['errors']?.toString() ?? 'Error getting detail';
+      }
+    } catch (e) {
+      debugPrint('Mark as seen failed: $e');
+    }
+  }
   Future<String?> deleteNotification(String id) async {
     try {
       await _ensureAccessToken();
@@ -68,6 +87,12 @@ class SocialNotificationsController extends ChangeNotifier {
     _accessToken = null;
     await getNotifications();
   }
-
+  void reset() {
+    _notifications = [];
+    _accessToken = null;
+    _error = null;
+    _loading = false;
+    notifyListeners();
+  }
 }
 

@@ -1,21 +1,24 @@
-import 'dart:convert';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
 
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_live_repository.dart';
+import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
+
 class LiveScreen extends StatefulWidget {
-  final String appId;
-  final String channelName;
-  final String token;
+  final String streamName;
   final String accessToken;
+  final int broadcasterUid;
+  final String? initialToken;
+  final String? postId;
 
   const LiveScreen({
     super.key,
-    required this.appId,
-    required this.channelName,
-    required this.token,
+    required this.streamName,
     required this.accessToken,
+    required this.broadcasterUid,
+    this.initialToken,
+    this.postId,
   });
 
   @override
@@ -23,72 +26,114 @@ class LiveScreen extends StatefulWidget {
 }
 
 class _LiveScreenState extends State<LiveScreen> {
-  RtcEngine? _engine;
-  bool _joined = false;
-  bool _loading = false;
-  String? _currentToken;
+  final SocialLiveRepository _repository = const SocialLiveRepository(
+    apiBaseUrl: AppConstants.socialBaseUrl,
+    serverKey: AppConstants.socialServerKey,
+  );
 
-  bool get _hasToken => _currentToken?.isNotEmpty == true;
+  RtcEngine? _engine;
+  String? _token;
+  bool _isInitializing = false;
+  bool _joined = false;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _currentToken = widget.token;
-    if (_hasToken) _initAgora();
+    _token = widget.initialToken;
+    _prepareStream();
+  }
+
+  Future<void> _prepareStream() async {
+    if (_isInitializing) return;
+    setState(() {
+      _isInitializing = true;
+      _errorMessage = null;
+    });
+
+    try {
+      String? token = _token;
+      if (token == null || token.isEmpty) {
+        final Map<String, dynamic>? payload =
+            await _repository.generateAgoraToken(
+          accessToken: widget.accessToken,
+          channelName: widget.streamName,
+          uid: widget.broadcasterUid,
+        );
+        token = payload?['token_agora']?.toString();
+      }
+
+      if (token == null || token.isEmpty) {
+        setState(() {
+          _errorMessage = 'Unable to fetch livestream token.';
+        });
+        return;
+      }
+
+      final Map<Permission, PermissionStatus> permissionStatuses = await [
+        Permission.camera,
+        Permission.microphone,
+      ].request();
+
+      final bool permissionsGranted = permissionStatuses.values.every(
+        (PermissionStatus status) => status.isGranted,
+      );
+
+      if (!permissionsGranted) {
+        setState(() {
+          _errorMessage =
+              'Camera and microphone permissions are required to go live.';
+        });
+        return;
+      }
+
+      _token = token;
+      await _initAgora();
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Failed to initialise livestream: $e';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isInitializing = false);
+      }
+    }
   }
 
   Future<void> _initAgora() async {
-    await [Permission.camera, Permission.microphone].request();
+    final String? token = _token;
+    if (token == null || token.isEmpty) {
+      throw Exception('Missing Agora token.');
+    }
 
-    _engine = createAgoraRtcEngine();
-    await _engine!.initialize(RtcEngineContext(appId: widget.appId));
+    final RtcEngine engine = createAgoraRtcEngine();
+    _engine = engine;
 
-    _engine!.registerEventHandler(
+    await engine.initialize(
+      const RtcEngineContext(appId: AppConstants.socialAgoraAppId),
+    );
+
+    engine.registerEventHandler(
       RtcEngineEventHandler(
-        onJoinChannelSuccess: (RtcConnection conn, int elapsed) {
-          debugPrint('✅ Join thành công: ${conn.channelId}');
+        onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
+          if (!mounted) return;
           setState(() => _joined = true);
         },
-        onUserJoined: (RtcConnection conn, int uid, int elapsed) {
-          debugPrint('👤 Viewer join: $uid');
-        },
-        onFirstLocalVideoFrame: (conn, width, height, elapsed) {
-          debugPrint('📸 Frame đầu tiên: ${width}x$height');
-        },
-        onError: (ErrorCodeType err, String msg) {
-          debugPrint('❌ Lỗi Agora: $err - $msg');
+        onError: (ErrorCodeType code, String message) {
+          debugPrint('Agora error: $code - $message');
         },
       ),
     );
 
-    // ✅ Bật video và đặt vai trò phát sóng
-    await _engine!.enableVideo();
-    await _engine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
-
-    // ✅ Cấu hình hướng hiển thị (sửa lỗi xoay ngược)
-    await _engine!.setVideoEncoderConfiguration(
-      const VideoEncoderConfiguration(
-        dimensions: VideoDimensions(width: 720, height: 1280),
-        orientationMode: OrientationMode.orientationModeFixedPortrait,
-        mirrorMode: VideoMirrorModeType.videoMirrorModeEnabled,
-      ),
+    await engine.enableVideo();
+    await engine.setClientRole(
+      role: ClientRoleType.clientRoleBroadcaster,
     );
-
-    // ✅ Thiết lập khung video cục bộ (local)
-    await _engine!.setupLocalVideo(const VideoCanvas(
-      uid: 0,
-      mirrorMode: VideoMirrorModeType.videoMirrorModeEnabled,
-      renderMode: RenderModeType.renderModeHidden,
-    ));
-
-    await _engine!.startPreview();
-
-    print('🎫 [DEBUG] Token đang dùng joinChannel: $_currentToken');
-
-    await _engine!.joinChannel(
-      token: _currentToken ?? '',
-      channelId: widget.channelName,
-      uid: 316,
+    await engine.startPreview();
+    await engine.joinChannel(
+      token: token,
+      channelId: widget.streamName,
+      uid: widget.broadcasterUid,
       options: const ChannelMediaOptions(
         clientRoleType: ClientRoleType.clientRoleBroadcaster,
         publishCameraTrack: true,
@@ -97,174 +142,126 @@ class _LiveScreenState extends State<LiveScreen> {
     );
   }
 
-  Future<void> _generateTokenAndStart() async {
-    if (_loading) return;
-    setState(() => _loading = true);
-
-    try {
-      final url = Uri.parse(
-        'https://social.vnshop247.com/api/generate_agora_token?access_token=${widget.accessToken}',
-      );
-
-      final res = await http.post(url, body: {
-        'server_key':
-        'f6e69c898ddd643154c9bd4b152555842e26a868-d195c100005dddb9f1a30a67a5ae42d4-19845955',
-        'channelName': widget.channelName,
-        'uid': '316',
-        'role': 'publisher',
-      });
-
-      print('🎫 Channel join: ${widget.channelName}');
-      final rawBody = res.body;
-      print('🧾 [DEBUG] Raw response from server:\n$rawBody');
-
-      String cleanBody = rawBody
-          .replaceAll(RegExp(r'[\r\n]+'), '')
-          .replaceAll(RegExp(r'\s+'), ' ')
-          .replaceAll(RegExp(r'\}\s*\[\]\s*$'), '}')
-          .trim();
-
-      print('🧩 [DEBUG] Cleaned JSON body:\n$cleanBody');
-
-      Map<String, dynamic>? jsonData;
-      try {
-        jsonData = jsonDecode(cleanBody);
-        final token = (jsonData != null && jsonData is Map<String, dynamic>)
-            ? jsonData['token_agora']?.toString()
-            : null;
-
-        if (token != null && token.isNotEmpty) {
-          print('🎫 Token Agora mới: $token');
-          setState(() => _currentToken = token);
-          await _initAgora();
-        } else {
-          _showMsg('Không thể lấy token hợp lệ từ server');
-        }
-      } on FormatException catch (e) {
-        print('❌ [DEBUG] FormatException khi parse JSON: $e');
-        print('❌ [DEBUG] Raw (lỗi) JSON content:\n$cleanBody');
-
-        final match = RegExp(r'\{.*\}').firstMatch(cleanBody);
-        if (match != null) {
-          final jsonPart = match.group(0)!;
-          print('🛠 [DEBUG] Found valid JSON substring:\n$jsonPart');
-          try {
-            jsonData = jsonDecode(jsonPart);
-            print('✅ [DEBUG] Fixed JSON parsed OK: $jsonData');
-          } catch (e2) {
-            _showMsg('Không thể phân tích dữ liệu token (JSON lỗi)');
-            return;
-          }
-        } else {
-          _showMsg('Phản hồi từ server không hợp lệ');
-          return;
-        }
-      } catch (e) {
-        print('❌ [DEBUG] Lỗi khác khi parse JSON: $e');
-        _showMsg('Không thể xử lý phản hồi từ server');
-        return;
-      }
-    } catch (e) {
-      _showMsg('Lỗi tạo token: $e');
-    } finally {
-      setState(() => _loading = false);
-    }
+  Future<void> _retry() async {
+    await _disposeEngine();
+    setState(() {
+      _token = widget.initialToken;
+      _joined = false;
+    });
+    await _prepareStream();
   }
 
-  void _showMsg(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  Future<void> _disposeEngine() async {
+    final RtcEngine? engine = _engine;
+    _engine = null;
+    if (engine != null) {
+      await engine.leaveChannel();
+      await engine.release();
+    }
   }
 
   @override
   void dispose() {
-    if (_engine != null) {
-      _engine!.leaveChannel();
-      _engine!.release();
-    }
+    _disposeEngine();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_hasToken) {
-      return Scaffold(
-        backgroundColor: Colors.black,
-        body: SafeArea(
-          child: Center(
-            child: _loading
-                ? const CircularProgressIndicator(color: Colors.white)
-                : Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.videocam, color: Colors.white, size: 80),
-                const SizedBox(height: 16),
-                const Text(
-                  'Chuẩn bị Livestream',
-                  style: TextStyle(color: Colors.white, fontSize: 22),
-                ),
-                const SizedBox(height: 10),
-                const Text(
-                  'Bạn chưa có token Agora (mới tạo bài post livestream)',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey, fontSize: 14),
-                ),
-                const SizedBox(height: 40),
-                ElevatedButton.icon(
-                  onPressed: _generateTokenAndStart,
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text('Bắt đầu phát trực tiếp'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 14,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                TextButton.icon(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.arrow_back, color: Colors.grey),
-                  label: const Text(
-                    'Quay lại',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          Center(
-            child: _joined
-                ? AgoraVideoView(
-              controller: VideoViewController(
-                rtcEngine: _engine!,
-                canvas: const VideoCanvas(uid: 0),
-              ),
-            )
-                : const CircularProgressIndicator(color: Colors.white),
-          ),
+          Positioned.fill(child: _buildBody()),
           Positioned(
             top: 40,
             left: 20,
             child: IconButton(
               icon: const Icon(Icons.close, color: Colors.white),
               onPressed: () async {
-                await _engine?.leaveChannel();
-                if (context.mounted) Navigator.pop(context);
+                await _disposeEngine();
+                if (mounted) Navigator.pop(context);
               },
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_errorMessage != null) {
+      return _buildError();
+    }
+    if (!_joined) {
+      return _buildLoading();
+    }
+    return _buildVideo();
+  }
+
+  Widget _buildLoading() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: const [
+          CircularProgressIndicator(color: Colors.white),
+          SizedBox(height: 16),
+          Text(
+            'Preparing livestream...',
+            style: TextStyle(color: Colors.white),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildError() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.report_problem, color: Colors.white, size: 48),
+            const SizedBox(height: 16),
+            Text(
+              _errorMessage ?? 'An error occurred.',
+              style: const TextStyle(color: Colors.white),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            if (!_isInitializing)
+              ElevatedButton(
+                onPressed: _retry,
+                child: const Text('Retry'),
+              ),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: () async {
+                await _disposeEngine();
+                if (mounted) Navigator.pop(context);
+              },
+              child: const Text(
+                'Close',
+                style: TextStyle(color: Colors.white70),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVideo() {
+    final RtcEngine? engine = _engine;
+    if (engine == null) {
+      return _buildLoading();
+    }
+
+    return AgoraVideoView(
+      controller: VideoViewController(
+        rtcEngine: engine,
+        canvas: const VideoCanvas(uid: 0),
       ),
     );
   }
