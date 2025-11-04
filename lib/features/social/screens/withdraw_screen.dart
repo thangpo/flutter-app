@@ -10,7 +10,7 @@ class WithdrawScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text(getTranslated('withdraw', context) ?? 'Rút tiền'),
       ),
-      body: const Center(child: Text('Màn hình Rút tiền', style: TextStyle(fontSize: 20))),
+      body: const Center(child: Text('Chúng tôi sẽ sớm phát hành để phục vụ bạn', style: TextStyle(fontSize: 20))),
     );
   }
 }
