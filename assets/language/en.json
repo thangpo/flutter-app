@@ -1165,5 +1165,6 @@
   "photos": "Photos",
   "events": "Events",
   "video": "Video",
-  "no_group_posts": "No group posts"
+  "no_group_posts": "No group posts",
+  "live_replay": "Live replay"
 }

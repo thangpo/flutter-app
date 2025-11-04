@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter/material.dart';
@@ -159,11 +159,11 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
         return;
       }
 
-      final int broadcasterUid =
+      final int provisionalUid =
           DateTime.now().millisecondsSinceEpoch.remainder(1000000);
 
       final Map<String, dynamic> session =
-          await sc.createLiveSession(broadcasterUid: broadcasterUid);
+          await sc.createLiveSession(broadcasterUid: provisionalUid);
 
       if (!mounted) return;
 
@@ -184,6 +184,8 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
 
       final String? token = session['token']?.toString();
       final String? postId = postData?['post_id']?.toString();
+      final int broadcasterUid =
+          int.tryParse(session['uid']?.toString() ?? '') ?? provisionalUid;
 
       Navigator.of(context).push(
         MaterialPageRoute(
@@ -205,6 +207,7 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
       }
     }
   }
+
   bool get _hasContent {
     return _textController.text.trim().isNotEmpty ||
         _images.isNotEmpty ||
@@ -429,8 +432,7 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.groups_2_outlined,
-                        size: 16, color: cs.primary),
+                    Icon(Icons.groups_2_outlined, size: 16, color: cs.primary),
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
@@ -440,8 +442,7 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
                               fontWeight: FontWeight.w600,
                             ) ??
                             TextStyle(
-                              color:
-                                  cs.onSurface.withValues(alpha: .75),
+                              color: cs.onSurface.withValues(alpha: .75),
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
                             ),
@@ -747,4 +748,3 @@ class _ComposeAction {
     required this.onTap,
   });
 }
-
