@@ -1,3 +1,4 @@
+//G:\flutter-app\lib\features\social\controllers\group_chat_controller.dart
 import 'dart:io';
 import 'dart:math';
 
@@ -338,10 +339,6 @@ class GroupChatController extends ChangeNotifier {
     return (fromId != null && me != null && fromId == me);
   }
 
-
-
-// G:\flutter-app\lib\features\social\controllers\group_chat_controller.dart
-
   // --- Edit group ---
   bool editingGroup = false;
 
@@ -399,5 +396,47 @@ class GroupChatController extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+
+
+// lib/features/social/controllers/group_chat_controller.dart
+// ... trong class GroupChatController ...
+
+  // ===== Members cache per group =====
+  final Map<String, Set<String>> _memberIdsByGroup = {};
+  Set<String> existingMemberIdsOf(String groupId) =>
+      _memberIdsByGroup[groupId] ?? <String>{};
+
+  Future<void> loadGroupMembers(String groupId) async {
+    try {
+      final members = await repo.fetchGroupMembers(groupId);
+      final ids = <String>{};
+      for (final m in members) {
+        final id = (m['user_id'] ?? m['id'] ?? '').toString();
+        if (id.isNotEmpty) ids.add(id);
+      }
+      _memberIdsByGroup[groupId] = ids;
+      notifyListeners();
+    } catch (e) {
+      lastError = e.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<bool> addUsers(String groupId, List<String> ids) async {
+    try {
+      final ok = await repo.addUsersToGroup(groupId, ids);
+      if (ok) {
+        await loadGroupMembers(groupId); // refresh lại danh sách trong nhóm
+      }
+      return ok;
+    } catch (e) {
+      lastError = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+
 
 }
