@@ -19,6 +19,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_sixvalley_ecommerce/features/profile/controllers/profile_contrroller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_list_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_group_detail_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_screen.dart';
 
@@ -312,29 +314,42 @@ class _WhatsOnYourMind extends StatelessWidget {
 
             // ===== Ô “Bạn đang nghĩ gì?”: bấm -> tạo post =====
             Expanded(
-              child: InkWell(
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const SocialCreatePostScreen(),
-                      fullscreenDialog: true,
-                    ),
-                  );
-                },
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceVariant.withOpacity(.5),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    'Bạn đang nghĩ gì?',
-                    style: TextStyle(
-                      color: cs.onSurface.withOpacity(.7),
-                      fontSize: 16,
-                    ),
+              child: Material(
+                // đảm bảo có Material ancestor cho InkWell
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const SocialCreatePostScreen(),
+                        fullscreenDialog: true,
+                      ),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Builder(
+                    builder: (context) {
+                      final cs =
+                          Theme.of(context).colorScheme; // <-- thêm dòng này
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: cs.surfaceVariant.withOpacity(.5),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          getTranslated(
+                                  'whats_on_your_mind', context) // <-- sửa key
+                              ??
+                              "What's on your mind?",
+                          style: TextStyle(
+                            color: cs.onSurface.withOpacity(.7),
+                            fontSize: 16,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -567,13 +582,13 @@ class _CreateStoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final ColorScheme cs = Theme.of(context).colorScheme;
     final social = context.watch<SocialController>();
     final profileCtrl = context.watch<ProfileController>();
     final fallbackProfile = profileCtrl.userInfoModel;
     final SocialUser? user = social.currentUser;
     final String? avatar = () {
-      final candidates = [
+      final List<String?> candidates = <String?>[
         user?.avatarUrl?.trim(),
         fallbackProfile?.imageFullUrl?.path?.trim(),
         fallbackProfile?.image?.trim(),
@@ -586,62 +601,76 @@ class _CreateStoryCard extends StatelessWidget {
       return null;
     }();
 
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: SizedBox(
-        width: 110,
-        child: Stack(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: Container(
-                height: double.infinity,
-                decoration: BoxDecoration(
-                  color: cs.surfaceVariant,
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircleAvatar(
-                      radius: 26,
-                      backgroundColor: cs.surface,
-                      backgroundImage: (avatar != null && avatar.isNotEmpty)
-                          ? CachedNetworkImageProvider(avatar)
-                          : null,
-                      child: avatar == null
-                          ? Icon(Icons.person, color: cs.onSurface)
-                          : null,
+    void openCreateStory() {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const SocialCreateStoryScreen(),
+          fullscreenDialog: true,
+        ),
+      );
+    }
+
+    return Container(
+      width: 110,
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: openCreateStory,
+            child: Stack(
+              children: [
+                if (avatar != null && avatar.isNotEmpty)
+                  CachedNetworkImage(
+                    imageUrl: avatar,
+                    width: double.infinity,
+                    height: double.infinity,
+                    fit: BoxFit.cover,
+                  )
+                else
+                  Container(color: cs.surfaceVariant),
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.black.withOpacity(0.45),
+                          Colors.black.withOpacity(0.05),
+                        ],
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                      ),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      getTranslated('your_story', context) ?? 'Your story',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+                Positioned(
+                  bottom: 12,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: cs.primary,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black26, blurRadius: 6)
+                        ],
+                      ),
+                      child:
+                          const Icon(Icons.add, size: 18, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ],
             ),
-            Positioned(
-              bottom: 8,
-              left: 8,
-              right: 8,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const SocialCreateStoryScreen(),
-                      fullscreenDialog: true,
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.add, size: 16),
-                label: Text(getTranslated('create', context) ?? 'Create'),
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(32),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -739,6 +768,10 @@ class SocialPostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final SocialPost post = context.select<SocialController, SocialPost?>(
+          (ctrl) => ctrl.findPostById(this.post.id),
+        ) ??
+        this.post;
     final cs = Theme.of(context).colorScheme;
     final onSurface = cs.onSurface;
     final Color baseColor = Theme.of(context).scaffoldBackgroundColor;
@@ -756,6 +789,9 @@ class SocialPostCard extends StatelessWidget {
     final int shareCount = post.shareCount;
     final bool isSharing = context.select<SocialController, bool>(
       (ctrl) => ctrl.isSharing(post.id),
+    );
+    final bool postActionBusy = context.select<SocialController, bool>(
+      (ctrl) => ctrl.isPostActionBusy(post.id),
     );
 
     final int reactionCount = post.reactionCount;
@@ -854,13 +890,23 @@ class SocialPostCard extends StatelessWidget {
                               ),
                               const SizedBox(width: 4),
                               Flexible(
-                                child: Text(
-                                  post.groupTitle ?? post.groupName ?? '',
-                                  style: TextStyle(
-                                    color: onSurface.withOpacity(.75),
-                                    fontWeight: FontWeight.w600,
+                                child: GestureDetector(
+                                  onTap: (post.groupId?.isNotEmpty ?? false)
+                                      ? () => _openGroupDetailFromPost(
+                                          context, post)
+                                      : null,
+                                  child: Text(
+                                    post.groupTitle ?? post.groupName ?? '',
+                                    style: TextStyle(
+                                      color: onSurface.withOpacity(.75),
+                                      fontWeight: FontWeight.w600,
+                                      decoration:
+                                          (post.groupId?.isNotEmpty ?? false)
+                                              ? TextDecoration.underline
+                                              : TextDecoration.none,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             ],
@@ -923,11 +969,24 @@ class SocialPostCard extends StatelessWidget {
                 ),
 
                 IconButton(
-                  icon: Icon(
-                    Icons.more_horiz,
-                    color: onSurface.withOpacity(.7),
-                  ),
-                  onPressed: () {},
+                  icon: postActionBusy
+                      ? SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color?>(
+                              onSurface.withOpacity(.7),
+                            ),
+                          ),
+                        )
+                      : Icon(
+                          Icons.more_horiz,
+                          color: onSurface.withOpacity(.7),
+                        ),
+                  onPressed: postActionBusy
+                      ? null
+                      : () => _showPostOptions(context, post),
                 ),
               ],
             ),
@@ -989,78 +1048,93 @@ class SocialPostCard extends StatelessWidget {
             const SizedBox(height: 8),
           ],
 
-          if (showStats) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
-                children: [
-                  // Trái: chỉ hiện Reactions khi > 0
-                  if (showReactions)
-                    Expanded(
+          if (showStats)
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => SocialPostDetailScreen(post: post),
+                    ),
+                  );
+                },
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
                       child: Row(
-                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (topReactions.isNotEmpty)
-                            _ReactionIconStack(labels: topReactions),
-                          if (topReactions.isNotEmpty) const SizedBox(width: 6),
-                          Text(
-                            _formatSocialCount(reactionCount),
-                            style:
-                                Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: onSurface.withOpacity(.85),
-                                      fontWeight: FontWeight.w600,
+                          if (showReactions)
+                            Expanded(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (topReactions.isNotEmpty)
+                                    _ReactionIconStack(labels: topReactions),
+                                  if (topReactions.isNotEmpty)
+                                    const SizedBox(width: 6),
+                                  Text(
+                                    _formatSocialCount(reactionCount),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: onSurface.withOpacity(.85),
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          else
+                            const Expanded(child: SizedBox.shrink()),
+                          const SizedBox(width: 12),
+                          Flexible(
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: Wrap(
+                                spacing: 12,
+                                children: [
+                                  if (showComments)
+                                    Text(
+                                      '${_formatSocialCount(commentCount)} ${getTranslated("comments", context) ?? "comments"}',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: onSurface.withOpacity(.7),
+                                          ),
+                                      overflow: TextOverflow.ellipsis,
                                     ),
+                                  if (showShares)
+                                    Text(
+                                      '${_formatSocialCount(shareCount)} ${getTranslated("share_plural", context) ?? "shares"}',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: onSurface.withOpacity(.7),
+                                          ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                ],
+                              ),
+                            ),
                           ),
                         ],
                       ),
-                    )
-                  else
-                    const Expanded(child: SizedBox.shrink()),
-
-                  const SizedBox(width: 12),
-
-                  // Phải: chỉ hiện comment/share khi > 0
-                  Flexible(
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: Wrap(
-                        spacing: 12,
-                        children: [
-                          if (showComments)
-                            Text(
-                              '${_formatSocialCount(commentCount)} ${getTranslated("comments", context) ?? "comments"}',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(
-                                    color: onSurface.withOpacity(.7),
-                                  ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          if (showShares)
-                            Text(
-                              '${_formatSocialCount(shareCount)} ${getTranslated("share_plural", context) ?? "shares"}',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(
-                                    color: onSurface.withOpacity(.7),
-                                  ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                        ],
-                      ),
                     ),
-                  ),
-                ],
+                    Divider(
+                      height: 1,
+                      thickness: .6,
+                      color: cs.surfaceVariant.withOpacity(.6),
+                    ),
+                  ],
+                ),
               ),
             ),
-            Divider(
-              height: 1,
-              thickness: .6,
-              color: cs.surfaceVariant.withOpacity(.6),
-            ),
-          ],
 
           // Actions
           Padding(
@@ -1160,6 +1234,140 @@ class SocialPostCard extends StatelessWidget {
     );
   }
 
+  Future<void> _showPostOptions(BuildContext context, SocialPost post) async {
+    final controller = context.read<SocialController>();
+    final String? currentUserId = controller.currentUser?.id;
+    final bool isOwner = currentUserId != null &&
+        currentUserId.isNotEmpty &&
+        currentUserId == post.publisherId;
+    final action = await showModalBottomSheet<_PostOptionsAction>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => _PostOptionsSheet(
+        isOwner: isOwner,
+        onSelected: (action) => Navigator.of(sheetCtx).pop(action),
+      ),
+    );
+
+    if (action == null) return;
+
+    switch (action) {
+      case _PostOptionsAction.save:
+        await controller.toggleSavePost(post);
+        break;
+      case _PostOptionsAction.edit:
+        final String? newText = await _promptEditPost(context, post);
+        if (newText != null) {
+          await controller.editPost(post, text: newText);
+        }
+        break;
+      case _PostOptionsAction.delete:
+        await controller.deletePost(post);
+        break;
+      case _PostOptionsAction.report:
+        await controller.reportPost(post);
+        break;
+      case _PostOptionsAction.hide:
+        await controller.hidePost(post);
+        break;
+    }
+  }
+
+  Future<String?> _promptEditPost(BuildContext context, SocialPost post) async {
+    final String initialText = _editableTextFromPost(post);
+    final TextEditingController textController =
+        TextEditingController(text: initialText);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogCtx) {
+        final theme = Theme.of(dialogCtx);
+        return AlertDialog(
+          title: Text(
+            getTranslated('edit_post', dialogCtx) ?? 'Edit post',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          content: TextField(
+            controller: textController,
+            autofocus: true,
+            maxLines: null,
+            minLines: 3,
+            decoration: InputDecoration(
+              hintText: getTranslated('what_on_your_mind', dialogCtx) ??
+                  'What\'s on your mind?',
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(),
+              child: Text(getTranslated('cancel', dialogCtx) ?? 'Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(dialogCtx).pop(textController.text);
+              },
+              child: Text(
+                getTranslated('save_changes', dialogCtx) ?? 'Save',
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == null) return null;
+    final String trimmed = result.trim();
+    final String original = initialText.trim();
+    if (trimmed.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(getTranslated('post_text_required', context) ??
+              'Post text cannot be empty'),
+        ),
+      );
+      return null;
+    }
+    if (trimmed == original) {
+      return null;
+    }
+    return trimmed;
+  }
+
+  void _openGroupDetailFromPost(BuildContext context, SocialPost post) {
+    final String? groupId = post.groupId;
+    if (groupId == null || groupId.isEmpty) return;
+    SocialGroup? initial;
+    final String? name = post.groupName ?? post.groupTitle;
+    if ((name?.isNotEmpty ?? false) ||
+        (post.groupAvatar?.isNotEmpty ?? false) ||
+        (post.groupCover?.isNotEmpty ?? false)) {
+      initial = SocialGroup(
+        id: groupId,
+        name: (name != null && name.trim().isNotEmpty) ? name.trim() : groupId,
+        title: post.groupTitle,
+        avatarUrl: post.groupAvatar,
+        coverUrl: post.groupCover,
+        memberCount: 0,
+        pendingCount: 0,
+        isJoined: false,
+        isAdmin: false,
+        isOwner: false,
+        requiresApproval: false,
+        joinRequestStatus: 0,
+      );
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SocialGroupDetailScreen(
+          groupId: groupId,
+          initialGroup: initial,
+        ),
+      ),
+    );
+  }
+
   void _openSharedPostDetail(BuildContext context, SocialPost shared) {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -1167,6 +1375,238 @@ class SocialPostCard extends StatelessWidget {
       ),
     );
   }
+}
+
+enum _PostOptionsAction { save, edit, delete, report, hide }
+
+class _PostOptionEntry {
+  final _PostOptionsAction action;
+  final IconData icon;
+  final String labelKey;
+  final String fallback;
+  final bool highlighted;
+  const _PostOptionEntry({
+    required this.action,
+    required this.icon,
+    required this.labelKey,
+    required this.fallback,
+    this.highlighted = false,
+  });
+}
+
+class _PostOptionsSheet extends StatelessWidget {
+  final ValueChanged<_PostOptionsAction> onSelected;
+  final bool isOwner;
+  const _PostOptionsSheet({
+    required this.onSelected,
+    required this.isOwner,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final Color sheetColor = theme.dialogTheme.backgroundColor ?? cs.surface;
+    final options = <_PostOptionEntry>[
+      const _PostOptionEntry(
+        action: _PostOptionsAction.save,
+        icon: Icons.bookmark_border,
+        labelKey: 'save_post',
+        fallback: 'Save post',
+        highlighted: true,
+      ),
+      if (isOwner) ...[
+        const _PostOptionEntry(
+          action: _PostOptionsAction.edit,
+          icon: Icons.edit_outlined,
+          labelKey: 'edit_post',
+          fallback: 'Edit post',
+          highlighted: true,
+        ),
+        const _PostOptionEntry(
+          action: _PostOptionsAction.delete,
+          icon: Icons.delete_outline,
+          labelKey: 'delete_post',
+          fallback: 'Delete',
+          highlighted: true,
+        ),
+      ] else
+        const _PostOptionEntry(
+          action: _PostOptionsAction.report,
+          icon: Icons.flag_outlined,
+          labelKey: 'report_post',
+          fallback: 'Report',
+        ),
+      const _PostOptionEntry(
+        action: _PostOptionsAction.hide,
+        icon: Icons.visibility_off_outlined,
+        labelKey: 'hide_post',
+        fallback: 'Hide',
+      ),
+    ];
+
+    String label(String key, String fallback) =>
+        getTranslated(key, context) ?? fallback;
+
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      child: Material(
+        color: sheetColor,
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 42,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: cs.onSurface.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        label('post_options', 'Post options'),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: cs.onSurface,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      splashRadius: 20,
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (int i = 0; i < options.length; i++) ...[
+                      _PostOptionsTile(
+                        entry: options[i],
+                        labelBuilder: label,
+                        theme: theme,
+                        colorScheme: cs,
+                        onTap: () => onSelected(options[i].action),
+                      ),
+                      if (i != options.length - 1) const SizedBox(height: 12),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PostOptionsTile extends StatelessWidget {
+  final _PostOptionEntry entry;
+  final String Function(String key, String fallback) labelBuilder;
+  final ThemeData theme;
+  final ColorScheme colorScheme;
+  final VoidCallback onTap;
+  const _PostOptionsTile({
+    required this.entry,
+    required this.labelBuilder,
+    required this.theme,
+    required this.colorScheme,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isDestructive = entry.action == _PostOptionsAction.delete;
+    final bool isAccent = entry.highlighted && !isDestructive;
+    final Color accentColor = isDestructive
+        ? colorScheme.error
+        : (isAccent ? colorScheme.primary : colorScheme.onSurface);
+    final Color tileColor = colorScheme.surfaceVariant.withOpacity(
+      theme.brightness == Brightness.dark ? 0.35 : 0.65,
+    );
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: tileColor,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            Icon(entry.icon, color: accentColor),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                labelBuilder(entry.labelKey, entry.fallback),
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color:
+                      isDestructive ? colorScheme.error : colorScheme.onSurface,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _editableTextFromPost(SocialPost post) {
+  final String? raw = post.rawText;
+  if (raw != null && raw.trim().isNotEmpty) {
+    return raw;
+  }
+  final String? htmlText = post.text;
+  if (htmlText == null || htmlText.isEmpty) {
+    return '';
+  }
+  String normalized = htmlText.replaceAll(
+    RegExp(r'<br\s*/?>', caseSensitive: false),
+    '\n',
+  );
+  normalized = normalized.replaceAll(
+    RegExp(r'</p\s*>', caseSensitive: false),
+    '\n',
+  );
+  normalized = normalized.replaceAll(
+    RegExp(r'<p[^>]*>', caseSensitive: false),
+    '',
+  );
+  normalized = normalized.replaceAll(RegExp(r'<[^>]+>'), '');
+  normalized = _decodeBasicHtmlEntities(normalized);
+  return normalized;
+}
+
+String _decodeBasicHtmlEntities(String input) {
+  return input
+      .replaceAll('&nbsp;', ' ')
+      .replaceAll('&amp;', '&')
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&#39;', "'")
+      .replaceAll('&#8217;', "'")
+      .replaceAll('&#8220;', '"')
+      .replaceAll('&#8221;', '"');
 }
 
 class _ImageGrid extends StatelessWidget {

@@ -1,17 +1,22 @@
+// lib/features/social/screens/profile_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:ui';
-import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_repository.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/chat_screen.dart';
+import 'package:flutter/services.dart'; // Clipboard
+
 import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_repository_ext.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/dimensions.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/edit_profile_screen.dart';
-
 
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
+
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/chat_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/edit_profile_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_post_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_story_screen.dart';
+
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user_profile.dart';
@@ -19,12 +24,14 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_screen.dart'
     show SocialPostCard;
 
-// tạo bài viết / tạo story
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_post_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_story_screen.dart';
+// NEW: sheet component (đã tạo file riêng)
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/member_list_bottom_sheet.dart';
+
+// ví
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/wallet_screen.dart';
 
 /// Tab hiện tại
-enum _ProfileTab { posts, about }
+enum _ProfileTab { posts, about, reels, photos }
 
 class ProfileScreen extends StatefulWidget {
   final String? targetUserId;
@@ -34,15 +41,72 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
+class _ImageTab extends StatelessWidget {
+  final ImageProvider image;
+  final bool active;
+  final VoidCallback onTap;
+  final bool showDropdown; // nếu vẫn muốn mũi tên nhỏ
+
+  const _ImageTab({
+    required this.image,
+    required this.onTap,
+    this.active = false,
+    this.showDropdown = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(right: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: active
+              ? theme.colorScheme.primary.withOpacity(0.12)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: active
+              ? Border.all(
+            color: theme.colorScheme.primary.withOpacity(0.6),
+            width: 1.2,
+          )
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ImageIcon(
+              image, // AssetImage / NetworkImage đều được
+              size: 18,
+              color: active ? theme.colorScheme.primary : theme.hintColor,
+            ),
+            if (showDropdown) const SizedBox(width: 4),
+            if (showDropdown)
+              Icon(
+                Icons.keyboard_arrow_down,
+                size: 16,
+                color: active ? theme.colorScheme.primary : theme.hintColor,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
     // load profile đúng user được bấm
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context
-          .read<SocialController>()
-          .loadUserProfile(targetUserId: widget.targetUserId);
+      context.read<SocialController>().loadUserProfile(
+        targetUserId: widget.targetUserId,
+      );
     });
   }
 
@@ -51,9 +115,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       body: SafeArea(
         // truyền targetUserId xuống body
-        child: _ProfileBody(
-          targetUserId: widget.targetUserId,
-        ),
+        child: _ProfileBody(targetUserId: widget.targetUserId),
       ),
     );
   }
@@ -77,9 +139,7 @@ class _ProfileBodyState extends State<_ProfileBody> {
   }
 
   void _switchToAbout() {
-    setState(() {
-      _currentTab = _ProfileTab.about;
-    });
+    setState(() => _currentTab = _ProfileTab.about);
   }
 
   @override
@@ -118,7 +178,8 @@ class _ProfileBodyState extends State<_ProfileBody> {
               isFollowingMe: false,
             );
 
-        final followers = sc.followers;
+        // Lấy list followers để hiển thị hàng avatar nhỏ + mở sheet
+        final recentFollowers = sc.followers.toList();
         final posts = sc.profilePosts;
 
         // xác định có phải đang xem profile của chính mình không
@@ -141,12 +202,10 @@ class _ProfileBodyState extends State<_ProfileBody> {
               SliverToBoxAdapter(
                 child: _ProfileHeaderSection(
                   user: safeHeaderUser,
-                  recentFollowers: followers,
+                  recentFollowers: recentFollowers,
                   currentTab: _currentTab,
                   onTabSelected: (_ProfileTab tab) {
-                    setState(() {
-                      _currentTab = tab;
-                    });
+                    setState(() => _currentTab = tab);
                   },
                   isSelf: isSelf,
                 ),
@@ -166,7 +225,7 @@ class _ProfileBodyState extends State<_ProfileBody> {
                       );
                     },
                     onShowAbout: _switchToAbout,
-                    isSelf: isSelf, // <-- truyền xuống để ẩn composer nếu không phải mình
+                    isSelf: isSelf, // ẩn composer nếu không phải mình
                   ),
                 )
               else
@@ -198,22 +257,14 @@ class _ProfileAppBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    final displayNamePart = user.displayName?.trim().isNotEmpty == true
-        ? user.displayName!.trim()
-        : null;
+    // Ưu tiên họ + tên; nếu thiếu cả hai thì dùng username
+    final hasFirst = user.firstName?.trim().isNotEmpty == true;
+    final hasLast = user.lastName?.trim().isNotEmpty == true;
+    final hasFullName = hasFirst || hasLast;
 
-    final usernamePart = user.userName?.trim().isNotEmpty == true
-        ? user.userName!.trim()
-        : null;
-
-    final nameFromFirstLast =
-    '${user.firstName ?? ''} ${user.lastName ?? ''}'.trim().isNotEmpty ==
-        true
+    final primaryTitle = hasFullName
         ? '${user.firstName ?? ''} ${user.lastName ?? ''}'.trim()
-        : null;
-
-    final titleText =
-        displayNamePart ?? usernamePart ?? nameFromFirstLast ?? 'Profile';
+        : (user.userName ?? 'Profile');
 
     return SliverAppBar(
       pinned: true,
@@ -227,7 +278,7 @@ class _ProfileAppBar extends StatelessWidget {
         children: [
           Expanded(
             child: Text(
-              titleText,
+              primaryTitle,
               style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -240,9 +291,8 @@ class _ProfileAppBar extends StatelessWidget {
             ),
         ],
       ),
-      actions: [
-        IconButton(onPressed: () {}, icon: const Icon(Icons.search)),
-        IconButton(onPressed: () {}, icon: const Icon(Icons.more_vert)),
+      actions: const [
+        // tuỳ ý
       ],
     );
   }
@@ -269,25 +319,21 @@ class _ProfileHeaderSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
-    // tên hiển thị to
+    // Tên hiển thị lớn
     final fullName = (() {
+      final first = (user.firstName ?? '').trim();
+      final last = (user.lastName ?? '').trim();
+      final firstLast =
+      [first, last].where((s) => s.isNotEmpty).join(' ').trim();
+
+      // Ưu tiên first + last; nếu cả hai đều trống thì fallback sang displayName, rồi userName
+      if (firstLast.isNotEmpty) return firstLast;
       if (user.displayName?.trim().isNotEmpty == true) {
         return user.displayName!.trim();
       }
-      final byFirstLast =
-      '${user.firstName ?? ''} ${user.lastName ?? ''}'.trim();
-      if (byFirstLast.isNotEmpty == true) {
-        return byFirstLast;
-      }
       return user.userName ?? 'Người dùng';
     })();
-
-    final followerText = _formatCount(user.followersCount);
-    final followingText = _formatCount(user.followingCount);
-    final statsText =
-        '$followerText người theo dõi • $followingText đang theo dõi';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -309,12 +355,44 @@ class _ProfileHeaderSection extends StatelessWidget {
                       : Container(
                     color: Colors.grey.shade200,
                     child: const Center(
-                      child: CircularProgressIndicator(),
-                    ),
+                        child: CircularProgressIndicator()),
                   ),
                   errorBuilder: (_, __, ___) => _CoverFallback(),
                 )
                     : _CoverFallback(),
+              ),
+
+              // === NÚT VÍ CÁ NHÂN (MỚI THÊM) ===
+              Positioned(
+                top: 16,
+                right: 16,
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const WalletScreen()),
+                    );
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.9),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.account_balance_wallet,
+                      color: Colors.blue,
+                      size: 22,
+                    ),
+                  ),
+                ),
               ),
 
               // Avatar
@@ -329,12 +407,12 @@ class _ProfileHeaderSection extends StatelessWidget {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: Border.all(color: Colors.white, width: 4),
-                      boxShadow: [
+                      boxShadow: const [
                         BoxShadow(
                           color: Colors.black26,
                           blurRadius: 12,
-                          offset: const Offset(0, 6),
-                        ),
+                          offset: Offset(0, 6),
+                        )
                       ],
                     ),
                     child: ClipOval(
@@ -342,9 +420,8 @@ class _ProfileHeaderSection extends StatelessWidget {
                           ? Image.network(
                         user.avatarUrl!,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) {
-                          return const _AvatarFallback();
-                        },
+                        errorBuilder: (_, __, ___) =>
+                        const _AvatarFallback(),
                       )
                           : const _AvatarFallback(),
                     ),
@@ -357,16 +434,19 @@ class _ProfileHeaderSection extends StatelessWidget {
 
         const SizedBox(height: 70),
 
-        // ===== NAME + VERIFIED BADGE =====
+        // ===== NAME (HỌ + TÊN) + VERIFIED BADGE =====
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text(
-                fullName,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
+              Expanded(
+                child: Text(
+                  fullName,
+                  style: const TextStyle(
+                      fontSize: 24, fontWeight: FontWeight.w800),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               const SizedBox(width: 6),
@@ -379,39 +459,84 @@ class _ProfileHeaderSection extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                   alignment: Alignment.center,
-                  child: const Icon(
-                    Icons.check,
-                    size: 14,
-                    color: Colors.white,
-                  ),
+                  child: const Icon(Icons.check, size: 14, color: Colors.white),
                 ),
+              const SizedBox(width: 4),
               const Icon(Icons.keyboard_arrow_down, size: 20),
             ],
           ),
         ),
 
+        // ===== USERNAME nhỏ bên dưới (chỉ hiện khi có HỌ + TÊN) =====
+        Builder(
+          builder: (_) {
+            final hasFirst = user.firstName?.trim().isNotEmpty == true;
+            final hasLast = user.lastName?.trim().isNotEmpty == true;
+            final hasFullName = hasFirst || hasLast;
+            final handle = (user.userName?.trim().isNotEmpty == true)
+                ? (user.userName!.startsWith('@')
+                ? user.userName!
+                : '@${user.userName!}')
+                : null;
+
+            if (hasFullName && handle != null) {
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                child: Text(
+                  handle,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).hintColor,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }
+            return const SizedBox.shrink();
+          },
+        ),
+
         const SizedBox(height: 4),
 
-        // follower/following text
+        // ===== DÒNG CHỮ FOLLOWERS/FOLLOWING (tap để mở sheet) =====
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            statsText,
-            style: TextStyle(
-              fontSize: 14,
-              color: theme.hintColor,
-            ),
+          child: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 6,
+            children: [
+              InkWell(
+                onTap: () => _showFollowersSheet(context),
+                child: Text(
+                  '${_formatCount(user.followersCount)} người theo dõi',
+                  style: TextStyle(fontSize: 14, color: theme.hintColor),
+                ),
+              ),
+              Text('•', style: TextStyle(fontSize: 14, color: theme.hintColor)),
+              InkWell(
+                onTap: () => _showFollowingSheet(context),
+                child: Text(
+                  '${_formatCount(user.followingCount)} đang theo dõi',
+                  style: TextStyle(fontSize: 14, color: theme.hintColor),
+                ),
+              ),
+            ],
           ),
         ),
 
         const SizedBox(height: 16),
 
-        // FOLLOWERS STACK
+        // FOLLOWERS STACK (nếu có) — tap mở sheet Followers
         if (recentFollowers.isNotEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: _CompactFollowersRow(
-              followers: recentFollowers.take(6).toList(),
+            child: GestureDetector(
+              onTap: () => _showFollowersSheet(context),
+              child: _CompactFollowersRow(
+                followers: recentFollowers.take(6).toList(),
+              ),
             ),
           ),
 
@@ -423,18 +548,13 @@ class _ProfileHeaderSection extends StatelessWidget {
           child: Column(
             children: [
               if (isSelf) ...[
-                // =========== TRANG CỦA CHÍNH MÌNH ===========
-
                 // Hàng 1: Công cụ chuyên nghiệp + Thêm vào tin
                 Row(
                   children: [
-                    // Công cụ chuyên nghiệp
                     Expanded(
                       flex: 3,
                       child: FilledButton.icon(
-                        onPressed: () {
-                          // TODO: mở công cụ chuyên nghiệp
-                        },
+                        onPressed: () {},
                         icon: const Icon(Icons.work_outline, size: 18),
                         label: const Text(
                           'Công cụ chuyên nghiệp',
@@ -449,9 +569,7 @@ class _ProfileHeaderSection extends StatelessWidget {
                           backgroundColor: const Color(0xFF3B82F6),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(
-                            vertical: 16,
-                            horizontal: 12,
-                          ),
+                              vertical: 16, horizontal: 12),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(30),
                           ),
@@ -460,8 +578,6 @@ class _ProfileHeaderSection extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 10),
-
-                    // + Thêm vào tin
                     Expanded(
                       flex: 2,
                       child: OutlinedButton(
@@ -475,9 +591,7 @@ class _ProfileHeaderSection extends StatelessWidget {
                         },
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(
-                            vertical: 16,
-                            horizontal: 10,
-                          ),
+                              vertical: 16, horizontal: 10),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(30),
                           ),
@@ -502,24 +616,17 @@ class _ProfileHeaderSection extends StatelessWidget {
 
                 const SizedBox(height: 10),
 
-                // Hàng 2: Chỉnh sửa trang cá nhân (thay vì Quảng cáo)
+                // Hàng 2: Chỉnh sửa trang cá nhân
                 Row(
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () {
-                          // mở màn hình Edit Profile
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (_) => EditProfileScreen(
                                 profile: user,
-                                onSave: (updatedProfile) {
-                                  // sau khi lưu xong, cập nhật controller
-                                  // hàm updateProfile() là ví dụ, bạn có thể đổi theo SocialController của bạn
-                                  // context
-                                  //     .read<SocialController>()
-                                  //     .updateProfile(updatedProfile);
-                                },
+                                onSave: (updatedProfile) {},
                               ),
                             ),
                           );
@@ -536,9 +643,7 @@ class _ProfileHeaderSection extends StatelessWidget {
                         ),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(
-                            vertical: 14,
-                            horizontal: 12,
-                          ),
+                              vertical: 14, horizontal: 12),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(30),
                           ),
@@ -549,50 +654,64 @@ class _ProfileHeaderSection extends StatelessWidget {
                         ),
                       ),
                     ),
+                    const SizedBox(width: 10),
+                    _MoreCircleButton(
+                      onPressed: () => _showSelfProfileMenu(context, user),
+                    ),
                   ],
                 ),
               ] else ...[
-                // =========== TRANG CỦA NGƯỜI KHÁC ===========
-
-                // =========== TRANG CỦA NGƯỜI KHÁC ===========
+                // Trang của người khác
                 Row(
                   children: [
-                    // THEO DÕI / ĐANG THEO DÕI
                     Expanded(
                       flex: 3,
                       child: Consumer<SocialController>(
                         builder: (context, sc, __) {
                           final bool busy = sc.isFollowBusy(user.id);
-                          // lấy trạng thái follow mới nhất (controller sẽ cập nhật profileHeaderUser)
                           final bool following =
                           sc.profileHeaderUser?.id == user.id
-                              ? (sc.profileHeaderUser?.isFollowing ?? user.isFollowing)
+                              ? (sc.profileHeaderUser?.isFollowing ??
+                              user.isFollowing)
                               : user.isFollowing;
 
                           return FilledButton.icon(
                             onPressed: busy
                                 ? null
                                 : () async {
-                              // gọi toggle trong controller: sẽ khóa nút, gọi API và cập nhật header
                               await context
                                   .read<SocialController>()
-                                  .toggleFollowUser();
+                                  .toggleFollowUser(
+                                  targetUserId: user.id);
                             },
                             icon: busy
                                 ? const SizedBox(
-                              width: 16, height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2),
                             )
-                                : Icon(following ? Icons.check : Icons.person_add_alt_1, size: 18),
+                                : Icon(
+                              following
+                                  ? Icons.check
+                                  : Icons.person_add_alt_1,
+                              size: 18,
+                            ),
                             label: Text(
                               following ? 'Đang theo dõi' : 'Theo dõi',
                               overflow: TextOverflow.ellipsis,
                               maxLines: 1,
-                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13.5,
+                              ),
                             ),
                             style: FilledButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 16, horizontal: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(30),
+                              ),
                               elevation: 1,
                             ),
                           );
@@ -606,48 +725,59 @@ class _ProfileHeaderSection extends StatelessWidget {
                       flex: 2,
                       child: OutlinedButton.icon(
                         onPressed: () async {
-                          // Lấy access token từ SharedPreferences
                           final sp = await SharedPreferences.getInstance();
-                          final token = sp.getString(AppConstants.socialAccessToken);
-
+                          final token = sp
+                              .getString(AppConstants.socialAccessToken);
                           if (token == null || token.isEmpty) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Bạn chưa đăng nhập MXH')),
+                              const SnackBar(
+                                content: Text('Bạn chưa đăng nhập MXH'),
+                              ),
                             );
                             return;
                           }
-
-                          // Điều hướng sang ChatScreen với đúng người nhận
                           Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (_) => ChatScreen(
-                                peerUserId : user.id, // đảm bảo là String, nếu int: user.id.toString()
+                                peerUserId: user.id,
                                 accessToken: token,
-                                peerName      : user.displayName ?? user.userName ?? 'Đoạn chat',
-                                peerAvatar     : user.avatarUrl,
+                                peerName: user.displayName ??
+                                    user.userName ??
+                                    'Đoạn chat',
+                                peerAvatar: user.avatarUrl,
                               ),
                             ),
                           );
                         },
-                        icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                        icon:
+                        const Icon(Icons.chat_bubble_outline, size: 18),
                         label: const Text(
                           'Nhắn tin',
-                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13.5,
+                          ),
                         ),
                         style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                          side: BorderSide(color: Theme.of(context).dividerColor, width: 1.2),
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 14, horizontal: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                          side: BorderSide(
+                            color: Theme.of(context).dividerColor,
+                            width: 1.2,
+                          ),
                         ),
                       ),
                     ),
-
                     const SizedBox(width: 10),
-                    const _MoreCircleButton(),
+                    _MoreCircleButton(
+                      onPressed: () => _showOtherProfileMenu(context, user),
+                    ),
                   ],
                 ),
-
               ],
             ],
           ),
@@ -675,17 +805,13 @@ class _ProfileHeaderSection extends StatelessWidget {
               _SimpleTab(
                 label: 'Reels',
                 active: false,
-                onTap: () {
-                  onTabSelected(_ProfileTab.posts);
-                },
+                onTap: () => onTabSelected(_ProfileTab.posts),
               ),
               _SimpleTab(
-                label: 'Xem thêm',
+                label: 'Ảnh',
                 hasDropdown: true,
                 active: false,
-                onTap: () {
-                  // TODO menu khác
-                },
+                onTap: () {},
               ),
             ],
           ),
@@ -701,6 +827,7 @@ class _ProfileHeaderSection extends StatelessWidget {
     );
   }
 
+  // ===== Helpers =====
   String _formatCount(int count) {
     if (count >= 1000) {
       final k = count / 1000;
@@ -708,34 +835,70 @@ class _ProfileHeaderSection extends StatelessWidget {
     }
     return count.toString();
   }
-}
 
+  // ===== OPEN SHEETS (MemberListBottomSheet) =====
+  void _showFollowersSheet(BuildContext context) {
+    final sc = context.read<SocialController>();
 
-// Nút tròn dấu "…"
-class _MoreCircleButton extends StatelessWidget {
-  const _MoreCircleButton();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    return Container(
-      height: 50,
-      width: 50,
-      decoration: BoxDecoration(
-        color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(
-          color: theme.dividerColor,
-          width: 1.2,
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => FractionallySizedBox(
+        heightFactor: 0.92,
+        child: MemberListBottomSheet(
+          title: 'Người theo dõi',
+          totalCount: sc.profileHeaderUser?.followersCount,
+          // Phân trang từ list đã có trong controller
+          pageLoader: (after) async {
+            const pageSize = 30;
+            final start = int.tryParse(after ?? '0') ?? 0;
+            final List<SocialUser> all = sc.followers.toList();
+            final pageUsers = all.skip(start).take(pageSize).toList();
+            final next =
+            (start + pageSize < all.length) ? '${start + pageSize}' : null;
+            return MemberPage(users: pageUsers, nextCursor: next);
+          },
+          onUserTap: (u) {
+            Navigator.of(context).pop();
+            // Nếu muốn mở profile user đó:
+            // Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProfileScreen(targetUserId: u.id)));
+          },
         ),
       ),
-      child: IconButton(
-        onPressed: () {
-          // TODO: mở menu report/block...
-        },
-        icon: const Icon(Icons.more_horiz, size: 22),
+    );
+  }
+
+  void _showFollowingSheet(BuildContext context) {
+    final sc = context.read<SocialController>();
+
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => FractionallySizedBox(
+        heightFactor: 0.92,
+        child: MemberListBottomSheet(
+          title: 'Đang theo dõi',
+          totalCount: sc.profileHeaderUser?.followingCount,
+          // Phân trang từ list đã có trong controller
+          pageLoader: (after) async {
+            const pageSize = 30;
+            final start = int.tryParse(after ?? '0') ?? 0;
+            final List<SocialUser> all = sc.following.toList();
+            final pageUsers = all.skip(start).take(pageSize).toList();
+            final next =
+            (start + pageSize < all.length) ? '${start + pageSize}' : null;
+            return MemberPage(users: pageUsers, nextCursor: next);
+          },
+          onUserTap: (u) {
+            Navigator.of(context).pop();
+            // Nếu muốn mở profile user đó:
+            // Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProfileScreen(targetUserId: u.id)));
+          },
+        ),
       ),
     );
   }
@@ -783,7 +946,7 @@ class _AvatarFallback extends StatelessWidget {
 }
 
 // ==============================
-// FOLLOWERS ROW
+// FOLLOWERS ROW (hàng avatar chồng)
 // ==============================
 class _CompactFollowersRow extends StatelessWidget {
   final List<SocialUser> followers;
@@ -904,13 +1067,12 @@ class _SimpleTab extends StatelessWidget {
 }
 
 // ==============================
-// BLOCK "CHI TIẾT" + "BÀI VIẾT"
-// (đầu tab Bài viết)
+// BLOCK "CHI TIẾT" + "BÀI VIẾT" (đầu tab Bài viết)
 // ==============================
 class _ProfileDetailsBlock extends StatelessWidget {
   final SocialUserProfile user;
   final VoidCallback onShowAbout;
-  final bool isSelf; // <-- thêm cờ này để biết có hiện ô "Bạn đang nghĩ gì?" không
+  final bool isSelf; // cờ để biết có hiện ô "Bạn đang nghĩ gì?" không
 
   const _ProfileDetailsBlock({
     required this.user,
@@ -992,11 +1154,7 @@ class _ProfileDetailsBlock extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.more_horiz,
-                  size: 20,
-                  color: theme.hintColor,
-                ),
+                Icon(Icons.more_horiz, size: 20, color: theme.hintColor),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -1062,10 +1220,7 @@ class _ProfileDetailsBlock extends StatelessWidget {
                       ? NetworkImage(avatarUrl)
                       : null,
                   child: (avatarUrl == null || avatarUrl.isEmpty)
-                      ? Icon(
-                    Icons.person,
-                    color: cs.onSurface.withOpacity(.6),
-                  )
+                      ? Icon(Icons.person, color: cs.onSurface.withOpacity(.6))
                       : null,
                 ),
                 const SizedBox(width: 12),
@@ -1075,7 +1230,6 @@ class _ProfileDetailsBlock extends StatelessWidget {
                   child: InkWell(
                     borderRadius: BorderRadius.circular(12),
                     onTap: () {
-                      // mở SocialCreatePostScreen
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => const SocialCreatePostScreen(),
@@ -1122,7 +1276,6 @@ class _ProfileDetailsBlock extends StatelessWidget {
                 ),
               ],
             ),
-
             const SizedBox(height: 16),
           ],
         ],
@@ -1158,40 +1311,24 @@ class _ProfileAboutSection extends StatelessWidget {
       rows.add(_AboutRowData(Icons.school_outlined, user.education!));
     }
     if (locationText.isNotEmpty) {
-      rows.add(
-        _AboutRowData(Icons.location_on_outlined, locationText),
-      );
+      rows.add(_AboutRowData(Icons.location_on_outlined, locationText));
     }
     if (user.website?.isNotEmpty == true) {
-      rows.add(
-        _AboutRowData(Icons.link, user.website!, isLink: true),
-      );
+      rows.add(_AboutRowData(Icons.link, user.website!, isLink: true));
     }
     if (user.genderText?.isNotEmpty == true) {
-      rows.add(
-        _AboutRowData(Icons.wc_rounded, user.genderText!),
-      );
+      rows.add(_AboutRowData(Icons.wc_rounded, user.genderText!));
     }
     if (user.birthday?.isNotEmpty == true) {
-      rows.add(
-        _AboutRowData(Icons.cake_outlined, user.birthday!),
-      );
+      rows.add(_AboutRowData(Icons.cake_outlined, user.birthday!));
     }
     if (user.relationshipStatus?.isNotEmpty == true) {
       rows.add(
-        _AboutRowData(
-          Icons.favorite_border,
-          user.relationshipStatus!,
-        ),
-      );
+          _AboutRowData(Icons.favorite_border, user.relationshipStatus!));
     }
     if (user.lastSeenText?.isNotEmpty == true) {
-      rows.add(
-        _AboutRowData(
-          Icons.schedule,
-          'Hoạt động ${user.lastSeenText} trước',
-        ),
-      );
+      rows.add(_AboutRowData(
+          Icons.schedule, 'Hoạt động ${user.lastSeenText} trước'));
     }
 
     final bool hasAnyInfo =
@@ -1275,17 +1412,10 @@ class _AboutInfoRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(
-          data.icon,
-          size: 20,
-          color: theme.hintColor,
-        ),
+        Icon(data.icon, size: 20, color: theme.hintColor),
         const SizedBox(width: 10),
         Expanded(
-          child: Text(
-            data.text,
-            style: textStyle,
-          ),
+          child: Text(data.text, style: textStyle),
         ),
       ],
     );
@@ -1302,7 +1432,7 @@ class _ProfilePostsSection extends StatelessWidget {
   final bool isLoadingMore;
   final VoidCallback onLoadMore;
   final VoidCallback onShowAbout;
-  final bool isSelf; // <-- thêm cờ này
+  final bool isSelf; // ẩn/hiện composer
 
   const _ProfilePostsSection({
     required this.user,
@@ -1315,7 +1445,7 @@ class _ProfilePostsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Nếu chưa có bài viết -> vẫn show block Chi tiết (và composer chỉ nếu isSelf)
+    // Nếu chưa có bài viết -> vẫn show block Chi tiết (và composer tùy isSelf)
     if (posts.isEmpty) {
       return Padding(
         padding: const EdgeInsets.only(
@@ -1332,7 +1462,8 @@ class _ProfilePostsSection extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             Padding(
-              padding: const EdgeInsets.all(Dimensions.paddingSizeDefault),
+              padding:
+              const EdgeInsets.all(Dimensions.paddingSizeDefault),
               child: Text(
                 getTranslated('no_posts_yet', context) ??
                     'Chưa có bài viết nào',
@@ -1384,4 +1515,436 @@ class _ProfilePostsSection extends StatelessWidget {
       ),
     );
   }
+}
+
+// ==============================
+// Nút tròn dấu "…"
+// ==============================
+class _MoreCircleButton extends StatelessWidget {
+  final VoidCallback onPressed;
+  const _MoreCircleButton({required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      height: 50,
+      width: 50,
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(
+          color: theme.dividerColor,
+          width: 1.2,
+        ),
+      ),
+      child: IconButton(
+        onPressed: onPressed,
+        icon: const Icon(Icons.more_horiz, size: 22),
+      ),
+    );
+  }
+}
+
+void _showOtherProfileMenu(
+    BuildContext context, SocialUserProfile user) {
+  final theme = Theme.of(context);
+  final sc = context.read<SocialController>();
+  final bool isBlocked =
+      sc.profileHeaderUser?.isBlocked ?? user.isBlocked;
+
+  showModalBottomSheet(
+    context: context,
+    useRootNavigator: true,
+    isScrollControlled: false,
+    backgroundColor: Colors.transparent,
+    builder: (_) {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Card chính của sheet
+              Container(
+                decoration: BoxDecoration(
+                  color: theme.cardColor,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 12,
+                      offset: const Offset(0, 6),
+                    )
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Handle
+                    Padding(
+                      padding:
+                      const EdgeInsets.symmetric(vertical: 10),
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: theme.dividerColor,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+
+                    // Header: avatar + tên
+                    ListTile(
+                      leading: CircleAvatar(
+                        radius: 20,
+                        backgroundImage:
+                        (user.avatarUrl?.isNotEmpty ?? false)
+                            ? NetworkImage(user.avatarUrl!)
+                            : null,
+                        child: (user.avatarUrl?.isEmpty ?? true)
+                            ? const Icon(Icons.person)
+                            : null,
+                      ),
+                      title: Text(
+                        user.displayName?.isNotEmpty == true
+                            ? user.displayName!
+                            : (user.userName ?? 'Người dùng'),
+                        style:
+                        const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      subtitle:
+                      Text('@${user.userName ?? user.id}'),
+                    ),
+                    const Divider(height: 1),
+
+                    // Báo cáo
+                    ListTile(
+                      leading: const Icon(Icons.flag_outlined,
+                          color: Colors.red),
+                      title: const Text('Báo cáo'),
+                      subtitle:
+                      const Text('Báo cáo trang cá nhân này'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        // TODO: mở form báo cáo
+                      },
+                    ),
+                    const Divider(height: 1),
+
+                    // Chặn / Bỏ chặn (động theo trạng thái)
+                    ListTile(
+                      leading:
+                      const Icon(Icons.block, color: Colors.red),
+                      title: Text(isBlocked ? 'Bỏ chặn' : 'Chặn'),
+                      subtitle: Text(
+                        isBlocked
+                            ? 'Cho phép xem & tương tác lại'
+                            : 'Không thấy nội dung và tương tác',
+                      ),
+                      onTap: () async {
+                        Navigator.pop(context);
+                        await _confirmBlock(context, user,
+                            unblock: isBlocked);
+                      },
+                    ),
+                    const Divider(height: 1),
+
+                    // Chia sẻ
+                    ListTile(
+                      leading:
+                      const Icon(Icons.share_outlined),
+                      title: const Text('Chia sẻ trang cá nhân'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        // TODO: mở share sheet / sao chép liên kết
+                      },
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              // Nút Hủy
+              Container(
+                decoration: BoxDecoration(
+                  color: theme.cardColor,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: ListTile(
+                  title: const Center(child: Text('Hủy')),
+                  onTap: () => Navigator.pop(context),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+Future<void> _confirmBlock(
+    BuildContext context,
+    SocialUserProfile user, {
+      bool unblock = false,
+    }) async {
+  final theme = Theme.of(context);
+  final sc = context.read<SocialController>();
+
+  final title = unblock ? 'Bỏ chặn người dùng?' : 'Chặn người dùng?';
+  final content = unblock
+      ? 'Bạn có chắc muốn bỏ chặn ${user.displayName ?? user.userName ?? 'người này'}?'
+      : 'Bạn có chắc muốn chặn ${user.displayName ?? user.userName ?? 'người này'}?\nSau khi chặn, hai bên sẽ không nhìn thấy hoặc tương tác với nhau.';
+
+  final actionText = unblock ? 'Bỏ chặn' : 'Chặn';
+
+  final shouldProceed = await showDialog<bool>(
+    context: context,
+    builder: (_) {
+      return AlertDialog(
+        title: Text(title),
+        content: Text(content),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Hủy'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(actionText),
+          ),
+        ],
+      );
+    },
+  );
+
+  if (shouldProceed != true) return;
+
+  try {
+    // unblock=true => block=false; unblock=false => block=true
+    await sc.toggleBlockUser(
+      targetUserId: user.id,
+      block: !unblock,
+    );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(unblock ? 'Đã bỏ chặn' : 'Đã chặn')),
+    );
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(e.toString())),
+    );
+  }
+}
+
+void _showSelfProfileMenu(
+    BuildContext context, SocialUserProfile user) {
+  final theme = Theme.of(context);
+  final sc = context.read<SocialController>();
+
+  showModalBottomSheet(
+    context: context,
+    useRootNavigator: true,
+    isScrollControlled: false,
+    backgroundColor: Colors.transparent,
+    builder: (_) {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: theme.cardColor,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 12,
+                      offset: const Offset(0, 6),
+                    )
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Handle
+                    Padding(
+                      padding:
+                      const EdgeInsets.symmetric(vertical: 10),
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: theme.dividerColor,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+
+                    // Header: avatar + tên
+                    ListTile(
+                      leading: CircleAvatar(
+                        radius: 20,
+                        backgroundImage:
+                        (user.avatarUrl?.isNotEmpty ?? false)
+                            ? NetworkImage(user.avatarUrl!)
+                            : null,
+                        child: (user.avatarUrl?.isEmpty ?? true)
+                            ? const Icon(Icons.person)
+                            : null,
+                      ),
+                      title: Text(
+                        user.displayName?.isNotEmpty == true
+                            ? user.displayName!
+                            : (user.userName ?? 'Trang cá nhân của tôi'),
+                        style:
+                        const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      subtitle:
+                      Text('@${user.userName ?? user.id}'),
+                    ),
+                    const Divider(height: 1),
+
+                    // Danh sách đã chặn
+                    ListTile(
+                      leading: const Icon(Icons.block),
+                      title: const Text('Danh sách đã chặn'),
+                      subtitle:
+                      const Text('Xem và bỏ chặn người dùng'),
+                      onTap: () async {
+                        Navigator.pop(context);
+                        await _showBlockedUsersSheet(context);
+                      },
+                    ),
+                    const Divider(height: 1),
+
+                    // Chia sẻ trang cá nhân
+                    ListTile(
+                      leading:
+                      const Icon(Icons.share_outlined),
+                      title: const Text('Chia sẻ trang cá nhân'),
+                      onTap: () async {
+                        Navigator.pop(context);
+                        await _shareMyProfile(context, user);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              // Nút Hủy
+              Container(
+                decoration: BoxDecoration(
+                  color: theme.cardColor,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: ListTile(
+                  title: const Center(child: Text('Hủy')),
+                  onTap: () => Navigator.pop(context),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+Future<void> _shareMyProfile(
+    BuildContext context, SocialUserProfile user) async {
+  final base = AppConstants.socialBaseUrl
+      .replaceAll(RegExp(r'/$'), '');
+  // ưu tiên username, fallback sang id
+  final path =
+  (user.userName?.isNotEmpty ?? false) ? '/${user.userName}' : '/u/${user.id}';
+  final url = '$base$path';
+
+  await Clipboard.setData(ClipboardData(text: url));
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text('Đã sao chép liên kết: $url')),
+  );
+}
+
+// ==============================
+// BỔ SUNG: SHEET "Danh sách đã chặn" + confirm dialog bỏ chặn
+// ==============================
+Future<void> _showBlockedUsersSheet(BuildContext context) async {
+  final sc = context.read<SocialController>();
+
+  // Tải nếu đang trống (yêu cầu bạn có sc.loadBlockedUsersIfEmpty())
+  await sc.loadBlockedUsersIfEmpty();
+
+  showModalBottomSheet(
+    context: context,
+    useRootNavigator: true,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => FractionallySizedBox(
+      heightFactor: 0.92,
+      child: MemberListBottomSheet(
+        title: 'Danh sách đã chặn',
+        // Nếu API không trả total, dùng length hiện có
+        totalCount: sc.blockedUsers.length,
+        pageLoader: (after) async {
+          const pageSize = 30;
+          final start = int.tryParse(after ?? '0') ?? 0;
+          final List<SocialUser> all = sc.blockedUsers.toList();
+          final pageUsers = all.skip(start).take(pageSize).toList();
+          final next = (start + pageSize < all.length)
+              ? '${start + pageSize}'
+              : null;
+          return MemberPage(users: pageUsers, nextCursor: next);
+        },
+        onUserTap: (u) async {
+          // Hỏi xác nhận
+          final ok = await _confirmUnblockFromList(context, u);
+          if (ok == true) {
+            await sc.unblockFromList(u.id);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Đã bỏ chặn')),
+            );
+          }
+        },
+      ),
+    ),
+  );
+}
+
+Future<bool?> _confirmUnblockFromList(
+    BuildContext context, SocialUser u) {
+  return showDialog<bool>(
+    context: context,
+    builder: (_) => AlertDialog(
+      title: const Text('Bỏ chặn người dùng?'),
+      content: Text(
+          'Bạn có chắc muốn bỏ chặn ${u.displayName ?? u.userName ?? u.id}?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Hủy'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: Colors.red,
+            foregroundColor: Colors.white,
+          ),
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Bỏ chặn'),
+        ),
+      ],
+    ),
+  );
 }

@@ -49,17 +49,58 @@ class SocialController with ChangeNotifier {
   final List<SocialPost> _posts = [];
   List<SocialPost> get posts => List.unmodifiable(_posts);
 
+  final List<SocialPost> _savedPosts = <SocialPost>[];
+  List<SocialPost> get savedPosts => List.unmodifiable(_savedPosts);
+
+  bool _loadingSavedPosts = false;
+  bool get loadingSavedPosts => _loadingSavedPosts;
+
+  bool _hasMoreSavedPosts = true;
+  bool get hasMoreSavedPosts => _hasMoreSavedPosts;
+
+  String? _savedAfterId;
+  static const int _savedPostsPageSize = 10;
+
   String? _accessToken;
   String? get accessToken => _accessToken;
 
   bool _creatingLive = false;
   bool get creatingLive => _creatingLive;
 
+  // ---- STATE ----
+  final List<SocialUser> followersList = [];
+  final List<SocialUser> followingList = [];
+
+  bool loadingFollowers = false;
+  bool loadingFollowing = false;
+
+  String? _followersAfter; // cursor/offset trang tiếp theo
+  String? _followingAfter;
+//new 11/04/2025
+  final Set<String> _blockBusy = {};
+  bool isBlockBusy(String userId) => _blockBusy.contains(userId);
+
+  List<SocialUser> _blockedUsers = <SocialUser>[];       // danh sách user đã chặn
+  Set<String> _blockedIds = <String>{};
+  bool _loadingBlocked = false;
+  bool get isLoadingBlocked => _loadingBlocked;
+  UnmodifiableListView<SocialUser> get blockedUsers =>
+      UnmodifiableListView(_blockedUsers);
+  bool isUserBlocked(String userId) => _blockedIds.contains(userId);
+  //end
+
+  bool get hasMoreFollowers =>
+      _followersAfter != null && _followersAfter!.isNotEmpty;
+  bool get hasMoreFollowing =>
+      _followingAfter != null && _followingAfter!.isNotEmpty;
+
   final List<SocialStory> _stories = [];
   List<SocialStory> get stories => List.unmodifiable(_stories);
   int _storiesOffset = 0;
   final Map<String, Queue<_PendingStoryReaction>> _queuedStoryReactions =
       <String, Queue<_PendingStoryReaction>>{};
+  final Set<String> _viewedStoryItemIds = <String>{};
+  final Set<String> _storyViewInFlight = <String>{};
   final List<SocialGroup> _suggestedGroups = <SocialGroup>[];
   List<SocialGroup> get suggestedGroups => List.unmodifiable(_suggestedGroups);
   bool _loadingSuggestedGroups = false;
@@ -85,6 +126,8 @@ class SocialController with ChangeNotifier {
       <String, StoryViewersState>{};
   final Set<String> _sharingPosts = <String>{};
   bool isSharing(String id) => _sharingPosts.contains(id);
+  final Set<String> _postActionBusy = <String>{};
+  bool isPostActionBusy(String id) => _postActionBusy.contains(id);
   bool _pendingLoadMore = false;
 
   // ========== USER PROFILE STATE (MERGED FROM PROFILE CONTROLLER) ==========
@@ -114,7 +157,13 @@ class SocialController with ChangeNotifier {
     _currentUser = null;
     _currentUserStory = null;
     _posts.clear();
+    _savedPosts.clear();
+    _loadingSavedPosts = false;
+    _hasMoreSavedPosts = true;
+    _savedAfterId = null;
     _stories.clear();
+    _viewedStoryItemIds.clear();
+    _storyViewInFlight.clear();
     _suggestedGroups.clear();
     _loadingSuggestedGroups = false;
     _suggestedGroupsFetched = false;
@@ -129,6 +178,8 @@ class SocialController with ChangeNotifier {
     _storiesOffset = 0;
     _storyReactionLoading.clear();
     _storyViewers.clear();
+    _blockBusy.clear();
+
 
     // Clear profile state
     _followers = const [];
@@ -240,16 +291,154 @@ class SocialController with ChangeNotifier {
     }
   }
 
+  //block user 11/04/2025
+  Future<bool> toggleBlockUser({
+    String? targetUserId,
+    required bool block, // true = block, false = un-block
+  }) async {
+    final String? id = targetUserId ?? _profileHeaderUser?.id;
+    if (id == null || id.isEmpty) {
+      throw Exception('Không xác định userId để chặn.');
+    }
+    // Không cho tự chặn chính mình
+    if (_currentUser?.id == id) {
+      return _profileHeaderUser?.isBlocked ?? false;
+    }
+    // Chống double-tap
+    if (_blockBusy.contains(id)) {
+      return _profileHeaderUser?.isBlocked ?? false;
+    }
+
+    _blockBusy.add(id);
+    notifyListeners();
+
+    try {
+      // service.blockUser phải trả về bool: true=blocked, false=un-blocked
+      final bool blocked = await service.blockUser(
+        targetUserId: id,
+        block: block,
+      );
+
+      // Cập nhật ngay header nếu đang mở profile user đó
+      if (_profileHeaderUser?.id == id && _profileHeaderUser != null) {
+        final cur = _profileHeaderUser!;
+        _profileHeaderUser = cur.copyWith(
+          isBlocked: blocked,
+          // Khi chặn thì coi như không follow nữa (tuỳ luật app của bạn)
+          isFollowing: blocked ? false : cur.isFollowing,
+        );
+      }
+
+      // (Tuỳ chọn) Nếu muốn đồng bộ list followers/following trong trang profile:
+      // nếu blocked thì loại user khỏi danh sách… (bạn có thể bỏ nếu backend tự xử)
+      if (blocked) {
+        // Thêm vào tập id đã chặn
+        final added = _blockedIds.add(id);
+        // Nếu chưa có trong list, thêm 1 item tối thiểu để hiển thị ngay
+        if (added && !_blockedUsers.any((u) => u.id == id)) {
+          final src = (_profileHeaderUser != null && _profileHeaderUser!.id == id)
+              ? _profileHeaderUser
+              : null;
+          _blockedUsers.insert(0, SocialUser(
+            id: id,
+            displayName: src?.displayName,
+            userName: src?.userName,
+            avatarUrl: src?.avatarUrl,
+            coverUrl: src?.coverUrl,
+          ));
+        }
+      }  else {
+        // Bỏ chặn: xóa khỏi set + list
+        _blockedIds.remove(id);
+        _blockedUsers.removeWhere((u) => u.id == id);
+
+        // 🔧 QUAN TRỌNG: tạo list mới để thay đổi reference => UI cập nhật ngay
+        _blockedUsers = List<SocialUser>.from(_blockedUsers);
+
+        notifyListeners();
+      }
+
+      notifyListeners();
+      return blocked;
+    } finally {
+      _blockBusy.remove(id);
+      notifyListeners();
+    }
+  }
+  Future<void> refreshBlockedUsers({bool force = false}) async {
+    if (_loadingBlocked) return;
+    if (!force && _blockedUsers.isNotEmpty) return;
+
+    _loadingBlocked = true;
+    notifyListeners();
+    try {
+      // YÊU CẦU: service.getBlockedUsers() trả về List<SocialUser>
+      final users = await service.getBlockedUsers();
+
+      _blockedUsers = users;
+      _blockedIds = users.map((u) => u.id).toSet();
+
+      // Đồng bộ cờ isBlocked cho header profile nếu đang mở
+      if (_profileHeaderUser != null) {
+        final isBlockedNow = _blockedIds.contains(_profileHeaderUser!.id);
+        _profileHeaderUser = _profileHeaderUser!.copyWith(
+          isBlocked: isBlockedNow,
+          // (tùy luật) nếu bị chặn thì cũng coi như không còn follow
+          isFollowing: isBlockedNow ? false : _profileHeaderUser!.isFollowing,
+        );
+      }
+    } finally {
+      _loadingBlocked = false;
+      notifyListeners();
+    }
+  }
+  Future<void> loadBlockedUsersIfEmpty({bool force = false}) async {
+    // Nếu force => luôn tải lại; nếu không => chỉ tải khi list đang trống
+    if (force) {
+      await refreshBlockedUsers(force: true);
+    } else {
+      if (!_loadingBlocked && _blockedUsers.isEmpty) {
+        await refreshBlockedUsers(force: true);
+      }
+    }
+  }
+
+  /// Unblock nhanh từ danh sách đã chặn (UI gọi)
+  Future<bool> unblockFromList(String userId) async {
+    if (userId.isEmpty) return false;
+    try {
+      // toggleBlockUser trả về "blocked" (true nếu đang chặn). Với block:false
+      // thì kết quả mong muốn là false (đã bỏ chặn).
+      final bool blocked = await toggleBlockUser(
+        targetUserId: userId,
+        block: false,
+      );
+      // Sau khi toggleBlockUser, danh sách _blockedUsers/_blockedIds đã được đồng bộ.
+      return !blocked; // true = đã bỏ chặn thành công
+    } catch (_) {
+      rethrow;
+    }
+  }
+
+
+
+
+
   //edit prodile user by aoanhan
-  // Trong SocialController
-  Future<SocialUserProfile> updateDataUserFromEdit(SocialUserProfile edited) async {
+
+  Future<SocialUserProfile> updateDataUserFromEdit(
+    SocialUserProfile edited, {
+    String? currentPassword,
+    String? newPassword,
+    String? ecomToken,
+  }) async {
     if (_updatingProfile) {
       throw Exception('Đang cập nhật hồ sơ, vui lòng đợi xíu...');
     }
     _updatingProfile = true;
     notifyListeners();
 
-    // helper nhỏ để bóc path local
+    // helper nhỏ để bóc path local (nếu bạn chưa dùng extension avatarLocalPath/coverLocalPath)
     String? _localPath(String? s) {
       if (s == null || s.isEmpty) return null;
       if (s.startsWith('file://')) return s.substring(7);
@@ -257,34 +446,66 @@ class SocialController with ChangeNotifier {
       return null;
     }
 
-    try {
-      final String? avatarLocal = _localPath(edited.avatarUrl);
-      final String? coverLocal  = _localPath(edited.coverUrl);
+    // Ưu tiên password truyền từ tham số; fallback sang field trong model (nếu bạn có giữ tạm)
+    String? cp = (currentPassword ?? edited.currentPassword)?.trim();
+    String? np = (newPassword ?? edited.newPassword)?.trim();
 
-      // Gọi Service: chú ý chữ ký có `required String? displayName`
+    // Nếu chỉ nhập 1 trong 2 -> báo lỗi sớm
+    if ((cp?.isNotEmpty ?? false) ^ (np?.isNotEmpty ?? false)) {
+      _updatingProfile = false;
+      notifyListeners();
+      throw Exception('Vui lòng nhập đủ Mật khẩu hiện tại và Mật khẩu mới');
+    }
+    // Rule cơ bản cho mật khẩu mới
+    if ((np?.isNotEmpty ?? false) && (np!.length < 6)) {
+      _updatingProfile = false;
+      notifyListeners();
+      throw Exception('Mật khẩu mới phải từ 6 ký tự trở lên');
+    }
+
+    try {
+      // Nếu bạn đã thêm extension SocialUserProfileX, có thể dùng:
+      // final avatarLocal = edited.avatarLocalPath;
+      // final coverLocal  = edited.coverLocalPath;
+      final String? avatarLocal = _localPath(edited.avatarUrl);
+      final String? coverLocal = _localPath(edited.coverUrl);
+
+      // Gọi Service: thêm first_name, last_name, current/new_password
       final updated = await service.updateDataUser(
-        displayName     : edited.displayName,       // required (có thể null, nhưng phải truyền tên tham số)
-        about           : edited.about,
-        genderText      : edited.genderText,
-        birthdayIso     : edited.birthday,          // yyyy-MM-dd
-        address         : edited.address,           // chỉ dùng address (không còn city/country ở UI)
-        website         : edited.website,
+        // --- tên ---
+        displayName: edited.displayName, // required String? (có thể null)
+        firstName: edited.firstName,
+        lastName: edited.lastName,
+
+        // --- thông tin khác ---
+        about: edited.about,
+        genderText: edited.genderText,
+        birthdayIso: edited.birthday, // yyyy-MM-dd
+        address: edited.address,
+        website: edited.website,
         relationshipText: edited.relationshipStatus,
-        avatarFilePath  : avatarLocal,              // path local (nếu có)
-        coverFilePath   : coverLocal,               // path local (nếu có)
+
+        // --- mật khẩu (chỉ gửi khi cả 2 đều có giá trị) ---
+        currentPassword: (cp?.isNotEmpty ?? false) ? cp : null,
+        newPassword: (np?.isNotEmpty ?? false) ? np : null,
+
+        // --- file ảnh ---
+        avatarFilePath: avatarLocal,
+        coverFilePath: coverLocal,
+        ecomToken: ecomToken,
       );
 
-      // Đồng bộ lại header/current user
+      // Đồng bộ lại header/current user (giữ nguyên như cũ)
       if (_profileHeaderUser?.id == updated.id) {
         _profileHeaderUser = updated;
       }
       if (_currentUser?.id == updated.id) {
         _currentUser = SocialUser(
-          id         : _currentUser!.id,
+          id: _currentUser!.id,
           displayName: updated.displayName ?? _currentUser!.displayName,
-          userName   : updated.userName    ?? _currentUser!.userName,
-          avatarUrl  : updated.avatarUrl   ?? _currentUser!.avatarUrl,
-          coverUrl   : updated.coverUrl    ?? _currentUser!.coverUrl,
+          userName: updated.userName ?? _currentUser!.userName,
+          avatarUrl: updated.avatarUrl ?? _currentUser!.avatarUrl,
+          coverUrl: updated.coverUrl ?? _currentUser!.coverUrl,
         );
       }
 
@@ -298,9 +519,6 @@ class SocialController with ChangeNotifier {
       notifyListeners();
     }
   }
-
-
-
 
   Future<void> loadUserGroups({bool forceRefresh = false}) async {
     if (_loadingUserGroups) return;
@@ -544,32 +762,76 @@ class SocialController with ChangeNotifier {
     notifyListeners();
   }
 
+  SocialPost? findPostById(String id) {
+    for (final list in <List<SocialPost>>[
+      _posts,
+      _groupPosts,
+      _profilePosts,
+      _savedPosts,
+    ]) {
+      for (final post in list) {
+        if (post.id == id) {
+          return post;
+        }
+      }
+    }
+    return null;
+  }
+
   void _updatePost(String id, SocialPost newPost) {
     bool changed = false;
+
     final int feedIndex = _posts.indexWhere((e) => e.id == id);
     if (feedIndex != -1) {
       _posts[feedIndex] = newPost;
       changed = true;
     }
+
     final int groupIndex = _groupPosts.indexWhere((e) => e.id == id);
     if (groupIndex != -1) {
       _groupPosts[groupIndex] = newPost;
       changed = true;
     }
-    if (changed) {
-      notifyListeners();
-    }
-    // Cập nhật trong danh sách profile (_profilePosts)
+
     final int profileIndex = _profilePosts.indexWhere((p) => p.id == id);
     if (profileIndex != -1) {
       _profilePosts[profileIndex] = newPost;
       changed = true;
     }
 
-    // Nếu có thay đổi ở ít nhất 1 nơi thì thông báo UI rebuild
+    final int savedIndex = _savedPosts.indexWhere((p) => p.id == id);
+    if (savedIndex != -1) {
+      _savedPosts[savedIndex] = newPost;
+      changed = true;
+    }
+
     if (changed) {
       notifyListeners();
     }
+  }
+
+  bool _removePostEverywhere(String id) {
+    bool removed = false;
+
+    final int feedBefore = _posts.length;
+    _posts.removeWhere((p) => p.id == id);
+    if (_posts.length != feedBefore) {
+      removed = true;
+    }
+
+    final int groupBefore = _groupPosts.length;
+    _groupPosts.removeWhere((p) => p.id == id);
+    if (_groupPosts.length != groupBefore) {
+      removed = true;
+    }
+
+    final int profileBefore = _profilePosts.length;
+    _profilePosts.removeWhere((p) => p.id == id);
+    if (_profilePosts.length != profileBefore) {
+      removed = true;
+    }
+
+    return removed;
   }
 
   // ========== POST CREATION ==========
@@ -667,10 +929,104 @@ class SocialController with ChangeNotifier {
             'f6e69c898ddd643154c9bd4b152555842e26a868-d195c100005dddb9f1a30a67a5ae42d4-19845955',
       );
 
-      final data = await repo.createLive(_accessToken!);
+      final data = await repo.createLive(
+        accessToken: _accessToken!,
+        streamName: 'live_${DateTime.now().millisecondsSinceEpoch}',
+      );
       return data;
     } catch (e) {
       rethrow;
+    } finally {
+      _creatingLive = false;
+      notifyListeners();
+    }
+  }
+
+  Future<Map<String, dynamic>> createLiveSession({int? broadcasterUid}) async {
+    final String? token = _accessToken;
+    if (token == null || token.isEmpty) {
+      throw Exception('Missing access token');
+    }
+
+    _creatingLive = true;
+    notifyListeners();
+
+    try {
+      final SocialLiveRepository repo = SocialLiveRepository(
+        apiBaseUrl: AppConstants.socialBaseUrl,
+        serverKey: AppConstants.socialServerKey,
+      );
+
+      final String rawUserId = (_currentUser?.id ?? '').trim();
+      String idSegment = rawUserId.replaceAll(RegExp(r'[^0-9]'), '');
+      if (idSegment.isEmpty) {
+        idSegment = '0';
+      }
+
+      final int timestamp = DateTime.now().microsecondsSinceEpoch;
+      int randomComponent = timestamp.remainder(10000000);
+      if (randomComponent <= 0) {
+        randomComponent =
+            DateTime.now().millisecondsSinceEpoch.remainder(10000000);
+        if (randomComponent <= 0) {
+          randomComponent = 1;
+        }
+      }
+
+      const int tokenUid = 0;
+      String streamName = 'stream_${idSegment}_$randomComponent';
+      final String baseStreamName = streamName;
+
+      Map<String, dynamic>? agoraPayload;
+      String? tokenAgora;
+      try {
+        agoraPayload = await repo.generateAgoraToken(
+          accessToken: token,
+          channelName: streamName,
+          uid: tokenUid,
+          role: 'publisher',
+        );
+        tokenAgora = (agoraPayload?['token_agora'] ?? agoraPayload?['token'])
+            ?.toString();
+        final String? payloadChannel =
+            agoraPayload?['channel_name']?.toString() ??
+                agoraPayload?['channel']?.toString();
+        if (payloadChannel != null && payloadChannel.isNotEmpty) {
+          streamName = payloadChannel;
+        }
+      } catch (error) {
+        debugPrint('generateAgoraToken failed: $error');
+        throw Exception('Failed to generate Agora token: $error');
+      }
+
+      if (tokenAgora == null || tokenAgora.isEmpty) {
+        throw Exception('Agora token response is empty.');
+      }
+
+      if (streamName.trim().isEmpty) {
+        streamName = baseStreamName;
+      }
+
+      final Map<String, dynamic> postData = await repo.createLive(
+        accessToken: token,
+        streamName: streamName,
+        token: tokenAgora,
+      );
+
+      postData.putIfAbsent('agora_token', () => tokenAgora);
+
+      final Map<String, dynamic> result = <String, dynamic>{
+        'post_data': postData,
+        'stream_name': streamName,
+        'uid': tokenUid,
+        'token': tokenAgora,
+      };
+
+      if (agoraPayload != null) {
+        result['agora'] = agoraPayload;
+      }
+
+      return result;
     } finally {
       _creatingLive = false;
       notifyListeners();
@@ -763,6 +1119,144 @@ class SocialController with ChangeNotifier {
   }
 
   // ========== STORY REACTIONS ==========
+  Future<void> refreshSavedPosts() async {
+    if (_loadingSavedPosts) return;
+    _loadingSavedPosts = true;
+    _hasMoreSavedPosts = true;
+    notifyListeners();
+    try {
+      final List<SocialPost> list =
+          await service.getSavedPosts(limit: _savedPostsPageSize);
+      _savedPosts
+        ..clear()
+        ..addAll(list);
+      _savedAfterId = list.isNotEmpty ? list.last.id : null;
+      _hasMoreSavedPosts = list.length >= _savedPostsPageSize;
+    } finally {
+      _loadingSavedPosts = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadMoreSavedPosts() async {
+    if (_loadingSavedPosts || !_hasMoreSavedPosts) return;
+    final String? anchorId =
+        _savedAfterId ?? (_savedPosts.isNotEmpty ? _savedPosts.last.id : null);
+    _loadingSavedPosts = true;
+    notifyListeners();
+    try {
+      final List<SocialPost> list = await service.getSavedPosts(
+        limit: _savedPostsPageSize,
+        afterPostId: anchorId,
+      );
+      if (list.isEmpty) {
+        if (_savedPosts.isNotEmpty) {
+          _hasMoreSavedPosts = false;
+        }
+        return;
+      }
+      _savedPosts.addAll(list);
+      _savedAfterId = list.last.id;
+      if (list.length < _savedPostsPageSize) {
+        _hasMoreSavedPosts = false;
+      }
+    } finally {
+      _loadingSavedPosts = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> markStoryItemViewed({
+    required SocialStory story,
+    required SocialStoryItem item,
+  }) async {
+    final String storyItemId = item.id;
+    if (storyItemId.isEmpty) return;
+
+    final String? currentUserId = currentUser?.id;
+    final String? ownerId = story.userId ?? item.userId;
+    if (currentUserId != null && ownerId != null && currentUserId == ownerId) {
+      return;
+    }
+
+    if (item.isViewed) {
+      _viewedStoryItemIds.add(storyItemId);
+      return;
+    }
+    if (_viewedStoryItemIds.contains(storyItemId)) {
+      return;
+    }
+
+    final int storyIndex = _findStoryIndex(story);
+    if (storyIndex == -1) return;
+    final int itemIndex = _stories[storyIndex]
+        .items
+        .indexWhere((element) => element.id == storyItemId);
+    if (itemIndex == -1) return;
+
+    final SocialStoryItem currentItem = _stories[storyIndex].items[itemIndex];
+    if (currentItem.isViewed) {
+      _viewedStoryItemIds.add(storyItemId);
+      return;
+    }
+
+    final SocialStoryItem optimistic = currentItem.copyWith(
+      isViewed: true,
+      viewCount: (currentItem.viewCount ?? 0) + 1,
+    );
+
+    _viewedStoryItemIds.add(storyItemId);
+    _replaceStoryItem(storyIndex, itemIndex, optimistic);
+    notifyListeners();
+
+    if (_storyViewInFlight.contains(storyItemId)) {
+      return;
+    }
+    _storyViewInFlight.add(storyItemId);
+
+    try {
+      final SocialStory? refreshed =
+          await service.getStoryById(storyId: storyItemId);
+      if (refreshed != null && refreshed.items.isNotEmpty) {
+        final SocialStoryItem? refreshedItem = refreshed.items.firstWhere(
+          (element) => element.id == storyItemId,
+          orElse: () => refreshed.items.first,
+        );
+        if (refreshedItem != null) {
+          final int latestStoryIndex = _findStoryIndex(story);
+          if (latestStoryIndex != -1) {
+            final int latestItemIndex = _stories[latestStoryIndex]
+                .items
+                .indexWhere((element) => element.id == storyItemId);
+            if (latestItemIndex != -1) {
+              _replaceStoryItem(
+                  latestStoryIndex,
+                  latestItemIndex,
+                  refreshedItem.copyWith(
+                    isViewed: true,
+                  ));
+              notifyListeners();
+            }
+          }
+        }
+      }
+    } catch (_) {
+      _viewedStoryItemIds.remove(storyItemId);
+      final int latestStoryIndex = _findStoryIndex(story);
+      if (latestStoryIndex != -1) {
+        final int latestItemIndex = _stories[latestStoryIndex]
+            .items
+            .indexWhere((element) => element.id == storyItemId);
+        if (latestItemIndex != -1) {
+          _replaceStoryItem(latestStoryIndex, latestItemIndex, currentItem);
+        }
+      }
+      notifyListeners();
+    } finally {
+      _storyViewInFlight.remove(storyItemId);
+    }
+  }
+
   Future<void> reactOnStoryItem({
     required SocialStory story,
     required SocialStoryItem item,
@@ -1076,6 +1570,194 @@ class SocialController with ChangeNotifier {
       return false;
     } finally {
       _sharingPosts.remove(post.id);
+      notifyListeners();
+    }
+  }
+
+  Future<void> toggleSavePost(SocialPost post) async {
+    if (_postActionBusy.contains(post.id)) return;
+    _postActionBusy.add(post.id);
+    notifyListeners();
+
+    final BuildContext? ctx = Get.context;
+    try {
+      final String actionResult = await service.performPostAction(
+        postId: post.id,
+        action: 'save',
+      );
+
+      if (ctx != null) {
+        final String lower = actionResult.toLowerCase();
+        String? messageKey;
+        if (lower.contains('unsaved')) {
+          messageKey = 'post_unsaved';
+        } else if (lower.contains('saved')) {
+          messageKey = 'post_saved';
+        }
+        final String message = messageKey != null
+            ? (getTranslated(messageKey, ctx) ?? actionResult)
+            : actionResult;
+        showCustomSnackBar(message, ctx, isError: false);
+      }
+    } catch (e) {
+      if (ctx != null) {
+        showCustomSnackBar(e.toString(), ctx, isError: true);
+      }
+    } finally {
+      _postActionBusy.remove(post.id);
+      notifyListeners();
+    }
+  }
+
+  Future<void> hidePost(SocialPost post) async {
+    if (_postActionBusy.contains(post.id)) return;
+    _postActionBusy.add(post.id);
+    notifyListeners();
+
+    final BuildContext? ctx = Get.context;
+    try {
+      final String result = await service.hidePost(postId: post.id);
+      final bool removed = _removePostEverywhere(post.id);
+      if (removed) {
+        notifyListeners();
+      }
+      if (ctx != null) {
+        final String message = getTranslated('post_hidden', ctx) ?? result;
+        showCustomSnackBar(message, ctx, isError: false);
+      }
+    } catch (e) {
+      if (ctx != null) {
+        showCustomSnackBar(e.toString(), ctx, isError: true);
+      }
+    } finally {
+      _postActionBusy.remove(post.id);
+      notifyListeners();
+    }
+  }
+
+  Future<void> deletePost(SocialPost post) async {
+    if (_postActionBusy.contains(post.id)) return;
+    _postActionBusy.add(post.id);
+    notifyListeners();
+
+    final BuildContext? ctx = Get.context;
+    try {
+      Map<String, dynamic>? extra;
+      if (post.pageId != null && post.pageId!.isNotEmpty) {
+        extra = {'page_id': post.pageId};
+      }
+      if (post.groupId != null && post.groupId!.isNotEmpty) {
+        (extra ??= {})['group_id'] = post.groupId;
+      }
+      final String result = await service.performPostAction(
+        postId: post.id,
+        action: 'delete',
+        extraFields: extra,
+      );
+      final bool removed = _removePostEverywhere(post.id);
+      if (removed) {
+        notifyListeners();
+      }
+      if (ctx != null) {
+        final String message = getTranslated('post_deleted', ctx) ?? result;
+        showCustomSnackBar(message, ctx, isError: false);
+      }
+    } catch (e) {
+      if (ctx != null) {
+        showCustomSnackBar(e.toString(), ctx, isError: true);
+      }
+    } finally {
+      _postActionBusy.remove(post.id);
+      notifyListeners();
+    }
+  }
+
+  Future<void> editPost(
+    SocialPost post, {
+    required String text,
+    int? privacyType,
+  }) async {
+    final String trimmed = text.trim();
+    if (trimmed.isEmpty) {
+      final BuildContext? ctx = Get.context;
+      if (ctx != null) {
+        final String message = getTranslated('post_text_required', ctx) ??
+            'Post text cannot be empty';
+        showCustomSnackBar(message, ctx, isError: true);
+      }
+      return;
+    }
+    if (_postActionBusy.contains(post.id)) return;
+    _postActionBusy.add(post.id);
+    notifyListeners();
+
+    final BuildContext? ctx = Get.context;
+    try {
+      final Map<String, dynamic> extra = {'text': trimmed};
+      if (privacyType != null) {
+        extra['privacy_type'] = privacyType.toString();
+      } else if (post.privacyType != null) {
+        extra['privacy_type'] = post.privacyType.toString();
+      }
+      if (post.pageId != null && post.pageId!.isNotEmpty) {
+        extra['page_id'] = post.pageId;
+      }
+      if (post.groupId != null && post.groupId!.isNotEmpty) {
+        extra['group_id'] = post.groupId;
+      }
+      await service.performPostAction(
+        postId: post.id,
+        action: 'edit',
+        extraFields: extra,
+      );
+      SocialPost updated = post.copyWith(text: trimmed, rawText: trimmed);
+      try {
+        final SocialPost? refreshed = await service.getPostById(
+          postId: post.id,
+        );
+        if (refreshed != null) {
+          updated = refreshed;
+        }
+      } catch (_) {
+        // Ignore fetch errors; fallback to optimistic update.
+      }
+      _updatePost(post.id, updated);
+      if (ctx != null) {
+        final String message =
+            getTranslated('post_updated', ctx) ?? 'Post updated';
+        showCustomSnackBar(message, ctx, isError: false);
+      }
+    } catch (e) {
+      if (ctx != null) {
+        showCustomSnackBar(e.toString(), ctx, isError: true);
+      }
+    } finally {
+      _postActionBusy.remove(post.id);
+      notifyListeners();
+    }
+  }
+
+  Future<void> reportPost(SocialPost post) async {
+    if (_postActionBusy.contains(post.id)) return;
+    _postActionBusy.add(post.id);
+    notifyListeners();
+
+    final BuildContext? ctx = Get.context;
+    try {
+      final String result = await service.performPostAction(
+        postId: post.id,
+        action: 'report',
+      );
+      if (ctx != null) {
+        final String message = getTranslated('post_reported', ctx) ?? result;
+        showCustomSnackBar(message, ctx, isError: false);
+      }
+    } catch (e) {
+      if (ctx != null) {
+        showCustomSnackBar(e.toString(), ctx, isError: true);
+      }
+    } finally {
+      _postActionBusy.remove(post.id);
       notifyListeners();
     }
   }

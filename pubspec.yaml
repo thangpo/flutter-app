@@ -71,7 +71,7 @@ dependencies:
   dropdown_button2: ^2.3.9
   gradient_borders: ^1.0.0
   flutter_spinkit: ^5.2.1
-  open_file: ^3.5.10
+  open_filex: ^4.4.0
   flutter_pdfview: ^1.2.7
   readmore: ^3.0.0
   open_file_manager: ^1.0.2
@@ -93,7 +93,7 @@ dependencies:
   skeletonizer: ^1.4.3
   phone_numbers_parser: ^9.0.3
   local_auth: ^2.3.0
-
+  encrypt: ^5.0.3
   flutter_html: ^3.0.0
   visibility_detector: ^0.4.0+2
   just_audio: ^0.10.5

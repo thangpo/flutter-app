@@ -125,6 +125,42 @@ class SocialRepository {
     }
   }
 
+  Future<ApiResponseModel<Response>> fetchSavedPosts({
+    int limit = 10,
+    String? afterPostId,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError(
+            'Please log in to your social network account');
+      }
+
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialPostsUri}?access_token=$token';
+
+      final Map<String, dynamic> payload = {
+        'server_key': AppConstants.socialServerKey,
+        'type': 'saved',
+        'limit': limit.toString(),
+      };
+
+      if (afterPostId != null && afterPostId.isNotEmpty) {
+        payload['after_post_id'] = afterPostId;
+      }
+
+      final Response res = await dioClient.post(
+        url,
+        data: FormData.fromMap(payload),
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
   Future<ApiResponseModel<Response>> fetchGroupFeed({
     required String groupId,
     int limit = 10,
@@ -187,6 +223,48 @@ class SocialRepository {
   }
 
   //thêm
+  // block user 04/11/2025 by aoanhan
+  Future<ApiResponseModel<Response>> blockUser({
+     required String targetUserId,
+    required bool block,
+  })async{
+    try{
+      final token=_getSocialAccessToken();
+      final url='${AppConstants.socialBaseUrl}${AppConstants.socialBlockUser}?access_token=$token';
+      final form=FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'user_id': targetUserId,
+        'block_action': block ? 'block' : 'un-block',
+      });
+      final res=await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: Headers.multipartFormDataContentType),
+      );
+      return ApiResponseModel<Response>.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel<Response>.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+  Future<ApiResponseModel<Response>> getBlockUser()
+  async{
+    try{
+      final token=_getSocialAccessToken();
+      final url='${AppConstants.socialBaseUrl}${AppConstants.socialGetBlockUser}?access_token=$token';
+      final form=FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+      });
+      final res=await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: Headers.multipartFormDataContentType),
+      );
+      return ApiResponseModel<Response>.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel<Response>.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
 
   //30/10  thêm follow trong profile
   // social_repository.dart
@@ -211,58 +289,83 @@ class SocialRepository {
       );
       return ApiResponseModel<Response>.withSuccess(res);
     } catch (e) {
-      return ApiResponseModel<Response>.withError(ApiErrorHandler.getMessage(e));
+      return ApiResponseModel<Response>.withError(
+          ApiErrorHandler.getMessage(e));
     }
   }
 
   //edit profile user
   Future<ApiResponseModel<Response>> updateDataUser({
-    String? displayName,
+    String? displayName, // đang map sang 'username' (xem lưu ý bên dưới)
+    String? firstName, // <-- mới
+    String? lastName, // <-- mới
     String? about,
-    String? genderText,       // 'Nam' | 'Nữ' | 'Khác'
-    String? birthdayIso,      // yyyy-MM-dd
+    String? genderText, // 'Nam' | 'Nữ' | 'Khác'
+    String? birthdayIso, // yyyy-MM-dd
     String? address,
     String? website,
-    String? relationshipText, // nếu backend cần mã thì bạn map riêng
-    String? avatarFilePath,   // file local (có thể là "file://..."), KHÔNG phải URL
-    String? coverFilePath,    // file local (có thể là "file://...")
+    String? relationshipText,
+    String? currentPassword, // <-- mới
+    String? newPassword, // <-- mới
+    String? avatarFilePath,
+    String? coverFilePath,
   }) async {
     try {
       final token = _getSocialAccessToken();
       if (token == null || token.isEmpty) {
-        return ApiResponseModel.withError('Please log in to your social network account');
+        return ApiResponseModel.withError(
+            'Please log in to your social network account');
       }
 
-      // Ghép URL an toàn
-      final base = '${AppConstants.socialBaseUrl}${AppConstants.socialUpdateDataUser}';
-      final sep  = base.contains('?') ? '&' : '?';
-      final url  = '$base${sep}access_token=$token';
+      final base =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialUpdateDataUser}';
+      final sep = base.contains('?') ? '&' : '?';
+      final url = '$base${sep}access_token=$token';
 
-      // Map field tuỳ chọn
       final Map<String, dynamic> fields = {
         'server_key': AppConstants.socialServerKey,
-        if ((displayName ?? '').trim().isNotEmpty) 'username': displayName!.trim(),
-        if ((about ?? '').trim().isNotEmpty)       'about': about!.trim(),
-        if ((genderText ?? '').isNotEmpty)         'gender': _genderToServer(genderText),
-        if ((birthdayIso ?? '').isNotEmpty)        'birthday': birthdayIso,
+
+        // -------- tên / hiển thị --------
+        if ((firstName ?? '').trim().isNotEmpty)
+          'first_name': firstName!.trim(), // <-- thêm
+        if ((lastName ?? '').trim().isNotEmpty)
+          'last_name': lastName!.trim(), // <-- thêm
+
+        // LƯU Ý: hiện tại bạn đang dùng displayName để map vào 'username' (handle).
+        // Nếu backend của bạn có field 'display_name' riêng, đổi key này thành 'display_name'.
+        if ((displayName ?? '').trim().isNotEmpty)
+          'username': displayName!.trim(),
+
+        // -------- info khác --------
+        if ((about ?? '').trim().isNotEmpty) 'about': about!.trim(),
+        if ((genderText ?? '').isNotEmpty)
+          'gender': _genderToServer(genderText),
+        if ((birthdayIso ?? '').isNotEmpty) 'birthday': birthdayIso,
         if ((address ?? '').trim().isNotEmpty) ...{
-          // tuỳ backend: nhiều nơi đọc khác key, đẩy cùng 1 giá trị để tương thích
-          'address' : address!.trim(),
-          'city'    : address.trim(),
+          'address': address!.trim(),
+          'city': address.trim(), // để tương thích vài backend
         },
-        if ((website ?? '').trim().isNotEmpty)     'website': website!.trim(),
+        if ((website ?? '').trim().isNotEmpty) 'website': website!.trim(),
         if ((relationshipText ?? '').trim().isNotEmpty)
-          'relationship': relationshipText!.trim(), // hoặc 'relationship_id' tuỳ API
+          'relationship': relationshipText!.trim(),
+
+        // -------- đổi mật khẩu --------
+        // Hầu hết backend (như WoWonder) yêu cầu CẢ 2 field khi đổi mật khẩu
+        if ((currentPassword ?? '').isNotEmpty)
+          'current_password': currentPassword,
+        if ((newPassword ?? '').isNotEmpty) 'new_password': newPassword,
       };
 
       // Files (strip "file://")
       if (avatarFilePath != null && avatarFilePath.isNotEmpty) {
         final p = _stripFileScheme(avatarFilePath);
-        fields['avatar'] = await MultipartFile.fromFile(p, filename: _fileName(p));
+        fields['avatar'] =
+            await MultipartFile.fromFile(p, filename: _fileName(p));
       }
       if (coverFilePath != null && coverFilePath.isNotEmpty) {
         final p = _stripFileScheme(coverFilePath);
-        fields['cover'] = await MultipartFile.fromFile(p, filename: _fileName(p));
+        fields['cover'] =
+            await MultipartFile.fromFile(p, filename: _fileName(p));
       }
 
       final form = FormData.fromMap(fields);
@@ -283,7 +386,7 @@ class SocialRepository {
   String _genderToServer(String? genderText) {
     final s = (genderText ?? '').trim().toLowerCase();
     if (s == 'nam' || s == 'male' || s == 'm') return 'male';
-    if (s == 'nữ'  || s == 'female' || s == 'f') return 'female';
+    if (s == 'nữ' || s == 'female' || s == 'f') return 'female';
     return 'other';
   }
 
@@ -294,7 +397,6 @@ class SocialRepository {
     final i = path.lastIndexOf(RegExp(r'[\/\\]'));
     return i >= 0 ? path.substring(i + 1) : path;
   }
-
 
   // THÊM vào class SocialRepository
   Future<ApiResponseModel<Response>> fetchUserProfile({
@@ -345,9 +447,8 @@ class SocialRepository {
             'Please log in to your social network account');
       }
 
-      final String userIdToLoad = targetUserId.isNotEmpty
-          ? targetUserId
-          : (_getSocialUserId() ?? '');
+      final String userIdToLoad =
+          targetUserId.isNotEmpty ? targetUserId : (_getSocialUserId() ?? '');
 
       final String url =
           '${AppConstants.socialBaseUrl}${AppConstants.socialPostsUri}?access_token=$token';
@@ -378,6 +479,7 @@ class SocialRepository {
       return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
     }
   }
+
   // THÊM vào class SocialRepository
   SocialUserProfile? parseUserProfile(Response res) {
     final data = res.data;
@@ -426,36 +528,38 @@ class SocialRepository {
 
     // tên cơ bản
     String? firstName = _cleanStr(map['first_name'] ?? map['fname']);
-    String? lastName  = _cleanStr(map['last_name'] ?? map['lname']);
-    String? userName  = _cleanStr(map['username'] ?? map['user_name']);
+    String? lastName = _cleanStr(map['last_name'] ?? map['lname']);
+    String? userName = _cleanStr(map['username'] ?? map['user_name']);
 
     // displayName ưu tiên: name -> first+last -> username
-    String? displayName = _cleanStr(map['name']);
+    String? displayName = _cleanStr(map['username'] ?? map['user_name']);
+    displayName ??= _cleanStr(map['name']);
+
     if (displayName == null || displayName.isEmpty) {
       final combined = [
         if (firstName != null && firstName.isNotEmpty) firstName,
-        if (lastName  != null && lastName.isNotEmpty) lastName,
+        if (lastName != null && lastName.isNotEmpty) lastName,
       ].join(' ').trim();
 
       if (combined.isNotEmpty) {
         displayName = combined;
       } else if (userName != null && userName.isNotEmpty) {
         displayName = userName;
+      } else {
+        displayName = id; // <— thêm fallback an toàn
       }
     }
 
     // avatar & cover
-    final avatarRaw = (map['avatar_full'] ??
-        map['avatar_original'] ??
-        map['avatar'] ??
-        '').toString();
-    final coverRaw = (map['cover_full'] ??
-        map['cover_original'] ??
-        map['cover'] ??
-        '').toString();
+    final avatarRaw =
+        (map['avatar_full'] ?? map['avatar_original'] ?? map['avatar'] ?? '')
+            .toString();
+    final coverRaw =
+        (map['cover_full'] ?? map['cover_original'] ?? map['cover'] ?? '')
+            .toString();
 
     final String? avatarUrl = _absoluteUrl(avatarRaw);
-    final String? coverUrl  = _absoluteUrl(coverRaw);
+    final String? coverUrl = _absoluteUrl(coverRaw);
 
     // details block (đếm follower/following/post...)
     final details = (map['details'] is Map)
@@ -528,8 +632,6 @@ class SocialRepository {
       isFollowingMe: isFollowingMe,
     );
   }
-
-
 
   //Stories
   Future<ApiResponseModel<Response>> fetchStories({
@@ -1279,9 +1381,15 @@ class SocialRepository {
     final String id = (map['post_id'] ?? map['id'] ?? '').toString();
     if (id.isEmpty) return null;
 
-
     final String text =
         (map['postText_API'] ?? map['postText'] ?? '').toString();
+    final String? originalText = _normalizeString(
+      map['OrginaltextDecoded'] ??
+          map['Orginaltext'] ??
+          map['original_text'] ??
+          map['originalText'] ??
+          map['Orginal_text'],
+    );
     final String timeText =
         (map['post_time'] ?? map['time_text'] ?? '').toString();
 
@@ -1290,10 +1398,10 @@ class SocialRepository {
     final String userName = (pub['name'] ?? pub['username'] ?? '').toString();
     final String? userAvatar = _normalizeMediaUrl(pub['avatar']);
     final String publisherId = (pub['user_id'] ??
-        pub['id'] ??
-        map['publisher_id'] ??
-        map['user_id'] ??
-        '')
+            pub['id'] ??
+            map['publisher_id'] ??
+            map['user_id'] ??
+            '')
         .toString();
 
     final List pm =
@@ -1315,6 +1423,18 @@ class SocialRepository {
       if (singleFull.isNotEmpty && _isImageUrl(singleFull))
         singleResolved ?? singleFull,
     ];
+    final dynamic thumbRaw = map['postFileThumb'] ??
+        map['post_file_thumb'] ??
+        map['thumb'] ??
+        map['thumbnail'] ??
+        map['stream_thumbnail'] ??
+        map['live_thumb'];
+    final String? thumbnailUrl = _normalizeMediaUrl(thumbRaw);
+    if (thumbnailUrl != null &&
+        thumbnailUrl.isNotEmpty &&
+        !imageUrls.contains(thumbnailUrl)) {
+      imageUrls.add(thumbnailUrl);
+    }
 
     final String fileUrlRaw =
         (map['postFile'] ?? map['postFile_full'] ?? '').toString();
@@ -1445,6 +1565,35 @@ class SocialRepository {
     final String? postType = (map['postType']?.toString().isNotEmpty ?? false)
         ? map['postType'].toString()
         : null;
+    final bool isLivePost = postType == 'live';
+    final String? liveStreamName = isLivePost
+        ? _normalizeString(map['stream_name'] ?? map['streamName'])
+        : null;
+    final String? liveToken = isLivePost
+        ? _normalizeString(
+            map['agora_token'] ?? map['token_agora'] ?? map['token'])
+        : null;
+    final DateTime? liveStartedAt = isLivePost
+        ? _epochToDateTime(_coerceInt(map['live_time'] ??
+            map['live_start_time'] ??
+            map['live_started_at']))
+        : null;
+    final bool liveEnded =
+        isLivePost && _isTruthy(map['live_ended'] ?? map['is_ended']);
+    final String? liveResourceId = isLivePost
+        ? _normalizeString(
+            map['agora_resource_id'] ?? map['resource_id'] ?? map['resourceId'])
+        : null;
+    final String? liveSid =
+        isLivePost ? _normalizeString(map['agora_sid'] ?? map['sid']) : null;
+
+    final String? pageId = () {
+      final String? normalized = _normalizeString(map['page_id']);
+      if (normalized == null || normalized == '0') return null;
+      return normalized;
+    }();
+    final int? privacyType =
+        _coerceInt(map['postPrivacy'] ?? map['privacy_type'] ?? map['privacy']);
 
     SocialPost? sharedPost;
     if (includeSharedInfo) {
@@ -1471,6 +1620,13 @@ class SocialRepository {
       videoUrl: videoUrl,
       audioUrl: audioUrl,
       postType: postType,
+      thumbnailUrl: thumbnailUrl,
+      liveStreamName: liveStreamName,
+      liveAgoraToken: liveToken,
+      liveStartedAt: liveStartedAt,
+      liveEnded: liveEnded,
+      liveResourceId: liveResourceId,
+      liveSid: liveSid,
       sharedPost: sharedPost,
       isGroupPost: isGroupPost,
       isGroupAdmin: groupAdmin,
@@ -1496,6 +1652,9 @@ class SocialRepository {
       pollOptions: (map['options'] is List)
           ? List<Map<String, dynamic>>.from(map['options'])
           : null,
+      rawText: originalText,
+      pageId: pageId,
+      privacyType: privacyType,
     );
   }
 
@@ -1932,12 +2091,6 @@ class SocialRepository {
     }
   }
 
-
-
-
-
-
-
   Future<ApiResponseModel<Response>> reactToPostWithAction({
     required String postId,
     required String reaction,
@@ -1965,6 +2118,70 @@ class SocialRepository {
         data: form,
         options: Options(contentType: 'multipart/form-data'),
       );
+      return ApiResponseModel.withSuccess(resp);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+  Future<ApiResponseModel<Response>> performPostAction({
+    required String postId,
+    required String action,
+    Map<String, dynamic>? extraFields,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError(
+            'Please log in to your social network account');
+      }
+
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialReactUri}?access_token=$token';
+
+      final Map<String, dynamic> payload = {
+        'server_key': AppConstants.socialServerKey,
+        'post_id': postId,
+        'action': action,
+      };
+      if (extraFields != null && extraFields.isNotEmpty) {
+        payload.addAll(extraFields);
+      }
+
+      final resp = await dioClient.post(
+        url,
+        data: FormData.fromMap(payload),
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
+      return ApiResponseModel.withSuccess(resp);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+  Future<ApiResponseModel<Response>> hidePost({
+    required String postId,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError(
+            'Please log in to your social network account');
+      }
+
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialHidePostUri}?access_token=$token';
+
+      final resp = await dioClient.post(
+        url,
+        data: FormData.fromMap({
+          'server_key': AppConstants.socialServerKey,
+          'post_id': postId,
+        }),
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
       return ApiResponseModel.withSuccess(resp);
     } catch (e) {
       return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
@@ -2917,9 +3134,10 @@ class SocialRepository {
   }
 
   //map public
-   SocialPost? mapToSocialPost(Map<String, dynamic> raw) {
+  SocialPost? mapToSocialPost(Map<String, dynamic> raw) {
     return _mapToSocialPost(Map<String, dynamic>.from(raw));
   }
+
   DateTime? _parseCommentDate(dynamic raw) {
     if (raw == null) return null;
     final String str = raw.toString().trim();

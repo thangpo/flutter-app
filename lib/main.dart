@@ -207,7 +207,7 @@ Future<void> main() async {
         create: (_) => di.sl<SocialGroupController>(),
       ),
       ChangeNotifierProvider(
-        create: (_) => GroupChatController(repo: GroupChatRepository()),
+        create: (_) => GroupChatController(GroupChatRepository()),
       ),
       ChangeNotifierProvider(
         create: (_) => SocialNotificationsController(

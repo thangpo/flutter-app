@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LocationModel {
   final int id;
@@ -18,31 +19,93 @@ class LocationModel {
 
   factory LocationModel.fromJson(Map<String, dynamic> json) {
     return LocationModel(
-      id: json['id'],
-      name: json['name'],
+      id: json['id'] ?? 0,
+      name: json['name'] ?? 'Unknown',
       slug: json['slug'] ?? '',
       imageUrl: json['image_url'] ?? '',
       toursCount: json['tours_count'] ?? 0,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'slug': slug,
+      'image_url': imageUrl,
+      'tours_count': toursCount,
+    };
+  }
 }
 
 class LocationService {
-  static const String apiUrl = "https://vietnamtoure.com/api/locations";
+  LocationService._privateConstructor();
+  static final LocationService _instance = LocationService._privateConstructor();
+  factory LocationService() => _instance;
 
-  static Future<List<LocationModel>> fetchLocations() async {
-    final response = await http.get(Uri.parse(apiUrl));
+  static const String _apiUrl = "https://vietnamtoure.com/api/locations";
+  static const String _cacheKey = 'cached_locations';
+  static const String _cacheTimestampKey = 'cached_locations_timestamp';
+  static const Duration _cacheDuration = Duration(days: 1);
 
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      if (data['status'] == true) {
-        List<dynamic> list = data['data'];
-        return list.map((json) => LocationModel.fromJson(json)).toList();
-      } else {
-        throw Exception("API trả về lỗi");
+  static Future<List<LocationModel>> fetchLocations({bool forceRefresh = false}) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    if (!forceRefresh) {
+      final cachedData = prefs.getString(_cacheKey);
+      final timestamp = prefs.getInt(_cacheTimestampKey);
+
+      if (cachedData != null && timestamp != null) {
+        final cacheAge = DateTime.now().millisecondsSinceEpoch - timestamp;
+        if (cacheAge < _cacheDuration.inMilliseconds) {
+          try {
+            final List<dynamic> jsonList = jsonDecode(cachedData);
+            return jsonList.map((e) => LocationModel.fromJson(e)).toList();
+          } catch (e) {
+            //debugPrint('Lỗi parse cache: $e');
+          }
+        }
       }
-    } else {
-      throw Exception("Không thể tải dữ liệu: ${response.statusCode}");
     }
+
+    try {
+      final response = await http.get(Uri.parse(_apiUrl)).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw Exception("Timeout khi tải dữ liệu"),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        if (data['status'] == true) {
+          final List<dynamic> list = data['data'];
+          final locations = list.map((json) => LocationModel.fromJson(json)).toList();
+
+          await prefs.setString(_cacheKey, jsonEncode(locations.map((e) => e.toJson()).toList()));
+          await prefs.setInt(_cacheTimestampKey, DateTime.now().millisecondsSinceEpoch);
+
+          return locations;
+        } else {
+          throw Exception(data['message'] ?? "API trả về lỗi");
+        }
+      } else {
+        throw Exception("Lỗi mạng: ${response.statusCode}");
+      }
+    } catch (e) {
+      final cachedData = prefs.getString(_cacheKey);
+      if (cachedData != null) {
+        try {
+          final List<dynamic> jsonList = jsonDecode(cachedData);
+          return jsonList.map((e) => LocationModel.fromJson(e)).toList();
+        } catch (_) {}
+      }
+      rethrow;
+    }
+  }
+
+  static Future<void> clearCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_cacheKey);
+    await prefs.remove(_cacheTimestampKey);
   }
 }

@@ -28,6 +28,7 @@ import 'package:flutter_sixvalley_ecommerce/features/notification/screens/notifi
 import 'package:flutter_sixvalley_ecommerce/features/address/screens/address_list_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/refer_and_earn/screens/refer_and_earn_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/setting/screens/settings_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/saved_posts_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_groups_screen.dart';
 import 'package:provider/provider.dart';
 import 'faq_screen_view.dart';
@@ -190,6 +191,11 @@ class _MoreScreenState extends State<MoreScreen> {
                             image: Images.friendImage,
                             title: getTranslated('groups', context),
                             navigateTo: const SocialGroupsScreen(),
+                          ),
+                          MenuButtonWidget(
+                            image: Images.wishlist,
+                            title: getTranslated('saved_posts', context),
+                            navigateTo: const SavedPostsScreen(),
                           ),
                           MenuButtonWidget(
                             image: Images.settings,

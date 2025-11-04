@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user_profile.dart';
@@ -23,12 +24,20 @@ class EditProfileScreen extends StatefulWidget {
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  // Controllers
+  // Controllers (info cơ bản)
+  late final TextEditingController _firstNameCtrl;
+  late final TextEditingController _lastNameCtrl;
   late final TextEditingController _displayNameCtrl;
   late final TextEditingController _aboutCtrl;
   late final TextEditingController _addressCtrl;
   late final TextEditingController _websiteCtrl;
   late final TextEditingController _birthdayCtrl;
+
+  // Password controllers (bảo mật)
+  late final TextEditingController _currentPwdCtrl;
+  late final TextEditingController _newPwdCtrl;
+  bool _showCurrentPwd = false;
+  bool _showNewPwd = false;
 
   // Dropdown
   String? _genderValue; // 'Nam' | 'Nữ' | 'Khác' | null
@@ -44,21 +53,33 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   void initState() {
     super.initState();
     final p = widget.profile;
+
+    // Nếu model chưa có firstName/lastName thì để chuỗi rỗng
+    _firstNameCtrl   = TextEditingController(text: p.firstName ?? '');
+    _lastNameCtrl    = TextEditingController(text: p.lastName ?? '');
+
     _displayNameCtrl = TextEditingController(text: p.displayName ?? '');
     _aboutCtrl       = TextEditingController(text: p.about ?? '');
-    _addressCtrl     = TextEditingController(text: p.address ?? ''); // chỉ dùng address
+    _addressCtrl     = TextEditingController(text: p.address ?? '');
     _websiteCtrl     = TextEditingController(text: p.website ?? '');
     _birthdayCtrl    = TextEditingController(text: _toUiDate(p.birthday));
     _genderValue     = _normalizeGender(p.genderText);
+
+    _currentPwdCtrl  = TextEditingController();
+    _newPwdCtrl      = TextEditingController();
   }
 
   @override
   void dispose() {
+    _firstNameCtrl.dispose();
+    _lastNameCtrl.dispose();
     _displayNameCtrl.dispose();
     _aboutCtrl.dispose();
     _addressCtrl.dispose();
     _websiteCtrl.dispose();
     _birthdayCtrl.dispose();
+    _currentPwdCtrl.dispose();
+    _newPwdCtrl.dispose();
     super.dispose();
   }
 
@@ -91,6 +112,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     String? _nullIfEmpty(String s) => s.trim().isEmpty ? null : s.trim();
 
+    final String? firstName   = _nullIfEmpty(_firstNameCtrl.text);
+    final String? lastName    = _nullIfEmpty(_lastNameCtrl.text);
     final String? displayName = _nullIfEmpty(_displayNameCtrl.text);
     final String? about       = _nullIfEmpty(_aboutCtrl.text);
     final String? address     = _nullIfEmpty(_addressCtrl.text);
@@ -98,36 +121,59 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final String? birthdayIso = _toIsoDate(_birthdayCtrl.text.trim());
     final String? genderText  = _genderValue;
 
+    final String cp = _currentPwdCtrl.text.trim();
+    final String np = _newPwdCtrl.text.trim();
+    final bool changingPwd = cp.isNotEmpty || np.isNotEmpty;
+
     try {
+      if (changingPwd) {
+        if (cp.isEmpty) throw 'Vui lòng nhập mật khẩu hiện tại';
+        if (np.length < 6) throw 'Mật khẩu mới tối thiểu 6 ký tự';
+        if (np == cp) throw 'Mật khẩu mới phải khác mật khẩu hiện tại';
+      }
+
       final controller = context.read<SocialController>();
+
+      // >>> LẤY TOKEN E-COM TỪ AuthController (giống như màn Profile ecom) <<<
+      final String ecomToken = context.read<AuthController>().getUserToken();
 
       // Tạo bản sao profile với dữ liệu mới (đánh dấu file local bằng scheme file://)
       final edited = widget.profile.copyWith(
+        firstName  : firstName,
+        lastName   : lastName,
         displayName: displayName,
         about      : about,
         address    : address,
         website    : website,
         birthday   : birthdayIso,
         genderText : genderText,
-        avatarUrl  : (_avatarLocalPath != null)
-            ? 'file://$_avatarLocalPath'
-            : widget.profile.avatarUrl,
-        coverUrl   : (_coverLocalPath != null)
-            ? 'file://$_coverLocalPath'
-            : widget.profile.coverUrl,
+        avatarUrl  : (_avatarLocalPath != null) ? 'file://$_avatarLocalPath' : widget.profile.avatarUrl,
+        coverUrl   : (_coverLocalPath  != null) ? 'file://$_coverLocalPath'  : widget.profile.coverUrl,
       );
 
-      // Gọi controller (non-null)
-      final updatedProfile = await controller.updateDataUserFromEdit(edited);
+      // Gọi controller: TRUYỀN KÈM ecomToken để service tự đồng bộ E-com
+      final updatedProfile = await controller.updateDataUserFromEdit(
+        edited,
+        currentPassword: changingPwd ? cp : null,
+        newPassword    : changingPwd ? np : null,
+        ecomToken      : ecomToken,                 // <<< THÊM DÒNG NÀY
+      );
 
       if (!mounted) return;
 
-      // Trả result về parent
       widget.onSave(updatedProfile);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cập nhật hồ sơ thành công')),
-      );
+      // Nếu muốn, có thể cảnh báo nhẹ khi thiếu token (đồng bộ E-com sẽ tự bỏ qua)
+      if (ecomToken.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Đã cập nhật MXH. Chưa đồng bộ E-com vì bạn chưa đăng nhập E-com.')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Cập nhật hồ sơ thành công')),
+        );
+      }
+
       Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
@@ -138,6 +184,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (mounted) setState(() => _saving = false);
     }
   }
+
 
   // ===== Utils =====
   String _toUiDate(String? iso) {
@@ -241,12 +288,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, __, ___) =>
                                 const _CoverPlaceholder(),
-                                loadingBuilder: (c, child, p) =>
-                                p == null ? child : const Center(child: CircularProgressIndicator()),
+                                loadingBuilder: (c, child, progress) =>
+                                progress == null
+                                    ? child
+                                    : const Center(
+                                    child:
+                                    CircularProgressIndicator()),
                               )
                             else if (_isLocalFile(coverPreview))
                               Image.file(
-                                File(coverPreview!.replaceFirst('file://', '')),
+                                File(coverPreview!
+                                    .replaceFirst('file://', '')),
                                 fit: BoxFit.cover,
                               )
                             else
@@ -256,7 +308,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               alignment: Alignment.topRight,
                               padding: const EdgeInsets.all(8),
                               child: const _CircleButton(
-                                  icon: Icons.camera_alt_outlined),
+                                icon: Icons.camera_alt_outlined,
+                              ),
                             ),
                           ],
                         ),
@@ -300,7 +353,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                       );
                                     } else if (_isLocalFile(src)) {
                                       return Image.file(
-                                        File(src!.replaceFirst('file://', '')),
+                                        File(src!
+                                            .replaceFirst('file://', '')),
                                         fit: BoxFit.cover,
                                       );
                                     }
@@ -318,7 +372,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               ),
                             ),
                             const _CircleButton(
-                                icon: Icons.camera_alt_outlined),
+                              icon: Icons.camera_alt_outlined,
+                            ),
                           ],
                         ),
                       ),
@@ -337,6 +392,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
               // -------- Thông tin chính --------
               const _SectionHeader(title: 'Thông tin chính'),
+              _LabeledField(
+                label: 'Họ (first_name)',
+                controller: _firstNameCtrl,
+                hint: 'VD: Nguyễn',
+                textInputAction: TextInputAction.next,
+              ),
+              _LabeledField(
+                label: 'Tên (last_name)',
+                controller: _lastNameCtrl,
+                hint: 'VD: Văn A',
+                textInputAction: TextInputAction.next,
+              ),
               _LabeledField(
                 label: 'Tên hiển thị *',
                 controller: _displayNameCtrl,
@@ -385,6 +452,25 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 controller: _websiteCtrl,
                 hint: 'https://...',
                 keyboardType: TextInputType.url,
+              ),
+
+              _SeparatorLine(color: dividerColor),
+
+              // -------- Bảo mật --------
+              const _SectionHeader(title: 'Bảo mật'),
+              _PasswordField(
+                label: 'Mật khẩu hiện tại',
+                controller: _currentPwdCtrl,
+                obscure: !_showCurrentPwd,
+                onToggleObscure: () =>
+                    setState(() => _showCurrentPwd = !_showCurrentPwd),
+              ),
+              _PasswordField(
+                label: 'Mật khẩu mới',
+                controller: _newPwdCtrl,
+                obscure: !_showNewPwd,
+                onToggleObscure: () =>
+                    setState(() => _showNewPwd = !_showNewPwd),
               ),
 
               const SizedBox(height: 24),
@@ -682,6 +768,66 @@ class _DateField extends StatelessWidget {
                     ),
                   ),
                 ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PasswordField extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+  final bool obscure;
+  final VoidCallback onToggleObscure;
+
+  const _PasswordField({
+    required this.label,
+    required this.controller,
+    required this.obscure,
+    required this.onToggleObscure,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style:
+              const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 6),
+          TextFormField(
+            controller: controller,
+            obscureText: obscure,
+            enableSuggestions: false,
+            autocorrect: false,
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              border:
+              OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(
+                  color: theme.dividerColor.withOpacity(.6),
+                  width: 1.2,
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide:
+                BorderSide(color: theme.colorScheme.primary, width: 1.4),
+              ),
+              suffixIcon: IconButton(
+                icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
+                onPressed: onToggleObscure,
               ),
             ),
           ),

@@ -24,6 +24,12 @@ abstract class SocialServiceInterface {
     required String reaction,
     String action = 'reaction',
   });
+  Future<String> performPostAction({
+    required String postId,
+    required String action,
+    Map<String, dynamic>? extraFields,
+  });
+  Future<String> hidePost({required String postId});
   Future<void> reactToStory({
     required String storyId,
     required String reaction,
@@ -33,6 +39,7 @@ abstract class SocialServiceInterface {
     int limit,
     int offset,
   });
+  Future<SocialStory?> getStoryById({required String storyId});
   Future<void> reactToComment({
     required String commentId,
     required String reaction,
@@ -75,6 +82,10 @@ abstract class SocialServiceInterface {
     int limit,
     String? afterPostId,
   });
+  Future<List<SocialPost>> getSavedPosts({
+    int limit,
+    String? afterPostId,
+  });
   Future<List<SocialGroup>> searchGroups({String keyword = ''});
   Future<List<SocialGroup>> getMyGroups({
     required String type,
@@ -86,16 +97,24 @@ abstract class SocialServiceInterface {
   // tên, kiểu trả về và named param phải khớp y hệt với Service
   Future<bool> toggleFollow({required String targetUserId});
   Future<SocialUserProfile> updateDataUser({
-    required String? displayName,
+    required String? displayName, // vẫn giữ kiểu required String?
+    String? firstName,            // <-- mới
+    String? lastName,             // <-- mới
     String? about,
-    String? genderText,
-    String? birthdayIso,
+    String? genderText,           // 'Nam' | 'Nữ' | 'Khác' -> map về male/female/other ở repo
+    String? birthdayIso,          // yyyy-MM-dd
     String? address,
     String? website,
     String? relationshipText,
+    String? currentPassword,      // <-- mới (đổi mật khẩu)
+    String? newPassword,          // <-- mới (đổi mật khẩu)
     String? avatarFilePath,
     String? coverFilePath,
+    String? ecomToken,
   });
+  Future<List<SocialUser>> getBlockedUsers();
+  Future<bool> blockUser({required String targetUserId, required bool block});
+
 
 
 

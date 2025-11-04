@@ -10,6 +10,8 @@ import 'package:path/path.dart' as p;
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/wowonder_text.dart';
 
+
+
 class SocialChatRepository {
   // ================= Helpers =================
   bool _notEmpty(String? s) => s != null && s.trim().isNotEmpty;
@@ -95,18 +97,26 @@ class SocialChatRepository {
 
   // Chuẩn hoá 1 message của WoWonder để UI render đúng
   void _hydrateWoWonderMessage(Map<String, dynamic> m) {
-    // text hiển thị
     m['display_text'] ??= pickWoWonderText(m);
 
-    // reply text
     if (m['reply'] is Map) {
       final r = Map<String, dynamic>.from(m['reply']);
       r['display_text'] = pickWoWonderText(r);
       m['reply'] = r;
     }
 
-    // media flags + absolute url
-    final media = '${m['media'] ?? ''}';
+    // ✅ FIX: fallback cho mediaFileName/mediaFileNames
+    String media = '';
+    if (m['media'] != null && '${m['media']}'.isNotEmpty) {
+      media = '${m['media']}';
+    } else if (m['mediaFileName'] != null &&
+        '${m['mediaFileName']}'.isNotEmpty) {
+      media = '${m['mediaFileName']}';
+    } else if (m['mediaFileNames'] != null &&
+        '${m['mediaFileNames']}'.isNotEmpty) {
+      media = '${m['mediaFileNames']}';
+    }
+
     if (media.isNotEmpty) {
       final ext = p.extension(media).toLowerCase();
       m['media_ext'] = ext;
@@ -115,7 +125,7 @@ class SocialChatRepository {
       m['is_video'] = _isVideoExt(ext);
       m['is_audio'] = _isAudioExt(ext);
 
-      // Với media (ảnh/video/audio) => để UI tự render, không ép display_text
+      // audio/image/video thì không cần display_text
       if (m['is_image'] == true ||
           m['is_video'] == true ||
           m['is_audio'] == true) {
@@ -123,6 +133,7 @@ class SocialChatRepository {
       }
     }
   }
+
 
   Map<String, dynamic>? _parseSendResponse(String body) {
     final map = jsonDecode(body) as Map<String, dynamic>;
@@ -200,6 +211,21 @@ class SocialChatRepository {
     if (res.statusCode != 200) _throwApi(res.body, httpCode: res.statusCode);
   }
 
+
+  MediaType _mimeFromPath(String path) {
+    final ext = p.extension(path).toLowerCase();
+    if (ext == '.m4a') return MediaType('audio', 'mp4');
+    if (ext == '.aac') return MediaType('audio', 'aac');
+    if (ext == '.mp3') return MediaType('audio', 'mpeg');
+    if (ext == '.wav') return MediaType('audio', 'wav');
+    if (ext == '.ogg') return MediaType('audio', 'ogg');
+    if (ext == '.png') return MediaType('image', 'png');
+    if (ext == '.jpg' || ext == '.jpeg') return MediaType('image', 'jpeg');
+    if (ext == '.webp') return MediaType('image', 'webp');
+    if (ext == '.pdf') return MediaType('application', 'pdf');
+    if (ext == '.zip') return MediaType('application', 'zip');
+    return MediaType('application', 'octet-stream');
+  }
   // ================= SEND (text / gif / file) =================
   // ===== SEND (text / gif / file) =====
   Future<Map<String, dynamic>?> sendMessage({
