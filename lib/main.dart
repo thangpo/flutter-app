@@ -64,6 +64,7 @@ import 'features/social/domain/repositories/group_chat_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_notifications_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_notifications_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_notification_service.dart';
+import 'package:flutter_sixvalley_ecommerce/features/notification/screens/notification_screen.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -100,6 +101,10 @@ Future<void> main() async {
       .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>()
       ?.requestNotificationsPermission();
+  await flutterLocalNotificationsPlugin
+      .resolvePlatformSpecificImplementation<
+      AndroidFlutterLocalNotificationsPlugin>()
+      ?.requestNotificationsPermission();
 
   NotificationBody? body;
   try {
@@ -112,34 +117,60 @@ Future<void> main() async {
     String? token = await FirebaseMessaging.instance.getToken();
     print("📱 FCM Device Token: $token");
     FirebaseMessaging.onBackgroundMessage(myBackgroundMessageHandler);
+    const AndroidNotificationChannel channel = AndroidNotificationChannel(
+      'high_importance_channel',
+      'Thông báo VNShop247',
+      description: 'Kênh thông báo mặc định cho VNShop247',
+      importance: Importance.max,
+    );
+
+    await flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(channel);
+
     // Sau khi FirebaseMessaging.onBackgroundMessage(myBackgroundMessageHandler);
     FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-      print('💬 Foreground message: ${message.notification?.title}');
-      navigatorKey.currentState?.pushNamed('/notifications');
+      print('💬 message.data[\'type\']: ${message.data['type']}');
+      final type = message.data['type'] ?? '';
+
+      // ❌ Không tự điều hướng ở đây nữa — chỉ hiển thị local notification thôi
       RemoteNotification? notification = message.notification;
       AndroidNotification? android = message.notification?.android;
       if (notification != null && android != null) {
-        const AndroidNotificationDetails androidDetails =
-        AndroidNotificationDetails(
+        const androidDetails = AndroidNotificationDetails(
           'high_importance_channel',
           'Thông báo VNShop247',
           importance: Importance.max,
           priority: Priority.high,
           playSound: true,
-          icon: 'notification_icon', // tên icon trắng trong res/drawable/
+          icon: 'notification_icon',
         );
-
-        const NotificationDetails notificationDetails =
-        NotificationDetails(android: androidDetails);
-
+        const details = NotificationDetails(android: androidDetails);
         await flutterLocalNotificationsPlugin.show(
           notification.hashCode,
           notification.title,
           notification.body,
-          notificationDetails,
+          details,
         );
       }
     });
+
+    // Khi người dùng nhấn vào thông báo
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      print('📬 Notification opened: ${message.data}');
+      final type = message.data['type'] ?? '';
+      if (type == 'order') {
+        navigatorKey.currentState?.pushNamed('/booking-confirm');
+      } else if (type == 'chatting') {
+        // mở màn hình chat nếu cần
+      } else if (type == 'notification' || type == 'test') {
+        navigatorKey.currentState?.push(MaterialPageRoute(
+          builder: (_) => const NotificationScreen(fromNotification: true),
+        ));
+      }
+    });
+
 
   } catch (_) {}
 
@@ -261,6 +292,7 @@ class MyApp extends StatelessWidget {
         routes: {
           '/login': (context) => const LoginScreen(),
           '/booking-confirm': (context) => const BookingConfirmScreen(),
+          '/notifications': (context) => const NotificationScreen(),
         },
       );
     });
