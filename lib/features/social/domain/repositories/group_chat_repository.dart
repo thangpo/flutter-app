@@ -453,4 +453,60 @@ class GroupChatRepository {
     };
   }
 
+
+// lib/features/social/domain/repositories/group_chat_repository.dart
+// ... giữ nguyên các import & class GroupChatRepository ...
+
+  Future<List<Map<String, dynamic>>> fetchGroupMembers(String groupId) async {
+    final token = await _getAccessTokenOrThrow();
+    final uri = Uri.parse('${_groupChatEndpoint()}?access_token=$token');
+
+    final res = await http.post(uri, body: {
+      'server_key': AppConstants.socialServerKey,
+      'type': 'get_members',
+      'id': groupId,
+    }).timeout(const Duration(seconds: 20));
+
+    if (res.statusCode != 200) {
+      throw Exception('Không lấy được thành viên (HTTP ${res.statusCode})');
+    }
+    final json = jsonDecode(res.body);
+    if (!(_isOk(json))) {
+      throw Exception(
+          'Không lấy được thành viên: ${json['errors'] ?? res.body}');
+    }
+
+    final data = (json['data'] ?? {}) as Map;
+    final members = (data['members'] ?? []) as List;
+    return members
+        .cast<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+  }
+
+  Future<bool> addUsersToGroup(String groupId, List<String> userIds) async {
+    if (userIds.isEmpty) return true;
+    final token = await _getAccessTokenOrThrow();
+    final uri = Uri.parse('${_groupChatEndpoint()}?access_token=$token');
+
+    final res = await http.post(uri, body: {
+      'server_key': AppConstants.socialServerKey,
+      'type': 'add_user',
+      'id': groupId,
+      'parts': userIds.join(','),
+    }).timeout(const Duration(seconds: 20));
+
+    if (res.statusCode != 200) {
+      throw Exception('Thêm thành viên thất bại (HTTP ${res.statusCode})');
+    }
+    final json = jsonDecode(res.body);
+    if (!(_isOk(json))) {
+      throw Exception(
+          'Thêm thành viên thất bại: ${json['errors'] ?? res.body}');
+    }
+    return true;
+  }
+
+
+
 }
