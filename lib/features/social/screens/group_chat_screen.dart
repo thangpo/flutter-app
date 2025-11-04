@@ -871,79 +871,83 @@ Future<void> _openMembersSheet() async {
                               horizontal: 12, vertical: 8),
                           itemCount: items.length,
                           itemBuilder: (ctx, i) {
-                            final msg = items[i];
-                            final isMe = ctrl.isMyMessage(msg);
+  final msg = items[i];
+  final isMe = ctrl.isMyMessage(msg);
+  final isSystem = msg['is_system'] == true;
 
-                            final userData =
-                                (msg['user_data'] ?? {}) as Map? ?? {};
-                            final avatarUrl =
-                                '${userData['avatar'] ?? ''}'.trim();
+  // 🔹 Nếu là tin nhắn hệ thống -> hiển thị đơn giản, không avatar
+  if (isSystem) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Center(
+        child: ChatMessageBubble(
+          key: ValueKey('${msg['id'] ?? msg.hashCode}'),
+          message: msg,
+          isMe: false,
+        ),
+      ),
+    );
+  }
 
-                            if (!isMe) {
-                              return Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 4.0),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  mainAxisAlignment: MainAxisAlignment.start,
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 16,
-                                      backgroundImage: avatarUrl.isNotEmpty
-                                          ? NetworkImage(avatarUrl)
-                                          : null,
-                                      child: avatarUrl.isEmpty
-                                          ? const Icon(Icons.person, size: 18)
-                                          : null,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Flexible(
-                                      child: ConstrainedBox(
-                                        constraints: BoxConstraints(
-                                          maxWidth: MediaQuery.of(context)
-                                                  .size
-                                                  .width *
-                                              0.78,
-                                        ),
-                                        child: ChatMessageBubble(
-                                          key: ValueKey(
-                                              '${msg['id'] ?? msg.hashCode}'),
-                                          message: msg,
-                                          isMe: false,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }
+  final userData = (msg['user_data'] ?? {}) as Map? ?? {};
+  final avatarUrl = '${userData['avatar'] ?? ''}'.trim();
 
-                            return Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 4.0),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  Flexible(
-                                    child: ConstrainedBox(
-                                      constraints: BoxConstraints(
-                                        maxWidth:
-                                            MediaQuery.of(context).size.width *
-                                                0.78,
-                                      ),
-                                      child: ChatMessageBubble(
-                                        key: ValueKey(
-                                            '${msg['id'] ?? msg.hashCode}'),
-                                        message: msg,
-                                        isMe: true,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
+  if (!isMe) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisAlignment: MainAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 16,
+            backgroundImage:
+                avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+            child: avatarUrl.isEmpty
+                ? const Icon(Icons.person, size: 18)
+                : null,
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.78,
+              ),
+              child: ChatMessageBubble(
+                key: ValueKey('${msg['id'] ?? msg.hashCode}'),
+                message: msg,
+                isMe: false,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // tin nhắn của chính mình
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4.0),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        Flexible(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.78,
+            ),
+            child: ChatMessageBubble(
+              key: ValueKey('${msg['id'] ?? msg.hashCode}'),
+              message: msg,
+              isMe: true,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+                        )
                       ),
               ),
 

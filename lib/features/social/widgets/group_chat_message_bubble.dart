@@ -35,21 +35,13 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
   Map<String, dynamic> get message => widget.message;
   bool get isMe => widget.isMe;
 
-  // Base URL cho các path tương đối (upload/...)
   static const String kBaseUrl = 'https://social.vnshop247.com/';
 
-  // Ghép URL tuyệt đối
   String _resolveMediaUrl(String s) {
     if (s.isEmpty) return s;
-    if (s.startsWith('http://') ||
-        s.startsWith('https://') ||
-        s.startsWith('file://') ||
-        s.startsWith('/')) {
+    if (s.startsWith('http') || s.startsWith('file://') || s.startsWith('/'))
       return s;
-    }
-    if (s.startsWith('upload/')) {
-      return kBaseUrl + s;
-    }
+    if (s.startsWith('upload/')) return kBaseUrl + s;
     return s;
   }
 
@@ -61,13 +53,26 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
   String _toLocalPath(String uri) =>
       uri.startsWith('file://') ? Uri.parse(uri).toFilePath() : uri;
 
-  String get _media {
-    final m = (message['media'] ?? '').toString();
-    if (m.isNotEmpty) return m;
-    return (message['media_url'] ?? '').toString();
-  }
+  String get _media =>
+      (message['media'] ?? message['media_url'] ?? '').toString();
 
   bool get _isImage => message['is_image'] == true;
+  bool get _isVideo =>
+      message['is_video'] == true || _looksLikeVideo(_resolveMediaUrl(_media));
+  bool get _isAudio =>
+      message['is_audio'] == true ||
+      message['type_two']?.toString() == 'voice' ||
+      _resolveMediaUrl(_media).toLowerCase().endsWith('.mp3') ||
+      _resolveMediaUrl(_media).toLowerCase().endsWith('.m4a') ||
+      _resolveMediaUrl(_media).toLowerCase().endsWith('.aac') ||
+      _resolveMediaUrl(_media).toLowerCase().endsWith('.wav');
+  bool get _isFile =>
+      message['is_file'] == true ||
+      ((!_isImage && !_isVideo && !_isAudio) && _media.isNotEmpty);
+
+  bool get _uploading => message['uploading'] == true;
+  bool get _failed => message['failed'] == true;
+
   bool _looksLikeVideo(String s) {
     final u = s.toLowerCase();
     return u.endsWith('.mp4') ||
@@ -77,43 +82,17 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
         _isContentUri(s);
   }
 
-  bool get _isVideo {
-    final src = _resolveMediaUrl(_media);
-    return (message['is_video'] == true) || _looksLikeVideo(src);
-  }
-
-  bool get _isAudio {
-    final src = _resolveMediaUrl(_media).toLowerCase();
-    return (message['is_audio'] == true) ||
-        (message['type_two']?.toString() == 'voice') ||
-        src.endsWith('.mp3') ||
-        src.endsWith('.m4a') ||
-        src.endsWith('.aac') ||
-        src.endsWith('.wav');
-  }
-
-  bool get _isFile =>
-      message['is_file'] == true ||
-      ((!_isImage && !_isVideo && !_isAudio) && _media.isNotEmpty);
-
-  bool get _uploading => message['uploading'] == true;
-  bool get _failed => message['failed'] == true;
-
-  // ---------- Decrypt ----------
+  // 🔒 Decrypt
   static final RegExp _maybeBase64 = RegExp(r'^[A-Za-z0-9+/=]+$');
   Uint8List _keyBytes16(String keyStr) {
     final src = utf8.encode(keyStr);
     final out = Uint8List(16);
-    final n = src.length > 16 ? 16 : src.length;
-    for (int i = 0; i < n; i++) out[i] = src[i];
+    for (int i = 0; i < src.length && i < 16; i++) out[i] = src[i];
     return out;
   }
 
-  String _cleanB64(String s) => s
-      .replaceAll('-', '+')
-      .replaceAll('_', '/')
-      .replaceAll(' ', '+')
-      .replaceAll('\n', '');
+  String _cleanB64(String s) =>
+      s.replaceAll('-', '+').replaceAll('_', '/').replaceAll(' ', '+');
   String _stripZeroBytes(String s) {
     final bytes = utf8.encode(s);
     int end = bytes.length;
@@ -137,14 +116,7 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
     try {
       final e =
           enc.Encrypter(enc.AES(key, mode: enc.AESMode.ecb, padding: null));
-      final out = e.decrypt(encData, iv: enc.IV.fromLength(0));
-      if (out.isNotEmpty) return out;
-    } catch (_) {}
-    try {
-      final e =
-          enc.Encrypter(enc.AES(key, mode: enc.AESMode.ecb, padding: null));
-      final out = e.decrypt(encData, iv: enc.IV.fromLength(0));
-      return _stripZeroBytes(out);
+      return _stripZeroBytes(e.decrypt(encData, iv: enc.IV.fromLength(0)));
     } catch (_) {}
     return encText;
   }
@@ -154,113 +126,59 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
     if (display.isNotEmpty) return display;
     final raw = (message['text'] ?? '').toString();
     final timeVal = message['time'];
-    if (raw.isEmpty) return '';
     return _tryDecryptText(raw, timeVal);
   }
 
-  // ---------------- VIDEO: VideoPlayer (no autoplay) ----------------
+  // 🎬 Lazy video
   VideoPlayerController? _vp;
   bool _videoReady = false;
-  bool _videoInitializing = false;
+  bool _initializingVideo = false;
   bool _userStarted = false;
 
-  Future<File?> _downloadTempVideo(String url) async {
-    try {
-      final dir = await getTemporaryDirectory();
-      final name = url.split('?').first.split('/').last;
-      final file = File('${dir.path}/$name');
-      if (await file.exists()) return file;
-      final req = await http.Client().send(http.Request('GET', Uri.parse(url)));
-      final sink = file.openWrite();
-      await req.stream.pipe(sink);
-      await sink.close();
-      return file;
-    } catch (_) {
-      return null;
-    }
-  }
-
   Future<void> _initVideo() async {
-    if (_videoInitializing || _videoReady || _media.isEmpty) return;
-    _videoInitializing = true;
-    if (mounted) setState(() {});
-
+    if (_initializingVideo || _videoReady || _media.isEmpty) return;
+    _initializingVideo = true;
+    setState(() {});
     final src = _resolveMediaUrl(_media);
-    // debugPrint('[VIDEO SRC] $src');
-
-    Future<VideoPlayerController> _buildCtrl() async {
-      if (_isContentUri(src)) {
-        return VideoPlayerController.contentUri(
-          Uri.parse(src),
-          videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
-        );
-      } else if (_isFileLike(src)) {
-        return VideoPlayerController.file(
-          File(_toLocalPath(src)),
-          videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
-        );
-      } else {
-        return VideoPlayerController.networkUrl(
-          Uri.parse(src),
-          videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
-          // headers tuỳ chọn nếu server nhạy UA/CORS/Range
-          httpHeaders: const {
-            'User-Agent': 'VNShop247/1.0 (Flutter-VideoPlayer)',
-          },
-        );
-      }
-    }
-
     try {
-      _vp = await _buildCtrl();
+      if (_isContentUri(src)) {
+        _vp = VideoPlayerController.contentUri(Uri.parse(src));
+      } else if (_isFileLike(src)) {
+        _vp = VideoPlayerController.file(File(_toLocalPath(src)));
+      } else {
+        _vp = VideoPlayerController.networkUrl(Uri.parse(src));
+      }
       await _vp!.initialize();
       await _vp!.setLooping(false);
-      await _vp!.pause(); // ❗ không tự chạy trong chat
-      await _vp!.seekTo(Duration.zero);
+      await _vp!.pause();
       _videoReady = true;
     } catch (_) {
-      if (!_isLocalUri(src) &&
-          (src.startsWith('http://') || src.startsWith('https://'))) {
-        try {
-          final f = await _downloadTempVideo(src);
-          if (f != null) {
-            _vp = VideoPlayerController.file(
-              f,
-              videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
-            );
-            await _vp!.initialize();
-            await _vp!.setLooping(false);
-            await _vp!.pause();
-            await _vp!.seekTo(Duration.zero);
-            _videoReady = true;
-          }
-        } catch (_) {}
-      }
     } finally {
-      _videoInitializing = false;
+      _initializingVideo = false;
       if (mounted) setState(() {});
     }
-  }
-
-  Future<void> _playOnTap() async {
-    if (_vp == null) return;
-    try {
-      _userStarted = true;
-      await _vp!.setVolume(1.0);
-      await _vp!.play();
-      if (mounted) setState(() {});
-    } catch (_) {}
   }
 
   void _disposeVideo() {
     _vp?.dispose();
     _vp = null;
     _videoReady = false;
-    _videoInitializing = false;
+    _initializingVideo = false;
     _userStarted = false;
   }
 
-  // ---------------- audio/voice ----------------
+  Future<void> _playOnTap() async {
+    if (!_videoReady) await _initVideo();
+    if (_vp == null) return;
+    try {
+      _userStarted = true;
+      await _vp!.setVolume(1.0);
+      await _vp!.play();
+      setState(() {});
+    } catch (_) {}
+  }
+
+  // 🔊 Audio
   AudioPlayer? _ap;
   Duration _pos = Duration.zero, _dur = Duration.zero;
   bool _vLoading = false, _vPlaying = false;
@@ -269,7 +187,6 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
     _disposeVoice();
     final src = _resolveMediaUrl(_media);
     if (src.isEmpty) return;
-
     _ap = AudioPlayer();
     _ap!.positionStream
         .listen((d) => mounted ? setState(() => _pos = d) : null);
@@ -279,7 +196,6 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
       final playing = st.playing && st.processingState == ProcessingState.ready;
       if (mounted) setState(() => _vPlaying = playing);
     });
-
     setState(() => _vLoading = true);
     try {
       if (_isLocalUri(src)) {
@@ -300,130 +216,49 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
     _vPlaying = false;
   }
 
-  // ---------------- file open/download ----------------
-  double _dlProgress = 0;
-  bool _downloading = false;
-
-  Future<File?> _downloadToTemp(String url, {String? filename}) async {
-    setState(() {
-      _downloading = true;
-      _dlProgress = 0;
-    });
-    try {
-      final req = await http.Client().send(http.Request('GET', Uri.parse(url)));
-      final total = req.contentLength ?? 0;
-      final dir = await getTemporaryDirectory();
-      final name = (filename?.trim().isNotEmpty == true)
-          ? filename!.trim()
-          : url.split('?').first.split('/').last;
-      final file = File('${dir.path}/$name');
-      final sink = file.openWrite();
-
-      int received = 0;
-      await for (final chunk in req.stream) {
-        received += chunk.length;
-        sink.add(chunk);
-        if (total > 0) setState(() => _dlProgress = received / total);
-      }
-      await sink.close();
-      return file;
-    } catch (_) {
-      return null;
-    } finally {
-      if (mounted) setState(() => _downloading = false);
-    }
-  }
-
+  // 📎 File
   Future<void> _openFileAttachment() async {
     final raw = _media;
     final name = (message['mediaFileName'] ?? '').toString();
     final src = _resolveMediaUrl(raw);
     if (src.isEmpty) return;
-
     if (_isLocalUri(src)) {
-      final path = _toLocalPath(src);
-      await OpenFilex.open(path);
+      await OpenFilex.open(_toLocalPath(src));
       return;
     }
-
-    final f = await _downloadToTemp(src, filename: name.isEmpty ? null : name);
-    if (f == null) return;
-    await OpenFilex.open(f.path);
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/${name.isEmpty ? 'file' : name}');
+    final res = await http.get(Uri.parse(src));
+    await file.writeAsBytes(res.bodyBytes);
+    await OpenFilex.open(file.path);
   }
 
+  // 🖼 Image
   void _openImagePreview() {
     final src = _resolveMediaUrl(_media);
     if (src.isEmpty) return;
-
     final isLocal = _isLocalUri(src);
     final imgWidget = isLocal
         ? Image.file(File(_toLocalPath(src)), fit: BoxFit.contain)
         : CachedNetworkImage(imageUrl: src, fit: BoxFit.contain);
-
-    Navigator.of(context).push(
-      PageRouteBuilder(
+    Navigator.of(context).push(PageRouteBuilder(
         opaque: false,
         barrierColor: Colors.black.withOpacity(0.95),
-        pageBuilder: (_, __, ___) {
-          return GestureDetector(
-            onTap: () => Navigator.of(context).pop(),
-            child: Scaffold(
-              backgroundColor: Colors.black,
-              body: SafeArea(
-                child: Center(
-                  child: Hero(
-                    tag: src,
-                    child: InteractiveViewer(
-                      panEnabled: true,
-                      minScale: 0.8,
-                      maxScale: 5,
-                      child: imgWidget,
-                    ),
-                  ),
-                ),
+        pageBuilder: (_, __, ___) => GestureDetector(
+              onTap: () => Navigator.of(context).pop(),
+              child: Scaffold(
+                backgroundColor: Colors.black,
+                body: Center(
+                    child: Hero(
+                        tag: src, child: InteractiveViewer(child: imgWidget))),
               ),
-            ),
-          );
-        },
-      ),
-    );
+            )));
   }
 
-  // ---------------- lifecycle ----------------
   @override
   void initState() {
     super.initState();
     if (_isAudio) _initVoice();
-    if (_isVideo) _initVideo(); // ❗ KHÔNG autoplay
-  }
-
-  @override
-  void didUpdateWidget(covariant ChatMessageBubble oldWidget) {
-    super.didUpdateWidget(oldWidget);
-
-    final oldSrc =
-        (oldWidget.message['media'] ?? oldWidget.message['media_url'] ?? '')
-            .toString();
-    final curSrc = _media;
-
-    final oldIsAudio = (oldWidget.message['is_audio'] == true) ||
-        (oldWidget.message['type_two']?.toString() == 'voice') ||
-        _resolveMediaUrl(oldSrc).toLowerCase().endsWith('.mp3') ||
-        _resolveMediaUrl(oldSrc).toLowerCase().endsWith('.m4a') ||
-        _resolveMediaUrl(oldSrc).toLowerCase().endsWith('.aac') ||
-        _resolveMediaUrl(oldSrc).toLowerCase().endsWith('.wav');
-    final curIsAudio = _isAudio;
-
-    if (curIsAudio && (!oldIsAudio || oldSrc != curSrc)) {
-      _initVoice();
-    }
-
-    final oldIsVideo = (oldWidget.message['is_video'] == true) ||
-        _looksLikeVideo(_resolveMediaUrl(oldSrc));
-    if (_isVideo && (!oldIsVideo || oldSrc != curSrc)) {
-      _disposeVideo();
-      _initVideo(); // ❗ KHÔNG autoplay khi đổi nguồn
-    }
   }
 
   @override
@@ -433,10 +268,9 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
     super.dispose();
   }
 
-  // ---------------- UI ----------------
   @override
   Widget build(BuildContext context) {
-    super.build(context); // keepAlive
+    super.build(context);
     final isMediaBubble = _isImage || _isVideo;
     final bubbleColor = (_isAudio || _isFile || isMediaBubble)
         ? Colors.transparent
@@ -448,6 +282,21 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
       bottomLeft: isMe ? const Radius.circular(14) : const Radius.circular(4),
       bottomRight: isMe ? const Radius.circular(4) : const Radius.circular(14),
     );
+
+    // 🔔 Tin nhắn hệ thống
+    if (message['is_system'] == true) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Center(
+          child: Text(
+            message['display_text'] ?? '',
+            style: const TextStyle(
+                fontSize: 11, color: Colors.grey, fontStyle: FontStyle.italic),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
 
     Widget content;
     if (_isVideo) {
@@ -498,7 +347,6 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
     final child = _isLocalUri(src)
         ? Image.file(File(_toLocalPath(src)), fit: BoxFit.cover)
         : CachedNetworkImage(imageUrl: src, fit: BoxFit.cover);
-
     return GestureDetector(
       onTap: _openImagePreview,
       child: Hero(
@@ -513,7 +361,7 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
 
   Widget _buildVideo() {
     final ready = _videoReady && _vp != null && _vp!.value.isInitialized;
-
+    final src = _resolveMediaUrl(_media);
     return ClipRRect(
       borderRadius: BorderRadius.circular(10),
       child: SizedBox(
@@ -524,48 +372,34 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
             fit: StackFit.expand,
             children: [
               Container(color: Colors.black),
-              if (!ready && _videoInitializing)
-                const Center(child: CircularProgressIndicator()),
-
               if (ready) VideoPlayer(_vp!),
-
-              // Nút Play lớn ở giữa, chỉ hiện khi chưa user-started hoặc đang pause
-              if (ready && (!_userStarted || !_vp!.value.isPlaying))
+              if (!ready && !_initializingVideo)
                 Center(
                   child: InkWell(
                     onTap: _playOnTap,
-                    borderRadius: BorderRadius.circular(999),
                     child: Container(
-                      padding: const EdgeInsets.all(10),
                       decoration: const BoxDecoration(
                           color: Colors.black54, shape: BoxShape.circle),
+                      padding: const EdgeInsets.all(10),
                       child: const Icon(Icons.play_arrow,
-                          size: 48, color: Colors.white),
+                          color: Colors.white, size: 48),
                     ),
                   ),
                 ),
-
-              // Thanh tiến trình
+              if (_initializingVideo)
+                const Center(child: CircularProgressIndicator()),
               if (ready)
                 Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  child: VideoProgressIndicator(
-                    _vp!,
-                    allowScrubbing: true,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                  ),
-                ),
-
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    child: VideoProgressIndicator(_vp!, allowScrubbing: true)),
               if (_uploading)
                 Positioned.fill(
-                  child: Container(
-                    color: Colors.black26,
-                    child: const Center(child: CircularProgressIndicator()),
-                  ),
-                ),
+                    child: Container(
+                        color: Colors.black26,
+                        child:
+                            const Center(child: CircularProgressIndicator()))),
             ],
           ),
         ),
@@ -575,77 +409,68 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
 
   Widget _buildVoice() {
     final bg = isMe ? const Color(0xFF0084FF) : const Color(0xFFE4E6EB);
-
     return Container(
       decoration:
           BoxDecoration(color: bg, borderRadius: BorderRadius.circular(18)),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       width: 280,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (_vLoading)
-            const LinearProgressIndicator(minHeight: 2, color: Colors.white),
-          Row(
-            children: [
-              InkWell(
-                onTap: _ap == null
-                    ? null
-                    : () async {
-                        if (_vPlaying) {
-                          await _ap!.pause();
-                        } else {
-                          if (_ap!.audioSource == null) await _initVoice();
-                          await _ap!.play();
-                        }
-                      },
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: const BoxDecoration(
-                      color: Colors.white, shape: BoxShape.circle),
-                  child: Icon(_vPlaying ? Icons.pause : Icons.play_arrow,
-                      color: bg),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    trackHeight: 4,
-                    thumbShape:
-                        const RoundSliderThumbShape(enabledThumbRadius: 8),
-                    overlayShape:
-                        const RoundSliderOverlayShape(overlayRadius: 14),
-                    activeTrackColor: Colors.white,
-                    inactiveTrackColor: Colors.white24,
-                    thumbColor: Colors.white,
-                    overlayColor: Colors.white30,
-                  ),
-                  child: Slider(
-                    value: _pos.inMilliseconds
-                        .clamp(0, _dur.inMilliseconds)
-                        .toDouble(),
-                    max: (_dur.inMilliseconds == 0 ? 1 : _dur.inMilliseconds)
-                        .toDouble(),
-                    onChanged: _ap == null
-                        ? null
-                        : (v) async {
-                            final seek = Duration(milliseconds: v.toInt());
-                            await _ap!.seek(seek);
-                          },
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text(_fmt(_dur),
-                  style: TextStyle(
-                      color: isMe ? Colors.white : Colors.black87,
-                      fontWeight: FontWeight.w500)),
-            ],
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if (_vLoading)
+          const LinearProgressIndicator(minHeight: 2, color: Colors.white),
+        Row(children: [
+          InkWell(
+            onTap: _ap == null
+                ? null
+                : () async {
+                    if (_vPlaying) {
+                      await _ap!.pause();
+                    } else {
+                      if (_ap!.audioSource == null) await _initVoice();
+                      await _ap!.play();
+                    }
+                  },
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: const BoxDecoration(
+                  color: Colors.white, shape: BoxShape.circle),
+              child:
+                  Icon(_vPlaying ? Icons.pause : Icons.play_arrow, color: bg),
+            ),
           ),
-        ],
-      ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: 4,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                activeTrackColor: Colors.white,
+                inactiveTrackColor: Colors.white24,
+                thumbColor: Colors.white,
+                overlayColor: Colors.white30,
+              ),
+              child: Slider(
+                value: _pos.inMilliseconds
+                    .clamp(0, _dur.inMilliseconds)
+                    .toDouble(),
+                max: (_dur.inMilliseconds == 0 ? 1 : _dur.inMilliseconds)
+                    .toDouble(),
+                onChanged: _ap == null
+                    ? null
+                    : (v) async {
+                        await _ap!.seek(Duration(milliseconds: v.toInt()));
+                      },
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(_fmt(_dur),
+              style: TextStyle(
+                  color: isMe ? Colors.white : Colors.black87,
+                  fontWeight: FontWeight.w500)),
+        ])
+      ]),
     );
   }
 
@@ -661,7 +486,6 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
         message['file_size'] ?? message['size'] ?? message['media_size'];
     final sizeStr =
         (sizeAny is int) ? _readableSize(sizeAny) : (sizeAny?.toString() ?? '');
-
     return Container(
       decoration: BoxDecoration(
           color: isMe ? const Color(0xFFDCEAFF) : const Color(0xFFF0F2F5),
@@ -671,37 +495,33 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
       child: InkWell(
         onTap: _openFileAttachment,
         borderRadius: BorderRadius.circular(18),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: const BoxDecoration(
-                  color: Color(0xFFE0E3EB), shape: BoxShape.circle),
-              child:
-                  const Icon(Icons.insert_drive_file, color: Color(0xFF6B7280)),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
+        child: Row(children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: const BoxDecoration(
+                color: Color(0xFFE0E3EB), shape: BoxShape.circle),
+            child:
+                const Icon(Icons.insert_drive_file, color: Color(0xFF6B7280)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(name.isEmpty ? 'Tệp đính kèm' : name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 14)),
-                    if (sizeStr.isNotEmpty)
-                      Text(sizeStr,
-                          style: const TextStyle(
-                              color: Color(0xFF6B7280), fontSize: 12)),
-                  ]),
-            ),
-            const SizedBox(width: 8),
-            const Icon(Icons.download_rounded, color: Color(0xFF6B7280)),
-          ],
-        ),
+                Text(name.isEmpty ? 'Tệp đính kèm' : name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 14)),
+                if (sizeStr.isNotEmpty)
+                  Text(sizeStr,
+                      style: const TextStyle(
+                          color: Color(0xFF6B7280), fontSize: 12)),
+              ])),
+          const SizedBox(width: 8),
+          const Icon(Icons.download_rounded, color: Color(0xFF6B7280)),
+        ]),
       ),
     );
   }
