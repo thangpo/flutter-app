@@ -192,7 +192,6 @@ class _TopUpScreenState extends State<TopUpScreen> {
 
   void _showSuccessConfirmationDialog({
     required int amount,
-    // required VoidCallback onConfirmed,
   }) {
     final formattedAmount = formatCurrency(amount.toString());
 
@@ -736,7 +735,7 @@ class _QRPaymentDialogState extends State<QRPaymentDialog> {
         orderCode: widget.paymentData['order_code'],
       );
 
-      if (result != null && result['status'] == 'pending') {
+      if (result != null && result['status'] == 'paid') {
         timer.cancel();
         widget.onSuccess();
       }

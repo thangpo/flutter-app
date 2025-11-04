@@ -69,6 +69,7 @@ class _WalletScreenState extends State<WalletScreen> {
   String email = "";
   bool isLoading = true;
   String? errorMessage;
+  bool isQREnabled = true; // Trạng thái bật/tắt QR
 
   @override
   void initState() {
@@ -76,7 +77,127 @@ class _WalletScreenState extends State<WalletScreen> {
     _loadWallet();
   }
 
+  // Hàm hiển thị dialog bật/tắt QR
+  void _showQRSettingsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(Icons.settings, color: Colors.blue.shade700),
+            const SizedBox(width: 8),
+            const Text(
+              'Cài đặt QR Code',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    isQREnabled ? Icons.qr_code_2 : Icons.qr_code_scanner_outlined,
+                    color: Colors.blue.shade700,
+                    size: 32,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Tính năng QR Code',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.blue.shade900,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          isQREnabled ? 'Đang bật' : 'Đang tắt',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: isQREnabled ? Colors.green : Colors.red,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: isQREnabled,
+                    onChanged: (value) {
+                      setState(() {
+                        isQREnabled = value;
+                      });
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            value
+                                ? 'Đã bật tính năng QR Code'
+                                : 'Đã tắt tính năng QR Code',
+                          ),
+                          backgroundColor: value ? Colors.green : Colors.red,
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                    activeColor: Colors.blue.shade700,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              isQREnabled
+                  ? 'Khi bật, bạn có thể hiển thị và quét mã QR để chia sẻ thông tin.'
+                  : 'Khi tắt, tính năng QR sẽ không khả dụng.',
+              style: const TextStyle(fontSize: 13, color: Colors.grey),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Đóng',
+              style: TextStyle(color: Colors.blue.shade700, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showMyQRCode() async {
+    if (!isQREnabled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Tính năng QR đang bị tắt. Vui lòng bật trong cài đặt.'),
+          backgroundColor: Colors.orange,
+          action: SnackBarAction(
+            label: 'Cài đặt',
+            textColor: Colors.white,
+            onPressed: _showQRSettingsDialog,
+          ),
+        ),
+      );
+      return;
+    }
+
     final auth = Provider.of<AuthController>(context, listen: false);
     final userIdStr = await auth.authServiceInterface.getSocialUserId();
 
@@ -93,11 +214,11 @@ class _WalletScreenState extends State<WalletScreen> {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.qr_code_2, color: Colors.orange),
-            SizedBox(width: 8),
-            Text('QR của bạn', style: TextStyle(fontWeight: FontWeight.w600)),
+            Icon(Icons.qr_code_2, color: Colors.blue.shade700),
+            const SizedBox(width: 8),
+            const Text('QR của bạn', style: TextStyle(fontWeight: FontWeight.w600)),
           ],
         ),
         content: SingleChildScrollView(
@@ -112,9 +233,10 @@ class _WalletScreenState extends State<WalletScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.blue.shade200, width: 2),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.blue.withOpacity(0.2),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -126,10 +248,29 @@ class _WalletScreenState extends State<WalletScreen> {
                     size: 180,
                     backgroundColor: Colors.white,
                     errorCorrectionLevel: QrErrorCorrectLevel.H,
+                    embeddedImage: const AssetImage('assets/icon/icon.png'),
+                    embeddedImageStyle: const QrEmbeddedImageStyle(
+                      size: Size(40, 40),
+                    ),
                   ),
                 ),
               ),
               const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'ID: $userId',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.blue.shade900,
+                  ),
+                ),
+              ),
               const SizedBox(height: 8),
               const Text(
                 'Người khác có thể quét QR để lấy thông tin của bạn',
@@ -142,7 +283,10 @@ class _WalletScreenState extends State<WalletScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Đóng'),
+            child: Text(
+              'Đóng',
+              style: TextStyle(color: Colors.blue.shade700),
+            ),
           ),
         ],
       ),
@@ -171,7 +315,7 @@ class _WalletScreenState extends State<WalletScreen> {
       final auth = Provider.of<AuthController>(context, listen: false);
       final userIdStr = await auth.authServiceInterface.getSocialUserId();
       final accessToken =
-          await auth.authServiceInterface.getSocialAccessToken();
+      await auth.authServiceInterface.getSocialAccessToken();
 
       if (userIdStr == null || accessToken == null) {
         throw Exception("Chưa đăng nhập vào mạng xã hội");
@@ -239,9 +383,14 @@ class _WalletScreenState extends State<WalletScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(getTranslated('wallet', context) ?? 'Ví cá nhân'),
-        backgroundColor: isDark ? Colors.grey[900] : Colors.blue,
+        backgroundColor: isDark ? Colors.grey[900] : Colors.blue.shade700,
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            icon: Icon(isQREnabled ? Icons.qr_code_2 : Icons.qr_code_scanner_outlined),
+            onPressed: _showQRSettingsDialog,
+            tooltip: "Cài đặt QR",
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: isLoading ? null : _loadWallet,
@@ -252,11 +401,12 @@ class _WalletScreenState extends State<WalletScreen> {
       backgroundColor: isDark ? Colors.grey[850] : Colors.grey[50],
       body: RefreshIndicator(
         onRefresh: _loadWallet,
+        color: Colors.blue.shade700,
         child: isLoading
             ? _buildSkeletonLoading(isDark)
             : errorMessage != null
-                ? _buildErrorWidget(isDark)
-                : _buildWalletContent(isDark),
+            ? _buildErrorWidget(isDark)
+            : _buildWalletContent(isDark),
       ),
     );
   }
@@ -325,38 +475,56 @@ class _WalletScreenState extends State<WalletScreen> {
     required Color color,
     required VoidCallback onTap,
     required bool isDark,
+    bool isDisabled = false,
   }) {
     return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 6),
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          decoration: BoxDecoration(
-            color: isDark ? Colors.grey[800] : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withOpacity(0.3)),
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2)),
-            ],
-          ),
-          child: Column(
-            children: [
-              Icon(icon, color: color, size: 28),
-              const SizedBox(height: 8),
-              Text(
-                label,
-                style: TextStyle(
-                    color: color, fontSize: 13, fontWeight: FontWeight.w600),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+      child: Opacity(
+        opacity: isDisabled ? 0.5 : 1.0,
+        child: InkWell(
+          onTap: isDisabled ? null : onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 6),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.grey[800] : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: color.withOpacity(0.3)),
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2)),
+              ],
+            ),
+            child: Column(
+              children: [
+                Icon(icon, color: color, size: 28),
+                const SizedBox(height: 8),
+                Text(
+                  label,
+                  style: TextStyle(
+                      color: color, fontSize: 13, fontWeight: FontWeight.w600),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (isDisabled) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'Tắt',
+                      style: TextStyle(fontSize: 10, color: Colors.red),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
       ),
@@ -366,11 +534,10 @@ class _WalletScreenState extends State<WalletScreen> {
   Widget _buildActionButtons(bool isDark) {
     return Row(
       children: [
-
         _buildActionButton(
           icon: Icons.send,
           label: getTranslated('transfer_money', context) ?? 'Chuyển tiền',
-          color: Colors.purple,
+          color: Colors.blue.shade700,
           onTap: () async {
             final auth = Provider.of<AuthController>(context, listen: false);
             final userIdStr = await auth.authServiceInterface.getSocialUserId();
@@ -384,7 +551,8 @@ class _WalletScreenState extends State<WalletScreen> {
               return;
             }
 
-            navigateWithCustomSlide(
+            // DỪNG TẠI ĐÂY: Dùng Navigator.push để nhận kết quả
+            final result = await navigateWithCustomSlide(
               context,
               TransferScreen(
                 walletBalance: wallet,
@@ -393,10 +561,14 @@ class _WalletScreenState extends State<WalletScreen> {
               ),
               direction: SlideDirection.fromLeft,
             );
+
+            // NẾU CHUYỂN TIỀN THÀNH CÔNG → RELOAD VÍ
+            if (result == true) {
+              await _loadWallet(); // TẢI LẠI SỐ DƯ
+            }
           },
           isDark: isDark,
         ),
-
         _buildActionButton(
           icon: Icons.add_circle,
           label: getTranslated('top_up', context) ?? 'Nạp tiền',
@@ -404,15 +576,14 @@ class _WalletScreenState extends State<WalletScreen> {
           onTap: _openTopUpScreen,
           isDark: isDark,
         ),
-
         _buildActionButton(
           icon: Icons.qr_code_2,
           label: 'QR ID',
-          color: Colors.orange,
+          color: isQREnabled ? Colors.blue.shade600 : Colors.grey,
           onTap: _showMyQRCode,
           isDark: isDark,
+          isDisabled: !isQREnabled,
         ),
-
         _buildActionButton(
           icon: Icons.money_off,
           label: getTranslated('withdraw', context) ?? 'Rút tiền',
@@ -433,8 +604,8 @@ class _WalletScreenState extends State<WalletScreen> {
   Widget _buildActionButtonsSkeleton(bool isDark) {
     return Row(
       children: List.generate(
-        3,
-        (_) => Expanded(
+        4,
+            (_) => Expanded(
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 6),
             height: 80,
@@ -473,46 +644,46 @@ class _WalletScreenState extends State<WalletScreen> {
             icon: Icons.account_circle,
             title: getTranslated('username', context) ?? 'Tên tài khoản',
             value: username,
-            color: Colors.purple,
+            color: Colors.blue.shade700,
             isText: true,
             isDark: isDark),
         _buildInfoCard(
             icon: Icons.email,
             title: getTranslated('email', context) ?? 'Email',
             value: email,
-            color: Colors.red,
+            color: Colors.blue.shade600,
             isText: true,
             isDark: isDark),
         _buildInfoCard(
             icon: Icons.account_balance_wallet,
             title: getTranslated('balance_label', context) ?? 'Balance',
             value: '${_formatMoney(balance, showDecimal: true)} ₫',
-            color: Colors.blue,
+            color: Colors.blue.shade800,
             isDark: isDark),
         _buildInfoCard(
             icon: Icons.stars,
             title: getTranslated('points', context) ?? 'Points',
             value: _formatMoney(points.toDouble()),
-            color: Colors.orange,
+            color: Colors.blue.shade500,
             isDark: isDark),
         _buildInfoCard(
             icon: Icons.calendar_today,
             title: getTranslated('daily_points', context) ?? 'Daily Points',
             value: _formatMoney(dailyPoints.toDouble()),
-            color: Colors.green,
+            color: Colors.lightBlue,
             isDark: isDark),
         _buildInfoCard(
             icon: Icons.swap_horiz,
             title: getTranslated('converted_points', context) ??
                 'Converted Points',
             value: _formatMoney(convertedPoints.toDouble()),
-            color: Colors.purple,
+            color: Colors.blueAccent,
             isDark: isDark),
         _buildInfoCard(
             icon: Icons.credit_card,
             title: getTranslated('credits', context) ?? 'Credits',
             value: _formatMoney(credits.toDouble()),
-            color: Colors.teal,
+            color: Colors.blue.shade400,
             isDark: isDark),
       ],
     );
@@ -561,7 +732,7 @@ class _WalletScreenState extends State<WalletScreen> {
             Text(
               getTranslated('available_balance', context) ?? 'Số dư khả dụng',
               style:
-                  TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14),
+              TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14),
             ),
           ],
         ),
@@ -596,22 +767,22 @@ class _WalletScreenState extends State<WalletScreen> {
                 fontSize: 14, color: isDark ? Colors.white70 : Colors.black54)),
         trailing: isText
             ? Flexible(
-                child: Text(
-                  value,
-                  style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white : Colors.black87),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              )
+          child: Text(
+            value,
+            style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white : Colors.black87),
+            overflow: TextOverflow.ellipsis,
+          ),
+        )
             : Text(
-                value,
-                style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white : Colors.black87),
-              ),
+          value,
+          style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.white : Colors.black87),
+        ),
       ),
     );
   }
@@ -626,7 +797,7 @@ class _WalletScreenState extends State<WalletScreen> {
         const SizedBox(height: 20),
         Text(
           errorMessage!,
-          style: TextStyle(fontSize: 16, color: Colors.red),
+          style: const TextStyle(fontSize: 16, color: Colors.red),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 20),
@@ -636,7 +807,7 @@ class _WalletScreenState extends State<WalletScreen> {
             icon: const Icon(Icons.refresh),
             label: Text(getTranslated('retry', context) ?? "Thử lại"),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
+              backgroundColor: Colors.blue.shade700,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             ),

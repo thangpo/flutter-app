@@ -27,6 +27,7 @@ class _TransferScreenState extends State<TransferScreen> {
   Map<String, dynamic>? _selectedUser;
   bool _isLoadingFriends = false;
   bool _isLoadingUserInfo = false;
+  bool _isTransferring = false;
   bool _isCameraActive = true;
   bool _isProcessing = false;
   String? _lastScannedCode;
@@ -243,13 +244,77 @@ class _TransferScreenState extends State<TransferScreen> {
     );
   }
 
-  void _handleTransfer() {
+  Future<void> _showSuccessDialog({
+    required String title,
+    required String message,
+    required int amount,
+  }) async {
+    return showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green, size: 28),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(message, style: TextStyle(fontSize: 14)),
+              SizedBox(height: 12),
+              Text(
+                'Số tiền: ${_formatMoney(amount.toDouble())} đ',
+                style: TextStyle(fontWeight: FontWeight.w600, color: Colors.purple),
+              ),
+              if (_selectedUser != null) ...[
+                SizedBox(height: 8),
+                Text('Người nhận: ${_selectedUser!['username']}', overflow: TextOverflow.ellipsis),
+                Text('ID: ${_selectedUser!['user_id']}', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.purple,
+                padding: EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+        actionsPadding: EdgeInsets.fromLTRB(16, 0, 16, 16),
+      ),
+    );
+  }
+
+  void _handleTransfer() async {
+    if (_isTransferring) return; // Ngăn nhấn nhiều lần
+
     if (_selectedUser == null) {
       _showSnackBar('Vui lòng chọn người nhận', Colors.orange);
       return;
     }
 
-    final amount = double.tryParse(_amountController.text.replaceAll('.', ''));
+    final inputText = _amountController.text.replaceAll('.', '');
+    final amount = int.tryParse(inputText);
     if (amount == null || amount <= 0) {
       _showSnackBar('Vui lòng nhập số tiền hợp lệ', Colors.orange);
       return;
@@ -260,8 +325,48 @@ class _TransferScreenState extends State<TransferScreen> {
       return;
     }
 
-    // TODO: Gọi API chuyển tiền tại đây
-    _showSnackBar('Đang xử lý chuyển tiền...', Colors.blue);
+    final recipientId = int.tryParse(_selectedUser!['user_id'].toString());
+    if (recipientId == null) {
+      _showSnackBar('ID người nhận không hợp lệ', Colors.red);
+      return;
+    }
+
+    // BẬT LOADING TOÀN MÀN HÌNH
+    setState(() => _isTransferring = true);
+
+    try {
+      final sepayService = SepayService();
+      final result = await sepayService.sendMoney(
+        context: context,
+        amount: amount,
+        userId: recipientId,
+      );
+
+      if (result != null && result['api_status'] == 200) {
+        // HIỂN THỊ DIALOG THÀNH CÔNG
+        await _showSuccessDialog(
+          title: 'Chuyển tiền thành công!',
+          message: result['message'] ?? 'Tiền đã được gửi đến ${_selectedUser!['username']}',
+          amount: amount,
+        );
+
+        // QUAY LẠI WALLET SCREEN + TẢI LẠI DỮ LIỆU
+        if (mounted) {
+          Navigator.pop(context, true); // true = cần reload
+        }
+      } else {
+        final errorMsg = result?['errors']?['error_text'] ??
+            result?['message'] ??
+            'Chuyển tiền thất bại. Vui lòng thử lại.';
+        _showSnackBar(errorMsg, Colors.red);
+      }
+    } catch (e) {
+      _showSnackBar('Lỗi kết nối: $e', Colors.red);
+    } finally {
+      if (mounted) {
+        setState(() => _isTransferring = false);
+      }
+    }
   }
 
   @override
@@ -288,304 +393,300 @@ class _TransferScreenState extends State<TransferScreen> {
             ),
         ],
       ),
-      body: Column(
+      body: Stack(
         children: [
-          // QR Scanner Section
-          if (_isCameraActive)
-            Expanded(
-              flex: 2,
-              child: Stack(
-                children: [
-                  MobileScanner(
-                    controller: _scannerController,
-                    onDetect: (BarcodeCapture capture) {
-                      if (_isProcessing) return;
-                      final barcode = capture.barcodes.first;
-                      if (barcode.rawValue != null) {
-                        _scanQrCode(barcode.rawValue!.trim());
-                      }
-                    },
-                  ),
-                  Center(
-                    child: Container(
-                      width: 250,
-                      height: 250,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.white, width: 3),
-                        borderRadius: BorderRadius.circular(12),
+          // === NỘI DUNG CHÍNH (trong Column) ===
+          Column(
+            children: [
+              // Camera
+              if (_isCameraActive)
+                Expanded(
+                  flex: 2,
+                  child: Stack(
+                    children: [
+                      MobileScanner(
+                        controller: _scannerController,
+                        onDetect: (BarcodeCapture capture) {
+                          if (_isProcessing) return;
+                          final barcode = capture.barcodes.first;
+                          if (barcode.rawValue != null) {
+                            _scanQrCode(barcode.rawValue!.trim());
+                          }
+                        },
                       ),
-                    ),
-                  ),
-                  if (_isProcessing || _isLoadingUserInfo)
-                    Container(
-                      color: Colors.black54,
-                      child: const Center(
-                        child: Card(
-                          child: Padding(
-                            padding: EdgeInsets.all(20),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                CircularProgressIndicator(),
-                                SizedBox(height: 16),
-                                Text('Đang xử lý...'),
-                              ],
-                            ),
+                      Center(
+                        child: Container(
+                          width: 250,
+                          height: 250,
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.white, width: 3),
+                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
                       ),
-                    ),
-                ],
-              ),
-            ),
-
-          // Wallet Info Section
-          Container(
-            padding: const EdgeInsets.all(16),
-            color: Colors.grey[200],
-            child: Row(
-              children: [
-                Icon(Icons.account_balance_wallet, color: Colors.purple),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Số dư khả dụng',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
+                      if (_isProcessing || _isLoadingUserInfo)
+                        Container(
+                          color: Colors.black54,
+                          child: const Center(
+                            child: Card(
+                              child: Padding(
+                                padding: EdgeInsets.all(20),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    CircularProgressIndicator(),
+                                    SizedBox(height: 16),
+                                    Text('Đang xử lý...'),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                      Text(
-                        '${_formatMoney(widget.walletBalance)} đ',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.purple,
-                        ),
-                      ),
                     ],
                   ),
                 ),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.purple.shade100,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    'ID: ${widget.userId}',
-                    style: TextStyle(
-                      color: Colors.purple,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
 
-          // Transfer Form Section
-          Expanded(
-            flex: _isCameraActive ? 1 : 3,
-            child: SingleChildScrollView(
-              padding: EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Thông tin chuyển tiền',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  SizedBox(height: 16),
-
-                  // Recipient Card
-                  Card(
-                    elevation: 2,
-                    child: InkWell(
-                      onTap: _showFriendSelectionSheet,
-                      borderRadius: BorderRadius.circular(8),
-                      child: Padding(
-                        padding: EdgeInsets.all(16),
-                        child: _selectedUser == null
-                            ? Row(
-                          children: [
-                            Icon(Icons.person_search, color: Colors.grey, size: 40),
-                            SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Người nhận',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey[600],
-                                    ),
-                                  ),
-                                  SizedBox(height: 4),
-                                  Text(
-                                    'Chọn từ danh sách bạn bè',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      color: Colors.grey[700],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-                          ],
-                        )
-                            : Row(
-                          children: [
-                            CircleAvatar(
-                              radius: 25,
-                              backgroundImage: NetworkImage(_selectedUser!['avatar'] ?? ''),
-                              onBackgroundImageError: (_, __) {},
-                              child: _selectedUser!['avatar'] == null || _selectedUser!['avatar'].isEmpty
-                                  ? Icon(Icons.person, size: 30)
-                                  : null,
-                            ),
-                            SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Người nhận',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey[600],
-                                    ),
-                                  ),
-                                  SizedBox(height: 4),
-                                  Text(
-                                    _selectedUser!['username'] ?? 'Không rõ tên',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                  Text(
-                                    'ID: ${_selectedUser!['user_id']}',
-                                    style: TextStyle(
-                                      color: Colors.grey[600],
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Icon(Icons.check_circle, color: Colors.green, size: 24),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 16),
-
-                  // Amount Input
-                  Text(
-                    'Số tiền',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey[700],
-                    ),
-                  ),
-                  SizedBox(height: 8),
-                  Card(
-                    elevation: 2,
-                    child: TextField(
-                      controller: _amountController,
-                      keyboardType: TextInputType.number,
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide.none,
-                        ),
-                        hintText: '0',
-                        suffixText: 'đ',
-                        suffixStyle: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey[600],
-                        ),
-                        prefixIcon: Icon(Icons.attach_money, color: Colors.purple),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                      ),
-                      onChanged: (value) {
-                        final text = value.replaceAll('.', '');
-                        if (text.isNotEmpty) {
-                          final formatted = _formatMoney(double.parse(text));
-                          _amountController.value = TextEditingValue(
-                            text: formatted,
-                            selection: TextSelection.collapsed(offset: formatted.length),
-                          );
-                        }
-                      },
-                    ),
-                  ),
-                  SizedBox(height: 24),
-
-                  // Transfer Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _handleTransfer,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.purple,
-                        foregroundColor: Colors.white,
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        elevation: 3,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+              // Wallet Info
+              Container(
+                padding: const EdgeInsets.all(16),
+                color: Colors.grey[200],
+                child: Row(
+                  children: [
+                    Icon(Icons.account_balance_wallet, color: Colors.purple),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.send, size: 20),
-                          SizedBox(width: 8),
                           Text(
-                            'Chuyển tiền',
+                            'Số dư khả dụng',
+                            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                          ),
+                          Text(
+                            '${_formatMoney(widget.walletBalance)} đ',
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
+                              color: Colors.purple,
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ),
-
-                  if (!_isCameraActive) ...[
-                    SizedBox(height: 16),
-                    Center(
-                      child: TextButton.icon(
-                        onPressed: _toggleCamera,
-                        icon: Icon(Icons.camera_alt),
-                        label: Text('Bật camera để quét QR'),
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.purple,
+                    // Sửa overflow cho ID
+                    Flexible(
+                      child: Container(
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.purple.shade100,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          'ID: ${widget.userId}',
+                          style: TextStyle(
+                            color: Colors.purple,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                         ),
                       ),
                     ),
                   ],
-                ],
+                ),
+              ),
+
+              // Form
+              Expanded(
+                flex: _isCameraActive ? 1 : 3,
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Thông tin chuyển tiền', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      SizedBox(height: 16),
+
+                      // Card chọn người nhận
+                      Card(
+                        elevation: 2,
+                        child: InkWell(
+                          onTap: _showFriendSelectionSheet,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: EdgeInsets.all(16),
+                            child: _selectedUser == null
+                                ? Row(
+                              children: [
+                                Icon(Icons.person_search, color: Colors.grey, size: 40),
+                                SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Người nhận', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                                      SizedBox(height: 4),
+                                      Text('Chọn từ danh sách bạn bè', style: TextStyle(fontSize: 16, color: Colors.grey[700])),
+                                    ],
+                                  ),
+                                ),
+                                Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                              ],
+                            )
+                                : Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 25,
+                                  backgroundImage: NetworkImage(_selectedUser!['avatar'] ?? ''),
+                                  onBackgroundImageError: (_, __) {},
+                                  child: _selectedUser!['avatar'] == null || _selectedUser!['avatar'].isEmpty
+                                      ? Icon(Icons.person, size: 30)
+                                      : null,
+                                ),
+                                SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Người nhận', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                                      SizedBox(height: 4),
+                                      Text(
+                                        _selectedUser!['username'] ?? 'Không rõ tên',
+                                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      Text(
+                                        'ID: ${_selectedUser!['user_id']}',
+                                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Icon(Icons.check_circle, color: Colors.green, size: 24),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 16),
+
+                      // Input số tiền
+                      Text('Số tiền', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey[700])),
+                      SizedBox(height: 8),
+                      Card(
+                        elevation: 2,
+                        child: TextField(
+                          controller: _amountController,
+                          keyboardType: TextInputType.number,
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.white,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                            hintText: '0',
+                            suffixText: 'đ',
+                            suffixStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.grey[600]),
+                            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                          ),
+                          onChanged: (value) {
+                            final text = value.replaceAll('.', '');
+                            if (text.isNotEmpty) {
+                              final formatted = _formatMoney(double.parse(text));
+                              _amountController.value = TextEditingValue(
+                                text: formatted,
+                                selection: TextSelection.collapsed(offset: formatted.length),
+                              );
+                            }
+                          },
+                        ),
+                      ),
+                      SizedBox(height: 24),
+
+                      // Nút chuyển tiền
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _isTransferring ? null : _handleTransfer, // Vô hiệu hóa khi đang loading
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.purple,
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            elevation: 3,
+                          ),
+                          child: _isTransferring
+                              ? Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                              ),
+                              SizedBox(width: 12),
+                              Text('Đang xử lý...', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                            ],
+                          )
+                              : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.send, size: 20),
+                              SizedBox(width: 8),
+                              Text('Chuyển tiền', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      if (!_isCameraActive) ...[
+                        SizedBox(height: 16),
+                        Center(
+                          child: TextButton.icon(
+                            onPressed: _toggleCamera,
+                            icon: Icon(Icons.camera_alt),
+                            label: Text('Bật camera để quét QR'),
+                            style: TextButton.styleFrom(foregroundColor: Colors.purple),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          // === LOADING OVERLAY ===
+          if (_isTransferring)
+            Container(
+              color: Colors.black54,
+              child: Center(
+                child: Card(
+                  elevation: 8,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  child: Padding(
+                    padding: EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.purple),
+                          strokeWidth: 5,
+                        ),
+                        SizedBox(height: 20),
+                        Text(
+                          'Đang chuyển tiền...',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
