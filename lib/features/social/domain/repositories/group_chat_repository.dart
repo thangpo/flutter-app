@@ -14,6 +14,7 @@ import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 class GroupChatRepository {
   GroupChatRepository();
 
+  // -------------------- Token & Endpoint --------------------
   Future<String> _getAccessTokenOrThrow() async {
     final sp = await SharedPreferences.getInstance();
     final token = sp.getString(AppConstants.socialAccessToken);
@@ -31,6 +32,7 @@ class GroupChatRepository {
     return '$base/api/group_chat';
   }
 
+  // -------------------- Content Type --------------------
   MediaType? _contentTypeFor(String filePath) {
     final ext = p.extension(filePath).toLowerCase();
     switch (ext) {
@@ -64,6 +66,7 @@ class GroupChatRepository {
     }
   }
 
+  // -------------------- Decrypt helpers --------------------
   static final RegExp _maybeBase64 = RegExp(r'^[A-Za-z0-9+/=]+$');
   String _cleanB64(String s) => s
       .replaceAll('-', '+')
@@ -294,7 +297,7 @@ class GroupChatRepository {
         .toList();
   }
 
-  // -------------------- Send (text/file) --------------------
+  // -------------------- Send --------------------
   Future<Map<String, dynamic>?> sendMessage({
     required String groupId,
     required String text,
@@ -363,29 +366,7 @@ class GroupChatRepository {
     return m == null ? null : _normalizeMsg(m);
   }
 
-  // -------- helpers for response --------
-  bool _isOk(Map json) {
-    final s = json['api_status'] ?? json['status'] ?? json['code'];
-    return '$s' == '200';
-    // một số bản trả 'api_status':200, số khác 'status':200 hoặc 'code':200
-  }
-
-  Map<String, dynamic>? _extractMessageMap(Map json) {
-    dynamic data = json['data'];
-    if (data is Map && data['message'] is Map) data = data['message'];
-    data ??= json['message'] ?? json['msg'] ?? json['messages'];
-
-    if (data is Map) {
-      return Map<String, dynamic>.from(data);
-    }
-    return null;
-  }
-
-
-// G:\flutter-app\lib\features\social\domain\repositories\group_chat_repository.dart
-
-  // G:\flutter-app\lib\features\social\domain\repositories\group_chat_repository.dart
-
+  // -------------------- Edit Group --------------------
   Future<Map<String, dynamic>> editGroup({
     required String groupId,
     String? name,
@@ -394,7 +375,6 @@ class GroupChatRepository {
     final token = await _getAccessTokenOrThrow();
     final uri = Uri.parse('${_groupChatEndpoint()}?access_token=$token');
 
-    // Nếu không đổi gì thì coi như ok để UI không chờ
     if ((name == null || name.trim().isEmpty) && avatarFile == null) {
       return {'group_id': groupId, 'group_name': name ?? ''};
     }
@@ -424,8 +404,6 @@ class GroupChatRepository {
           'Edit group thất bại (HTTP ${streamed.statusCode}): $body');
     }
 
-    // WoWonder có thể trả nhiều dạng: {api_status, data:{...}}, hoặc {api_status, message: "..."},
-    // hoặc nhét thẳng fields ra ngoài.
     Map<String, dynamic> json;
     try {
       json = jsonDecode(body) as Map<String, dynamic>;
@@ -442,15 +420,96 @@ class GroupChatRepository {
         ? Map<String, dynamic>.from(objRaw)
         : <String, dynamic>{};
 
-    // Chuẩn hoá output để controller dễ dùng
     return {
       'group_id': obj['group_id']?.toString() ?? groupId,
       'group_name': (obj['group_name'] ?? obj['name'] ?? name ?? '').toString(),
-      // server có thể trả avatar_full hoặc avatar/group_avatar
       'avatar':
           (obj['avatar_full'] ?? obj['avatar'] ?? obj['group_avatar'] ?? '')
               .toString(),
     };
   }
 
+  // -------------------- Members --------------------
+  Future<List<Map<String, dynamic>>> fetchGroupMembers(String groupId) async {
+    final token = await _getAccessTokenOrThrow();
+    final url = '${AppConstants.socialBaseUrl}/api/group_chat';
+    final res = await http.post(Uri.parse('$url?access_token=$token'), body: {
+      'server_key': AppConstants.socialServerKey,
+      'type': 'get_members',
+      'id': groupId,
+    });
+
+    final data = jsonDecode(res.body);
+    if (!_isOk(data)) throw Exception('Failed to fetch members');
+
+    final members = (data['data']?['members'] ?? []) as List;
+    return members.map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+
+
+  Future<bool> removeGroupUsers(String groupId, List<String> userIds) async {
+    final token = await _getAccessTokenOrThrow();
+    final url = '${AppConstants.socialBaseUrl}/api/group_chat';
+    final parts = userIds.join(',');
+    final res = await http.post(Uri.parse('$url?access_token=$token'), body: {
+      'server_key': AppConstants.socialServerKey,
+      'type': 'remove_user',
+      'id': groupId,
+      'parts': parts,
+    });
+
+    final data = jsonDecode(res.body);
+    return _isOk(data);
+  }
+
+  Future<bool> addUsersToGroup(String groupId, List<String> userIds) async {
+    if (userIds.isEmpty) return true;
+    final token = await _getAccessTokenOrThrow();
+    final uri = Uri.parse('${_groupChatEndpoint()}?access_token=$token');
+
+    final res = await http.post(uri, body: {
+      'server_key': AppConstants.socialServerKey,
+      'type': 'add_user',
+      'id': groupId,
+      'parts': userIds.join(','),
+    }).timeout(const Duration(seconds: 20));
+
+    if (res.statusCode != 200) {
+      throw Exception('Thêm thành viên thất bại (HTTP ${res.statusCode})');
+    }
+    final json = jsonDecode(res.body);
+    if (!(_isOk(json))) {
+      throw Exception(
+          'Thêm thành viên thất bại: ${json['errors'] ?? res.body}');
+    }
+    return true;
+  }
+
+  // -------------------- Helpers --------------------
+  bool _isOk(Map json) {
+    final s = json['api_status'] ?? json['status'] ?? json['code'];
+    return '$s' == '200';
+  }
+
+  Map<String, dynamic>? _extractMessageMap(Map json) {
+    dynamic data = json['data'];
+    if (data is Map && data['message'] is Map) data = data['message'];
+    data ??= json['message'] ?? json['msg'] ?? json['messages'];
+
+    if (data is Map) {
+      return Map<String, dynamic>.from(data);
+    }
+    return null;
+  }
+
+  List<dynamic> _extractList(dynamic data) {
+    if (data == null) return [];
+    if (data is List) return data;
+    if (data is Map && data.containsKey('data')) {
+      final d = data['data'];
+      if (d is List) return d;
+    }
+    return [];
+  }
 }

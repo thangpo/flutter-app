@@ -126,5 +126,86 @@ class SepayService {
     }
   }
 
+  Future<Map<String, dynamic>?> sendMoney({
+    required BuildContext context,
+    required int amount,
+    required int userId,
+  }) async {
+    try {
+      final auth = Provider.of<AuthController>(context, listen: false);
+
+      final accessToken = await auth.authServiceInterface.getSocialAccessToken();
+      if (accessToken == null) {
+        throw Exception("Access Token is NULL");
+      }
+
+      final url = Uri.parse(
+        "${baseUrl}wallet?access_token=$accessToken",
+      );
+
+      final response = await http.post(
+        url,
+        headers: {"Content-Type": "application/x-www-form-urlencoded"},
+        body: {
+          "server_key": AppConstants.socialServerKey,
+          "type": "send",
+          "amount": amount.toString(),
+          "user_id": userId.toString(),
+        },
+      );
+
+      print("SEND MONEY RESPONSE: ${response.body}");
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data;
+      }
+
+      return null;
+    } catch (e) {
+      print("Send Money Error: $e");
+      return null;
+    }
+  }
+
+  Future<List<dynamic>?> getTransactions({
+    required BuildContext context,
+  }) async {
+    try {
+      final auth = Provider.of<AuthController>(context, listen: false);
+      final accessToken = await auth.authServiceInterface.getSocialAccessToken();
+
+      if (accessToken == null) {
+        throw Exception("Access Token is NULL");
+      }
+
+      final url = Uri.parse("${baseUrl}wallet?access_token=$accessToken");
+
+      final response = await http.post(
+        url,
+        headers: {"Content-Type": "application/x-www-form-urlencoded"},
+        body: {
+          "server_key": AppConstants.socialServerKey,
+          "type": "get_transactions",
+        },
+      );
+
+      print("GET TRANSACTIONS RESPONSE: ${response.body}");
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['api_status'] == 200) {
+          return data['transactions'] as List<dynamic>;
+        } else {
+          print("API Error: ${data['errors']}");
+        }
+      }
+
+      return null;
+    } catch (e) {
+      print("Get Transactions Error: $e");
+      return null;
+    }
+  }
 
 }

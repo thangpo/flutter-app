@@ -9,6 +9,7 @@ import 'transfer_screen.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'topup_screen.dart';
 import 'withdraw_screen.dart';
+import 'wallet_detail_screen.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -58,7 +59,7 @@ Future<dynamic> navigateWithCustomSlide(
   );
 }
 
-class _WalletScreenState extends State<WalletScreen> {
+class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMixin {
   double wallet = 0.0;
   double balance = 0.0;
   int points = 0;
@@ -69,6 +70,7 @@ class _WalletScreenState extends State<WalletScreen> {
   String email = "";
   bool isLoading = true;
   String? errorMessage;
+  bool isQREnabled = true;
 
   @override
   void initState() {
@@ -76,7 +78,141 @@ class _WalletScreenState extends State<WalletScreen> {
     _loadWallet();
   }
 
+  void _showQRSettingsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(Icons.settings, color: Colors.blue.shade700),
+            const SizedBox(width: 8),
+            const Text(
+              'Cài đặt QR Code',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    isQREnabled ? Icons.qr_code_2 : Icons.qr_code_scanner_outlined,
+                    color: Colors.blue.shade700,
+                    size: 32,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Tính năng QR Code',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.blue.shade900,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          isQREnabled ? 'Đang bật' : 'Đang tắt',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: isQREnabled ? Colors.green : Colors.red,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: isQREnabled,
+                    onChanged: (value) {
+                      setState(() {
+                        isQREnabled = value;
+                      });
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            value
+                                ? 'Đã bật tính năng QR Code'
+                                : 'Đã tắt tính năng QR Code',
+                          ),
+                          backgroundColor: value ? Colors.green : Colors.red,
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                    activeColor: Colors.blue.shade700,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              isQREnabled
+                  ? 'Khi bật, bạn có thể hiển thị và quét mã QR để chia sẻ thông tin.'
+                  : 'Khi tắt, tính năng QR sẽ không khả dụng.',
+              style: const TextStyle(fontSize: 13, color: Colors.grey),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Đóng',
+              style: TextStyle(color: Colors.blue.shade700, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openWalletDetailWithAnimation() {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        transitionDuration: Duration(milliseconds: 800),
+        pageBuilder: (_, __, ___) => WalletDetailScreen(
+          balance: wallet,
+          username: username,
+        ),
+        transitionsBuilder: (_, animation, __, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+      ),
+    );
+  }
+
   void _showMyQRCode() async {
+    if (!isQREnabled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Tính năng QR đang bị tắt. Vui lòng bật trong cài đặt.'),
+          backgroundColor: Colors.orange,
+          action: SnackBarAction(
+            label: 'Cài đặt',
+            textColor: Colors.white,
+            onPressed: _showQRSettingsDialog,
+          ),
+        ),
+      );
+      return;
+    }
+
     final auth = Provider.of<AuthController>(context, listen: false);
     final userIdStr = await auth.authServiceInterface.getSocialUserId();
 
@@ -89,64 +225,137 @@ class _WalletScreenState extends State<WalletScreen> {
 
     final userId = int.tryParse(userIdStr) ?? 0;
 
+    // Animation Controller
+    late AnimationController _controller;
+    late Animation<double> _scaleAnimation;
+    late Animation<double> _rotateAnimation;
+    late Animation<double> _opacityAnimation;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.qr_code_2, color: Colors.orange),
-            SizedBox(width: 8),
-            Text('QR của bạn', style: TextStyle(fontWeight: FontWeight.w600)),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                width: 220,
-                height: 220,
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Row(
+                children: [
+                  Icon(Icons.qr_code_2, color: Colors.blue.shade700),
+                  const SizedBox(width: 8),
+                  const Text('QR của bạn', style: TextStyle(fontWeight: FontWeight.w600)),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // QR CODE VỚI ANIMATION
+                    AnimatedBuilder(
+                      animation: _controller,
+                      builder: (context, child) {
+                        return Transform.scale(
+                          scale: _scaleAnimation.value,
+                          child: Transform.rotate(
+                            angle: _rotateAnimation.value,
+                            child: Opacity(
+                              opacity: _opacityAnimation.value,
+                              child: Container(
+                                width: 220,
+                                height: 220,
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.blue.shade200, width: 2),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.blue.withOpacity(0.2),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: QrImageView(
+                                  data: userId.toString(),
+                                  version: QrVersions.auto,
+                                  size: 180,
+                                  backgroundColor: Colors.white,
+                                  errorCorrectionLevel: QrErrorCorrectLevel.H,
+                                  embeddedImage: const AssetImage('assets/icon/icon.png'),
+                                  embeddedImageStyle: const QrEmbeddedImageStyle(
+                                    size: Size(40, 40),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                    ],
-                  ),
-                  child: QrImageView(
-                    data: userId.toString(),
-                    version: QrVersions.auto,
-                    size: 180,
-                    backgroundColor: Colors.white,
-                    errorCorrectionLevel: QrErrorCorrectLevel.H,
-                  ),
+                      child: Text(
+                        'ID: $userId',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.blue.shade900,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Người khác có thể quét QR để lấy thông tin của bạn',
+                      style: TextStyle(fontSize: 13, color: Colors.grey),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
-              const SizedBox(height: 8),
-              const Text(
-                'Người khác có thể quét QR để lấy thông tin của bạn',
-                style: TextStyle(fontSize: 13, color: Colors.grey),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Đóng'),
-          ),
-        ],
-      ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    _controller.reverse().then((_) => Navigator.pop(context));
+                  },
+                  child: Text(
+                    'Đóng',
+                    style: TextStyle(color: Colors.blue.shade700),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    ).then((_) {
+      _controller.dispose();
+    });
+
+    // Tạo Animation Controller
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: Navigator.of(context),
     );
+
+    _scaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
+    );
+
+    _rotateAnimation = Tween<double>(begin: -0.2, end: 0.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
+    );
+
+    _opacityAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: const Interval(0.3, 1.0)),
+    );
+
+    _controller.forward();
   }
 
   void _openTopUpScreen() async {
@@ -171,7 +380,7 @@ class _WalletScreenState extends State<WalletScreen> {
       final auth = Provider.of<AuthController>(context, listen: false);
       final userIdStr = await auth.authServiceInterface.getSocialUserId();
       final accessToken =
-          await auth.authServiceInterface.getSocialAccessToken();
+      await auth.authServiceInterface.getSocialAccessToken();
 
       if (userIdStr == null || accessToken == null) {
         throw Exception("Chưa đăng nhập vào mạng xã hội");
@@ -239,9 +448,14 @@ class _WalletScreenState extends State<WalletScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(getTranslated('wallet', context) ?? 'Ví cá nhân'),
-        backgroundColor: isDark ? Colors.grey[900] : Colors.blue,
+        backgroundColor: isDark ? Colors.grey[900] : Colors.blue.shade700,
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            icon: Icon(isQREnabled ? Icons.qr_code_2 : Icons.qr_code_scanner_outlined),
+            onPressed: _showQRSettingsDialog,
+            tooltip: "Cài đặt QR",
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: isLoading ? null : _loadWallet,
@@ -252,11 +466,12 @@ class _WalletScreenState extends State<WalletScreen> {
       backgroundColor: isDark ? Colors.grey[850] : Colors.grey[50],
       body: RefreshIndicator(
         onRefresh: _loadWallet,
+        color: Colors.blue.shade700,
         child: isLoading
             ? _buildSkeletonLoading(isDark)
             : errorMessage != null
-                ? _buildErrorWidget(isDark)
-                : _buildWalletContent(isDark),
+            ? _buildErrorWidget(isDark)
+            : _buildWalletContent(isDark),
       ),
     );
   }
@@ -325,38 +540,56 @@ class _WalletScreenState extends State<WalletScreen> {
     required Color color,
     required VoidCallback onTap,
     required bool isDark,
+    bool isDisabled = false,
   }) {
     return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 6),
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          decoration: BoxDecoration(
-            color: isDark ? Colors.grey[800] : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withOpacity(0.3)),
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2)),
-            ],
-          ),
-          child: Column(
-            children: [
-              Icon(icon, color: color, size: 28),
-              const SizedBox(height: 8),
-              Text(
-                label,
-                style: TextStyle(
-                    color: color, fontSize: 13, fontWeight: FontWeight.w600),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+      child: Opacity(
+        opacity: isDisabled ? 0.5 : 1.0,
+        child: InkWell(
+          onTap: isDisabled ? null : onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 6),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.grey[800] : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: color.withOpacity(0.3)),
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2)),
+              ],
+            ),
+            child: Column(
+              children: [
+                Icon(icon, color: color, size: 28),
+                const SizedBox(height: 8),
+                Text(
+                  label,
+                  style: TextStyle(
+                      color: color, fontSize: 13, fontWeight: FontWeight.w600),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (isDisabled) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'Tắt',
+                      style: TextStyle(fontSize: 10, color: Colors.red),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
       ),
@@ -366,11 +599,10 @@ class _WalletScreenState extends State<WalletScreen> {
   Widget _buildActionButtons(bool isDark) {
     return Row(
       children: [
-
         _buildActionButton(
           icon: Icons.send,
           label: getTranslated('transfer_money', context) ?? 'Chuyển tiền',
-          color: Colors.purple,
+          color: Colors.blue.shade700,
           onTap: () async {
             final auth = Provider.of<AuthController>(context, listen: false);
             final userIdStr = await auth.authServiceInterface.getSocialUserId();
@@ -384,7 +616,7 @@ class _WalletScreenState extends State<WalletScreen> {
               return;
             }
 
-            navigateWithCustomSlide(
+            final result = await navigateWithCustomSlide(
               context,
               TransferScreen(
                 walletBalance: wallet,
@@ -393,10 +625,13 @@ class _WalletScreenState extends State<WalletScreen> {
               ),
               direction: SlideDirection.fromLeft,
             );
+
+            if (result == true) {
+              await _loadWallet();
+            }
           },
           isDark: isDark,
         ),
-
         _buildActionButton(
           icon: Icons.add_circle,
           label: getTranslated('top_up', context) ?? 'Nạp tiền',
@@ -404,15 +639,14 @@ class _WalletScreenState extends State<WalletScreen> {
           onTap: _openTopUpScreen,
           isDark: isDark,
         ),
-
         _buildActionButton(
           icon: Icons.qr_code_2,
           label: 'QR ID',
-          color: Colors.orange,
+          color: isQREnabled ? Colors.blue.shade600 : Colors.grey,
           onTap: _showMyQRCode,
           isDark: isDark,
+          isDisabled: !isQREnabled,
         ),
-
         _buildActionButton(
           icon: Icons.money_off,
           label: getTranslated('withdraw', context) ?? 'Rút tiền',
@@ -433,8 +667,8 @@ class _WalletScreenState extends State<WalletScreen> {
   Widget _buildActionButtonsSkeleton(bool isDark) {
     return Row(
       children: List.generate(
-        3,
-        (_) => Expanded(
+        4,
+            (_) => Expanded(
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 6),
             height: 80,
@@ -473,97 +707,167 @@ class _WalletScreenState extends State<WalletScreen> {
             icon: Icons.account_circle,
             title: getTranslated('username', context) ?? 'Tên tài khoản',
             value: username,
-            color: Colors.purple,
+            color: Colors.blue.shade700,
             isText: true,
             isDark: isDark),
         _buildInfoCard(
             icon: Icons.email,
             title: getTranslated('email', context) ?? 'Email',
             value: email,
-            color: Colors.red,
+            color: Colors.blue.shade600,
             isText: true,
             isDark: isDark),
         _buildInfoCard(
             icon: Icons.account_balance_wallet,
             title: getTranslated('balance_label', context) ?? 'Balance',
             value: '${_formatMoney(balance, showDecimal: true)} ₫',
-            color: Colors.blue,
+            color: Colors.blue.shade800,
             isDark: isDark),
         _buildInfoCard(
             icon: Icons.stars,
             title: getTranslated('points', context) ?? 'Points',
             value: _formatMoney(points.toDouble()),
-            color: Colors.orange,
+            color: Colors.blue.shade500,
             isDark: isDark),
         _buildInfoCard(
             icon: Icons.calendar_today,
             title: getTranslated('daily_points', context) ?? 'Daily Points',
             value: _formatMoney(dailyPoints.toDouble()),
-            color: Colors.green,
+            color: Colors.lightBlue,
             isDark: isDark),
         _buildInfoCard(
             icon: Icons.swap_horiz,
             title: getTranslated('converted_points', context) ??
                 'Converted Points',
             value: _formatMoney(convertedPoints.toDouble()),
-            color: Colors.purple,
+            color: Colors.blueAccent,
             isDark: isDark),
         _buildInfoCard(
             icon: Icons.credit_card,
             title: getTranslated('credits', context) ?? 'Credits',
             value: _formatMoney(credits.toDouble()),
-            color: Colors.teal,
+            color: Colors.blue.shade400,
             isDark: isDark),
       ],
     );
   }
 
   Widget _buildMainBalanceCard(bool isDark) {
-    return Card(
-      elevation: 8,
-      color: isDark ? Colors.grey[800] : null,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(
-            colors: isDark
-                ? [Colors.blue.shade900, Colors.blue.shade700]
-                : [Colors.blue.shade600, Colors.blue.shade800],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.account_balance_wallet,
-                    color: Colors.white.withOpacity(0.9), size: 32),
-                const SizedBox(width: 12),
-                Text(
-                  getTranslated('balance', context) ?? 'Số dư ví',
-                  style: const TextStyle(color: Colors.white70, fontSize: 16),
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          PageRouteBuilder(
+            transitionDuration: Duration(milliseconds: 800),
+            pageBuilder: (_, animation, ___) {
+              return FadeTransition(
+                opacity: animation,
+                child: WalletDetailScreen(
+                  balance: wallet,
+                  username: username,
                 ),
-              ],
+              );
+            },
+            transitionsBuilder: (_, animation, __, child) {
+              return child;
+            },
+          ),
+        );
+      },
+      child: Card(
+        elevation: 8,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          padding: EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: LinearGradient(
+              colors: isDark
+                  ? [Colors.blue.shade900, Colors.blue.shade700]
+                  : [Colors.blue.shade600, Colors.blue.shade800],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-            const SizedBox(height: 16),
-            Text(
-              '${_formatMoney(wallet, showDecimal: true)} ₫',
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 36,
-                  fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              getTranslated('available_balance', context) ?? 'Số dư khả dụng',
-              style:
-                  TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14),
-            ),
-          ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.account_balance_wallet,
+                      color: Colors.white.withOpacity(0.9), size: 32),
+                  SizedBox(width: 12),
+                  Text(
+                    getTranslated('balance', context) ?? 'Số dư ví',
+                    style: TextStyle(color: Colors.white70, fontSize: 16),
+                  ),
+                ],
+              ),
+              SizedBox(height: 16),
+
+              // HIỆU ỨNG "THẢ XUỐNG + PHÓNG TO"
+              GestureDetector(
+                onTap: () => _openWalletDetailWithAnimation(),
+                child: Hero(
+                  tag: 'wallet_balance_hero',
+                  flightShuttleBuilder: (
+                      BuildContext flightContext,
+                      Animation<double> animation,
+                      HeroFlightDirection flightDirection,
+                      BuildContext fromHeroContext,
+                      BuildContext toHeroContext,
+                      ) {
+                    return AnimatedBuilder(
+                      animation: animation,
+                      builder: (context, child) {
+                        // Hiệu ứng rơi xuống + phóng to
+                        final fall = Tween<double>(begin: 0.0, end: 1.0).evaluate(animation);
+                        final scale = 1.0 + (fall * 2.0); // Phóng to gấp 3
+
+                        return Transform.translate(
+                          offset: Offset(0, fall * 300), // Rơi xuống 300px
+                          child: Transform.scale(
+                            scale: scale,
+                            child: Opacity(
+                              opacity: 1.0 - fall, // Mờ dần khi rơi
+                              child: child,
+                            ),
+                          ),
+                        );
+                      },
+                      child: Material(
+                        color: Colors.transparent,
+                        child: Text(
+                          '${_formatMoney(wallet, showDecimal: true)} đ',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 36,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                  child: Material(
+                    color: Colors.transparent,
+                    child: Text(
+                      '${_formatMoney(wallet, showDecimal: true)} đ',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 36,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              SizedBox(height: 8),
+              Text(
+                getTranslated('available_balance', context) ?? 'Số dư khả dụng',
+                style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -596,22 +900,22 @@ class _WalletScreenState extends State<WalletScreen> {
                 fontSize: 14, color: isDark ? Colors.white70 : Colors.black54)),
         trailing: isText
             ? Flexible(
-                child: Text(
-                  value,
-                  style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white : Colors.black87),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              )
+          child: Text(
+            value,
+            style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white : Colors.black87),
+            overflow: TextOverflow.ellipsis,
+          ),
+        )
             : Text(
-                value,
-                style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white : Colors.black87),
-              ),
+          value,
+          style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.white : Colors.black87),
+        ),
       ),
     );
   }
@@ -626,7 +930,7 @@ class _WalletScreenState extends State<WalletScreen> {
         const SizedBox(height: 20),
         Text(
           errorMessage!,
-          style: TextStyle(fontSize: 16, color: Colors.red),
+          style: const TextStyle(fontSize: 16, color: Colors.red),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 20),
@@ -636,7 +940,7 @@ class _WalletScreenState extends State<WalletScreen> {
             icon: const Icon(Icons.refresh),
             label: Text(getTranslated('retry', context) ?? "Thử lại"),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
+              backgroundColor: Colors.blue.shade700,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             ),

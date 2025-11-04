@@ -112,6 +112,9 @@ abstract class SocialServiceInterface {
     String? coverFilePath,
     String? ecomToken,
   });
+  Future<List<SocialUser>> getBlockedUsers();
+  Future<bool> blockUser({required String targetUserId, required bool block});
+
 
 
 
