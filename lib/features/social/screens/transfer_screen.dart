@@ -21,34 +21,64 @@ class TransferScreen extends StatefulWidget {
   State<TransferScreen> createState() => _TransferScreenState();
 }
 
-class _TransferScreenState extends State<TransferScreen> {
-  late final MobileScannerController _scannerController;
+class _TransferScreenState extends State<TransferScreen> with TickerProviderStateMixin {
+  MobileScannerController? _scannerController;
   final TextEditingController _amountController = TextEditingController();
   Map<String, dynamic>? _selectedUser;
   bool _isLoadingFriends = false;
   bool _isLoadingUserInfo = false;
   bool _isTransferring = false;
-  bool _isCameraActive = true;
+  bool _isCameraActive = false;
   bool _isProcessing = false;
   String? _lastScannedCode;
   DateTime? _lastScanTime;
   List<dynamic> _followingList = [];
 
+  late AnimationController _balanceAnimController;
+  late AnimationController _buttonAnimController;
+  late Animation<double> _balanceScaleAnim;
+  late Animation<double> _buttonScaleAnim;
+
   @override
   void initState() {
     super.initState();
-    _scannerController = MobileScannerController(
-      detectionSpeed: DetectionSpeed.normal,
-      facing: CameraFacing.back,
+    _balanceAnimController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
     );
+    _buttonAnimController = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+
+    _balanceScaleAnim = CurvedAnimation(
+      parent: _balanceAnimController,
+      curve: Curves.elasticOut,
+    );
+    _buttonScaleAnim = Tween<double>(begin: 1.0, end: 0.95).animate(
+      CurvedAnimation(parent: _buttonAnimController, curve: Curves.easeInOut),
+    );
+
+    _balanceAnimController.forward();
     _loadFollowingUsers();
   }
 
   @override
   void dispose() {
-    _scannerController.dispose();
+    _scannerController?.dispose();
     _amountController.dispose();
+    _balanceAnimController.dispose();
+    _buttonAnimController.dispose();
     super.dispose();
+  }
+
+  void _initializeCamera() {
+    if (_scannerController == null) {
+      _scannerController = MobileScannerController(
+        detectionSpeed: DetectionSpeed.normal,
+        facing: CameraFacing.back,
+      );
+    }
   }
 
   Future<void> _loadFollowingUsers() async {
@@ -69,10 +99,7 @@ class _TransferScreenState extends State<TransferScreen> {
     } else {
       setState(() => _isLoadingFriends = false);
       if (mounted) {
-        _showSnackBar(
-          'Không thể tải danh sách bạn bè',
-          Colors.orange,
-        );
+        _showSnackBar('Không thể tải danh sách bạn bè', Colors.orange);
       }
     }
   }
@@ -139,9 +166,23 @@ class _TransferScreenState extends State<TransferScreen> {
   void _showSnackBar(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
+        content: Row(
+          children: [
+            Icon(
+              color == Colors.green ? Icons.check_circle :
+              color == Colors.red ? Icons.error : Icons.info,
+              color: Colors.white,
+              size: 20,
+            ),
+            SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
         backgroundColor: color,
         duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        margin: EdgeInsets.all(16),
       ),
     );
   }
@@ -149,6 +190,12 @@ class _TransferScreenState extends State<TransferScreen> {
   void _toggleCamera() {
     setState(() {
       _isCameraActive = !_isCameraActive;
+      if (_isCameraActive) {
+        _initializeCamera();
+      } else {
+        _scannerController?.dispose();
+        _scannerController = null;
+      }
     });
   }
 
@@ -156,89 +203,160 @@ class _TransferScreenState extends State<TransferScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.7,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        expand: false,
-        builder: (context, scrollController) => Column(
-          children: [
-            Container(
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.purple.shade50,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.people, color: Colors.purple),
-                  SizedBox(width: 12),
-                  Text(
-                    'Chọn người nhận',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Spacer(),
-                  IconButton(
-                    icon: Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 20,
+              offset: Offset(0, -5),
             ),
-            Divider(height: 1),
-            Expanded(
-              child: _isLoadingFriends
-                  ? Center(child: CircularProgressIndicator())
-                  : _followingList.isEmpty
-                  ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+          ],
+        ),
+        child: DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (context, scrollController) => Column(
+            children: [
+              Container(
+                margin: EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Container(
+                padding: EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.purple.shade400, Colors.purple.shade600],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+                ),
+                child: Row(
                   children: [
-                    Icon(Icons.people_outline, size: 64, color: Colors.grey),
-                    SizedBox(height: 16),
-                    Text(
-                      'Chưa có bạn bè',
-                      style: TextStyle(color: Colors.grey, fontSize: 16),
+                    Container(
+                      padding: EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(Icons.people, color: Colors.white, size: 24),
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Chọn người nhận',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.close, color: Colors.white),
+                      onPressed: () => Navigator.pop(context),
                     ),
                   ],
                 ),
-              )
-                  : ListView.builder(
-                controller: scrollController,
-                itemCount: _followingList.length,
-                itemBuilder: (context, index) {
-                  final user = _followingList[index];
-                  return ListTile(
-                    leading: CircleAvatar(
-                      backgroundImage: NetworkImage(
-                        user['avatar'] ?? '',
-                      ),
-                      onBackgroundImageError: (_, __) {},
-                      child: user['avatar'] == null || user['avatar'].isEmpty
-                          ? Icon(Icons.person)
-                          : null,
-                    ),
-                    title: Text(
-                      user['username'] ?? 'Không rõ tên',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    subtitle: Text('ID: ${user['user_id']}'),
-                    trailing: Icon(Icons.arrow_forward_ios, size: 16),
-                    onTap: () {
-                      setState(() => _selectedUser = user);
-                      Navigator.pop(context);
-                    },
-                  );
-                },
               ),
-            ),
-          ],
+              Expanded(
+                child: _isLoadingFriends
+                    ? Center(
+                  child: CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.purple),
+                  ),
+                )
+                    : _followingList.isEmpty
+                    ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.people_outline, size: 80, color: Colors.grey[300]),
+                      SizedBox(height: 16),
+                      Text(
+                        'Chưa có bạn bè',
+                        style: TextStyle(color: Colors.grey, fontSize: 16),
+                      ),
+                    ],
+                  ),
+                )
+                    : ListView.builder(
+                  controller: scrollController,
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  itemCount: _followingList.length,
+                  itemBuilder: (context, index) {
+                    final user = _followingList[index];
+                    return Container(
+                      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.1),
+                            blurRadius: 4,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: ListTile(
+                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        leading: Hero(
+                          tag: 'avatar_${user['user_id']}',
+                          child: CircleAvatar(
+                            radius: 28,
+                            backgroundImage: NetworkImage(user['avatar'] ?? ''),
+                            onBackgroundImageError: (_, __) {},
+                            child: user['avatar'] == null || user['avatar'].isEmpty
+                                ? Icon(Icons.person, size: 28)
+                                : null,
+                          ),
+                        ),
+                        title: Text(
+                          user['username'] ?? 'Không rõ tên',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'ID: ${user['user_id']}',
+                          style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                        ),
+                        trailing: Container(
+                          padding: EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.purple.shade50,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.arrow_forward_ios,
+                            size: 16,
+                            color: Colors.purple,
+                          ),
+                        ),
+                        onTap: () {
+                          setState(() => _selectedUser = user);
+                          Navigator.pop(context);
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -252,61 +370,135 @@ class _TransferScreenState extends State<TransferScreen> {
     return showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.green, size: 28),
-            SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                title,
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                overflow: TextOverflow.ellipsis,
-              ),
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Container(
+          padding: EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.green.shade50, Colors.white],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
             ),
-          ],
-        ),
-        content: SingleChildScrollView(
+            borderRadius: BorderRadius.circular(20),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(message, style: TextStyle(fontSize: 14)),
+              Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.green,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.green.withOpacity(0.3),
+                      blurRadius: 20,
+                      spreadRadius: 5,
+                    ),
+                  ],
+                ),
+                child: Icon(Icons.check, color: Colors.white, size: 48),
+              ),
+              SizedBox(height: 20),
+              Text(
+                title,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                  color: Colors.green.shade700,
+                ),
+                textAlign: TextAlign.center,
+              ),
               SizedBox(height: 12),
               Text(
-                'Số tiền: ${_formatMoney(amount.toDouble())} đ',
-                style: TextStyle(fontWeight: FontWeight.w600, color: Colors.purple),
+                message,
+                style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                textAlign: TextAlign.center,
               ),
-              if (_selectedUser != null) ...[
-                SizedBox(height: 8),
-                Text('Người nhận: ${_selectedUser!['username']}', overflow: TextOverflow.ellipsis),
-                Text('ID: ${_selectedUser!['user_id']}', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-              ],
+              SizedBox(height: 20),
+              Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.purple.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      'Số tiền',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      '${_formatMoney(amount.toDouble())} đ',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 24,
+                        color: Colors.purple,
+                      ),
+                    ),
+                    if (_selectedUser != null) ...[
+                      Divider(height: 24),
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 20,
+                            backgroundImage: NetworkImage(_selectedUser!['avatar'] ?? ''),
+                            onBackgroundImageError: (_, __) {},
+                          ),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _selectedUser!['username'],
+                                  style: TextStyle(fontWeight: FontWeight.w600),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  'ID: ${_selectedUser!['user_id']}',
+                                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    'Hoàn tất',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
-        actions: [
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.purple,
-                padding: EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              child: Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-          ),
-        ],
-        actionsPadding: EdgeInsets.fromLTRB(16, 0, 16, 16),
       ),
     );
   }
 
   void _handleTransfer() async {
-    if (_isTransferring) return; // Ngăn nhấn nhiều lần
+    if (_isTransferring) return;
 
     if (_selectedUser == null) {
       _showSnackBar('Vui lòng chọn người nhận', Colors.orange);
@@ -331,7 +523,6 @@ class _TransferScreenState extends State<TransferScreen> {
       return;
     }
 
-    // BẬT LOADING TOÀN MÀN HÌNH
     setState(() => _isTransferring = true);
 
     try {
@@ -343,16 +534,13 @@ class _TransferScreenState extends State<TransferScreen> {
       );
 
       if (result != null && result['api_status'] == 200) {
-        // HIỂN THỊ DIALOG THÀNH CÔNG
         await _showSuccessDialog(
           title: 'Chuyển tiền thành công!',
           message: result['message'] ?? 'Tiền đã được gửi đến ${_selectedUser!['username']}',
           amount: amount,
         );
-
-        // QUAY LẠI WALLET SCREEN + TẢI LẠI DỮ LIỆU
         if (mounted) {
-          Navigator.pop(context, true); // true = cần reload
+          Navigator.pop(context, true);
         }
       } else {
         final errorMsg = result?['errors']?['error_text'] ??
@@ -374,14 +562,18 @@ class _TransferScreenState extends State<TransferScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(getTranslated('transfer_money', context) ?? 'Chuyển tiền'),
-        backgroundColor: Colors.purple,
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: Icon(_isCameraActive ? Icons.camera_alt : Icons.camera_alt_outlined),
-            onPressed: _toggleCamera,
-            tooltip: _isCameraActive ? 'Tắt camera' : 'Bật camera',
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.purple.shade400, Colors.purple.shade700],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
           ),
+        ),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        actions: [
           if (_selectedUser != null)
             IconButton(
               icon: Icon(Icons.person_remove),
@@ -395,294 +587,557 @@ class _TransferScreenState extends State<TransferScreen> {
       ),
       body: Stack(
         children: [
-          // === NỘI DUNG CHÍNH (trong Column) ===
-          Column(
-            children: [
-              // Camera
-              if (_isCameraActive)
-                Expanded(
-                  flex: 2,
-                  child: Stack(
-                    children: [
-                      MobileScanner(
-                        controller: _scannerController,
-                        onDetect: (BarcodeCapture capture) {
-                          if (_isProcessing) return;
-                          final barcode = capture.barcodes.first;
-                          if (barcode.rawValue != null) {
-                            _scanQrCode(barcode.rawValue!.trim());
-                          }
-                        },
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.purple.shade50, Colors.white],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+            child: Column(
+              children: [
+                if (_isCameraActive && _scannerController != null)
+                  Container(
+                    height: 300,
+                    margin: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 15,
+                          offset: Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: Stack(
+                        children: [
+                          MobileScanner(
+                            controller: _scannerController!,
+                            onDetect: (BarcodeCapture capture) {
+                              if (_isProcessing) return;
+                              final barcode = capture.barcodes.first;
+                              if (barcode.rawValue != null) {
+                                _scanQrCode(barcode.rawValue!.trim());
+                              }
+                            },
+                          ),
+                          Center(
+                            child: Container(
+                              width: 220,
+                              height: 220,
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.white, width: 3),
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.purple.withOpacity(0.3),
+                                    blurRadius: 20,
+                                    spreadRadius: 2,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            top: 16,
+                            right: 16,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.5),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: IconButton(
+                                icon: Icon(Icons.close, color: Colors.white),
+                                onPressed: _toggleCamera,
+                              ),
+                            ),
+                          ),
+                          if (_isProcessing || _isLoadingUserInfo)
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.black87,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Center(
+                                child: Container(
+                                  padding: EdgeInsets.all(24),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      CircularProgressIndicator(
+                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.purple),
+                                      ),
+                                      SizedBox(height: 16),
+                                      Text('Đang xử lý...'),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
-                      Center(
-                        child: Container(
-                          width: 250,
-                          height: 250,
+                    ),
+                  ),
+
+                ScaleTransition(
+                  scale: _balanceScaleAnim,
+                  child: Container(
+                    margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.purple.shade400, Colors.purple.shade600],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.purple.withOpacity(0.3),
+                          blurRadius: 15,
+                          offset: Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            border: Border.all(color: Colors.white, width: 3),
+                            color: Colors.white.withOpacity(0.2),
                             borderRadius: BorderRadius.circular(12),
                           ),
+                          child: Icon(Icons.account_balance_wallet, color: Colors.white, size: 28),
                         ),
-                      ),
-                      if (_isProcessing || _isLoadingUserInfo)
+                        SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Số dư khả dụng',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.white.withOpacity(0.9),
+                                ),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                '${_formatMoney(widget.walletBalance)} đ',
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                         Container(
-                          color: Colors.black54,
-                          child: const Center(
-                            child: Card(
+                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            'ID: ${widget.userId}',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Thông tin chuyển tiền',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.purple.shade700,
+                          ),
+                        ),
+                        SizedBox(height: 16),
+
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.grey.withOpacity(0.1),
+                                blurRadius: 10,
+                                offset: Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: _showFriendSelectionSheet,
+                              borderRadius: BorderRadius.circular(16),
                               child: Padding(
-                                padding: EdgeInsets.all(20),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
+                                padding: EdgeInsets.all(16),
+                                child: _selectedUser == null
+                                    ? Row(
                                   children: [
-                                    CircularProgressIndicator(),
-                                    SizedBox(height: 16),
-                                    Text('Đang xử lý...'),
+                                    Container(
+                                      padding: EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.purple.shade50,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Icon(
+                                        Icons.person_search,
+                                        color: Colors.purple,
+                                        size: 32,
+                                      ),
+                                    ),
+                                    SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Người nhận',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                          SizedBox(height: 4),
+                                          Text(
+                                            'Chọn từ danh sách bạn bè',
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w500,
+                                              color: Colors.grey[800],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                                  ],
+                                )
+                                    : Row(
+                                  children: [
+                                    Hero(
+                                      tag: 'avatar_${_selectedUser!['user_id']}',
+                                      child: CircleAvatar(
+                                        radius: 30,
+                                        backgroundImage: NetworkImage(_selectedUser!['avatar'] ?? ''),
+                                        onBackgroundImageError: (_, __) {},
+                                        child: _selectedUser!['avatar'] == null || _selectedUser!['avatar'].isEmpty
+                                            ? Icon(Icons.person, size: 30)
+                                            : null,
+                                      ),
+                                    ),
+                                    SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Người nhận',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                          SizedBox(height: 4),
+                                          Text(
+                                            _selectedUser!['username'] ?? 'Không rõ tên',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 17,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          Text(
+                                            'ID: ${_selectedUser!['user_id']}',
+                                            style: TextStyle(
+                                              color: Colors.grey[600],
+                                              fontSize: 12,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Icon(Icons.check_circle, color: Colors.green, size: 28),
                                   ],
                                 ),
                               ),
                             ),
                           ),
                         ),
-                    ],
-                  ),
-                ),
+                        SizedBox(height: 20),
 
-              // Wallet Info
-              Container(
-                padding: const EdgeInsets.all(16),
-                color: Colors.grey[200],
-                child: Row(
-                  children: [
-                    Icon(Icons.account_balance_wallet, color: Colors.purple),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Số dư khả dụng',
-                            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        Text(
+                          'Số tiền',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[800],
                           ),
-                          Text(
-                            '${_formatMoney(widget.walletBalance)} đ',
+                        ),
+                        SizedBox(height: 12),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.grey.withOpacity(0.1),
+                                blurRadius: 10,
+                                offset: Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: TextField(
+                            controller: _amountController,
+                            keyboardType: TextInputType.number,
                             style: TextStyle(
-                              fontSize: 18,
+                              fontSize: 24,
                               fontWeight: FontWeight.bold,
                               color: Colors.purple,
                             ),
+                            decoration: InputDecoration(
+                              filled: true,
+                              fillColor: Colors.white,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: BorderSide.none,
+                              ),
+                              hintText: '0',
+                              hintStyle: TextStyle(color: Colors.grey[400]),
+                              prefixIcon: Icon(Icons.attach_money, color: Colors.purple, size: 28),
+                              suffixText: 'đ',
+                              suffixStyle: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.purple.shade300,
+                              ),
+                              contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                            ),
+                            onChanged: (value) {
+                              final text = value.replaceAll('.', '');
+                              if (text.isNotEmpty) {
+                                final formatted = _formatMoney(double.parse(text));
+                                _amountController.value = TextEditingValue(
+                                  text: formatted,
+                                  selection: TextSelection.collapsed(offset: formatted.length),
+                                );
+                              }
+                            },
                           ),
-                        ],
-                      ),
-                    ),
-                    // Sửa overflow cho ID
-                    Flexible(
-                      child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.purple.shade100,
-                          borderRadius: BorderRadius.circular(20),
                         ),
-                        child: Text(
-                          'ID: ${widget.userId}',
-                          style: TextStyle(
-                            color: Colors.purple,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 11,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+                        SizedBox(height: 24),
 
-              // Form
-              Expanded(
-                flex: _isCameraActive ? 1 : 3,
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Thông tin chuyển tiền', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      SizedBox(height: 16),
-
-                      // Card chọn người nhận
-                      Card(
-                        elevation: 2,
-                        child: InkWell(
-                          onTap: _showFriendSelectionSheet,
-                          borderRadius: BorderRadius.circular(8),
-                          child: Padding(
-                            padding: EdgeInsets.all(16),
-                            child: _selectedUser == null
-                                ? Row(
-                              children: [
-                                Icon(Icons.person_search, color: Colors.grey, size: 40),
-                                SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text('Người nhận', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                                      SizedBox(height: 4),
-                                      Text('Chọn từ danh sách bạn bè', style: TextStyle(fontSize: 16, color: Colors.grey[700])),
-                                    ],
-                                  ),
+                        if (!_isCameraActive)
+                          Container(
+                            margin: EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [Colors.blue.shade400, Colors.blue.shade600],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.blue.withOpacity(0.3),
+                                  blurRadius: 10,
+                                  offset: Offset(0, 4),
                                 ),
-                                Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
                               ],
-                            )
-                                : Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 25,
-                                  backgroundImage: NetworkImage(_selectedUser!['avatar'] ?? ''),
-                                  onBackgroundImageError: (_, __) {},
-                                  child: _selectedUser!['avatar'] == null || _selectedUser!['avatar'].isEmpty
-                                      ? Icon(Icons.person, size: 30)
-                                      : null,
-                                ),
-                                SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: _toggleCamera,
+                                borderRadius: BorderRadius.circular(16),
+                                child: Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Text('Người nhận', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                                      SizedBox(height: 4),
+                                      Icon(Icons.qr_code_scanner, color: Colors.white, size: 24),
+                                      SizedBox(width: 12),
                                       Text(
-                                        _selectedUser!['username'] ?? 'Không rõ tên',
-                                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      Text(
-                                        'ID: ${_selectedUser!['user_id']}',
-                                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                                        overflow: TextOverflow.ellipsis,
+                                        'Quét mã QR',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
                                       ),
                                     ],
                                   ),
                                 ),
-                                Icon(Icons.check_circle, color: Colors.green, size: 24),
-                              ],
+                              ),
+                            ),
+                          ),
+
+                        GestureDetector(
+                          onTapDown: (_) => _buttonAnimController.forward(),
+                          onTapUp: (_) {
+                            _buttonAnimController.reverse();
+                            if (!_isTransferring) _handleTransfer();
+                          },
+                          onTapCancel: () => _buttonAnimController.reverse(),
+                          child: ScaleTransition(
+                            scale: _buttonScaleAnim,
+                            child: Container(
+                              width: double.infinity,
+                              padding: EdgeInsets.symmetric(vertical: 18),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: _isTransferring
+                                      ? [Colors.grey.shade400, Colors.grey.shade600]
+                                      : [Colors.purple.shade400, Colors.purple.shade700],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.purple.withOpacity(0.4),
+                                    blurRadius: 15,
+                                    offset: Offset(0, 6),
+                                  ),
+                                ],
+                              ),
+                              child: _isTransferring
+                                  ? Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 3,
+                                    ),
+                                  ),
+                                  SizedBox(width: 16),
+                                  Text(
+                                    'Đang xử lý...',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              )
+                                  : Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.send_rounded, color: Colors.white, size: 24),
+                                  SizedBox(width: 12),
+                                  Text(
+                                    'Chuyển tiền',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      SizedBox(height: 16),
 
-                      // Input số tiền
-                      Text('Số tiền', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey[700])),
-                      SizedBox(height: 8),
-                      Card(
-                        elevation: 2,
-                        child: TextField(
-                          controller: _amountController,
-                          keyboardType: TextInputType.number,
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                          decoration: InputDecoration(
-                            filled: true,
-                            fillColor: Colors.white,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                            hintText: '0',
-                            suffixText: 'đ',
-                            suffixStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.grey[600]),
-                            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                          ),
-                          onChanged: (value) {
-                            final text = value.replaceAll('.', '');
-                            if (text.isNotEmpty) {
-                              final formatted = _formatMoney(double.parse(text));
-                              _amountController.value = TextEditingValue(
-                                text: formatted,
-                                selection: TextSelection.collapsed(offset: formatted.length),
-                              );
-                            }
-                          },
-                        ),
-                      ),
-                      SizedBox(height: 24),
-
-                      // Nút chuyển tiền
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _isTransferring ? null : _handleTransfer, // Vô hiệu hóa khi đang loading
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.purple,
-                            foregroundColor: Colors.white,
-                            padding: EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            elevation: 3,
-                          ),
-                          child: _isTransferring
-                              ? Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                              ),
-                              SizedBox(width: 12),
-                              Text('Đang xử lý...', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                            ],
-                          )
-                              : Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.send, size: 20),
-                              SizedBox(width: 8),
-                              Text('Chuyển tiền', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      if (!_isCameraActive) ...[
-                        SizedBox(height: 16),
-                        Center(
-                          child: TextButton.icon(
-                            onPressed: _toggleCamera,
-                            icon: Icon(Icons.camera_alt),
-                            label: Text('Bật camera để quét QR'),
-                            style: TextButton.styleFrom(foregroundColor: Colors.purple),
-                          ),
-                        ),
+                        SizedBox(height: 20),
                       ],
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
 
-          // === LOADING OVERLAY ===
           if (_isTransferring)
             Container(
               color: Colors.black54,
               child: Center(
-                child: Card(
-                  elevation: 8,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  child: Padding(
-                    padding: EdgeInsets.all(32),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.purple),
-                          strokeWidth: 5,
+                child: Container(
+                  margin: EdgeInsets.all(32),
+                  padding: EdgeInsets.all(40),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.3),
+                        blurRadius: 30,
+                        spreadRadius: 10,
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.purple.shade300, Colors.purple.shade500],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          shape: BoxShape.circle,
                         ),
-                        SizedBox(height: 20),
-                        Text(
-                          'Đang chuyển tiền...',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                        child: SizedBox(
+                          width: 50,
+                          height: 50,
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            strokeWidth: 5,
+                          ),
                         ),
-                      ],
-                    ),
+                      ),
+                      SizedBox(height: 24),
+                      Text(
+                        'Đang chuyển tiền...',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.purple.shade700,
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'Vui lòng đợi trong giây lát',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),

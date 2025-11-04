@@ -155,9 +155,6 @@ class _TopUpScreenState extends State<TopUpScreen> {
           Navigator.of(context).pop();
           _showSuccessConfirmationDialog(
             amount: paymentData['amount'],
-            // onConfirmed: () {
-            //   Navigator.of(context).pop(true);
-            // },
           );
         },
         onCancel: () {
