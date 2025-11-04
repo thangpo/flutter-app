@@ -403,25 +403,40 @@ class GroupChatController extends ChangeNotifier {
 // ... trong class GroupChatController ...
 
   // ===== Members cache per group =====
-  final Map<String, Set<String>> _memberIdsByGroup = {};
-  Set<String> existingMemberIdsOf(String groupId) =>
-      _memberIdsByGroup[groupId] ?? <String>{};
+    Map<String, List<Map<String, dynamic>>> _membersByGroup = {};
+
+ 
+
 
   Future<void> loadGroupMembers(String groupId) async {
-    try {
-      final members = await repo.fetchGroupMembers(groupId);
-      final ids = <String>{};
-      for (final m in members) {
-        final id = (m['user_id'] ?? m['id'] ?? '').toString();
-        if (id.isNotEmpty) ids.add(id);
-      }
-      _memberIdsByGroup[groupId] = ids;
-      notifyListeners();
-    } catch (e) {
-      lastError = e.toString();
+    final members = await repo.fetchGroupMembers(groupId);
+    _membersByGroup[groupId] = members;
+    notifyListeners();
+  }
+
+  List<Map<String, dynamic>> membersOf(String groupId) =>
+      _membersByGroup[groupId] ?? [];
+
+  Future<bool> removeUsers(String groupId, List<String> ids) async {
+    final ok = await repo.removeGroupUsers(groupId, ids);
+    if (ok) {
+      _membersByGroup[groupId]?.removeWhere(
+          (u) => ids.contains('${u['user_id'] ?? u['id'] ?? ''}'));
       notifyListeners();
     }
+    return ok;
   }
+
+  List<String> existingMemberIdsOf(String groupId) {
+    final members = _membersByGroup[groupId];
+    if (members == null) return [];
+    return members
+        .map((m) => '${m['user_id'] ?? m['id'] ?? ''}')
+        .where((id) => id.isNotEmpty)
+        .toList();
+  }
+
+
 
   Future<bool> addUsers(String groupId, List<String> ids) async {
     try {
