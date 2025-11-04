@@ -1,3 +1,4 @@
+// G:\flutter-app\lib\features\social\controllers\group_chat_controller.dart
 import 'dart:io';
 import 'dart:math';
 
@@ -218,16 +219,16 @@ class GroupChatController extends ChangeNotifier {
     };
   }
 
-   Future<void> sendMessage(
+  Future<void> sendMessage(
     String groupId,
     String text, {
     File? file,
-    String? type, // 'image' | 'video' | 'voice' | 'file' | null
+    String? type,
   }) async {
     lastError = null;
     final msgHash = _tempHash();
 
-    // 1) Optimistic UI: thêm local trước
+    // 1) Optimistic UI
     final local = _makeLocalMessage(
       groupId: groupId,
       text: text,
@@ -239,8 +240,6 @@ class GroupChatController extends ChangeNotifier {
     _setMessages(groupId, cur);
     notifyListeners();
 
-    // 2) Gửi API -> flip trạng thái NGAY khi thành công HTTP,
-    //    rồi GHÉP dữ liệu server (nếu có) vào đúng bubble local (không reload)
     try {
       final serverMsg = await repo.sendMessage(
         groupId: groupId,
@@ -261,7 +260,6 @@ class GroupChatController extends ChangeNotifier {
       );
 
       if (idx == -1) {
-        // Không tìm thấy bubble local (hiếm) -> nếu có serverMsg thì thêm vào
         if (serverMsg != null) {
           final normalized = _normalizeServerMessage(serverMsg);
           list.add(normalized);
@@ -271,17 +269,13 @@ class GroupChatController extends ChangeNotifier {
         return;
       }
 
-      // Flip trạng thái NGAY cả khi serverMsg == null
       final currentLocal = Map<String, dynamic>.from(list[idx]);
       currentLocal['uploading'] = false;
       currentLocal['failed'] = false;
       currentLocal['is_local'] = false;
 
       if (serverMsg != null) {
-        // Ghép dữ liệu từ server vào bubble local
         final normalized = _normalizeServerMessage(serverMsg);
-
-        // Ưu tiên field từ server nếu có, fallback sang local sẵn có
         currentLocal
           ..addAll({
             'id': normalized['id'] ?? currentLocal['id'],
@@ -299,7 +293,6 @@ class GroupChatController extends ChangeNotifier {
             'is_audio': normalized['is_audio'] ?? currentLocal['is_audio'],
             'is_file': normalized['is_file'] ?? currentLocal['is_file'],
             'time': normalized['time'] ?? currentLocal['time'],
-            // đảm bảo các cờ trạng thái đã tắt:
             'uploading': false,
             'failed': false,
             'is_local': false,
@@ -310,7 +303,6 @@ class GroupChatController extends ChangeNotifier {
       _setMessages(groupId, List<Map<String, dynamic>>.from(list));
       notifyListeners();
     } catch (e) {
-      // 3) HTTP lỗi -> đánh dấu failed cho bubble local
       final list = _messagesByGroup[groupId];
       if (list != null) {
         final idx = list.indexWhere(
@@ -338,11 +330,7 @@ class GroupChatController extends ChangeNotifier {
     return (fromId != null && me != null && fromId == me);
   }
 
-
-
-// G:\flutter-app\lib\features\social\controllers\group_chat_controller.dart
-
-  // --- Edit group ---
+  // ---------- Edit group ----------
   bool editingGroup = false;
 
   Future<bool> editGroup({
@@ -370,20 +358,20 @@ class GroupChatController extends ChangeNotifier {
         if (newName.isNotEmpty) {
           cur['group_name'] = newName;
           cur['name'] = newName;
+          addSystemMessage(groupId, '✏️ Đã đổi tên nhóm thành "$newName"');
         }
 
         var newAvatar = (updated['avatar'] ?? '').toString();
         if (newAvatar.isNotEmpty &&
             (newAvatar.startsWith('http://') ||
                 newAvatar.startsWith('https://'))) {
-          // phá cache để thấy ngay
           final sep = newAvatar.contains('?') ? '&' : '?';
           newAvatar =
               '$newAvatar${sep}cb=${DateTime.now().millisecondsSinceEpoch}';
           cur['avatar'] = newAvatar;
           cur['group_avatar'] = newAvatar;
+          addSystemMessage(groupId, '🖼️ Đã đổi ảnh nhóm');
         }
-        // nếu server không trả avatar mới: giữ avatar cũ; UI vẫn thấy ảnh local ngay chỗ màn đổi ảnh
 
         groups[idx] = cur;
       }
@@ -398,6 +386,103 @@ class GroupChatController extends ChangeNotifier {
       editingGroup = false;
       notifyListeners();
     }
+  }
+
+  // ---------- Members ----------
+  Map<String, List<Map<String, dynamic>>> _membersByGroup = {};
+
+  Future<void> loadGroupMembers(String groupId) async {
+    final members = await repo.fetchGroupMembers(groupId);
+    _membersByGroup[groupId] = members;
+    notifyListeners();
+  }
+
+  List<Map<String, dynamic>> membersOf(String groupId) =>
+      _membersByGroup[groupId] ?? [];
+
+  List<String> existingMemberIdsOf(String groupId) {
+    final members = _membersByGroup[groupId];
+    if (members == null) return [];
+    return members
+        .map((m) => '${m['user_id'] ?? m['id'] ?? ''}')
+        .where((id) => id.isNotEmpty)
+        .toList();
+  }
+
+  Future<bool> addUsers(String groupId, List<String> ids) async {
+    try {
+      final ok = await repo.addUsersToGroup(groupId, ids);
+      if (ok) {
+        await loadGroupMembers(groupId);
+
+        final members = _membersByGroup[groupId] ?? [];
+        final addedNames = members
+            .where((m) {
+              final idStr = '${m['user_id'] ?? m['id'] ?? ''}';
+              return ids.contains(idStr);
+            })
+            .map((m) => (m['name'] ?? m['username'] ?? '').toString())
+            .where((n) => n.isNotEmpty)
+            .join(', ');
+
+        addSystemMessage(
+          groupId,
+          addedNames.isNotEmpty
+              ? '👥 Đã thêm $addedNames vào nhóm'
+              : '👥 Đã thêm ${ids.length} thành viên vào nhóm',
+        );
+      }
+      return ok;
+    } catch (e) {
+      lastError = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+
+  Future<bool> removeUsers(String groupId, List<String> ids) async {
+    final ok = await repo.removeGroupUsers(groupId, ids);
+    if (ok) {
+      final removedNames = <String>[];
+      final members = _membersByGroup[groupId] ?? [];
+      for (final id in ids) {
+        final user = members.firstWhere(
+          (u) => '${u['user_id'] ?? u['id'] ?? ''}' == id,
+          orElse: () => {},
+        );
+        if (user.isNotEmpty) {
+          removedNames
+              .add('${user['name'] ?? user['username'] ?? 'Người dùng'}');
+        }
+      }
+      _membersByGroup[groupId]?.removeWhere(
+          (u) => ids.contains('${u['user_id'] ?? u['id'] ?? ''}'));
+      notifyListeners();
+
+      final namesText = removedNames.join(', ');
+      addSystemMessage(groupId, '❌ Đã xoá $namesText khỏi nhóm');
+    }
+    return ok;
+  }
+
+  // ---------- System Message ----------
+  void addSystemMessage(String groupId, String text) {
+    final list = _messagesByGroup[groupId] ?? [];
+    final msg = {
+      'id': DateTime.now().millisecondsSinceEpoch.toString(),
+      'display_text': text,
+      'is_system': true,
+      'time': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    };
+    list.add(msg);
+    list.sort((a, b) {
+      final aTime = int.tryParse('${a['time'] ?? 0}') ?? 0;
+      final bTime = int.tryParse('${b['time'] ?? 0}') ?? 0;
+      return aTime.compareTo(bTime);
+    });
+    _messagesByGroup[groupId] = list;
+    notifyListeners();
   }
 
 }
