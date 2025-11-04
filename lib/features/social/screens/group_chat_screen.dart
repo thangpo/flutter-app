@@ -11,6 +11,8 @@ import 'package:provider/provider.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_chat_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/group_chat_message_bubble.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/add_group_members_screen.dart';
+
 
 class GroupChatScreen extends StatefulWidget {
   final String groupId;
@@ -48,7 +50,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   bool _showScrollToBottom = false;
   int _lastItemCount = 0;
 
-  // --- NEW: override tên & avatar để cập nhật ngay ---
+  // --- override tên & avatar để cập nhật ngay ---
   String? _titleOverride; // tên nhóm sau khi đổi
   String? _avatarOverridePath; // có thể là http(s) hoặc file path/local uri
 
@@ -415,6 +417,83 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     );
   }
 
+  Future<void> _openAddMembersPicker() async {
+    // bên trong GroupChatScreen, trước khi push màn add:
+    final ctrl = context.read<GroupChatController>();
+    await ctrl.loadGroupMembers(widget.groupId);
+    final existing = ctrl.existingMemberIdsOf(widget.groupId);
+
+    final added = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddGroupMembersScreen(
+          groupId: widget.groupId,
+          existingMemberIds: existing,
+        ),
+      ),
+    );
+    if (added == true) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Đã thêm thành viên')),
+      );
+    }
+
+  }
+
+
+  // NEW: Dialog thêm thành viên theo danh sách userId phân tách dấu phẩy
+  Future<void> _openAddMembersDialog() async {
+    final ctrl = context.read<GroupChatController>();
+    final textCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Thêm thành viên'),
+        content: TextField(
+          controller: textCtrl,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Nhập user IDs, ví dụ: 2,3,4',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Huỷ'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Thêm'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+
+    final raw = textCtrl.text.trim();
+    if (raw.isEmpty) return;
+
+    final ids = raw
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toSet()
+        .toList();
+
+    if (ids.isEmpty) return;
+
+    final success = await ctrl.addUsers(widget.groupId, ids);
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content: Text(
+              success ? 'Đã thêm thành viên' : 'Thêm thành viên thất bại')),
+    );
+  }
+
   void _openGroupInfoSheet() {
     final avatarProvider =
         _finalAvatarProvider(context.read<GroupChatController>());
@@ -520,13 +599,17 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                       fontWeight: FontWeight.w600, fontSize: 18)),
               const SizedBox(height: 12),
 
-              // Row actions: call / video / add / mute (demo)
+              // Row actions: call / video / add / mute
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _circleAction(icon: Icons.call, label: 'Gọi thoại'),
                   _circleAction(icon: Icons.videocam, label: 'Gọi video'),
-                  _circleAction(icon: Icons.group_add, label: 'Thêm'),
+                  _circleAction(
+                      icon: Icons.group_add,
+                      label: 'Thêm',
+                      onTap: _openAddMembersPicker),
+
                   _circleAction(
                       icon: Icons.notifications_off, label: 'Bật tắt'),
                 ],
