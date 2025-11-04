@@ -417,11 +417,90 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     );
   }
 
+
+Future<void> _openMembersSheet() async {
+    final ctrl = context.read<GroupChatController>();
+    await ctrl.loadGroupMembers(widget.groupId);
+    final members = ctrl.membersOf(widget.groupId);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Thành viên nhóm',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            const SizedBox(height: 12),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: members.length,
+                itemBuilder: (_, i) {
+                  final m = members[i];
+                  final name = '${m['name'] ?? m['username'] ?? 'Người dùng'}';
+                  final avatar = '${m['avatar'] ?? ''}';
+                  final id = '${m['user_id'] ?? m['id'] ?? ''}';
+
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundImage:
+                          avatar.isNotEmpty ? NetworkImage(avatar) : null,
+                      child: avatar.isEmpty
+                          ? const Icon(Icons.person, size: 20)
+                          : null,
+                    ),
+                    title: Text(name),
+                    subtitle: Text('ID: $id'),
+                    onTap: () async {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx2) => AlertDialog(
+                          title: Text('Xóa $name khỏi nhóm?'),
+                          actions: [
+                            TextButton(
+                                onPressed: () => Navigator.pop(ctx2, false),
+                                child: const Text('Hủy')),
+                            ElevatedButton(
+                                onPressed: () => Navigator.pop(ctx2, true),
+                                child: const Text('Xóa')),
+                          ],
+                        ),
+                      );
+                      if (confirm == true) {
+                        final ok = await ctrl.removeUsers(widget.groupId, [id]);
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text(ok
+                                ? 'Đã xóa $name khỏi nhóm'
+                                : 'Xóa thất bại')));
+                        Navigator.pop(ctx); // Đóng sheet
+                        _openMembersSheet(); // Mở lại để refresh
+                      }
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+
   Future<void> _openAddMembersPicker() async {
     // bên trong GroupChatScreen, trước khi push màn add:
     final ctrl = context.read<GroupChatController>();
     await ctrl.loadGroupMembers(widget.groupId);
-    final existing = ctrl.existingMemberIdsOf(widget.groupId);
+    final existing = ctrl.existingMemberIdsOf(widget.groupId).toSet();
+
 
     final added = await Navigator.push(
       context,
@@ -611,10 +690,61 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                       onTap: _openAddMembersPicker),
 
                   _circleAction(
-                      icon: Icons.notifications_off, label: 'Bật tắt'),
+                      icon: Icons.group,
+                      label: 'Thành viên',
+                      onTap: _openMembersSheet),
+
                 ],
               ),
               const SizedBox(height: 12),
+              // Hiển thị danh sách thành viên trong sheet
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: EdgeInsets.only(left: 12, bottom: 6),
+                  child: Text(
+                    'Thành viên nhóm',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                  ),
+                ),
+              ),
+              FutureBuilder(
+                future: context
+                    .read<GroupChatController>()
+                    .loadGroupMembers(widget.groupId),
+                builder: (ctx2, snapshot) {
+                  final ctrl = context.read<GroupChatController>();
+                  final members = ctrl.membersOf(widget.groupId);
+                  // Lấy ra chủ nhóm
+                  final owners =
+                      members.where((m) => '${m['is_owner']}' == '1').toList();
+
+                  if (owners.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Text('Không tìm thấy chủ nhóm.'),
+                    );
+                  }
+
+                  final m = owners.first;
+                  final name = '${m['name'] ?? m['username'] ?? 'Người dùng'}';
+                  final avatar = '${m['avatar'] ?? ''}';
+
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundImage:
+                          avatar.isNotEmpty ? NetworkImage(avatar) : null,
+                      child: avatar.isEmpty
+                          ? const Icon(Icons.person, size: 22)
+                          : null,
+                    ),
+                    title: Text(name,
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                    subtitle: const Text('👑 Chủ nhóm'),
+                  );
+                },
+              ),
+
             ],
           ),
         );
