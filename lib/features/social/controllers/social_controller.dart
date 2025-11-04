@@ -74,11 +74,13 @@ class SocialController with ChangeNotifier {
   bool loadingFollowers = false;
   bool loadingFollowing = false;
 
-  String? _followersAfter;   // cursor/offset trang tiếp theo
+  String? _followersAfter; // cursor/offset trang tiếp theo
   String? _followingAfter;
 
-  bool get hasMoreFollowers => _followersAfter != null && _followersAfter!.isNotEmpty;
-  bool get hasMoreFollowing => _followingAfter != null && _followingAfter!.isNotEmpty;
+  bool get hasMoreFollowers =>
+      _followersAfter != null && _followersAfter!.isNotEmpty;
+  bool get hasMoreFollowing =>
+      _followingAfter != null && _followingAfter!.isNotEmpty;
 
   final List<SocialStory> _stories = [];
   List<SocialStory> get stories => List.unmodifiable(_stories);
@@ -370,8 +372,6 @@ class SocialController with ChangeNotifier {
       notifyListeners();
     }
   }
-
-
 
   Future<void> loadUserGroups({bool forceRefresh = false}) async {
     if (_loadingUserGroups) return;
@@ -810,44 +810,73 @@ class SocialController with ChangeNotifier {
         serverKey: AppConstants.socialServerKey,
       );
 
-      final String streamNameBase =
-          'live_${DateTime.now().millisecondsSinceEpoch}';
-      final int uid = broadcasterUid ??
-          DateTime.now().millisecondsSinceEpoch.remainder(1000000);
+      final String rawUserId = (_currentUser?.id ?? '').trim();
+      String idSegment = rawUserId.replaceAll(RegExp(r'[^0-9]'), '');
+      if (idSegment.isEmpty) {
+        idSegment = '0';
+      }
+
+      final int timestamp = DateTime.now().microsecondsSinceEpoch;
+      int randomComponent = timestamp.remainder(10000000);
+      if (randomComponent <= 0) {
+        randomComponent =
+            DateTime.now().millisecondsSinceEpoch.remainder(10000000);
+        if (randomComponent <= 0) {
+          randomComponent = 1;
+        }
+      }
+
+      const int tokenUid = 0;
+      String streamName = 'stream_${idSegment}_$randomComponent';
+      final String baseStreamName = streamName;
 
       Map<String, dynamic>? agoraPayload;
       String? tokenAgora;
       try {
         agoraPayload = await repo.generateAgoraToken(
           accessToken: token,
-          channelName: streamNameBase,
-          uid: uid,
+          channelName: streamName,
+          uid: tokenUid,
+          role: 'publisher',
         );
-        tokenAgora = agoraPayload?['token_agora']?.toString();
+        tokenAgora = (agoraPayload?['token_agora'] ?? agoraPayload?['token'])
+            ?.toString();
+        final String? payloadChannel =
+            agoraPayload?['channel_name']?.toString() ??
+                agoraPayload?['channel']?.toString();
+        if (payloadChannel != null && payloadChannel.isNotEmpty) {
+          streamName = payloadChannel;
+        }
       } catch (error) {
         debugPrint('generateAgoraToken failed: $error');
+        throw Exception('Failed to generate Agora token: $error');
+      }
+
+      if (tokenAgora == null || tokenAgora.isEmpty) {
+        throw Exception('Agora token response is empty.');
+      }
+
+      if (streamName.trim().isEmpty) {
+        streamName = baseStreamName;
       }
 
       final Map<String, dynamic> postData = await repo.createLive(
         accessToken: token,
-        streamName: streamNameBase,
-        token: tokenAgora ?? '',
+        streamName: streamName,
+        token: tokenAgora,
       );
 
-      final String streamName =
-          postData['stream_name']?.toString() ?? streamNameBase;
+      postData.putIfAbsent('agora_token', () => tokenAgora);
 
       final Map<String, dynamic> result = <String, dynamic>{
         'post_data': postData,
         'stream_name': streamName,
-        'uid': uid,
+        'uid': tokenUid,
+        'token': tokenAgora,
       };
 
       if (agoraPayload != null) {
         result['agora'] = agoraPayload;
-      }
-      if ((tokenAgora ?? '').isNotEmpty) {
-        result['token'] = tokenAgora;
       }
 
       return result;

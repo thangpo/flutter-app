@@ -16,6 +16,13 @@ class SocialPost {
   final String? videoUrl;
   final String? audioUrl;
   final String? postType;
+  final String? thumbnailUrl;
+  final String? liveStreamName;
+  final String? liveAgoraToken;
+  final DateTime? liveStartedAt;
+  final bool liveEnded;
+  final String? liveResourceId;
+  final String? liveSid;
   final SocialPost? sharedPost;
 
   // Group
@@ -52,7 +59,7 @@ class SocialPost {
 
   const SocialPost({
     required this.id,
-    this.publisherId,                // <-- NEW
+    this.publisherId, // <-- NEW
     this.text,
     this.userName,
     this.userAvatar,
@@ -67,6 +74,13 @@ class SocialPost {
     this.videoUrl,
     this.audioUrl,
     this.postType,
+    this.thumbnailUrl,
+    this.liveStreamName,
+    this.liveAgoraToken,
+    this.liveStartedAt,
+    this.liveEnded = false,
+    this.liveResourceId,
+    this.liveSid,
     this.sharedPost,
     this.isGroupPost = false,
     this.isGroupAdmin = false,
@@ -94,7 +108,7 @@ class SocialPost {
 
   SocialPost copyWith({
     String? id,
-    String? publisherId,            // <-- NEW
+    String? publisherId, // <-- NEW
     String? text,
     String? userName,
     String? userAvatar,
@@ -109,6 +123,13 @@ class SocialPost {
     String? videoUrl,
     String? audioUrl,
     String? postType,
+    String? thumbnailUrl,
+    String? liveStreamName,
+    String? liveAgoraToken,
+    DateTime? liveStartedAt,
+    bool? liveEnded,
+    String? liveResourceId,
+    String? liveSid,
     SocialPost? sharedPost,
     bool? isGroupPost,
     bool? isGroupAdmin,
@@ -150,6 +171,13 @@ class SocialPost {
       videoUrl: videoUrl ?? this.videoUrl,
       audioUrl: audioUrl ?? this.audioUrl,
       postType: postType ?? this.postType,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      liveStreamName: liveStreamName ?? this.liveStreamName,
+      liveAgoraToken: liveAgoraToken ?? this.liveAgoraToken,
+      liveStartedAt: liveStartedAt ?? this.liveStartedAt,
+      liveEnded: liveEnded ?? this.liveEnded,
+      liveResourceId: liveResourceId ?? this.liveResourceId,
+      liveSid: liveSid ?? this.liveSid,
       sharedPost: sharedPost ?? this.sharedPost,
       isGroupPost: isGroupPost ?? this.isGroupPost,
       isGroupAdmin: isGroupAdmin ?? this.isGroupAdmin,
