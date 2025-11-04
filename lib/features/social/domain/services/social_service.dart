@@ -589,6 +589,55 @@ class SocialService implements SocialServiceInterface {
     throw Exception('Toggle follow failed');
   }
 
+  //block user 11/04/2025
+  @override
+  Future<List<SocialUser>> getBlockedUsers() async {
+    final resp = await socialRepository.getBlockUser(); // <— hàm bạn đã có
+    if (resp.isSuccess && resp.response != null && resp.response!.statusCode == 200) {
+      final data = resp.response!.data;
+      final list = (data?['blocked_users'] as List? ?? []);
+      // Map về SocialUser (không đổi model SocialUser)
+      return list.map<SocialUser>((u) {
+        String id = (u['user_id'] ?? u['id'] ?? '').toString();
+        String? name = (u['name'] ?? u['displayName'])?.toString();
+        String? username = (u['username'] ?? u['user_name'])?.toString();
+        String? avatar = (u['avatar'] ?? u['avatar_full'])?.toString();
+        String? cover = (u['cover'] ?? u['cover_full'])?.toString();
+        return SocialUser(
+          id: id,
+          displayName: name,
+          userName: username,
+          avatarUrl: avatar,
+          coverUrl: cover,
+        );
+      }).toList();
+    }
+    ApiChecker.checkApi(resp);
+    throw Exception('Failed to load blocked users');
+  }
+
+
+  @override
+  Future<bool> blockUser({required String targetUserId,
+    required bool block,})async{
+    final resp = await socialRepository.blockUser(targetUserId: targetUserId,block: block,);
+    if(resp.isSuccess && resp.response!=null){
+      final data = resp.response!.data;
+      final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
+      if (status == 200) {
+        final raw = '${data?['block_status'] ?? ''}'.toLowerCase().trim();
+        if (raw == 'blocked') return true;
+        if (raw == 'un-blocked') return false;
+        throw Exception('Unknown block_status: $raw');
+      }
+      final msg = (data?['errors']?['error_text'] ?? data?['message'] ?? 'Block failed').toString();
+      throw Exception(msg);
+    }
+
+    ApiChecker.checkApi(resp);
+    throw Exception('Block failed');
+  }
+
   // ========== EDIT PROFILE (SOCIAL) + SYNC E-COM ==========
   @override
   Future<SocialUserProfile> updateDataUser({

@@ -223,6 +223,48 @@ class SocialRepository {
   }
 
   //thêm
+  // block user 04/11/2025 by aoanhan
+  Future<ApiResponseModel<Response>> blockUser({
+     required String targetUserId,
+    required bool block,
+  })async{
+    try{
+      final token=_getSocialAccessToken();
+      final url='${AppConstants.socialBaseUrl}${AppConstants.socialBlockUser}?access_token=$token';
+      final form=FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'user_id': targetUserId,
+        'block_action': block ? 'block' : 'un-block',
+      });
+      final res=await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: Headers.multipartFormDataContentType),
+      );
+      return ApiResponseModel<Response>.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel<Response>.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+  Future<ApiResponseModel<Response>> getBlockUser()
+  async{
+    try{
+      final token=_getSocialAccessToken();
+      final url='${AppConstants.socialBaseUrl}${AppConstants.socialGetBlockUser}?access_token=$token';
+      final form=FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+      });
+      final res=await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: Headers.multipartFormDataContentType),
+      );
+      return ApiResponseModel<Response>.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel<Response>.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
 
   //30/10  thêm follow trong profile
   // social_repository.dart
@@ -346,6 +388,7 @@ class SocialRepository {
     final i = path.lastIndexOf(RegExp(r'[\/\\]'));
     return i >= 0 ? path.substring(i + 1) : path;
   }
+
 
 
   // THÊM vào class SocialRepository

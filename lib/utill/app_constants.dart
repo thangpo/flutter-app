@@ -66,6 +66,10 @@ class AppConstants {
   static const String socialChatGetUserMessagesUri = '/api/get_user_messages';
   static const String socialChatReadChatsUri = '/api/read_chats';
 
+  //block user 04/11/2025
+  static const String socialBlockUser='/api/block-user';
+  static const String socialGetBlockUser='/api/get-blocked-users';
+
   //follow
   static const String socialFollowUser = '/api/follow-user';
   static const String socialUpdateDataUser = '/api/update-user-data';

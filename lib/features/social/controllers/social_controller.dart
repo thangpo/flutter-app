@@ -76,6 +76,18 @@ class SocialController with ChangeNotifier {
 
   String? _followersAfter;   // cursor/offset trang tiếp theo
   String? _followingAfter;
+//new 11/04/2025
+  final Set<String> _blockBusy = {};
+  bool isBlockBusy(String userId) => _blockBusy.contains(userId);
+
+  List<SocialUser> _blockedUsers = <SocialUser>[];       // danh sách user đã chặn
+  Set<String> _blockedIds = <String>{};
+  bool _loadingBlocked = false;
+  bool get isLoadingBlocked => _loadingBlocked;
+  UnmodifiableListView<SocialUser> get blockedUsers =>
+      UnmodifiableListView(_blockedUsers);
+  bool isUserBlocked(String userId) => _blockedIds.contains(userId);
+  //end
 
   bool get hasMoreFollowers => _followersAfter != null && _followersAfter!.isNotEmpty;
   bool get hasMoreFollowing => _followingAfter != null && _followingAfter!.isNotEmpty;
@@ -164,6 +176,8 @@ class SocialController with ChangeNotifier {
     _storiesOffset = 0;
     _storyReactionLoading.clear();
     _storyViewers.clear();
+    _blockBusy.clear();
+
 
     // Clear profile state
     _followers = const [];
@@ -274,6 +288,139 @@ class SocialController with ChangeNotifier {
       notifyListeners();
     }
   }
+
+  //block user 11/04/2025
+  Future<bool> toggleBlockUser({
+    String? targetUserId,
+    required bool block, // true = block, false = un-block
+  }) async {
+    final String? id = targetUserId ?? _profileHeaderUser?.id;
+    if (id == null || id.isEmpty) {
+      throw Exception('Không xác định userId để chặn.');
+    }
+    // Không cho tự chặn chính mình
+    if (_currentUser?.id == id) {
+      return _profileHeaderUser?.isBlocked ?? false;
+    }
+    // Chống double-tap
+    if (_blockBusy.contains(id)) {
+      return _profileHeaderUser?.isBlocked ?? false;
+    }
+
+    _blockBusy.add(id);
+    notifyListeners();
+
+    try {
+      // service.blockUser phải trả về bool: true=blocked, false=un-blocked
+      final bool blocked = await service.blockUser(
+        targetUserId: id,
+        block: block,
+      );
+
+      // Cập nhật ngay header nếu đang mở profile user đó
+      if (_profileHeaderUser?.id == id && _profileHeaderUser != null) {
+        final cur = _profileHeaderUser!;
+        _profileHeaderUser = cur.copyWith(
+          isBlocked: blocked,
+          // Khi chặn thì coi như không follow nữa (tuỳ luật app của bạn)
+          isFollowing: blocked ? false : cur.isFollowing,
+        );
+      }
+
+      // (Tuỳ chọn) Nếu muốn đồng bộ list followers/following trong trang profile:
+      // nếu blocked thì loại user khỏi danh sách… (bạn có thể bỏ nếu backend tự xử)
+      if (blocked) {
+        // Thêm vào tập id đã chặn
+        final added = _blockedIds.add(id);
+        // Nếu chưa có trong list, thêm 1 item tối thiểu để hiển thị ngay
+        if (added && !_blockedUsers.any((u) => u.id == id)) {
+          final src = (_profileHeaderUser != null && _profileHeaderUser!.id == id)
+              ? _profileHeaderUser
+              : null;
+          _blockedUsers.insert(0, SocialUser(
+            id: id,
+            displayName: src?.displayName,
+            userName: src?.userName,
+            avatarUrl: src?.avatarUrl,
+            coverUrl: src?.coverUrl,
+          ));
+        }
+      }  else {
+        // Bỏ chặn: xóa khỏi set + list
+        _blockedIds.remove(id);
+        _blockedUsers.removeWhere((u) => u.id == id);
+
+        // 🔧 QUAN TRỌNG: tạo list mới để thay đổi reference => UI cập nhật ngay
+        _blockedUsers = List<SocialUser>.from(_blockedUsers);
+
+        notifyListeners();
+      }
+
+      notifyListeners();
+      return blocked;
+    } finally {
+      _blockBusy.remove(id);
+      notifyListeners();
+    }
+  }
+  Future<void> refreshBlockedUsers({bool force = false}) async {
+    if (_loadingBlocked) return;
+    if (!force && _blockedUsers.isNotEmpty) return;
+
+    _loadingBlocked = true;
+    notifyListeners();
+    try {
+      // YÊU CẦU: service.getBlockedUsers() trả về List<SocialUser>
+      final users = await service.getBlockedUsers();
+
+      _blockedUsers = users;
+      _blockedIds = users.map((u) => u.id).toSet();
+
+      // Đồng bộ cờ isBlocked cho header profile nếu đang mở
+      if (_profileHeaderUser != null) {
+        final isBlockedNow = _blockedIds.contains(_profileHeaderUser!.id);
+        _profileHeaderUser = _profileHeaderUser!.copyWith(
+          isBlocked: isBlockedNow,
+          // (tùy luật) nếu bị chặn thì cũng coi như không còn follow
+          isFollowing: isBlockedNow ? false : _profileHeaderUser!.isFollowing,
+        );
+      }
+    } finally {
+      _loadingBlocked = false;
+      notifyListeners();
+    }
+  }
+  Future<void> loadBlockedUsersIfEmpty({bool force = false}) async {
+    // Nếu force => luôn tải lại; nếu không => chỉ tải khi list đang trống
+    if (force) {
+      await refreshBlockedUsers(force: true);
+    } else {
+      if (!_loadingBlocked && _blockedUsers.isEmpty) {
+        await refreshBlockedUsers(force: true);
+      }
+    }
+  }
+
+  /// Unblock nhanh từ danh sách đã chặn (UI gọi)
+  Future<bool> unblockFromList(String userId) async {
+    if (userId.isEmpty) return false;
+    try {
+      // toggleBlockUser trả về "blocked" (true nếu đang chặn). Với block:false
+      // thì kết quả mong muốn là false (đã bỏ chặn).
+      final bool blocked = await toggleBlockUser(
+        targetUserId: userId,
+        block: false,
+      );
+      // Sau khi toggleBlockUser, danh sách _blockedUsers/_blockedIds đã được đồng bộ.
+      return !blocked; // true = đã bỏ chặn thành công
+    } catch (_) {
+      rethrow;
+    }
+  }
+
+
+
+
 
   //edit prodile user by aoanhan
 

@@ -37,6 +37,9 @@ class SocialUserProfile {
   final bool isFollowing;
   final bool isFollowingMe;
 
+  // Trạng thái block user (NEW)
+  final bool isBlocked;
+
   // ===== Trường phục vụ cập nhật (KHÔNG lấy từ API, KHÔNG lưu local) =====
   final String? currentPassword;    // <-- NEW: chỉ dùng khi đổi mật khẩu
   final String? newPassword;        // <-- NEW: chỉ dùng khi đổi mật khẩu
@@ -69,6 +72,7 @@ class SocialUserProfile {
     this.isFollowingMe = false,
     this.currentPassword,           // <-- NEW
     this.newPassword,               // <-- NEW
+    this.isBlocked = false,         // <-- NEW
   });
 
   factory SocialUserProfile.fromJson(Map<String, dynamic> json) {
@@ -92,6 +96,17 @@ class SocialUserProfile {
       final s = v.toString().trim();
       if (s.isEmpty || s == '0' || s == '0000-00-00') return null;
       return s;
+    }
+
+    // --- NEW: parse trạng thái block từ nhiều key có thể xuất hiện ---
+    bool _toBlocked(dynamic v) {
+      if (v == null) return false;
+      if (v is bool) return v;
+      if (v is num) return v != 0;
+      final s = v.toString().trim().toLowerCase();
+      if (s == '1' || s == 'true' || s == 'blocked' || s == 'block') return true;
+      if (s == '0' || s == 'false' || s == 'un-blocked' || s == 'unblocked') return false;
+      return false;
     }
 
     return SocialUserProfile(
@@ -139,9 +154,17 @@ class SocialUserProfile {
       isFollowing    : _toBool(json['isFollowing'] ?? json['is_following']),
       isFollowingMe  : _toBool(json['isFollowingMe'] ?? json['is_following_me']),
 
-      // Các trường mật khẩu KHÔNG đọc từ server
+      // mật khẩu KHÔNG lấy từ server
       currentPassword: null,
-      newPassword   : null,
+      newPassword    : null,
+
+      // --- NEW: block status ---
+      isBlocked: _toBlocked(
+        json['isBlocked'] ??
+            json['is_blocked'] ??
+            json['blocked'] ??
+            json['block_status'],
+      ),
     );
   }
 
@@ -172,6 +195,8 @@ class SocialUserProfile {
       'lastSeenText'    : lastSeenText,
       'isFollowing'     : isFollowing,
       'isFollowingMe'   : isFollowingMe,
+      // NEW: serialize trạng thái block (dùng nội bộ)
+      'isBlocked'       : isBlocked,
       // CHÚ Ý: Không serialize currentPassword/newPassword để tránh lưu trữ nhạy cảm
     };
   }
@@ -205,6 +230,7 @@ class SocialUserProfile {
     bool? isFollowingMe,
     String? currentPassword,   // <-- NEW
     String? newPassword,       // <-- NEW
+    bool? isBlocked,           // <-- NEW
   }) {
     return SocialUserProfile(
       id: id ?? this.id,
@@ -233,7 +259,8 @@ class SocialUserProfile {
       isFollowing: isFollowing ?? this.isFollowing,
       isFollowingMe: isFollowingMe ?? this.isFollowingMe,
       currentPassword: currentPassword ?? this.currentPassword, // <-- NEW
-      newPassword   : newPassword    ?? this.newPassword,       // <-- NEW
+      newPassword    : newPassword    ?? this.newPassword,      // <-- NEW
+      isBlocked      : isBlocked      ?? this.isBlocked,        // <-- NEW
     );
   }
 }
