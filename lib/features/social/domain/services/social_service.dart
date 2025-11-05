@@ -17,6 +17,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user_profile.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_photo.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_reel.dart';
 
 import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
@@ -667,6 +668,32 @@ class SocialService implements SocialServiceInterface {
 
     throw Exception(resp.error ?? 'getUserPhotos failed');
   }
+
+  //reefs
+
+
+// service impl
+  @override
+  Future<List<SocialReel>> getUserReels({
+    String? targetUserId,
+    int limit = 20,
+    String? offset,
+  }) async {
+    final resp = await socialRepository.getAlbumUser(
+      targetUserId: targetUserId,
+      type: 'video',     // hoặc 'video' tùy API của bạn
+      limit: limit,
+      offset: offset,
+    );
+
+    if (resp.isSuccess && resp.response?.statusCode == 200) {
+      final data = resp.response!.data;
+      final baseUrl = AppConstants.socialBaseUrl.replaceAll(RegExp(r'/$'), '') + '/';
+      return SocialReel.parseFromGetAlbums(data, baseUrl: baseUrl);
+    }
+    throw Exception(resp.error ?? 'getUserReels failed');
+  }
+
 
 
 

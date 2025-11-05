@@ -249,35 +249,37 @@ class SocialRepository {
 
   //get album user 05/11/2025
   Future<ApiResponseModel<Response>> getAlbumUser({
-    String? targetUserId,          // <-- thêm
+    String? targetUserId,
     String type = 'photos',
     int limit = 30,
     String? offset,
-})async {
-    try{
-    final token = _getSocialAccessToken();
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      final url = '${AppConstants.socialBaseUrl}${AppConstants.socialGetAlbumUser}?access_token=$token';
+      final userId = (targetUserId != null && targetUserId.isNotEmpty)
+          ? targetUserId
+          : _getSocialUserId();
 
-    final url = '${AppConstants.socialBaseUrl}${AppConstants
-        .socialGetAlbumUser}?access_token=$token';
-    final  user_id =
-    (targetUserId != null && targetUserId.isNotEmpty)
-        ? targetUserId
-        : _getSocialUserId();
-    final form = FormData.fromMap({
-      'server_key': AppConstants.socialServerKey,
-      'user_id': user_id,
-      'type': type
-    });
-    final res = await dioClient.post(
-      url,
-      data: form,
-      options: Options(contentType: Headers.multipartFormDataContentType),
-    );
-    return ApiResponseModel<Response>.withSuccess(res);
-  } catch (e) {
-  return ApiResponseModel<Response>.withError(ApiErrorHandler.getMessage(e));
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'user_id': userId,
+        'type': type,
+        'limit': limit.toString(),          // <-- thêm
+        if (offset != null && offset.isNotEmpty) 'offset': offset, // <-- thêm
+      });
+
+      final res = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: Headers.multipartFormDataContentType),
+      );
+      return ApiResponseModel<Response>.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel<Response>.withError(ApiErrorHandler.getMessage(e));
+    }
   }
-}
+
 
 
 

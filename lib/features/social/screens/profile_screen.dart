@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:ui';
 import 'package:flutter/services.dart'; // Clipboard
+import 'dart:typed_data';
+import 'package:video_thumbnail/video_thumbnail.dart';
+import 'package:collection/collection.dart'; // nếu cần firstWhereOrNull ở chỗ khác
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -20,6 +23,8 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_story
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user_profile.dart';
+// NEW: Reels model
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_reel.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_screen.dart'
     show SocialPostCard;
@@ -29,6 +34,9 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/member_list_
 
 // ví
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/wallet_screen.dart';
+
+// NEW: video player cho màn xem reel
+import 'package:video_player/video_player.dart';
 
 /// Tab hiện tại
 enum _ProfileTab { posts, about, reels, photos }
@@ -200,6 +208,10 @@ class _ProfileBodyState extends State<_ProfileBody> {
             );
             break;
           case _ProfileTab.reels:
+            tabContent = _ProfileReelsSection(
+              targetUserId: widget.targetUserId,
+            );
+            break;
           case _ProfileTab.posts:
           default:
             tabContent = _ProfilePostsSection(
@@ -230,8 +242,22 @@ class _ProfileBodyState extends State<_ProfileBody> {
                   user: safeHeaderUser,
                   recentFollowers: recentFollowers,
                   currentTab: _currentTab,
-                  onTabSelected: (_ProfileTab tab) {
+                  onTabSelected: (_ProfileTab tab) async {
                     setState(() => _currentTab = tab);
+                    // NEW: khi chuyển sang Reels thì refresh nếu cần
+                    if (tab == _ProfileTab.reels) {
+                      final viewedId = widget.targetUserId ??
+                          sc.profileHeaderUser?.id ??
+                          sc.currentUser?.id;
+                      if ((sc.profileReels.isEmpty ||
+                          sc.reelsForUserId != viewedId) &&
+                          !sc.isLoadingProfileReels) {
+                        await sc.refreshProfileReels(
+                          targetUserId: viewedId,
+                          limit: 20,
+                        );
+                      }
+                    }
                   },
                   isSelf: isSelf,
                 ),
@@ -987,8 +1013,7 @@ class _CompactFollowersRow extends StatelessWidget {
                       ? NetworkImage(display[i].avatarUrl!)
                       : null,
                   child: display[i].avatarUrl?.isNotEmpty != true
-                      ? const Icon(Icons.person,
-                      size: 16, color: Colors.grey)
+                      ? const Icon(Icons.person, size: 16, color: Colors.grey)
                       : null,
                 ),
               ),
@@ -1069,9 +1094,8 @@ class _SimpleTab extends StatelessWidget {
               Icon(
                 Icons.keyboard_arrow_down,
                 size: 16,
-                color: active
-                    ? theme.colorScheme.primary
-                    : theme.hintColor,
+                color:
+                active ? theme.colorScheme.primary : theme.hintColor,
               ),
           ],
         ),
@@ -2112,7 +2136,7 @@ class _ProfilePhotosSectionState extends State<_ProfilePhotosSection> {
                 itemBuilder: (_, i) {
                   final p = photos[i];
                   final thumb = p.thumbUrl ?? p.fullUrl;
-                  final full  = p.fullUrl ?? p.thumbUrl;
+                  final full = p.fullUrl ?? p.thumbUrl;
 
                   // Nếu không có URL hợp lệ thì render ô hỏng và không cho mở
                   if (full == null && thumb == null) {
@@ -2137,7 +2161,8 @@ class _ProfilePhotosSectionState extends State<_ProfilePhotosSection> {
 
                         // Xác định index ảnh được chạm tương ứng trong mảng urls
                         final tapped = full ?? thumb;
-                        final initialIndex = tapped == null ? i : urls.indexOf(tapped);
+                        final initialIndex =
+                        tapped == null ? i : urls.indexOf(tapped);
                         final safeIndex = initialIndex < 0 ? 0 : initialIndex;
 
                         // heroTags dùng chính URLs để match Hero
@@ -2167,7 +2192,9 @@ class _ProfilePhotosSectionState extends State<_ProfilePhotosSection> {
                             if (progress == null) return child;
                             return const ColoredBox(
                               color: Color(0x11000000),
-                              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                              child: Center(
+                                  child:
+                                  CircularProgressIndicator(strokeWidth: 2)),
                             );
                           },
                         ),
@@ -2175,7 +2202,6 @@ class _ProfilePhotosSectionState extends State<_ProfilePhotosSection> {
                     ),
                   );
                 },
-
               ),
             ),
             const SizedBox(height: 8),
@@ -2197,13 +2223,223 @@ class _ProfilePhotosSectionState extends State<_ProfilePhotosSection> {
     );
   }
 }
+
 // ==============================
-// FULLSCREEN GALLERY (thuần Flutter)
+// REELS SECTION (NEW)
+// ==============================
+class _ProfileReelsSection extends StatefulWidget {
+  final String? targetUserId;
+  const _ProfileReelsSection({this.targetUserId});
+
+  @override
+  State<_ProfileReelsSection> createState() => _ProfileReelsSectionState();
+}
+
+class _ProfileReelsSectionState extends State<_ProfileReelsSection> {
+  @override
+  final Map<String, Future<Uint8List?>> _thumbFutureCache = {};
+  Future<Uint8List?> _genThumb(String videoUrl) {
+    return VideoThumbnail.thumbnailData(
+      video: videoUrl,                // chấp nhận file path hoặc URL
+      imageFormat: ImageFormat.JPEG,  // ra JPEG cho nhẹ
+      timeMs: 0,                      // frame đầu tiên của video
+      maxHeight: 480,                 // vừa đủ nét cho lưới 9:16
+      quality: 75,                    // chất lượng hợp lý
+    );
+  }
+  void initState() {
+    super.initState();
+    // Nạp reels lần đầu nếu cần (phòng khi không prefetch)
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final sc = context.read<SocialController>();
+      final viewedId =
+          widget.targetUserId ?? sc.profileHeaderUser?.id ?? sc.currentUser?.id;
+      if ((sc.profileReels.isEmpty || sc.reelsForUserId != viewedId) &&
+          !sc.isLoadingProfileReels) {
+        await sc.refreshProfileReels(targetUserId: viewedId, limit: 20);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<SocialController>(
+      builder: (context, sc, _) {
+        final reels = sc.profileReels;
+        final loading = sc.isLoadingProfileReels;
+
+        if (loading && reels.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (reels.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: Center(
+              child: Text(
+                'Chưa có video',
+                style: TextStyle(color: Theme.of(context).hintColor),
+              ),
+            ),
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: GridView.builder(
+                itemCount: reels.length,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  mainAxisSpacing: 4,
+                  crossAxisSpacing: 4,
+                  childAspectRatio: 9 / 16, // dọc kiểu reels
+                ),
+                itemBuilder: (_, i) {
+                  final r = reels[i];
+
+// Ưu tiên ảnh thumb từ API, nếu không có thì tự tạo từ video
+                  Widget preview;
+                  if (r.thumbUrl != null && r.thumbUrl!.isNotEmpty) {
+                    preview = Image.network(
+                      r.thumbUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const ColoredBox(
+                        color: Color(0x11000000),
+                        child: Center(child: Icon(Icons.broken_image)),
+                      ),
+                      loadingBuilder: (c, child, p) => p == null
+                          ? child
+                          : const ColoredBox(
+                        color: Color(0x11000000),
+                        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                      ),
+                    );
+                  } else if (r.videoUrl != null && r.videoUrl!.isNotEmpty) {
+                    final fut = _thumbFutureCache.putIfAbsent(
+                      r.videoUrl!,
+                          () => _genThumb(r.videoUrl!),
+                    );
+                    preview = FutureBuilder<Uint8List?>(
+                      future: fut,
+                      builder: (_, snap) {
+                        if (snap.hasData && snap.data != null) {
+                          return Image.memory(
+                            snap.data!,
+                            fit: BoxFit.cover,
+                          );
+                        }
+                        if (snap.hasError) {
+                          return const ColoredBox(
+                            color: Color(0x11000000),
+                            child: Center(child: Icon(Icons.videocam_off)),
+                          );
+                        }
+                        return const ColoredBox(
+                          color: Color(0x11000000),
+                          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                        );
+                      },
+                    );
+                  } else {
+                    preview = const ColoredBox(
+                      color: Color(0x11000000),
+                      child: Center(child: Icon(Icons.videocam_off)),
+                    );
+                  }
+
+                  return ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => _ReelPlayerScreen(reel: r)),
+                        );
+                      },
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          preview,
+                          const Align(
+                            alignment: Alignment.center,
+                            child: Icon(Icons.play_circle_outline, size: 36, color: Colors.white),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (sc.hasMoreProfileReels)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Center(
+                  child: TextButton(
+                    onPressed: () => sc.loadMoreProfileReels(
+                      targetUserId: widget.targetUserId,
+                      limit: 20,
+                    ),
+                    child: const Text('Tải thêm'),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+
+class _DurationChip extends StatelessWidget {
+  final int seconds;
+  const _DurationChip({required this.seconds});
+
+  String _fmt(int s) {
+    final m = s ~/ 60;
+    final r = s % 60;
+    if (m >= 60) {
+      final h = m ~/ 60;
+      final mm = m % 60;
+      return '${h.toString().padLeft(2, '0')}:${mm.toString().padLeft(2, '0')}:${r.toString().padLeft(2, '0')}';
+    }
+    return '${m.toString().padLeft(2, '0')}:${r.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.black87,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        _fmt(seconds),
+        style: const TextStyle(
+            color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+}
+
+// ==============================
+// FULLSCREEN GALLERY (thuần Flutter) cho ảnh
 // ==============================
 class FullscreenGalleryLite extends StatefulWidget {
-  final List<String> urls;          // danh sách URL ảnh full-size
-  final int initialIndex;           // mở tại ảnh thứ mấy
-  final List<String>? heroTags;     // dùng để match Hero từ grid (nên trùng URL)
+  final List<String> urls; // danh sách URL ảnh full-size
+  final int initialIndex; // mở tại ảnh thứ mấy
+  final List<String>? heroTags; // dùng để match Hero từ grid (nên trùng URL)
 
   const FullscreenGalleryLite({
     super.key,
@@ -2213,7 +2449,8 @@ class FullscreenGalleryLite extends StatefulWidget {
   });
 
   @override
-  State<FullscreenGalleryLite> createState() => _FullscreenGalleryLiteState();
+  State<FullscreenGalleryLite> createState() =>
+      _FullscreenGalleryLiteState();
 }
 
 class _FullscreenGalleryLiteState extends State<FullscreenGalleryLite>
@@ -2244,6 +2481,7 @@ class _FullscreenGalleryLiteState extends State<FullscreenGalleryLite>
   }
 
   @override
+
   void dispose() {
     _anim.dispose();
     for (final c in _controllers.values) {
@@ -2260,7 +2498,8 @@ class _FullscreenGalleryLiteState extends State<FullscreenGalleryLite>
   void _toggleZoom() {
     final c = _controllers[_index] ??= TransformationController();
     final isZoomed = !c.value.isIdentity();
-    final end = isZoomed ? Matrix4.identity() : (Matrix4.identity()..scale(2.2));
+    final end =
+    isZoomed ? Matrix4.identity() : (Matrix4.identity()..scale(2.2));
     _matrixTween = Matrix4Tween(begin: c.value, end: end)
         .animate(CurvedAnimation(parent: _anim, curve: Curves.easeOut));
     _anim.forward(from: 0);
@@ -2283,11 +2522,13 @@ class _FullscreenGalleryLiteState extends State<FullscreenGalleryLite>
             onPageChanged: (i) => setState(() => _index = i),
             itemCount: widget.urls.length,
             itemBuilder: (ctx, i) {
-              final tag = (widget.heroTags != null && i < (widget.heroTags!.length))
+              final tag = (widget.heroTags != null &&
+                  i < (widget.heroTags!.length))
                   ? widget.heroTags![i]
                   : widget.urls[i];
 
-              final controller = _controllers[i] ??= TransformationController();
+              final controller =
+              _controllers[i] ??= TransformationController();
 
               return Center(
                 child: Hero(
@@ -2306,9 +2547,13 @@ class _FullscreenGalleryLiteState extends State<FullscreenGalleryLite>
                         widget.urls[i],
                         fit: BoxFit.contain,
                         loadingBuilder: (c, child, p) =>
-                        p == null ? child : const Center(child: CircularProgressIndicator()),
+                        p == null
+                            ? child
+                            : const Center(
+                            child: CircularProgressIndicator()),
                         errorBuilder: (_, __, ___) =>
-                        const Icon(Icons.broken_image, color: Colors.white, size: 48),
+                        const Icon(Icons.broken_image,
+                            color: Colors.white, size: 48),
                       ),
                     ),
                   ),
@@ -2334,7 +2579,8 @@ class _FullscreenGalleryLiteState extends State<FullscreenGalleryLite>
                   icon: const Icon(Icons.close),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: Colors.black54,
                     borderRadius: BorderRadius.circular(20),
@@ -2345,6 +2591,78 @@ class _FullscreenGalleryLiteState extends State<FullscreenGalleryLite>
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ==============================
+// REEL PLAYER SCREEN (NEW)
+// ==============================
+class _ReelPlayerScreen extends StatefulWidget {
+  final SocialReel reel;
+  const _ReelPlayerScreen({required this.reel});
+
+  @override
+  State<_ReelPlayerScreen> createState() => _ReelPlayerScreenState();
+}
+
+class _ReelPlayerScreenState extends State<_ReelPlayerScreen> {
+  VideoPlayerController? _controller;
+  bool _ready = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final url = widget.reel.videoUrl;
+    if (url != null && url.isNotEmpty) {
+      _controller = VideoPlayerController.networkUrl(Uri.parse(url))
+        ..initialize().then((_) {
+          if (!mounted) return;
+          setState(() => _ready = true);
+          _controller!.setLooping(true);
+          _controller!.play();
+        });
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final aspect = (_controller?.value.aspectRatio ?? 0) == 0
+        ? (9 / 16)
+        : _controller!.value.aspectRatio;
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          Center(
+            child: _ready && _controller != null
+                ? AspectRatio(
+              aspectRatio: aspect,
+              child: VideoPlayer(_controller!),
+            )
+                : const CircularProgressIndicator(),
+          ),
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 8,
+            left: 8,
+            child: IconButton.filled(
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.black54,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.arrow_back),
             ),
           ),
         ],

@@ -16,7 +16,7 @@ import 'package:flutter_sixvalley_ecommerce/main.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
-
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_reel.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_live_repository.dart';
 
 class SocialController with ChangeNotifier {
@@ -101,6 +101,20 @@ class SocialController with ChangeNotifier {
   List<SocialPhoto> get profilePhotos => List.unmodifiable(_profilePhotos);
   bool get isLoadingProfilePhotos => _loadingProfilePhotos;
   bool get hasMoreProfilePhotos => _hasMoreProfilePhotos;
+
+
+  // --- REELS STATE ---
+  List<SocialReel> _profileReels = <SocialReel>[];
+  bool _loadingProfileReels = false;
+  String? _reelsOffset;             // nếu backend có trả offset/id trang tiếp theo
+  bool _hasMoreProfileReels = true;
+  String? _reelsForUserId;          // cache theo user đang xem
+
+  List<SocialReel> get profileReels => List.unmodifiable(_profileReels);
+  bool get isLoadingProfileReels => _loadingProfileReels;
+  bool get hasMoreProfileReels => _hasMoreProfileReels;
+  String? get reelsForUserId => _reelsForUserId;
+
   //end
 
 
@@ -212,6 +226,12 @@ class SocialController with ChangeNotifier {
     _hasMoreProfilePhotos = true;
     _photosOffset = null;
     _photosForUserId = null;
+    // reset reels
+    _profileReels = <SocialReel>[];
+    _loadingProfileReels = false;
+    _reelsOffset = null;
+    _hasMoreProfileReels = true;
+    _reelsForUserId = null;
 
     if (notify) {
       notifyListeners();
@@ -492,6 +512,90 @@ class SocialController with ChangeNotifier {
       notifyListeners();
     }
   }
+
+
+  Future<void> refreshProfileReels({String? targetUserId, int limit = 20}) async {
+    if (_loadingProfileReels) return;
+
+    final String? viewedId =
+        targetUserId ?? _profileHeaderUser?.id ?? _currentUser?.id;
+    if (viewedId == null || viewedId.isEmpty) {
+      // không có user để load
+      _profileReels = <SocialReel>[];
+      _hasMoreProfileReels = false;
+      notifyListeners();
+      return;
+    }
+
+    _loadingProfileReels = true;
+    // Nếu đổi sang user khác => reset paging
+    if (_reelsForUserId != viewedId) {
+      _reelsOffset = null;
+      _profileReels = <SocialReel>[];
+      _hasMoreProfileReels = true;
+      _reelsForUserId = viewedId;
+    }
+    notifyListeners();
+
+    try {
+      // YÊU CẦU: service có getUserReels(type='videos' ở repo)
+      final List<SocialReel> reels = await service.getUserReels(
+        targetUserId: viewedId,
+        limit: limit,
+        offset: null,
+      );
+
+      _profileReels = reels;
+      _hasMoreProfileReels = reels.length >= limit;
+      // Nếu repo/service có trả next offset => gán _reelsOffset ở đây
+      // _reelsOffset = service.lastReelsOffset; // (tuỳ bạn mở rộng)
+    } catch (_) {
+      _profileReels = <SocialReel>[];
+      _hasMoreProfileReels = false;
+    } finally {
+      _loadingProfileReels = false;
+      notifyListeners();
+    }
+  }
+
+
+  Future<void> loadMoreProfileReels({String? targetUserId, int limit = 20}) async {
+    if (_loadingProfileReels || !_hasMoreProfileReels) return;
+
+    final String? viewedId =
+        targetUserId ?? _profileHeaderUser?.id ?? _currentUser?.id;
+    if (viewedId == null || viewedId.isEmpty) return;
+
+    // Nếu userId đổi mà bạn chưa refresh => ép refresh trước
+    if (_reelsForUserId != viewedId) {
+      await refreshProfileReels(targetUserId: viewedId, limit: limit);
+      return;
+    }
+
+    _loadingProfileReels = true;
+    notifyListeners();
+
+    try {
+      final List<SocialReel> reels = await service.getUserReels(
+        targetUserId: viewedId,
+        limit: limit,
+        offset: _reelsOffset,
+      );
+
+      if (reels.isEmpty) {
+        _hasMoreProfileReels = false;
+      } else {
+        _profileReels = <SocialReel>[..._profileReels, ...reels];
+        _hasMoreProfileReels = reels.length >= limit;
+        // nếu backend có trả offset => cập nhật
+        // _reelsOffset = service.lastReelsOffset; // (tuỳ bạn mở rộng)
+      }
+    } finally {
+      _loadingProfileReels = false;
+      notifyListeners();
+    }
+  }
+
 
 
   //report user
@@ -1957,6 +2061,7 @@ class SocialController with ChangeNotifier {
       final viewedId = _profileHeaderUser?.id;
       if (viewedId != null && viewedId.isNotEmpty) {
         await refreshProfilePhotos(targetUserId: viewedId);
+        await refreshProfileReels(targetUserId: viewedId);
       }
 
       // nếu đây là profile của chính mình thì bạn có thể
