@@ -5,6 +5,8 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_feed_page.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user_profile.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_photo.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_reel.dart';
 
 
 abstract class SocialServiceInterface {
@@ -92,30 +94,49 @@ abstract class SocialServiceInterface {
     int limit,
     int offset,
   });
+  Future<List<SocialUser>> searchUsers({
+    required String keyword,
+    int limit,
+  });
+  Future<SocialUser?> getUserById({required String userId});
+  Future<SocialUser?> getUserByUsername({required String username});
 
   //30/10 follow profile user
   // tên, kiểu trả về và named param phải khớp y hệt với Service
   Future<bool> toggleFollow({required String targetUserId});
   Future<SocialUserProfile> updateDataUser({
     required String? displayName, // vẫn giữ kiểu required String?
-    String? firstName,            // <-- mới
-    String? lastName,             // <-- mới
+    String? firstName, // <-- mới
+    String? lastName, // <-- mới
     String? about,
-    String? genderText,           // 'Nam' | 'Nữ' | 'Khác' -> map về male/female/other ở repo
-    String? birthdayIso,          // yyyy-MM-dd
+    String?
+        genderText, // 'Nam' | 'Nữ' | 'Khác' -> map về male/female/other ở repo
+    String? birthdayIso, // yyyy-MM-dd
     String? address,
     String? website,
     String? relationshipText,
-    String? currentPassword,      // <-- mới (đổi mật khẩu)
-    String? newPassword,          // <-- mới (đổi mật khẩu)
+    String? currentPassword, // <-- mới (đổi mật khẩu)
+    String? newPassword, // <-- mới (đổi mật khẩu)
     String? avatarFilePath,
     String? coverFilePath,
     String? ecomToken,
   });
   Future<List<SocialUser>> getBlockedUsers();
   Future<bool> blockUser({required String targetUserId, required bool block});
-
-
-
+  Future<String> reportUser({
+    required String targetUserId,
+    required String text,
+  });
+  Future<List<SocialPhoto>> getUserPhotos({
+    String? targetUserId,
+    int limit = 35,
+    String? offset,
+  });
+  // interface
+  Future<List<SocialReel>> getUserReels({
+    String? targetUserId,
+    int limit = 20,
+    String? offset,
+  });
 
 }

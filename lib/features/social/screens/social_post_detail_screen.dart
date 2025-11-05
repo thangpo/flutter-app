@@ -18,7 +18,10 @@ import 'package:flutter_sixvalley_ecommerce/features/product_details/screens/pro
 import 'package:flutter_sixvalley_ecommerce/helper/price_converter.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/share_post_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/shared_post_preview.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/widgets/social_post_media.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/live_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/mention_formatter.dart';
 
 enum CommentSortOrder { newest, oldest }
 
@@ -45,6 +48,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
   final int _pageSize = 10;
   final Set<String> _commentReactionLoading = <String>{};
   CommentSortOrder _sortOrder = CommentSortOrder.newest;
+  bool _handledLiveNavigation = false;
 
   @override
   void initState() {
@@ -83,6 +87,68 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
     } finally {
       _loadingComments = false;
     }
+  }
+
+  bool _isActiveLivePost(SocialPost post) {
+    final String type = (post.postType ?? '').toLowerCase();
+    if (type != 'live') return false;
+    if (post.liveEnded) return false;
+    final String? streamName = post.liveStreamName;
+    return streamName != null && streamName.isNotEmpty;
+  }
+
+  void _maybeOpenLive(SocialPost post) {
+    if (_handledLiveNavigation) return;
+    if (!_isActiveLivePost(post)) return;
+    _handledLiveNavigation = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await _openLiveScreen(post);
+    });
+  }
+
+  Future<void> _openLiveScreen(SocialPost post) async {
+    final String? streamName = post.liveStreamName;
+    if (streamName == null || streamName.isEmpty) {
+      _handledLiveNavigation = false;
+      return;
+    }
+
+    SocialController? controller;
+    try {
+      controller = context.read<SocialController>();
+    } on ProviderNotFoundException {
+      controller = null;
+    }
+    final String? accessToken = controller?.accessToken;
+    final bool hasAccessToken =
+        accessToken != null && accessToken.trim().isNotEmpty;
+    final String? preparedToken = post.liveAgoraToken;
+    if (!hasAccessToken && (preparedToken == null || preparedToken.isEmpty)) {
+      showCustomSnackBar(
+        getTranslated('live_token_missing', context) ??
+            'Unable to join livestream right now.',
+        context,
+        isError: true,
+      );
+      _handledLiveNavigation = false;
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => LiveScreen(
+          streamName: streamName,
+          accessToken: accessToken ?? '',
+          broadcasterUid: 0,
+          initialToken: preparedToken,
+          postId: post.id,
+          isHost: false,
+          hostDisplayName: post.userName,
+          hostAvatarUrl: post.userAvatar,
+        ),
+      ),
+    );
   }
 
   Future<void> _reactOnComment(SocialComment comment, String reaction) async {
@@ -384,6 +450,13 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                     : (p.sharedPost != null ? p : current);
                             final SocialPost? sharedPost =
                                 displayPost.sharedPost ?? p.sharedPost;
+                            final bool isLiveDetail = sharedPost == null &&
+                                _isActiveLivePost(displayPost);
+                            if (isLiveDetail) {
+                              _maybeOpenLive(displayPost);
+                            }
+                            final bool sharedIsLive = sharedPost != null &&
+                                _isActiveLivePost(sharedPost!);
                             final String? postText =
                                 (current.text?.isNotEmpty ?? false)
                                     ? current.text
@@ -395,26 +468,37 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                             final bool hasPoll =
                                 pollOptions != null && pollOptions.isNotEmpty;
                             final Widget? mediaContent = sharedPost != null
-                                ? SharedPostPreviewCard(
-                                    post: sharedPost!,
-                                    compact: true,
-                                    padding: const EdgeInsets.all(10),
-                                    onTap: () {
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                          builder: (_) =>
-                                              SocialPostDetailScreen(
-                                                  post: sharedPost!),
+                                ? sharedIsLive
+                                    ? buildSocialPostMedia(
+                                        context,
+                                        sharedPost!.copyWith(
+                                          id: '${sharedPost!.id}_detail_${displayPost.id}',
                                         ),
-                                      );
-                                    },
-                                  )
-                                : ((displayPost.videoUrl ?? '').isNotEmpty ||
-                                        (displayPost.audioUrl ?? '')
-                                            .isNotEmpty ||
-                                        displayPost.imageUrls.isNotEmpty)
-                                    ? _DetailMedia(post: displayPost)
-                                    : null;
+                                        compact: false)
+                                    : SharedPostPreviewCard(
+                                        post: sharedPost!,
+                                        compact: true,
+                                        padding: const EdgeInsets.all(10),
+                                        parentPostId: displayPost.id,
+                                        onTap: () {
+                                          Navigator.of(context).push(
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  SocialPostDetailScreen(
+                                                      post: sharedPost!),
+                                            ),
+                                          );
+                                        },
+                                      )
+                                : isLiveDetail
+                                    ? null
+                                    : ((displayPost.videoUrl ?? '')
+                                                .isNotEmpty ||
+                                            (displayPost.audioUrl ?? '')
+                                                .isNotEmpty ||
+                                            displayPost.imageUrls.isNotEmpty)
+                                        ? _DetailMedia(post: displayPost)
+                                        : null;
                             final myReaction = current.myReaction;
                             final bool isSharing = ctrl.isSharing(current.id);
                             final List<String> topReactions =
@@ -435,24 +519,39 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                   Padding(
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 12),
-                                    child: Html(
-                                      data: postText!,
-                                      style: {
-                                        'body': Style(
-                                          color: onSurface,
-                                          fontSize: FontSize(15),
-                                          lineHeight: LineHeight(1.35),
-                                          margin: Margins.zero,
-                                          padding: HtmlPaddings.zero,
-                                        ),
-                                      },
-                                      onLinkTap: (url, _, __) async {
-                                        if (url != null) {
-                                          final uri = Uri.parse(url);
-                                          await launchUrl(uri,
-                                              mode: LaunchMode
-                                                  .externalApplication);
-                                        }
+                                    child: Builder(
+                                      builder: (BuildContext context) {
+                                        final SocialController controller =
+                                            context.read<SocialController>();
+                                        final String formatted =
+                                            MentionFormatter.decorate(
+                                                postText!, controller);
+                                        return Html(
+                                          data: formatted,
+                                          style: {
+                                            'body': Style(
+                                              color: onSurface,
+                                              fontSize: FontSize(15),
+                                              lineHeight: LineHeight(1.35),
+                                              margin: Margins.zero,
+                                              padding: HtmlPaddings.zero,
+                                            ),
+                                          },
+                                          onLinkTap: (url, _, __) async {
+                                            if (url == null) return;
+                                            if (MentionFormatter.isMentionLink(
+                                                url)) {
+                                              await MentionFormatter
+                                                  .handleMentionTap(
+                                                      context, url);
+                                              return;
+                                            }
+                                            final uri = Uri.parse(url);
+                                            await launchUrl(uri,
+                                                mode: LaunchMode
+                                                    .externalApplication);
+                                          },
+                                        );
                                       },
                                     ),
                                   ),
@@ -474,12 +573,12 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                 BorderRadius.circular(8),
                                             child: LinearProgressIndicator(
                                               value: (((double.tryParse(
-                                                            (opt['percentage_num'] ??
-                                                                    '0')
-                                                                .toString()) ??
-                                                        0.0) /
-                                                    100.0))
-                                                .clamp(0, 1),
+                                                              (opt['percentage_num'] ??
+                                                                      '0')
+                                                                  .toString()) ??
+                                                          0.0) /
+                                                      100.0))
+                                                  .clamp(0, 1),
                                             ),
                                           ),
                                           const SizedBox(height: 10),

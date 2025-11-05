@@ -11,11 +11,12 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_service_interface.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_service.dart';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_photo.dart';
 import 'package:flutter_sixvalley_ecommerce/main.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
-
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_reel.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_live_repository.dart';
 
 class SocialController with ChangeNotifier {
@@ -80,7 +81,7 @@ class SocialController with ChangeNotifier {
   final Set<String> _blockBusy = {};
   bool isBlockBusy(String userId) => _blockBusy.contains(userId);
 
-  List<SocialUser> _blockedUsers = <SocialUser>[];       // danh sách user đã chặn
+  List<SocialUser> _blockedUsers = <SocialUser>[]; // danh sách user đã chặn
   Set<String> _blockedIds = <String>{};
   bool _loadingBlocked = false;
   bool get isLoadingBlocked => _loadingBlocked;
@@ -88,6 +89,34 @@ class SocialController with ChangeNotifier {
       UnmodifiableListView(_blockedUsers);
   bool isUserBlocked(String userId) => _blockedIds.contains(userId);
   //end
+  //05/11/2025 report user
+  final Set<String> _reportBusy = {};
+  bool isReportBusy(String userId) => _reportBusy.contains(userId);
+  List<SocialPhoto> _profilePhotos = <SocialPhoto>[];
+  bool _loadingProfilePhotos = false;
+  String? _photosOffset;     // nếu backend trả offset/id tiếp theo
+  bool _hasMoreProfilePhotos = true;
+  String? _photosForUserId;
+
+  List<SocialPhoto> get profilePhotos => List.unmodifiable(_profilePhotos);
+  bool get isLoadingProfilePhotos => _loadingProfilePhotos;
+  bool get hasMoreProfilePhotos => _hasMoreProfilePhotos;
+
+
+  // --- REELS STATE ---
+  List<SocialReel> _profileReels = <SocialReel>[];
+  bool _loadingProfileReels = false;
+  String? _reelsOffset;             // nếu backend có trả offset/id trang tiếp theo
+  bool _hasMoreProfileReels = true;
+  String? _reelsForUserId;          // cache theo user đang xem
+
+  List<SocialReel> get profileReels => List.unmodifiable(_profileReels);
+  bool get isLoadingProfileReels => _loadingProfileReels;
+  bool get hasMoreProfileReels => _hasMoreProfileReels;
+  String? get reelsForUserId => _reelsForUserId;
+
+  //end
+
 
   bool get hasMoreFollowers =>
       _followersAfter != null && _followersAfter!.isNotEmpty;
@@ -129,6 +158,10 @@ class SocialController with ChangeNotifier {
   final Set<String> _postActionBusy = <String>{};
   bool isPostActionBusy(String id) => _postActionBusy.contains(id);
   bool _pendingLoadMore = false;
+  final Map<String, List<SocialUser>> _mentionCache =
+      <String, List<SocialUser>>{};
+  final Map<String, SocialUser> _userCacheById = <String, SocialUser>{};
+  final Map<String, SocialUser> _userCacheByUsername = <String, SocialUser>{};
 
   // ========== USER PROFILE STATE (MERGED FROM PROFILE CONTROLLER) ==========
   List<SocialUser> _followers = const [];
@@ -179,8 +212,6 @@ class SocialController with ChangeNotifier {
     _storyReactionLoading.clear();
     _storyViewers.clear();
     _blockBusy.clear();
-
-
     // Clear profile state
     _followers = const [];
     _following = const [];
@@ -189,6 +220,19 @@ class SocialController with ChangeNotifier {
     _loadingProfile = false;
     _loadingProfilePosts = false;
     _lastProfilePostId = null;
+
+    //clear photo
+    _profilePhotos = <SocialPhoto>[];
+    _loadingProfilePhotos = false;
+    _hasMoreProfilePhotos = true;
+    _photosOffset = null;
+    _photosForUserId = null;
+    // reset reels
+    _profileReels = <SocialReel>[];
+    _loadingProfileReels = false;
+    _reelsOffset = null;
+    _hasMoreProfileReels = true;
+    _reelsForUserId = null;
 
     if (notify) {
       notifyListeners();
@@ -336,18 +380,21 @@ class SocialController with ChangeNotifier {
         final added = _blockedIds.add(id);
         // Nếu chưa có trong list, thêm 1 item tối thiểu để hiển thị ngay
         if (added && !_blockedUsers.any((u) => u.id == id)) {
-          final src = (_profileHeaderUser != null && _profileHeaderUser!.id == id)
-              ? _profileHeaderUser
-              : null;
-          _blockedUsers.insert(0, SocialUser(
-            id: id,
-            displayName: src?.displayName,
-            userName: src?.userName,
-            avatarUrl: src?.avatarUrl,
-            coverUrl: src?.coverUrl,
-          ));
+          final src =
+              (_profileHeaderUser != null && _profileHeaderUser!.id == id)
+                  ? _profileHeaderUser
+                  : null;
+          _blockedUsers.insert(
+              0,
+              SocialUser(
+                id: id,
+                displayName: src?.displayName,
+                userName: src?.userName,
+                avatarUrl: src?.avatarUrl,
+                coverUrl: src?.coverUrl,
+              ));
         }
-      }  else {
+      } else {
         // Bỏ chặn: xóa khỏi set + list
         _blockedIds.remove(id);
         _blockedUsers.removeWhere((u) => u.id == id);
@@ -365,6 +412,7 @@ class SocialController with ChangeNotifier {
       notifyListeners();
     }
   }
+
   Future<void> refreshBlockedUsers({bool force = false}) async {
     if (_loadingBlocked) return;
     if (!force && _blockedUsers.isNotEmpty) return;
@@ -392,6 +440,7 @@ class SocialController with ChangeNotifier {
       notifyListeners();
     }
   }
+
   Future<void> loadBlockedUsersIfEmpty({bool force = false}) async {
     // Nếu force => luôn tải lại; nếu không => chỉ tải khi list đang trống
     if (force) {
@@ -419,9 +468,202 @@ class SocialController with ChangeNotifier {
       rethrow;
     }
   }
+  //photo
+  Future<void> refreshProfilePhotos({String? targetUserId}) async {
+    if (_loadingProfilePhotos) return;
+    _loadingProfilePhotos = true;
+    _photosOffset = null;
+    _hasMoreProfilePhotos = true;
+    notifyListeners();
+
+    try {
+      final photos = await service.getUserPhotos(
+        targetUserId: targetUserId ?? _profileHeaderUser?.id ?? _currentUser?.id,
+        limit: 35,
+        offset: null,
+      );
+      _profilePhotos = photos;
+      // Nếu backend không trả offset/has_more, ta ước lượng theo limit
+      _hasMoreProfilePhotos = photos.length >= 35;
+    } catch (e) {
+      _profilePhotos = <SocialPhoto>[];
+      _hasMoreProfilePhotos = false;
+    } finally {
+      _loadingProfilePhotos = false;
+      notifyListeners();
+    }
+  }
+
+// ----- LOAD MORE -----
+  Future<void> loadMoreProfilePhotos({String? targetUserId}) async {
+    if (_loadingProfilePhotos || !_hasMoreProfilePhotos) return;
+    _loadingProfilePhotos = true;
+    notifyListeners();
+
+    try {
+      final photos = await service.getUserPhotos(
+        targetUserId: targetUserId ?? _profileHeaderUser?.id ?? _currentUser?.id,
+        limit: 35,
+        offset: _photosOffset,
+      );
+      if (photos.isEmpty) {
+        _hasMoreProfilePhotos = false;
+      } else {
+        _profilePhotos = [..._profilePhotos, ...photos];
+        // cập nhật _photosOffset nếu backend có trả trong resp (tuỳ bạn mở rộng)
+        _hasMoreProfilePhotos = photos.length >= 35;
+      }
+    } finally {
+      _loadingProfilePhotos = false;
+      notifyListeners();
+    }
+  }
+
+
+  Future<void> refreshProfileReels({String? targetUserId, int limit = 20}) async {
+    if (_loadingProfileReels) return;
+
+    final String? viewedId =
+        targetUserId ?? _profileHeaderUser?.id ?? _currentUser?.id;
+    if (viewedId == null || viewedId.isEmpty) {
+      // không có user để load
+      _profileReels = <SocialReel>[];
+      _hasMoreProfileReels = false;
+      notifyListeners();
+      return;
+    }
+
+    _loadingProfileReels = true;
+    // Nếu đổi sang user khác => reset paging
+    if (_reelsForUserId != viewedId) {
+      _reelsOffset = null;
+      _profileReels = <SocialReel>[];
+      _hasMoreProfileReels = true;
+      _reelsForUserId = viewedId;
+    }
+    notifyListeners();
+
+    try {
+      // YÊU CẦU: service có getUserReels(type='videos' ở repo)
+      final List<SocialReel> reels = await service.getUserReels(
+        targetUserId: viewedId,
+        limit: limit,
+        offset: null,
+      );
+
+      _profileReels = reels;
+      _hasMoreProfileReels = reels.length >= limit;
+      // Nếu repo/service có trả next offset => gán _reelsOffset ở đây
+      // _reelsOffset = service.lastReelsOffset; // (tuỳ bạn mở rộng)
+    } catch (_) {
+      _profileReels = <SocialReel>[];
+      _hasMoreProfileReels = false;
+    } finally {
+      _loadingProfileReels = false;
+      notifyListeners();
+    }
+  }
+
+
+  Future<void> loadMoreProfileReels({String? targetUserId, int limit = 20}) async {
+    if (_loadingProfileReels || !_hasMoreProfileReels) return;
+
+    final String? viewedId =
+        targetUserId ?? _profileHeaderUser?.id ?? _currentUser?.id;
+    if (viewedId == null || viewedId.isEmpty) return;
+
+    // Nếu userId đổi mà bạn chưa refresh => ép refresh trước
+    if (_reelsForUserId != viewedId) {
+      await refreshProfileReels(targetUserId: viewedId, limit: limit);
+      return;
+    }
+
+    _loadingProfileReels = true;
+    notifyListeners();
+
+    try {
+      final List<SocialReel> reels = await service.getUserReels(
+        targetUserId: viewedId,
+        limit: limit,
+        offset: _reelsOffset,
+      );
+
+      if (reels.isEmpty) {
+        _hasMoreProfileReels = false;
+      } else {
+        _profileReels = <SocialReel>[..._profileReels, ...reels];
+        _hasMoreProfileReels = reels.length >= limit;
+        // nếu backend có trả offset => cập nhật
+        // _reelsOffset = service.lastReelsOffset; // (tuỳ bạn mở rộng)
+      }
+    } finally {
+      _loadingProfileReels = false;
+      notifyListeners();
+    }
+  }
 
 
 
+  //report user
+  /// Trả về message từ server (nếu có), đồng thời show snackbar nếu có context.
+  Future<String> reportUser({
+    String? targetUserId,
+    required String text,
+  }) async {
+    final String trimmed = text.trim();
+
+    // Xác định id mục tiêu: ưu tiên tham số, fallback header user
+    final String? id = (targetUserId != null && targetUserId.isNotEmpty)
+        ? targetUserId
+        : _profileHeaderUser?.id;
+
+    if (id == null || id.isEmpty) {
+      throw Exception('Không xác định người cần báo cáo.');
+    }
+
+    // Không cho báo cáo chính mình
+    if (_currentUser?.id == id) {
+      throw Exception('Bạn không thể báo cáo chính mình.');
+    }
+
+    if (trimmed.isEmpty) {
+      throw Exception('Vui lòng nhập nội dung báo cáo.');
+    }
+
+    // Chặn double-tap
+    if (_reportBusy.contains(id)) {
+      throw Exception('Đang gửi báo cáo, vui lòng đợi...');
+    }
+    _reportBusy.add(id);
+    notifyListeners();
+
+    try {
+      // YÊU CẦU: SocialServiceInterface phải có reportUser(targetUserId, text)
+      // Service nên trả về String message (hoặc throw nếu lỗi).
+      final String msg = await service.reportUser(
+        targetUserId: id,
+        text: trimmed,
+      );
+
+      final ctx = Get.context; // nếu bạn đang dùng GetX cho context
+      if (ctx != null) {
+        final okMsg = (msg.isNotEmpty) ? msg : 'Đã gửi báo cáo';
+        showCustomSnackBar(okMsg, ctx, isError: false);
+      }
+      return msg;
+    } catch (e) {
+      final ctx = Get.context;
+      if (ctx != null) {
+        showCustomSnackBar(e.toString(), ctx, isError: true);
+      }
+      rethrow;
+    } finally {
+      _reportBusy.remove(id);
+      notifyListeners();
+    }
+  }
+
+  //photo
 
 
   //edit prodile user by aoanhan
@@ -1557,7 +1799,18 @@ class SocialController with ChangeNotifier {
     try {
       final SocialPost shared =
           await service.sharePost(postId: post.id, text: text);
-      _posts.insert(0, shared);
+      SocialPost resolved = shared;
+      try {
+        final SocialPost? refreshed =
+            await service.getPostById(postId: shared.id);
+        if (refreshed != null) {
+          resolved = refreshed;
+        }
+      } catch (_) {
+        // ignore fallback, optimistic shared data will be used
+      }
+      resolved = _ensureSharedLiveMetadata(resolved, post);
+      _posts.insert(0, resolved);
       notifyListeners();
       final ctx = Get.context!;
       final successMsg = getTranslated('share_post_success', ctx) ??
@@ -1571,6 +1824,187 @@ class SocialController with ChangeNotifier {
     } finally {
       _sharingPosts.remove(post.id);
       notifyListeners();
+    }
+  }
+
+  SocialPost _ensureSharedLiveMetadata(
+    SocialPost response,
+    SocialPost original,
+  ) {
+    final String? originalType = original.postType?.toLowerCase();
+    if (originalType != 'live') {
+      return response;
+    }
+
+    SocialPost? shared = response.sharedPost;
+    if (shared == null) {
+      return response.copyWith(sharedPost: original);
+    }
+
+    bool changed = false;
+    bool isBlank(String? value) => value == null || value.trim().isEmpty;
+
+    if (isBlank(shared.postType) && !isBlank(original.postType)) {
+      shared = shared.copyWith(postType: original.postType);
+      changed = true;
+    }
+    if (isBlank(shared.liveStreamName) && !isBlank(original.liveStreamName)) {
+      shared = shared.copyWith(liveStreamName: original.liveStreamName);
+      changed = true;
+    }
+    if (isBlank(shared.liveAgoraToken) && !isBlank(original.liveAgoraToken)) {
+      shared = shared.copyWith(liveAgoraToken: original.liveAgoraToken);
+      changed = true;
+    }
+    if (isBlank(shared.liveResourceId) && !isBlank(original.liveResourceId)) {
+      shared = shared.copyWith(liveResourceId: original.liveResourceId);
+      changed = true;
+    }
+    if (isBlank(shared.liveSid) && !isBlank(original.liveSid)) {
+      shared = shared.copyWith(liveSid: original.liveSid);
+      changed = true;
+    }
+    if (shared.liveStartedAt == null && original.liveStartedAt != null) {
+      shared = shared.copyWith(liveStartedAt: original.liveStartedAt);
+      changed = true;
+    }
+
+    final String? fallbackThumbnail =
+        !isBlank(original.thumbnailUrl) ? original.thumbnailUrl : null;
+    final String? fallbackImage =
+        !isBlank(original.imageUrl) ? original.imageUrl : fallbackThumbnail;
+    if (isBlank(shared.thumbnailUrl) && !isBlank(fallbackThumbnail)) {
+      shared = shared.copyWith(thumbnailUrl: fallbackThumbnail);
+      changed = true;
+    }
+    if (isBlank(shared.imageUrl) && !isBlank(fallbackImage)) {
+      shared = shared.copyWith(imageUrl: fallbackImage);
+      changed = true;
+    }
+    if (shared.imageUrls.isEmpty && original.imageUrls.isNotEmpty) {
+      shared = shared.copyWith(imageUrls: original.imageUrls);
+      changed = true;
+    }
+    if (isBlank(shared.imageUrl) && shared.imageUrls.isNotEmpty) {
+      shared = shared.copyWith(imageUrl: shared.imageUrls.first);
+      changed = true;
+    }
+    if (isBlank(shared.thumbnailUrl) && !isBlank(shared.imageUrl)) {
+      shared = shared.copyWith(thumbnailUrl: shared.imageUrl);
+      changed = true;
+    }
+    if (isBlank(shared.videoUrl) && !isBlank(original.videoUrl)) {
+      shared = shared.copyWith(videoUrl: original.videoUrl);
+      changed = true;
+    }
+    if (isBlank(shared.fileUrl) && !isBlank(original.fileUrl)) {
+      shared = shared.copyWith(fileUrl: original.fileUrl);
+      changed = true;
+    }
+
+    final bool liveEnded = shared.liveEnded || original.liveEnded;
+    if (liveEnded != shared.liveEnded) {
+      shared = shared.copyWith(liveEnded: liveEnded);
+      changed = true;
+    }
+
+    return changed ? response.copyWith(sharedPost: shared) : response;
+  }
+
+  Future<List<SocialUser>> searchMentionUsers({
+    required String keyword,
+    int limit = 8,
+  }) async {
+    final String normalized = keyword.trim().toLowerCase();
+    if (normalized.isEmpty) return const <SocialUser>[];
+    final List<SocialUser>? cached = _mentionCache[normalized];
+    if (cached != null) {
+      if (cached.length > limit) {
+        return cached.sublist(0, limit);
+      }
+      return List<SocialUser>.from(cached);
+    }
+    try {
+      final List<SocialUser> results =
+          await service.searchUsers(keyword: keyword, limit: limit);
+      final List<SocialUser> filtered = results
+          .where(
+              (SocialUser user) => (user.userName?.trim().isNotEmpty ?? false))
+          .toList();
+      for (final SocialUser user in filtered) {
+        _cacheUser(user);
+      }
+      _mentionCache[normalized] = filtered;
+      if (filtered.length > limit) {
+        return filtered.sublist(0, limit);
+      }
+      return filtered;
+    } catch (_) {
+      _mentionCache.putIfAbsent(normalized, () => const <SocialUser>[]);
+      return const <SocialUser>[];
+    }
+  }
+
+  SocialUser? getCachedUserById(String id) {
+    final String key = id.trim();
+    if (key.isEmpty) return null;
+    return _userCacheById[key];
+  }
+
+  SocialUser? getCachedUserByUsername(String username) {
+    final String key = username.trim().toLowerCase();
+    if (key.isEmpty) return null;
+    return _userCacheByUsername[key];
+  }
+
+  String? getCachedMentionLabelById(String id) {
+    final SocialUser? user = getCachedUserById(id);
+    if (user == null) return null;
+    if (user.userName?.isNotEmpty ?? false) return user.userName;
+    if (user.displayName?.isNotEmpty ?? false) return user.displayName;
+    return null;
+  }
+
+  Future<SocialUser?> resolveUserById(String id) async {
+    final String key = id.trim();
+    if (key.isEmpty) return null;
+    final SocialUser? cached = _userCacheById[key];
+    if (cached != null) return cached;
+    try {
+      final SocialUser? user = await service.getUserById(userId: key);
+      if (user != null) {
+        _cacheUser(user);
+      }
+      return user;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<SocialUser?> resolveUserByUsername(String username) async {
+    final String key = username.trim().toLowerCase();
+    if (key.isEmpty) return null;
+    final SocialUser? cached = _userCacheByUsername[key];
+    if (cached != null) return cached;
+    try {
+      final SocialUser? user =
+          await service.getUserByUsername(username: username);
+      if (user != null) {
+        _cacheUser(user);
+      }
+      return user;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void rememberUser(SocialUser user) => _cacheUser(user);
+
+  void _cacheUser(SocialUser user) {
+    _userCacheById[user.id] = user;
+    final String? username = user.userName?.trim();
+    if (username != null && username.isNotEmpty) {
+      _userCacheByUsername[username.toLowerCase()] = user;
     }
   }
 
@@ -1818,6 +2252,11 @@ class SocialController with ChangeNotifier {
 
       // lưu header user đầy đủ (SocialUserProfile?)
       _profileHeaderUser = bundle.user;
+      final viewedId = _profileHeaderUser?.id;
+      if (viewedId != null && viewedId.isNotEmpty) {
+        await refreshProfilePhotos(targetUserId: viewedId);
+        await refreshProfileReels(targetUserId: viewedId);
+      }
 
       // nếu đây là profile của chính mình thì bạn có thể
       // optionally sync lại _currentUser nếu muốn.
@@ -1872,7 +2311,7 @@ class SocialController with ChangeNotifier {
     if (_loadingProfilePosts) return;
     if (_lastProfilePostId == null || _lastProfilePostId!.isEmpty) return;
 
-    final userId = targetUserId ?? _currentUser?.id;
+    final userId = targetUserId ?? _profileHeaderUser?.id ?? _currentUser?.id;
     if (userId == null || userId.isEmpty) return;
 
     _loadingProfilePosts = true;

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
@@ -22,7 +22,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_scre
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_group_detail_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/mention_formatter.dart';
 
 class SocialFeedScreen extends StatefulWidget {
   const SocialFeedScreen({super.key});
@@ -782,6 +782,7 @@ class SocialPostCard extends StatelessWidget {
             post: sharedPost!,
             compact: true,
             padding: const EdgeInsets.all(10),
+            parentPostId: post.id,
             onTap: () => _openSharedPostDetail(context, sharedPost),
           )
         : buildSocialPostMedia(context, post);
@@ -996,22 +997,38 @@ class SocialPostCard extends StatelessWidget {
           if ((post.text ?? '').isNotEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Html(
-                data: post.text!,
-                style: {
-                  'body': Style(
-                    color: onSurface,
-                    fontSize: FontSize(15),
-                    lineHeight: LineHeight(1.35),
-                    margin: Margins.zero,
-                    padding: HtmlPaddings.zero,
-                  ),
-                },
-                onLinkTap: (url, _, __) async {
-                  if (url != null) {
-                    final uri = Uri.parse(url);
-                    await launchUrl(uri, mode: LaunchMode.externalApplication);
-                  }
+              child: Builder(
+                builder: (BuildContext context) {
+                  final SocialController controller =
+                      context.read<SocialController>();
+                  final String formatted = MentionFormatter.decorate(
+                    post.text!,
+                    controller,
+                  );
+                  return Html(
+                    data: formatted,
+                    style: {
+                      'body': Style(
+                        color: onSurface,
+                        fontSize: FontSize(15),
+                        lineHeight: LineHeight(1.35),
+                        margin: Margins.zero,
+                        padding: HtmlPaddings.zero,
+                      ),
+                    },
+                    onLinkTap: (url, _, __) async {
+                      if (url == null) return;
+                      if (MentionFormatter.isMentionLink(url)) {
+                        await MentionFormatter.handleMentionTap(context, url);
+                        return;
+                      }
+                      final uri = Uri.parse(url);
+                      await launchUrl(
+                        uri,
+                        mode: LaunchMode.externalApplication,
+                      );
+                    },
+                  );
                 },
               ),
             ),
