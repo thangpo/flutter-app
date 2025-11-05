@@ -16,6 +16,9 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user_profile.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_repository.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_photo.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_reel.dart';
+
 import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 
@@ -747,6 +750,111 @@ class SocialService implements SocialServiceInterface {
     ApiChecker.checkApi(resp);
     throw Exception('Toggle follow failed');
   }
+
+
+  // report user 05/11/2025
+  @override
+  Future<String> reportUser({
+    required String targetUserId,
+    required String text,
+  }) async {
+    final resp = await socialRepository.reportUser(
+      targetUserId: targetUserId,
+      text: text,
+    );
+
+    // thành công ở tầng transport
+    if (resp.isSuccess && resp.response != null) {
+      final Response raw = resp.response!;
+      final code = raw.statusCode ?? 0;
+
+      // cố gắng đọc payload WoWonder
+      try {
+        final data = (raw.data is Map) ? (raw.data as Map) : const {};
+        final apiStatus = data['api_status'] ?? data['status'] ?? data['code'];
+
+        if (code == 200 && apiStatus == 200) {
+          final msg = (data['message'] ??
+              data['api_text'] ??
+              data['message_text'] ??
+              'Báo cáo người dùng thành công')
+              .toString();
+          return msg;
+        }
+
+        // server trả 200 nhưng payload báo lỗi
+        final err = (data['errors']?['error_text'] ??
+            data['error'] ??
+            data['message'] ??
+            'Không thể gửi báo cáo người dùng')
+            .toString();
+        throw Exception(err);
+      } catch (_) {
+        // fallback: status 200 nhưng payload lạ -> coi như ok
+        if (code == 200) return 'Báo cáo người dùng thành công';
+        throw Exception('Không thể gửi báo cáo người dùng (HTTP $code)');
+      }
+    }
+
+    // lỗi ở tầng repo (network/timeout/parse…)
+    throw Exception(resp.error ?? 'Không thể gửi báo cáo người dùng');
+  }
+
+  //photo
+  @override
+  Future<List<SocialPhoto>> getUserPhotos({
+    String? targetUserId,
+    int limit = 35,
+    String? offset,
+  }) async {
+    final resp = await socialRepository.getAlbumUser(
+      targetUserId: targetUserId, // <-- truyền thẳng id người cần lấy
+      type: 'photos',
+      limit: limit,
+      offset: offset,
+    );
+
+    if (resp.isSuccess && resp.response != null && resp.response!.statusCode == 200) {
+      final data = resp.response!.data; // Map<String, dynamic>
+      final baseUrl = AppConstants.socialBaseUrl.replaceAll(RegExp(r'/$'), '') + '/';
+
+      final photos = SocialPhoto.parseFromGetAlbums(
+        data,
+        baseUrl: baseUrl,
+      );
+      return photos;
+    }
+
+    throw Exception(resp.error ?? 'getUserPhotos failed');
+  }
+
+  //reefs
+
+
+// service impl
+  @override
+  Future<List<SocialReel>> getUserReels({
+    String? targetUserId,
+    int limit = 20,
+    String? offset,
+  }) async {
+    final resp = await socialRepository.getAlbumUser(
+      targetUserId: targetUserId,
+      type: 'video',     // hoặc 'video' tùy API của bạn
+      limit: limit,
+      offset: offset,
+    );
+
+    if (resp.isSuccess && resp.response?.statusCode == 200) {
+      final data = resp.response!.data;
+      final baseUrl = AppConstants.socialBaseUrl.replaceAll(RegExp(r'/$'), '') + '/';
+      return SocialReel.parseFromGetAlbums(data, baseUrl: baseUrl);
+    }
+    throw Exception(resp.error ?? 'getUserReels failed');
+  }
+
+
+
 
   //block user 11/04/2025
   @override

@@ -16,6 +16,8 @@ class AppConstants {
   static const String socialBaseUrl = 'https://social.vnshop247.com';
   static const String socialServerKey =
       'f6e69c898ddd643154c9bd4b152555842e26a868-d195c100005dddb9f1a30a67a5ae42d4-19845955';
+  static const String socialApiUpdateFcmTokenUri=
+      'api/update_fcm_token';
   static const String socialAuthUri = '/api/auth';
   static const String socialCreateAccountUri = '/api/create-account';
   static const String socialDeleteAccessTokenUri = '/api/delete-access-token';
@@ -69,6 +71,9 @@ class AppConstants {
   //block user 04/11/2025
   static const String socialBlockUser='/api/block-user';
   static const String socialGetBlockUser='/api/get-blocked-users';
+
+  static const String socialReportUser='/api/report_user';
+  static const String socialGetAlbumUser='/api/get-user-albums/';
 
   //follow
   static const String socialFollowUser = '/api/follow-user';

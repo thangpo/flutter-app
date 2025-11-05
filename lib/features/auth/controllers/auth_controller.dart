@@ -35,6 +35,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/firebase_token_updater.dart';
 
 class AuthController with ChangeNotifier {
   final AuthServiceInterface authServiceInterface;
@@ -166,6 +167,8 @@ class AuthController with ChangeNotifier {
                 'en');
         callback(true, token, null, null, message, socialLogin.medium, null,
             socialLogin.email, socialLogin.name);
+        await FirebaseTokenUpdater.update();
+
       }
 
       if (temporaryToken != null && temporaryToken.isNotEmpty) {
@@ -306,6 +309,8 @@ class AuthController with ChangeNotifier {
       final String socialUserId = (data['user_id'] ?? '').toString();
       if (socialUserId.isNotEmpty) {
         await authServiceInterface.saveSocialUserId(socialUserId);
+        await FirebaseTokenUpdater.update();
+
       }
       try {
         await Provider.of<SocialController>(Get.context!, listen: false)
@@ -558,12 +563,16 @@ class AuthController with ChangeNotifier {
       final String socialUserId = (data['user_id'] ?? '').toString();
       if (socialUserId.isNotEmpty) {
         await authServiceInterface.saveSocialUserId(socialUserId);
+        await FirebaseTokenUpdater.update();
+
       }
       try {
         await Provider.of<SocialController>(Get.context!, listen: false)
             .loadCurrentUser(force: true);
       } catch (_) {}
       // ========== END EXTERNAL SOCIAL AUTH ==========
+      // ✅ Gửi FCM token lên server
+      await FirebaseTokenUpdater.update();
 
       if (token != null && token.isNotEmpty) {
         authServiceInterface.saveUserToken(token);
