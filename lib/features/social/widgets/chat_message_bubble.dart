@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:chewie/chewie.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +10,10 @@ import 'package:flutter_pdfview/flutter_pdfview.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
+import 'package:encrypt/encrypt.dart' as enc;
+
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/call_invite.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/incoming_call_screen.dart';
 
 class ChatMessageBubble extends StatefulWidget {
   final Map<String, dynamic> message;
@@ -38,7 +43,11 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
   Duration _audioDur = Duration.zero;
 
   Map<String, dynamic> get m => widget.message;
-  String get _text => (m['display_text'] ?? '').toString();
+
+  /// text hiển thị từ server (đã qua normalize/decrypt)
+  String get _text =>
+      (m['display_text'] ?? m['text'] ?? m['message'] ?? '').toString();
+
   String get _mediaUrl => (m['media_url'] ?? '').toString();
   bool get _isImage => m['is_image'] == true;
   bool get _isVideo => m['is_video'] == true;
@@ -165,8 +174,62 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
     );
   }
 
+// Lấy plain-text ưu tiên display_text -> decrypt(text,time) -> text gốc
+  String? _getPlainTextForInvite() {
+    final disp = (m['display_text'] ?? '').toString();
+    if (disp.isNotEmpty) return disp;
+
+    final raw = (m['text'] ?? '').toString();
+    if (raw.isEmpty) return null;
+
+    final timeKey = (m['time'] ?? '').toString(); // khóa 16 bytes từ 'time'
+    final dec = _tryDecryptWoText(raw, timeKey);
+    return dec ?? raw;
+  }
+
+  String? _tryDecryptWoText(String base64Text, String timeKey) {
+    try {
+      final clean = base64Text.replaceAll(RegExp(r'[^A-Za-z0-9+/=]'), '');
+      final k16 = timeKey.padRight(16, '0').substring(0, 16);
+
+      // 1) Thử PKCS7
+      try {
+        final e1 = enc.Encrypter(
+          enc.AES(enc.Key.fromUtf8(k16),
+              mode: enc.AESMode.ecb, padding: 'PKCS7'),
+        );
+        final s1 = e1.decrypt64(clean);
+        return _stripZeros(s1);
+      } catch (_) {}
+
+      // 2) Thử no-padding
+      try {
+        final e2 = enc.Encrypter(
+          enc.AES(enc.Key.fromUtf8(k16), mode: enc.AESMode.ecb, padding: null),
+        );
+        final s2 = e2.decrypt64(clean);
+        return _stripZeros(s2);
+      } catch (_) {}
+
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _stripZeros(String s) => s.replaceAll(RegExp(r'\x00+\$'), '');
+
+
+
   @override
   Widget build(BuildContext context) {
+    // 🔔 ƯU TIÊN: nếu là lời mời gọi thì render bubble đặc biệt
+    final invite = CallInvite.tryParse(_getPlainTextForInvite() ?? '');
+
+    if (invite != null) {
+      return _buildInviteBubble(invite);
+    }
+
     final radius = Radius.circular(18);
     final bg = widget.isMe ? const Color(0xFF2F80ED) : const Color(0xFFEFEFEF);
     final fg = widget.isMe ? Colors.white : Colors.black87;
@@ -219,11 +282,18 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
             _buildAudioPlayer(bg: bg, fg: fg),
 
           // ====== FILE / TEXT ======
-          // ====== TEXT / FILE ======
           if (!_isImage && !_isVideo && !_isAudio) ...[
             if (_mediaUrl.isNotEmpty)
               GestureDetector(
-                onTap: () => _openFile(_mediaUrl),
+                onTap: () {
+                  final name =
+                      (m['mediaFileName'] ?? '').toString().toLowerCase();
+                  if (name.endsWith('.pdf')) {
+                    _openPdfInline(_mediaUrl);
+                  } else {
+                    _openFile(_mediaUrl);
+                  }
+                },
                 child: Container(
                   margin: const EdgeInsets.only(top: 4),
                   padding:
@@ -235,11 +305,10 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
                   child: Text(
                     _text.isNotEmpty
                         ? _text
-                        : (m['mediaFileName']
-                                    ?.toString()
-                                    .toLowerCase()
-                                    .endsWith('.pdf') ??
-                                false)
+                        : ((m['mediaFileName'] ?? '')
+                                .toString()
+                                .toLowerCase()
+                                .endsWith('.pdf'))
                             ? '📄 Mở tài liệu PDF'
                             : '📎 Tệp đính kèm',
                     style: TextStyle(
@@ -265,7 +334,6 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
                 ),
               ),
           ]
-
         ],
       ),
     );
@@ -277,6 +345,69 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
             widget.isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [bubble],
+      ),
+    );
+  }
+
+  /// Bubble đặc biệt cho lời mời gọi 1-1
+  Widget _buildInviteBubble(CallInvite invite) {
+    final isExpired = invite.isExpired();
+    final isVideo = invite.media == 'video';
+    final bg = widget.isMe ? const Color(0xFF2F80ED) : const Color(0xFFEFEFEF);
+    final fg = widget.isMe ? Colors.white : Colors.black87;
+
+    final content = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(isVideo ? Icons.videocam : Icons.call, color: fg),
+        const SizedBox(width: 10),
+        Flexible(
+          child: Text(
+            widget.isMe
+                ? (isVideo ? 'Bạn đã mời gọi video' : 'Bạn đã mời gọi thoại')
+                : (isVideo ? 'Lời mời gọi video' : 'Lời mời gọi thoại') +
+                    (isExpired ? ' (hết hạn)' : ''),
+            style: TextStyle(color: fg, fontSize: 15),
+          ),
+        ),
+        if (!widget.isMe && !isExpired)
+          Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: TextButton(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => IncomingCallScreen(
+                      callId: invite.callId,
+                      mediaType: invite.media,
+                    ),
+                  ),
+                );
+              },
+              child: const Text('Trả lời'),
+            ),
+          ),
+      ],
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      child: Row(
+        mainAxisAlignment:
+            widget.isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        children: [
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 280),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: content,
+            ),
+          ),
+        ],
       ),
     );
   }
