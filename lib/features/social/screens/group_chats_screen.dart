@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../controllers/group_chat_controller.dart';
 import 'group_chat_screen.dart';
 import 'create_group_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_list_screen.dart';
+
 
 class GroupChatsScreen extends StatefulWidget {
   final String accessToken;
@@ -20,9 +22,7 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context
-          .read<GroupChatController>()
-          .loadGroups(); // ⬅️ không truyền tham số
+      context.read<GroupChatController>().loadGroups();
     });
   }
 
@@ -33,9 +33,7 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
   }
 
   Future<void> _reloadGroups() async {
-    await context
-        .read<GroupChatController>()
-        .loadGroups(); // ⬅️ không truyền tham số
+    await context.read<GroupChatController>().loadGroups();
   }
 
   String _formatTime(dynamic ts) {
@@ -59,8 +57,27 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
         g['text'] ??
         '';
     final sender = g['last_sender_name'] ?? g['last_sender'] ?? '';
-    final isMedia = (g['last_message_type'] ?? g['type_two'] ?? '') == 'media';
-    if (isMedia) return '${sender.isNotEmpty ? "$sender: " : ""}[Ảnh/Video]';
+    final type = (g['last_message_type'] ?? g['type_two'] ?? '').toString();
+    final isMedia = type == 'media' ||
+        type == 'image' ||
+        type == 'video' ||
+        type == 'voice' ||
+        type == 'audio' ||
+        type == 'file';
+    String tag = '';
+    if (isMedia) {
+      if (type == 'image')
+        tag = '[Ảnh]';
+      else if (type == 'video')
+        tag = '[Video]';
+      else if (type == 'voice' || type == 'audio')
+        tag = '[Voice]';
+      else if (type == 'file')
+        tag = '[Tệp]';
+      else
+        tag = '[Ảnh/Video]';
+    }
+    if (isMedia) return '${sender.isNotEmpty ? "$sender: " : ""}$tag';
     if (text is String && text.isNotEmpty) {
       final t = text.replaceAll('\n', ' ').trim();
       return sender.isNotEmpty ? '$sender: $t' : t;
@@ -81,13 +98,20 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
     return m.toString() == '1' || m.toString().toLowerCase() == 'true';
   }
 
+  bool _isOnline(Map<String, dynamic> g) {
+    final v = g['is_online'] ?? g['online'] ?? g['active'];
+    if (v is bool) return v;
+    if (v == null) return false;
+    return v.toString() == '1' || v.toString().toLowerCase() == 'true';
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Đoạn chat'),
+        title: const Text('Nhóm chat'),
         elevation: 0,
         actions: [
           IconButton(
@@ -106,12 +130,14 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Tạo nhóm thành công')),
                 );
-                await _reloadGroups(); // ⬅️ reload sau khi tạo
+                await _reloadGroups();
               }
             },
           ),
         ],
       ),
+
+      // === BODY ===
       body: Column(
         children: [
           // Search
@@ -125,7 +151,7 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
                 hintText: 'Tìm kiếm nhóm',
                 prefixIcon: const Icon(Icons.search),
                 filled: true,
-                fillColor: cs.surfaceVariant.withOpacity(.4),
+                fillColor: cs.surfaceVariant.withOpacity(.35),
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 border: OutlineInputBorder(
@@ -144,6 +170,7 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
             ),
           ),
 
+          // List
           Expanded(
             child: Consumer<GroupChatController>(
               builder: (context, ctrl, _) {
@@ -166,12 +193,13 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
                 }
 
                 return RefreshIndicator(
-                  onRefresh: _reloadGroups, // ⬅️ không truyền tham số
+                  onRefresh: _reloadGroups,
                   child: ListView.separated(
                     physics: const AlwaysScrollableScrollPhysics(),
                     itemCount: groups.length,
                     separatorBuilder: (_, __) => Divider(
                       height: 1,
+                      indent: 84, // lùi giống Messenger (avatar 56 + padding)
                       color: cs.outlineVariant.withOpacity(.3),
                     ),
                     itemBuilder: (_, i) {
@@ -189,8 +217,17 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
                       final preview = _previewText(g);
                       final unread = _unread(g);
                       final muted = _isMuted(g);
+                      final online = _isOnline(g);
 
-                      return InkWell(
+                      return _GroupTile(
+                        cs: cs,
+                        avatarUrl: avatar,
+                        title: groupName,
+                        subtitle: preview,
+                        timeText: time,
+                        unread: unread,
+                        muted: muted,
+                        online: online,
                         onTap: () {
                           Navigator.push(
                             context,
@@ -202,116 +239,6 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
                             ),
                           );
                         },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 10),
-                          child: Row(
-                            children: [
-                              // Avatar
-                              CircleAvatar(
-                                radius: 26,
-                                backgroundImage: avatar.isNotEmpty
-                                    ? NetworkImage(avatar)
-                                    : null,
-                                backgroundColor: cs.surfaceVariant,
-                                child: avatar.isEmpty
-                                    ? Text(
-                                        groupName.isNotEmpty
-                                            ? groupName[0].toUpperCase()
-                                            : '?',
-                                        style: TextStyle(
-                                          color: cs.onSurface,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 18,
-                                        ),
-                                      )
-                                    : null,
-                              ),
-                              const SizedBox(width: 12),
-
-                              // Name + preview
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            groupName,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              fontWeight: unread > 0
-                                                  ? FontWeight.w700
-                                                  : FontWeight.w600,
-                                              fontSize: 16,
-                                            ),
-                                          ),
-                                        ),
-                                        if (time.isNotEmpty)
-                                          Text(
-                                            time,
-                                            style: TextStyle(
-                                              fontSize: 12.5,
-                                              color:
-                                                  cs.onSurface.withOpacity(.6),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      preview,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 13.5,
-                                        color: unread > 0
-                                            ? cs.onSurface
-                                            : cs.onSurface.withOpacity(.7),
-                                        fontWeight: unread > 0
-                                            ? FontWeight.w600
-                                            : FontWeight.w400,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-
-                              // Badge + mute
-                              const SizedBox(width: 8),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  if (unread > 0)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: cs.primary,
-                                        borderRadius: BorderRadius.circular(16),
-                                      ),
-                                      child: Text(
-                                        unread > 99 ? '99+' : '$unread',
-                                        style: TextStyle(
-                                          color: cs.onPrimary,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                  if (muted) ...[
-                                    const SizedBox(height: 8),
-                                    Icon(Icons.notifications_off_rounded,
-                                        size: 18,
-                                        color: cs.onSurface.withOpacity(.6)),
-                                  ],
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
                       );
                     },
                   ),
@@ -320,6 +247,400 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
             ),
           ),
         ],
+      ),
+
+      // === FOOTER NAV ===
+      bottomNavigationBar: Consumer<GroupChatController>(
+        builder: (context, ctrl, _) {
+          final totalGroupUnread =
+              ctrl.groups.fold<int>(0, (sum, g) => sum + _unread(g));
+
+          return _FooterNav(
+            currentIndex: 2, // Màn hình Nhóm Chat
+            chatBadgeCount:
+                0, // nếu có tổng unread của “Đoạn chat” thì set ở đây
+            showNotifDot: totalGroupUnread > 0,
+            onTap: (i) {
+              if (i == 2) return; // đang ở Nhóm Chat rồi
+
+              if (i == 0) {
+                // Điều hướng về màn “Đoạn chat” (FriendsList)
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        FriendsListScreen(accessToken: widget.accessToken),
+                  ),
+                );
+                return;
+              }
+
+              // TODO: gắn màn “Tin” (i == 1) và “Menu” (i == 3) theo router của bạn
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Chưa gắn điều hướng cho tab $i')),
+              );
+            },
+          );
+        },
+      ),
+
+    );
+  }
+}
+
+/// =====================
+/// Messenger-like tile
+/// =====================
+class _GroupTile extends StatelessWidget {
+  final ColorScheme cs;
+  final String avatarUrl;
+  final String title;
+  final String subtitle;
+  final String timeText;
+  final int unread;
+  final bool muted;
+  final bool online;
+  final VoidCallback onTap;
+
+  const _GroupTile({
+    required this.cs,
+    required this.avatarUrl,
+    required this.title,
+    required this.subtitle,
+    required this.timeText,
+    required this.unread,
+    required this.muted,
+    required this.online,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasUnread = unread > 0;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            // Avatar with gradient ring & online dot
+            _AvatarRing(
+              size: 56,
+              avatarUrl: avatarUrl,
+              placeholderChar: title.isNotEmpty ? title[0].toUpperCase() : '?',
+              showRing: hasUnread,
+              online: online,
+              cs: cs,
+            ),
+            const SizedBox(width: 12),
+
+            // Title + subtitle
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // name + time + mute
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontWeight:
+                                hasUnread ? FontWeight.w800 : FontWeight.w700,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      if (timeText.isNotEmpty)
+                        Text(
+                          timeText,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: cs.onSurface.withOpacity(.6),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      if (muted) ...[
+                        const SizedBox(width: 6),
+                        Icon(Icons.notifications_off_rounded,
+                            size: 16, color: cs.onSurface.withOpacity(.5)),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  // preview + unread dot
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            color: hasUnread
+                                ? cs.onSurface
+                                : cs.onSurface.withOpacity(.7),
+                            fontWeight:
+                                hasUnread ? FontWeight.w600 : FontWeight.w400,
+                          ),
+                        ),
+                      ),
+                      if (hasUnread)
+                        Container(
+                          width: 8,
+                          height: 8,
+                          margin: const EdgeInsets.only(left: 8),
+                          decoration: BoxDecoration(
+                            color: cs.primary,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(width: 8),
+
+            // Unread badge (giống Messenger)
+            if (hasUnread)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: cs.primary,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(
+                  unread > 99 ? '99+' : '$unread',
+                  style: TextStyle(
+                    color: cs.onPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AvatarRing extends StatelessWidget {
+  final double size;
+  final String avatarUrl;
+  final String placeholderChar;
+  final bool showRing;
+  final bool online;
+  final ColorScheme cs;
+
+  const _AvatarRing({
+    required this.size,
+    required this.avatarUrl,
+    required this.placeholderChar,
+    required this.showRing,
+    required this.online,
+    required this.cs,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final avatar = CircleAvatar(
+      radius: size / 2 - (showRing ? 2 : 0),
+      backgroundImage: avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+      backgroundColor: cs.surfaceVariant,
+      child: avatarUrl.isEmpty
+          ? Text(
+              placeholderChar,
+              style: TextStyle(
+                color: cs.onSurface,
+                fontWeight: FontWeight.bold,
+                fontSize: size * 0.38,
+              ),
+            )
+          : null,
+    );
+
+    final avatarWithRing = showRing
+        ? Container(
+            width: size,
+            height: size,
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  cs.primary,
+                  cs.tertiary,
+                ],
+              ),
+            ),
+            child: Container(
+              decoration: const BoxDecoration(
+                  shape: BoxShape.circle, color: Colors.white),
+              child: avatar,
+            ),
+          )
+        : SizedBox(width: size, height: size, child: avatar);
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        avatarWithRing,
+        if (online)
+          Positioned(
+            right: -1,
+            bottom: -1,
+            child: Container(
+              width: size * 0.28,
+              height: size * 0.28,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+              ),
+              child: Container(
+                margin: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: Colors.green,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// =====================
+/// Footer Nav (custom)
+/// =====================
+class _FooterNav extends StatelessWidget {
+  final int currentIndex;
+  final int chatBadgeCount;
+  final bool showNotifDot;
+  final ValueChanged<int> onTap;
+
+  const _FooterNav({
+    required this.currentIndex,
+    required this.chatBadgeCount,
+    required this.showNotifDot,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    Widget item({
+      required int index,
+      required IconData icon,
+      required String label,
+      int badge = 0,
+      bool dot = false,
+    }) {
+      final active = currentIndex == index;
+      final color = active ? cs.primary : cs.onSurface.withOpacity(.7);
+
+      return Expanded(
+        child: InkWell(
+          onTap: () => onTap(index),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Icon(icon, size: 24, color: color),
+                    if (badge > 0)
+                      Positioned(
+                        right: -10,
+                        top: -8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: cs.primary,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            badge > 99 ? '99+' : '$badge',
+                            style: TextStyle(
+                              color: cs.onPrimary,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (badge == 0 && dot)
+                      Positioned(
+                        right: -2,
+                        top: -2,
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                              color: cs.primary, shape: BoxShape.circle),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 12,
+                    fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Material(
+      elevation: 6,
+      child: SafeArea(
+        top: false,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            border:
+                Border(top: BorderSide(color: cs.outlineVariant, width: .5)),
+          ),
+          child: Row(
+            children: [
+              item(
+                  index: 0,
+                  icon: Icons.chat_bubble,
+                  label: 'Đoạn chat',
+                  badge: chatBadgeCount),
+              item(index: 1, icon: Icons.video_collection, label: 'Tin'),
+              item(
+                  index: 2,
+                  icon: Icons.groups,
+                  label: 'Nhóm Chat',
+                  dot: showNotifDot),
+              item(index: 3, icon: Icons.menu, label: 'Menu'),
+            ],
+          ),
+        ),
       ),
     );
   }
