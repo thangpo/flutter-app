@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
@@ -36,10 +37,19 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
   bool _submitting = false;
 
   final ImagePicker _picker = ImagePicker();
+  final FocusNode _textFocusNode = FocusNode();
+  Timer? _mentionDebounce;
+  List<SocialUser> _mentionSuggestions = <SocialUser>[];
+  bool _mentionLoading = false;
+  bool _mentionPromptVisible = false;
+  int _mentionStartIndex = -1;
+  String _currentMentionQuery = '';
 
   @override
   void initState() {
     super.initState();
+    _textController.addListener(_handleTextChanged);
+    _textFocusNode.addListener(_handleTextFocusChange);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final sc = context.read<SocialController>();
       sc.loadCurrentUser();
@@ -48,6 +58,10 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
 
   @override
   void dispose() {
+    _textController.removeListener(_handleTextChanged);
+    _mentionDebounce?.cancel();
+    _textFocusNode.removeListener(_handleTextFocusChange);
+    _textFocusNode.dispose();
     _textController.dispose();
     super.dispose();
   }
@@ -214,6 +228,13 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
         _video != null;
   }
 
+  bool get _shouldShowMentionSuggestions =>
+      _mentionStartIndex >= 0 &&
+      _textFocusNode.hasFocus &&
+      (_mentionLoading ||
+          _mentionSuggestions.isNotEmpty ||
+          _mentionPromptVisible);
+
   Future<void> _submit() async {
     if (!_hasContent || _submitting) {
       showCustomSnackBar(
@@ -277,7 +298,7 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
         icon: Icons.person_add_alt_1_outlined,
         color: Colors.lightBlue,
         label: getTranslated('tag_people', context) ?? 'Tag people',
-        onTap: () => _showComingSoon('tag_people'),
+        onTap: _openMentionSuggestions,
       ),
       _ComposeAction(
         icon: Icons.emoji_emotions_outlined,
@@ -525,16 +546,23 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
   }
 
   Widget _buildTextField(ThemeData theme) {
-    return TextField(
-      controller: _textController,
-      maxLines: null,
-      minLines: 5,
-      decoration: InputDecoration(
-        hintText: getTranslated('whats_on_your_mind', context) ??
-            "What's on your mind?",
-        border: InputBorder.none,
-      ),
-      style: theme.textTheme.titleMedium?.copyWith(fontSize: 18),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: _textController,
+          focusNode: _textFocusNode,
+          maxLines: null,
+          minLines: 5,
+          decoration: InputDecoration(
+            hintText: getTranslated('whats_on_your_mind', context) ??
+                "What's on your mind?",
+            border: InputBorder.none,
+          ),
+          style: theme.textTheme.titleMedium?.copyWith(fontSize: 18),
+        ),
+        if (_shouldShowMentionSuggestions) _buildMentionSuggestions(theme),
+      ],
     );
   }
 
@@ -701,6 +729,320 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
     showCustomSnackBar(message, context, isError: false);
   }
 
+  void _openMentionSuggestions() {
+    FocusScope.of(context).requestFocus(_textFocusNode);
+    final TextSelection selection = _textController.selection;
+    final String text = _textController.text;
+    int cursor;
+    if (!selection.isValid) {
+      cursor = text.length;
+    } else if (selection.isCollapsed) {
+      cursor = selection.baseOffset;
+    } else {
+      cursor = selection.extentOffset;
+    }
+    cursor = cursor.clamp(0, text.length);
+
+    final bool hasAtBefore =
+        cursor > 0 && text.substring(cursor - 1, cursor) == '@';
+    if (!hasAtBefore) {
+      final bool needsSpace =
+          cursor > 0 && text.substring(cursor - 1, cursor).trim().isNotEmpty;
+      final String insertion = '${needsSpace ? ' ' : ''}@';
+      final String updated = text.replaceRange(cursor, cursor, insertion);
+      final int newCursor = cursor + insertion.length;
+      _textController.value = TextEditingValue(
+        text: updated,
+        selection: TextSelection.collapsed(offset: newCursor),
+      );
+    }
+    setState(() {
+      _mentionPromptVisible = true;
+    });
+  }
+
+  void _handleTextFocusChange() {
+    if (!_textFocusNode.hasFocus) {
+      _resetMentionTracking();
+    }
+  }
+
+  void _handleTextChanged() {
+    if (!mounted) return;
+    final TextSelection selection = _textController.selection;
+    if (!selection.isValid || !selection.isCollapsed) {
+      _resetMentionTracking();
+      return;
+    }
+    final int cursor = selection.baseOffset;
+    if (cursor <= 0 || cursor > _textController.text.length) {
+      _resetMentionTracking();
+      return;
+    }
+    final _MentionToken? token =
+        _resolveMentionToken(_textController.text, cursor);
+    if (token == null) {
+      _resetMentionTracking();
+      return;
+    }
+    final String query = token.query;
+    final bool queryChanged = query != _currentMentionQuery;
+    _mentionStartIndex = token.start;
+    if (!queryChanged) {
+      if (query.isEmpty && !_mentionPromptVisible && mounted) {
+        setState(() {
+          _mentionPromptVisible = true;
+        });
+      }
+      return;
+    }
+    _currentMentionQuery = query;
+    _mentionDebounce?.cancel();
+    if (query.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _mentionPromptVisible = true;
+          _mentionSuggestions = const <SocialUser>[];
+          _mentionLoading = false;
+        });
+      }
+      return;
+    }
+    setState(() {
+      _mentionPromptVisible = false;
+      _mentionLoading = true;
+      _mentionSuggestions = const <SocialUser>[];
+    });
+    _mentionDebounce = Timer(const Duration(milliseconds: 250), () {
+      _fetchMentionSuggestions(query);
+    });
+  }
+
+  Future<void> _fetchMentionSuggestions(String query) async {
+    final String currentQuery = query;
+    final SocialController controller = context.read<SocialController>();
+    try {
+      final List<SocialUser> results =
+          await controller.searchMentionUsers(keyword: currentQuery, limit: 8);
+      if (!mounted) return;
+      if (_currentMentionQuery != currentQuery) return;
+      setState(() {
+        _mentionPromptVisible = false;
+        _mentionSuggestions = results;
+        _mentionLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      if (_currentMentionQuery != currentQuery) return;
+      setState(() {
+        _mentionPromptVisible = true;
+        _mentionSuggestions = const <SocialUser>[];
+        _mentionLoading = false;
+      });
+    }
+  }
+
+  void _resetMentionTracking() {
+    final bool hasState = _mentionStartIndex != -1 ||
+        _mentionSuggestions.isNotEmpty ||
+        _mentionLoading ||
+        _currentMentionQuery.isNotEmpty;
+    if (!hasState) return;
+    _mentionDebounce?.cancel();
+    if (!mounted) {
+      _mentionSuggestions = const <SocialUser>[];
+      _mentionLoading = false;
+      _mentionStartIndex = -1;
+      _currentMentionQuery = '';
+      _mentionPromptVisible = false;
+      return;
+    }
+    setState(() {
+      _mentionSuggestions = const <SocialUser>[];
+      _mentionLoading = false;
+      _mentionStartIndex = -1;
+      _currentMentionQuery = '';
+      _mentionPromptVisible = false;
+    });
+  }
+
+  _MentionToken? _resolveMentionToken(String text, int cursor) {
+    final int safeCursor = cursor.clamp(0, text.length);
+    int index = safeCursor - 1;
+    while (index >= 0) {
+      final String char = text[index];
+      if (char == '@') {
+        final bool validPrefix =
+            index == 0 || !_isUsernameChar(text[index - 1]);
+        if (!validPrefix) {
+          return null;
+        }
+        final String query = text.substring(index + 1, safeCursor);
+        if (_isValidMentionQuery(query)) {
+          return _MentionToken(start: index, query: query);
+        }
+        return null;
+      }
+      if (!_isUsernameChar(char)) {
+        break;
+      }
+      index--;
+    }
+    return null;
+  }
+
+  bool _isUsernameChar(String char) {
+    if (char.isEmpty) return false;
+    final int code = char.codeUnitAt(0);
+    if (code >= 48 && code <= 57) return true; // 0-9
+    if (code >= 65 && code <= 90) return true; // A-Z
+    if (code >= 97 && code <= 122) return true; // a-z
+    return char == '_' || char == '.';
+  }
+
+  bool _isValidMentionQuery(String query) {
+    if (query.isEmpty) return true;
+    final RegExp pattern = RegExp(r'^[A-Za-z0-9_.]+$');
+    return pattern.hasMatch(query);
+  }
+
+  void _handleMentionTap(SocialUser user) {
+    final String? username = user.userName?.trim();
+    if (username == null || username.isEmpty) return;
+    final String text = _textController.text;
+    final int start = _mentionStartIndex.clamp(0, text.length);
+    final int cursor =
+        _textController.selection.baseOffset.clamp(0, text.length);
+    if (cursor < start) return;
+    final String before = text.substring(0, start);
+    final String after = text.substring(cursor);
+    final String mentionText = '@$username';
+    final String insertion = '$mentionText ';
+    final String updated = '$before$insertion$after';
+    final int newCursor = (before + insertion).length;
+    _textController.value = TextEditingValue(
+      text: updated,
+      selection: TextSelection.collapsed(offset: newCursor),
+    );
+    _resetMentionTracking();
+    FocusScope.of(context).requestFocus(_textFocusNode);
+  }
+
+  Widget _buildMentionSuggestions(ThemeData theme) {
+    final ColorScheme cs = theme.colorScheme;
+    final List<SocialUser> suggestions = _mentionSuggestions;
+    final bool showPrompt =
+        _mentionPromptVisible && !_mentionLoading && suggestions.isEmpty;
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      constraints: const BoxConstraints(maxHeight: 220),
+      child: _mentionLoading && suggestions.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.all(16),
+              child: Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+                  ),
+                ),
+              ),
+            )
+          : showPrompt
+              ? Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Text(
+                    getTranslated('start_typing_to_tag', context) ??
+                        'Start typing to tag someone…',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                )
+              : suggestions.isEmpty
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      child: Text(
+                        getTranslated('no_results_found', context) ??
+                            'No matches found',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: cs.onSurfaceVariant),
+                      ),
+                    )
+                  : ListView.separated(
+                      shrinkWrap: true,
+                      physics: const BouncingScrollPhysics(),
+                      itemBuilder: (BuildContext context, int index) {
+                        final SocialUser user = suggestions[index];
+                        final String? avatar = user.avatarUrl;
+                        final String displayName =
+                            user.displayName?.trim().isNotEmpty == true
+                                ? user.displayName!.trim()
+                                : (user.userName?.trim().isNotEmpty == true
+                                    ? user.userName!.trim()
+                                    : user.id);
+                        final String? username = user.userName?.trim();
+                        return ListTile(
+                          dense: true,
+                          onTap: () => _handleMentionTap(user),
+                          leading: CircleAvatar(
+                            radius: 20,
+                            backgroundColor: cs.surfaceVariant,
+                            backgroundImage:
+                                (avatar != null && avatar.isNotEmpty)
+                                    ? NetworkImage(avatar)
+                                    : null,
+                            child: (avatar == null || avatar.isEmpty)
+                                ? Text(
+                                    displayName.isNotEmpty
+                                        ? displayName[0].toUpperCase()
+                                        : '?',
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  )
+                                : null,
+                          ),
+                          title: Text(
+                            displayName,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: (username != null && username.isNotEmpty)
+                              ? Text(
+                                  '@$username',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: cs.onSurfaceVariant,
+                                  ),
+                                )
+                              : null,
+                        );
+                      },
+                      separatorBuilder: (_, __) => Divider(
+                        height: 1,
+                        thickness: 0.6,
+                        color: cs.outline.withOpacity(.1),
+                      ),
+                      itemCount: suggestions.length,
+                    ),
+    );
+  }
+
   String _displayName(SocialUser? user, ProfileModel? profile) {
     final String? socialName = user?.displayName?.trim();
     if (socialName != null && socialName.isNotEmpty) {
@@ -746,5 +1088,15 @@ class _ComposeAction {
     required this.color,
     required this.label,
     required this.onTap,
+  });
+}
+
+class _MentionToken {
+  final int start;
+  final String query;
+
+  const _MentionToken({
+    required this.start,
+    required this.query,
   });
 }

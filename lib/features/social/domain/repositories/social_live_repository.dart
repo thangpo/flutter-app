@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_comment.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_live_comments_page.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:http/http.dart' as http;
 
@@ -147,6 +148,19 @@ class SocialLiveRepository {
       return null;
     }();
 
+    final List<SocialUser> joinedUsers = _mergeUsers(<dynamic>[
+      body['joined'],
+      body['joined_data'],
+      if (body['data'] is Map) (body['data'] as Map)['joined'],
+      if (body['data'] is Map) (body['data'] as Map)['joined_data'],
+    ]);
+    final List<SocialUser> leftUsers = _mergeUsers(<dynamic>[
+      body['left'],
+      body['left_data'],
+      if (body['data'] is Map) (body['data'] as Map)['left'],
+      if (body['data'] is Map) (body['data'] as Map)['left_data'],
+    ]);
+
     return SocialLiveCommentsPage(
       comments: comments,
       nextOffset: nextOffset,
@@ -156,6 +170,8 @@ class SocialLiveRepository {
       viewerCount: viewerCount,
       isLive: isLive,
       statusWord: statusWord,
+      joinedUsers: joinedUsers,
+      leftUsers: leftUsers,
     );
   }
 
@@ -549,6 +565,94 @@ class SocialLiveRepository {
       return comments.last.id;
     }
     return null;
+  }
+
+  List<SocialUser> _mergeUsers(List<dynamic> sources) {
+    final List<SocialUser> output = <SocialUser>[];
+    final Set<String> seen = <String>{};
+    for (final dynamic source in sources) {
+      for (final SocialUser user in _collectUsers(source)) {
+        if (seen.add(user.id)) {
+          output.add(user);
+        }
+      }
+    }
+    return output;
+  }
+
+  Iterable<SocialUser> _collectUsers(dynamic raw) sync* {
+    if (raw == null) return;
+    if (raw is Iterable) {
+      for (final dynamic item in raw) {
+        final SocialUser? user = _parseUser(item);
+        if (user != null) yield user;
+      }
+    } else if (raw is Map) {
+      for (final dynamic value in raw.values) {
+        final SocialUser? user = _parseUser(value);
+        if (user != null) {
+          yield user;
+        }
+      }
+    }
+  }
+
+  SocialUser? _parseUser(dynamic raw) {
+    if (raw is! Map) return null;
+    final Map<String, dynamic> map = Map<String, dynamic>.from(raw);
+
+    final String? id =
+        _normalizeString(map['user_id'] ?? map['id'] ?? map['userId']);
+    if (id == null || id.isEmpty) return null;
+
+    String? firstName =
+        _normalizeString(map['first_name'] ?? map['fname'] ?? map['firstName']);
+    String? lastName =
+        _normalizeString(map['last_name'] ?? map['lname'] ?? map['lastName']);
+    String? displayName = _normalizeString(map['name'] ??
+        map['full_name'] ??
+        map['fullname'] ??
+        map['display_name']);
+    final String? userName =
+        _normalizeString(map['username'] ?? map['user_name']);
+
+    if (displayName == null || displayName.isEmpty) {
+      final List<String> pieces = <String>[
+        if (firstName != null && firstName.isNotEmpty) firstName,
+        if (lastName != null && lastName.isNotEmpty) lastName,
+      ];
+      final String combined = pieces.join(' ').trim();
+      if (combined.isNotEmpty) {
+        displayName = combined;
+      } else if (userName != null && userName.isNotEmpty) {
+        displayName = userName;
+      } else {
+        displayName = id;
+      }
+    }
+
+    final String? avatar = _normalizeMediaUrl(
+      map['avatar_full'] ?? map['avatar'] ?? map['profile_picture'],
+    );
+    final String? cover = _normalizeMediaUrl(
+      map['cover_full'] ?? map['cover'] ?? map['cover_image'],
+    );
+    final bool isAdmin =
+        _isTruthy(map['is_admin'] ?? map['admin'] ?? map['is_moderator']);
+    final bool isOwner =
+        _isTruthy(map['is_owner'] ?? map['owner'] ?? map['is_creator']);
+
+    return SocialUser(
+      id: id,
+      displayName: displayName,
+      firstName: firstName,
+      lastName: lastName,
+      userName: userName,
+      avatarUrl: avatar,
+      coverUrl: cover,
+      isAdmin: isAdmin,
+      isOwner: isOwner,
+    );
   }
 
   List<String> _extractFileList(Map<String, dynamic> body) {

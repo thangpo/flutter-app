@@ -9,6 +9,7 @@ import 'package:flutter_sixvalley_ecommerce/di_container.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_comment.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_live_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_service_interface.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
@@ -568,11 +569,21 @@ class _LiveScreenState extends State<LiveScreen> {
       );
       if (!mounted) return;
       bool appended = false;
+      final List<SocialComment> systemEvents = <SocialComment>[
+        for (final SocialUser user in page.joinedUsers)
+          _createLiveEventComment(user, joined: true),
+        for (final SocialUser user in page.leftUsers)
+          _createLiveEventComment(user, joined: false),
+      ];
       final int? viewerCount = page.viewerCount;
       final bool? isLive = page.isLive;
       final String? statusWord = page.statusWord;
       setState(() {
-        for (final SocialComment comment in page.comments) {
+        final List<SocialComment> incoming = <SocialComment>[
+          ...page.comments,
+          ...systemEvents,
+        ];
+        for (final SocialComment comment in incoming) {
           if (_commentIds.add(comment.id)) {
             _comments.add(comment);
             appended = true;
@@ -743,6 +754,35 @@ class _LiveScreenState extends State<LiveScreen> {
         ),
       );
     }
+  }
+
+  SocialComment _createLiveEventComment(
+    SocialUser user, {
+    required bool joined,
+  }) {
+    String? candidate(String? value) {
+      if (value == null) return null;
+      final String trimmed = value.trim();
+      return trimmed.isEmpty ? null : trimmed;
+    }
+
+    final String displayName = candidate(user.displayName) ??
+        candidate(user.userName) ??
+        candidate(user.firstName) ??
+        candidate(user.lastName) ??
+        user.id;
+    final String message =
+        joined ? 'joined the livestream' : 'left the livestream';
+    final String identifier =
+        'system_${joined ? 'join' : 'leave'}_${user.id}_${DateTime.now().microsecondsSinceEpoch}';
+
+    return SocialComment(
+      id: identifier,
+      text: message,
+      userName: displayName,
+      userAvatar: candidate(user.avatarUrl),
+      createdAt: DateTime.now(),
+    );
   }
 
   Future<void> _endLive({bool silent = false}) async {

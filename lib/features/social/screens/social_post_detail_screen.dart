@@ -21,6 +21,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/widgets/shared_post_
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/social_post_media.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/live_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/mention_formatter.dart';
 
 enum CommentSortOrder { newest, oldest }
 
@@ -449,8 +450,8 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                     : (p.sharedPost != null ? p : current);
                             final SocialPost? sharedPost =
                                 displayPost.sharedPost ?? p.sharedPost;
-                            final bool isLiveDetail =
-                                sharedPost == null && _isActiveLivePost(displayPost);
+                            final bool isLiveDetail = sharedPost == null &&
+                                _isActiveLivePost(displayPost);
                             if (isLiveDetail) {
                               _maybeOpenLive(displayPost);
                             }
@@ -471,8 +472,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                     ? buildSocialPostMedia(
                                         context,
                                         sharedPost!.copyWith(
-                                          id:
-                                              '${sharedPost!.id}_detail_${displayPost.id}',
+                                          id: '${sharedPost!.id}_detail_${displayPost.id}',
                                         ),
                                         compact: false)
                                     : SharedPostPreviewCard(
@@ -492,7 +492,8 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                       )
                                 : isLiveDetail
                                     ? null
-                                    : ((displayPost.videoUrl ?? '').isNotEmpty ||
+                                    : ((displayPost.videoUrl ?? '')
+                                                .isNotEmpty ||
                                             (displayPost.audioUrl ?? '')
                                                 .isNotEmpty ||
                                             displayPost.imageUrls.isNotEmpty)
@@ -518,24 +519,39 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                   Padding(
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 12),
-                                    child: Html(
-                                      data: postText!,
-                                      style: {
-                                        'body': Style(
-                                          color: onSurface,
-                                          fontSize: FontSize(15),
-                                          lineHeight: LineHeight(1.35),
-                                          margin: Margins.zero,
-                                          padding: HtmlPaddings.zero,
-                                        ),
-                                      },
-                                      onLinkTap: (url, _, __) async {
-                                        if (url != null) {
-                                          final uri = Uri.parse(url);
-                                          await launchUrl(uri,
-                                              mode: LaunchMode
-                                                  .externalApplication);
-                                        }
+                                    child: Builder(
+                                      builder: (BuildContext context) {
+                                        final SocialController controller =
+                                            context.read<SocialController>();
+                                        final String formatted =
+                                            MentionFormatter.decorate(
+                                                postText!, controller);
+                                        return Html(
+                                          data: formatted,
+                                          style: {
+                                            'body': Style(
+                                              color: onSurface,
+                                              fontSize: FontSize(15),
+                                              lineHeight: LineHeight(1.35),
+                                              margin: Margins.zero,
+                                              padding: HtmlPaddings.zero,
+                                            ),
+                                          },
+                                          onLinkTap: (url, _, __) async {
+                                            if (url == null) return;
+                                            if (MentionFormatter.isMentionLink(
+                                                url)) {
+                                              await MentionFormatter
+                                                  .handleMentionTap(
+                                                      context, url);
+                                              return;
+                                            }
+                                            final uri = Uri.parse(url);
+                                            await launchUrl(uri,
+                                                mode: LaunchMode
+                                                    .externalApplication);
+                                          },
+                                        );
                                       },
                                     ),
                                   ),
@@ -557,12 +573,12 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                 BorderRadius.circular(8),
                                             child: LinearProgressIndicator(
                                               value: (((double.tryParse(
-                                                            (opt['percentage_num'] ??
-                                                                    '0')
-                                                                .toString()) ??
-                                                        0.0) /
-                                                    100.0))
-                                                .clamp(0, 1),
+                                                              (opt['percentage_num'] ??
+                                                                      '0')
+                                                                  .toString()) ??
+                                                          0.0) /
+                                                      100.0))
+                                                  .clamp(0, 1),
                                             ),
                                           ),
                                           const SizedBox(height: 10),
