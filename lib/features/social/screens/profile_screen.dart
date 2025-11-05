@@ -188,13 +188,39 @@ class _ProfileBodyState extends State<_ProfileBody> {
             widget.targetUserId!.isEmpty ||
             widget.targetUserId == myId);
 
-        if (loadingProfile && headerUser == null) {
-          return const Center(child: CircularProgressIndicator());
+        // === Chọn nội dung theo tab (dưới dạng RenderBox) ===
+        Widget tabContent;
+        switch (_currentTab) {
+          case _ProfileTab.about:
+            tabContent = _ProfileAboutSection(user: safeHeaderUser);
+            break;
+          case _ProfileTab.photos:
+            tabContent = _ProfilePhotosSection(
+              targetUserId: widget.targetUserId,
+            );
+            break;
+          case _ProfileTab.reels:
+          case _ProfileTab.posts:
+          default:
+            tabContent = _ProfilePostsSection(
+              user: safeHeaderUser,
+              posts: posts,
+              isLoadingMore: loadingPosts,
+              onLoadMore: () {
+                sc.loadMoreProfilePosts(
+                  targetUserId: widget.targetUserId,
+                  limit: 10,
+                );
+              },
+              onShowAbout: _switchToAbout,
+              isSelf: isSelf,
+            );
         }
 
         return RefreshIndicator(
           onRefresh: _handleRefresh,
           child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
               _ProfileAppBar(user: safeHeaderUser),
 
@@ -212,32 +238,21 @@ class _ProfileBodyState extends State<_ProfileBody> {
               ),
 
               // NỘI DUNG THEO TAB
-              if (_currentTab == _ProfileTab.posts)
-                SliverToBoxAdapter(
-                  child: _ProfilePostsSection(
-                    user: safeHeaderUser,
-                    posts: posts,
-                    isLoadingMore: loadingPosts,
-                    onLoadMore: () {
-                      sc.loadMoreProfilePosts(
-                        targetUserId: widget.targetUserId,
-                        limit: 10,
-                      );
-                    },
-                    onShowAbout: _switchToAbout,
-                    isSelf: isSelf, // ẩn composer nếu không phải mình
-                  ),
-                )
-              else
-                SliverToBoxAdapter(
-                  child: _ProfileAboutSection(
-                    user: safeHeaderUser,
-                  ),
-                ),
+              SliverToBoxAdapter(child: tabContent),
 
+              // khoảng đệm dưới cùng
               const SliverToBoxAdapter(
                 child: SizedBox(height: Dimensions.paddingSizeExtraLarge),
               ),
+
+              // Nếu muốn hiển thị shimmer/skeleton khi chưa có dữ liệu cơ bản
+              if (loadingProfile && headerUser == null)
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                ),
             ],
           ),
         );
@@ -726,8 +741,8 @@ class _ProfileHeaderSection extends StatelessWidget {
                       child: OutlinedButton.icon(
                         onPressed: () async {
                           final sp = await SharedPreferences.getInstance();
-                          final token = sp
-                              .getString(AppConstants.socialAccessToken);
+                          final token =
+                          sp.getString(AppConstants.socialAccessToken);
                           if (token == null || token.isEmpty) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
@@ -804,14 +819,13 @@ class _ProfileHeaderSection extends StatelessWidget {
               ),
               _SimpleTab(
                 label: 'Reels',
-                active: false,
-                onTap: () => onTabSelected(_ProfileTab.posts),
+                active: currentTab == _ProfileTab.reels,
+                onTap: () => onTabSelected(_ProfileTab.reels),
               ),
               _SimpleTab(
                 label: 'Ảnh',
-                hasDropdown: true,
-                active: false,
-                onTap: () {},
+                active: currentTab == _ProfileTab.photos,
+                onTap: () => onTabSelected(_ProfileTab.photos),
               ),
             ],
           ),
@@ -1622,7 +1636,6 @@ void _showOtherProfileMenu(
                     const Divider(height: 1),
 
                     // Báo cáo
-                    // Báo cáo
                     ListTile(
                       leading: const Icon(Icons.flag_outlined, color: Colors.red),
                       title: const Text('Báo cáo'),
@@ -1749,7 +1762,6 @@ Future<void> _confirmBlock(
 void _showSelfProfileMenu(
     BuildContext context, SocialUserProfile user) {
   final theme = Theme.of(context);
-  final sc = context.read<SocialController>();
 
   showModalBottomSheet(
     context: context,
@@ -1949,6 +1961,7 @@ Future<bool?> _confirmUnblockFromList(
     ),
   );
 }
+
 // === REPORT USER DIALOG ===
 void _showReportUserDialog(BuildContext context, {String? targetUserId}) {
   final sc = context.read<SocialController>();
@@ -2031,4 +2044,311 @@ void _showReportUserDialog(BuildContext context, {String? targetUserId}) {
       });
     },
   );
+}
+
+class _ProfilePhotosSection extends StatefulWidget {
+  final String? targetUserId;
+  const _ProfilePhotosSection({this.targetUserId});
+
+  @override
+  State<_ProfilePhotosSection> createState() => _ProfilePhotosSectionState();
+}
+
+class _ProfilePhotosSectionState extends State<_ProfilePhotosSection> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final sc = context.read<SocialController>();
+      // Chỉ nạp khi chưa có dữ liệu
+      if (sc.profilePhotos.isEmpty && !sc.isLoadingProfilePhotos) {
+        sc.refreshProfilePhotos(targetUserId: widget.targetUserId);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<SocialController>(
+      builder: (context, sc, _) {
+        final photos = sc.profilePhotos;
+        final loading = sc.isLoadingProfilePhotos;
+
+        if (loading && photos.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (photos.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: Center(
+              child: Text(
+                'Chưa có ảnh',
+                style: TextStyle(color: Theme.of(context).hintColor),
+              ),
+            ),
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: GridView.builder(
+                itemCount: photos.length,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  mainAxisSpacing: 4,
+                  crossAxisSpacing: 4,
+                  childAspectRatio: 1,
+                ),
+                itemBuilder: (_, i) {
+                  final p = photos[i];
+                  final thumb = p.thumbUrl ?? p.fullUrl;
+                  final full  = p.fullUrl ?? p.thumbUrl;
+
+                  // Nếu không có URL hợp lệ thì render ô hỏng và không cho mở
+                  if (full == null && thumb == null) {
+                    return const ColoredBox(
+                      color: Color(0x11000000),
+                      child: Center(child: Icon(Icons.broken_image)),
+                    );
+                  }
+
+                  // Dùng URL làm heroTag để khớp 1-1 giữa grid và viewer
+                  final heroTag = (full ?? thumb)!;
+
+                  return ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: GestureDetector(
+                      onTap: () {
+                        // Tạo danh sách URL ảnh full-size theo đúng thứ tự đang hiển thị
+                        final urls = photos
+                            .map((e) => e.fullUrl ?? e.thumbUrl)
+                            .whereType<String>()
+                            .toList();
+
+                        // Xác định index ảnh được chạm tương ứng trong mảng urls
+                        final tapped = full ?? thumb;
+                        final initialIndex = tapped == null ? i : urls.indexOf(tapped);
+                        final safeIndex = initialIndex < 0 ? 0 : initialIndex;
+
+                        // heroTags dùng chính URLs để match Hero
+                        final heroTags = urls;
+
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => FullscreenGalleryLite(
+                              urls: urls,
+                              initialIndex: safeIndex,
+                              heroTags: heroTags,
+                            ),
+                          ),
+                        );
+                      },
+                      child: Hero(
+                        tag: heroTag,
+                        child: Image.network(
+                          // Ưu tiên thumb cho grid để tải nhanh
+                          thumb ?? full!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const ColoredBox(
+                            color: Color(0x11000000),
+                            child: Center(child: Icon(Icons.broken_image)),
+                          ),
+                          loadingBuilder: (context, child, progress) {
+                            if (progress == null) return child;
+                            return const ColoredBox(
+                              color: Color(0x11000000),
+                              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  );
+                },
+
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (sc.hasMoreProfilePhotos)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Center(
+                  child: TextButton(
+                    onPressed: () => sc.loadMoreProfilePhotos(
+                      targetUserId: widget.targetUserId,
+                    ),
+                    child: const Text('Tải thêm'),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+// ==============================
+// FULLSCREEN GALLERY (thuần Flutter)
+// ==============================
+class FullscreenGalleryLite extends StatefulWidget {
+  final List<String> urls;          // danh sách URL ảnh full-size
+  final int initialIndex;           // mở tại ảnh thứ mấy
+  final List<String>? heroTags;     // dùng để match Hero từ grid (nên trùng URL)
+
+  const FullscreenGalleryLite({
+    super.key,
+    required this.urls,
+    this.initialIndex = 0,
+    this.heroTags,
+  });
+
+  @override
+  State<FullscreenGalleryLite> createState() => _FullscreenGalleryLiteState();
+}
+
+class _FullscreenGalleryLiteState extends State<FullscreenGalleryLite>
+    with SingleTickerProviderStateMixin {
+  late final PageController _pageController;
+  late int _index;
+
+  // Mỗi trang có một TransformationController để zoom/pan
+  final _controllers = <int, TransformationController>{};
+
+  // Double-tap zoom animation
+  late final AnimationController _anim;
+  Animation<Matrix4>? _matrixTween;
+
+  @override
+  void initState() {
+    super.initState();
+    _index = widget.initialIndex.clamp(0, widget.urls.length - 1);
+    _pageController = PageController(initialPage: _index);
+
+    _anim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 180),
+    )..addListener(() {
+      final c = _controllers[_index];
+      if (c != null && _matrixTween != null) c.value = _matrixTween!.value;
+    });
+  }
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    for (final c in _controllers.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  bool _isZoomed(int i) {
+    final c = _controllers[i];
+    return c != null && !c.value.isIdentity();
+  }
+
+  void _toggleZoom() {
+    final c = _controllers[_index] ??= TransformationController();
+    final isZoomed = !c.value.isIdentity();
+    final end = isZoomed ? Matrix4.identity() : (Matrix4.identity()..scale(2.2));
+    _matrixTween = Matrix4Tween(begin: c.value, end: end)
+        .animate(CurvedAnimation(parent: _anim, curve: Curves.easeOut));
+    _anim.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Nếu đang zoom ảnh hiện tại thì khoá vuốt PageView để không xung đột
+    final physics = _isZoomed(_index)
+        ? const NeverScrollableScrollPhysics()
+        : const PageScrollPhysics();
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          PageView.builder(
+            controller: _pageController,
+            physics: physics,
+            onPageChanged: (i) => setState(() => _index = i),
+            itemCount: widget.urls.length,
+            itemBuilder: (ctx, i) {
+              final tag = (widget.heroTags != null && i < (widget.heroTags!.length))
+                  ? widget.heroTags![i]
+                  : widget.urls[i];
+
+              final controller = _controllers[i] ??= TransformationController();
+
+              return Center(
+                child: Hero(
+                  tag: tag,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onDoubleTap: _toggleZoom,
+                    child: InteractiveViewer(
+                      transformationController: controller,
+                      minScale: 1,
+                      maxScale: 3.5,
+                      panEnabled: true,
+                      scaleEnabled: true,
+                      onInteractionEnd: (_) => setState(() {}),
+                      child: Image.network(
+                        widget.urls[i],
+                        fit: BoxFit.contain,
+                        loadingBuilder: (c, child, p) =>
+                        p == null ? child : const Center(child: CircularProgressIndicator()),
+                        errorBuilder: (_, __, ___) =>
+                        const Icon(Icons.broken_image, color: Colors.white, size: 48),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+
+          // Top bar: nút đóng + chỉ số
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 8,
+            left: 8,
+            right: 8,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                IconButton.filled(
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.black54,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${_index + 1}/${widget.urls.length}',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

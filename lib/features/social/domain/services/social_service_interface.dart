@@ -5,7 +5,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_feed_page.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user_profile.dart';
-
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_photo.dart';
 
 abstract class SocialServiceInterface {
   Future<List<SocialPost>> getNewsFeed({int limit, String? afterPostId});
@@ -117,6 +117,11 @@ abstract class SocialServiceInterface {
   Future<String> reportUser({
     required String targetUserId,
     required String text,
+  });
+  Future<List<SocialPhoto>> getUserPhotos({
+    String? targetUserId,
+    int limit = 35,
+    String? offset,
   });
 
 

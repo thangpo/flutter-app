@@ -16,6 +16,8 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user_profile.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_repository.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_photo.dart';
+
 import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 
@@ -637,6 +639,36 @@ class SocialService implements SocialServiceInterface {
     // lỗi ở tầng repo (network/timeout/parse…)
     throw Exception(resp.error ?? 'Không thể gửi báo cáo người dùng');
   }
+
+  //photo
+  @override
+  Future<List<SocialPhoto>> getUserPhotos({
+    String? targetUserId,
+    int limit = 35,
+    String? offset,
+  }) async {
+    final resp = await socialRepository.getAlbumUser(
+      targetUserId: targetUserId, // <-- truyền thẳng id người cần lấy
+      type: 'photos',
+      limit: limit,
+      offset: offset,
+    );
+
+    if (resp.isSuccess && resp.response != null && resp.response!.statusCode == 200) {
+      final data = resp.response!.data; // Map<String, dynamic>
+      final baseUrl = AppConstants.socialBaseUrl.replaceAll(RegExp(r'/$'), '') + '/';
+
+      final photos = SocialPhoto.parseFromGetAlbums(
+        data,
+        baseUrl: baseUrl,
+      );
+      return photos;
+    }
+
+    throw Exception(resp.error ?? 'getUserPhotos failed');
+  }
+
+
 
   //block user 11/04/2025
   @override

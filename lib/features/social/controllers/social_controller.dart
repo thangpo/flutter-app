@@ -11,6 +11,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_service_interface.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_service.dart';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_photo.dart';
 import 'package:flutter_sixvalley_ecommerce/main.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -91,7 +92,17 @@ class SocialController with ChangeNotifier {
   //05/11/2025 report user
   final Set<String> _reportBusy = {};
   bool isReportBusy(String userId) => _reportBusy.contains(userId);
+  List<SocialPhoto> _profilePhotos = <SocialPhoto>[];
+  bool _loadingProfilePhotos = false;
+  String? _photosOffset;     // nếu backend trả offset/id tiếp theo
+  bool _hasMoreProfilePhotos = true;
+  String? _photosForUserId;
+
+  List<SocialPhoto> get profilePhotos => List.unmodifiable(_profilePhotos);
+  bool get isLoadingProfilePhotos => _loadingProfilePhotos;
+  bool get hasMoreProfilePhotos => _hasMoreProfilePhotos;
   //end
+
 
   bool get hasMoreFollowers =>
       _followersAfter != null && _followersAfter!.isNotEmpty;
@@ -185,6 +196,7 @@ class SocialController with ChangeNotifier {
     _blockBusy.clear();
 
 
+
     // Clear profile state
     _followers = const [];
     _following = const [];
@@ -193,6 +205,13 @@ class SocialController with ChangeNotifier {
     _loadingProfile = false;
     _loadingProfilePosts = false;
     _lastProfilePostId = null;
+
+    //clear photo
+    _profilePhotos = <SocialPhoto>[];
+    _loadingProfilePhotos = false;
+    _hasMoreProfilePhotos = true;
+    _photosOffset = null;
+    _photosForUserId = null;
 
     if (notify) {
       notifyListeners();
@@ -423,6 +442,57 @@ class SocialController with ChangeNotifier {
       rethrow;
     }
   }
+  //photo
+  Future<void> refreshProfilePhotos({String? targetUserId}) async {
+    if (_loadingProfilePhotos) return;
+    _loadingProfilePhotos = true;
+    _photosOffset = null;
+    _hasMoreProfilePhotos = true;
+    notifyListeners();
+
+    try {
+      final photos = await service.getUserPhotos(
+        targetUserId: targetUserId ?? _profileHeaderUser?.id ?? _currentUser?.id,
+        limit: 35,
+        offset: null,
+      );
+      _profilePhotos = photos;
+      // Nếu backend không trả offset/has_more, ta ước lượng theo limit
+      _hasMoreProfilePhotos = photos.length >= 35;
+    } catch (e) {
+      _profilePhotos = <SocialPhoto>[];
+      _hasMoreProfilePhotos = false;
+    } finally {
+      _loadingProfilePhotos = false;
+      notifyListeners();
+    }
+  }
+
+// ----- LOAD MORE -----
+  Future<void> loadMoreProfilePhotos({String? targetUserId}) async {
+    if (_loadingProfilePhotos || !_hasMoreProfilePhotos) return;
+    _loadingProfilePhotos = true;
+    notifyListeners();
+
+    try {
+      final photos = await service.getUserPhotos(
+        targetUserId: targetUserId ?? _profileHeaderUser?.id ?? _currentUser?.id,
+        limit: 35,
+        offset: _photosOffset,
+      );
+      if (photos.isEmpty) {
+        _hasMoreProfilePhotos = false;
+      } else {
+        _profilePhotos = [..._profilePhotos, ...photos];
+        // cập nhật _photosOffset nếu backend có trả trong resp (tuỳ bạn mở rộng)
+        _hasMoreProfilePhotos = photos.length >= 35;
+      }
+    } finally {
+      _loadingProfilePhotos = false;
+      notifyListeners();
+    }
+  }
+
 
   //report user
   /// Trả về message từ server (nếu có), đồng thời show snackbar nếu có context.
@@ -482,6 +552,9 @@ class SocialController with ChangeNotifier {
       notifyListeners();
     }
   }
+
+  //photo
+
 
 
 
@@ -1881,6 +1954,10 @@ class SocialController with ChangeNotifier {
 
       // lưu header user đầy đủ (SocialUserProfile?)
       _profileHeaderUser = bundle.user;
+      final viewedId = _profileHeaderUser?.id;
+      if (viewedId != null && viewedId.isNotEmpty) {
+        await refreshProfilePhotos(targetUserId: viewedId);
+      }
 
       // nếu đây là profile của chính mình thì bạn có thể
       // optionally sync lại _currentUser nếu muốn.
@@ -1935,7 +2012,7 @@ class SocialController with ChangeNotifier {
     if (_loadingProfilePosts) return;
     if (_lastProfilePostId == null || _lastProfilePostId!.isEmpty) return;
 
-    final userId = targetUserId ?? _currentUser?.id;
+    final userId = targetUserId ?? _profileHeaderUser?.id ?? _currentUser?.id;
     if (userId == null || userId.isEmpty) return;
 
     _loadingProfilePosts = true;
