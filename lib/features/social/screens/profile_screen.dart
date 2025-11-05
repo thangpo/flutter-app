@@ -340,8 +340,9 @@ class _ProfileHeaderSection extends StatelessWidget {
       children: [
         // === COVER + AVATAR ===
         SizedBox(
-          height: 180,
+          height: 220,
           child: Stack(
+            clipBehavior: Clip.none,
             children: [
               // Cover
               Positioned.fill(
@@ -349,7 +350,7 @@ class _ProfileHeaderSection extends StatelessWidget {
                     ? Image.network(
                   user.coverUrl!,
                   fit: BoxFit.cover,
-                  loadingBuilder: (context, child, progress) =>
+                  loadingBuilder: (_, child, progress) =>
                   progress == null
                       ? child
                       : Container(
@@ -362,68 +363,81 @@ class _ProfileHeaderSection extends StatelessWidget {
                     : _CoverFallback(),
               ),
 
-              // === NÚT VÍ CÁ NHÂN (MỚI THÊM) ===
+              // Avatar
               Positioned(
-                top: 16,
+                left: 16,
+                bottom: -40,
+                child: Container(
+                  width: 110,
+                  height: 110,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 4),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black26,
+                        blurRadius: 12,
+                        offset: Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: ClipOval(
+                    child: user.avatarUrl?.isNotEmpty == true
+                        ? Image.network(
+                      user.avatarUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const _AvatarFallback(),
+                    )
+                        : const _AvatarFallback(),
+                  ),
+                ),
+              ),
+
+              // === NÚT VÍ HIỂN THỊ NGANG VỚI AVATAR ===
+              Positioned(
                 right: 16,
+                bottom: -15, // căn ngang avatar
                 child: GestureDetector(
                   onTap: () {
-                    Navigator.of(context).push(
+                    Navigator.push(
+                      context,
                       MaterialPageRoute(builder: (_) => const WalletScreen()),
                     );
                   },
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.9),
-                      shape: BoxShape.circle,
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(40),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
+                          color: Colors.black.withOpacity(0.15),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
                         ),
                       ],
                     ),
-                    child: const Icon(
-                      Icons.account_balance_wallet,
-                      color: Colors.blue,
-                      size: 22,
-                    ),
-                  ),
-                ),
-              ),
-
-              // Avatar
-              Positioned(
-                left: 16,
-                bottom: 0,
-                child: Transform.translate(
-                  offset: const Offset(0, 50),
-                  child: Container(
-                    width: 100,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 4),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Colors.black26,
-                          blurRadius: 12,
-                          offset: Offset(0, 6),
-                        )
+                    child: Row(
+                      children: const [
+                        Icon(
+                          Icons.account_balance_wallet_rounded,
+                          color: Colors.blue,
+                          size: 22,
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          "Ví của tôi",
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                        ),
                       ],
-                    ),
-                    child: ClipOval(
-                      child: user.avatarUrl?.isNotEmpty == true
-                          ? Image.network(
-                        user.avatarUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) =>
-                        const _AvatarFallback(),
-                      )
-                          : const _AvatarFallback(),
                     ),
                   ),
                 ),

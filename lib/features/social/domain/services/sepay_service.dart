@@ -14,7 +14,6 @@ class SepayService {
   }) async {
     try {
       final auth = Provider.of<AuthController>(context, listen: false);
-
       final accessToken = await auth.authServiceInterface.getSocialAccessToken();
 
       if (accessToken == null) {

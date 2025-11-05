@@ -340,7 +340,7 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
     // Tạo Animation Controller
     _controller = AnimationController(
       duration: const Duration(milliseconds: 800),
-      vsync: Navigator.of(context),
+      vsync: this,
     );
 
     _scaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
@@ -648,8 +648,8 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
           isDisabled: !isQREnabled,
         ),
         _buildActionButton(
-          icon: Icons.money_off,
-          label: getTranslated('withdraw', context) ?? 'Rút tiền',
+          icon: Icons.card_giftcard,
+          label: getTranslated('ADS', context) ?? 'Quảng cáo',
           color: Colors.red,
           onTap: () {
             navigateWithCustomSlide(
@@ -804,7 +804,6 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
               ),
               SizedBox(height: 16),
 
-              // HIỆU ỨNG "THẢ XUỐNG + PHÓNG TO"
               GestureDetector(
                 onTap: () => _openWalletDetailWithAnimation(),
                 child: Hero(
@@ -819,16 +818,15 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                     return AnimatedBuilder(
                       animation: animation,
                       builder: (context, child) {
-                        // Hiệu ứng rơi xuống + phóng to
                         final fall = Tween<double>(begin: 0.0, end: 1.0).evaluate(animation);
-                        final scale = 1.0 + (fall * 2.0); // Phóng to gấp 3
+                        final scale = 1.0 + (fall * 2.0);
 
                         return Transform.translate(
-                          offset: Offset(0, fall * 300), // Rơi xuống 300px
+                          offset: Offset(0, fall * 300),
                           child: Transform.scale(
                             scale: scale,
                             child: Opacity(
-                              opacity: 1.0 - fall, // Mờ dần khi rơi
+                              opacity: 1.0 - fall,
                               child: child,
                             ),
                           ),
