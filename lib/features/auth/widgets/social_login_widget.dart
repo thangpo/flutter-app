@@ -16,6 +16,7 @@ import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_contr
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/facebook_login_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/google_login_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/splash/controllers/splash_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/custom_themes.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/dimensions.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
@@ -23,6 +24,7 @@ import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakba
 import 'package:flutter_sixvalley_ecommerce/features/dashboard/screens/dashboard_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/firebase_token_updater.dart';
 
 class SocialLoginWidget extends StatefulWidget {
   const SocialLoginWidget({super.key});
@@ -351,7 +353,7 @@ Future<void> googleLogin(BuildContext context) async {
       token = Provider.of<GoogleSignInController>(Get.context!, listen: false).auth?.accessToken;
       name =  Provider.of<GoogleSignInController>(Get.context!, listen: false).googleAccount!.displayName;
       medium = 'google';
-      log('eemail =>$email token =>$token');
+      log('email =>$email token =>$token');
 
       socialLogin.email = email;
       socialLogin.medium = medium;
@@ -360,6 +362,9 @@ Future<void> googleLogin(BuildContext context) async {
       socialLogin.name = name;
 
       await Provider.of<AuthController>(Get.context!, listen: false).socialLogin(socialLogin, route);
+      // ✅ Sau khi đăng nhập thành công → gửi token FCM lên server
+      await FirebaseTokenUpdater.update();
+
     }
   } catch (er) {
     debugPrint('access token error is : $er');
@@ -383,6 +388,9 @@ Future<void> facebookLogin(BuildContext context) async {
       socialLogin.token = token;
       socialLogin.uniqueId = id;
       await Provider.of<AuthController>(Get.context!, listen: false).socialLogin(socialLogin, route);
+      // ✅ Sau khi đăng nhập thành công → gửi token FCM lên server
+      await FirebaseTokenUpdater.update();
+
     }
   } catch (er) {
     debugPrint('access token error is : $er');
@@ -411,6 +419,8 @@ Future<void> appleLogin(BuildContext context) async {
     socialLogin.uniqueId = id;
     socialLogin.name = credential.givenName ?? '';
     await Provider.of<AuthController>(Get.context!, listen: false).socialLogin(socialLogin, route);
+// ✅ Sau khi đăng nhập thành công → gửi token FCM lên server
+    await FirebaseTokenUpdater.update();
 
     log('id token =>${credential.identityToken}\n===> Identifier${credential.userIdentifier}\n==>Given Name ${credential.familyName}');
   } catch (er) {
