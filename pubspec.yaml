@@ -104,6 +104,7 @@ dependencies:
 
   # Thu âm thay cho 'record'
   flutter_sound: ^9.2.13
+  flutter_webrtc: ^1.2.0
 
 #dependency_overrides:
 #  firebase_core_platform_interface: ^5.4.0
