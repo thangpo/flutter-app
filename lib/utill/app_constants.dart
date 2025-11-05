@@ -72,6 +72,9 @@ class AppConstants {
   static const String socialBlockUser='/api/block-user';
   static const String socialGetBlockUser='/api/get-blocked-users';
 
+  static const String socialReportUser='/api/report_user';
+  static const String socialGetAlbumUser='/api/get-user-albums/';
+
   //follow
   static const String socialFollowUser = '/api/follow-user';
   static const String socialUpdateDataUser = '/api/update-user-data';
