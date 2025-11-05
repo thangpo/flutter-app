@@ -4,9 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:provider/provider.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/chat_message_bubble.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_chat_repository.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/call_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/call_screen.dart';
+
+
 
 class ChatScreen extends StatefulWidget {
   final String accessToken;
@@ -42,7 +47,6 @@ class _ChatScreenState extends State<ChatScreen> {
   final _recorder = FlutterSoundRecorder();
   bool _recReady = false;
   bool _recOn = false;
-  String? _recPath;
 
   // Messenger-like
   bool _showScrollToBottom = false;
@@ -325,6 +329,89 @@ class _ChatScreenState extends State<ChatScreen> {
     await repo.readChats(token: widget.accessToken, peerUserId: _peerId);
   }
 
+  // ====== GỌI 1-1 qua CallController ======
+  Future<void> _startCall(String mediaType) async {
+    final call = context.read<CallController>();
+    if (!call.ready) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('CallController chưa sẵn sàng')),
+      );
+      return;
+    }
+
+    final calleeId = int.tryParse(_peerId) ?? 0;
+    if (calleeId <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('peerUserId không hợp lệ')),
+      );
+      return;
+    }
+
+    try {
+      await call.startCall(calleeId: calleeId, mediaType: mediaType);
+      _showCallingDialog(mediaType: mediaType);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lỗi tạo cuộc gọi: $e')),
+      );
+    }
+  }
+
+  void _showCallingDialog({required String mediaType}) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return Consumer<CallController>(
+          builder: (ctx, call, _) {
+            if (call.callStatus == 'answered') {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
+                if (call.activeCallId != null && mounted) {
+                  Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => CallScreen(
+                      isCaller: true,
+                      callId: call.activeCallId!,
+                      mediaType: call.activeMediaType, // 'audio' | 'video'
+                      peerName: widget.peerName,
+                      peerAvatar: widget.peerAvatar,
+                    ),
+                  ));
+                }
+              });
+            } else if (call.callStatus == 'declined' ||
+                call.callStatus == 'ended') {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Cuộc gọi đã ${call.callStatus}')),
+                );
+              });
+            }
+
+            return AlertDialog(
+              title: Text(mediaType == 'audio'
+                  ? 'Đang gọi thoại...'
+                  : 'Đang gọi video...'),
+              content: const Text('Chờ đối phương trả lời...'),
+              actions: [
+                TextButton(
+                  onPressed: () async {
+                    try {
+                      await context.read<CallController>().endCall();
+                    } catch (_) {}
+                    if (context.mounted) Navigator.of(context).pop();
+                  },
+                  child: const Text('Hủy'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   // ===== UI =====
   @override
   Widget build(BuildContext context) {
@@ -358,6 +445,19 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         elevation: 0,
         centerTitle: false,
+        // 2 nút gọi nhanh (thoại / video)
+        actions: [
+          IconButton(
+            tooltip: 'Gọi thoại',
+            icon: const Icon(Icons.call),
+            onPressed: () => _startCall('audio'),
+          ),
+          IconButton(
+            tooltip: 'Gọi video',
+            icon: const Icon(Icons.videocam),
+            onPressed: () => _startCall('video'),
+          ),
+        ],
       ),
       body: Stack(
         children: [
