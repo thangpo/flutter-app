@@ -223,6 +223,30 @@ class SocialRepository {
   }
 
   //thêm
+  //report user 05/11/2025
+  Future<ApiResponseModel<Response>> reportUser({
+    required String targetUserId,
+    required String text
+})async{
+    try{
+      final token=_getSocialAccessToken();
+      final url='${AppConstants.socialBaseUrl}${AppConstants.socialReportUser}?access_token=$token';
+      final form=FormData.fromMap({
+        'server_key':AppConstants.socialServerKey,
+        'user':targetUserId,
+        'text':text
+      });
+      final res=await dioClient.post(
+        url,
+        data:form,
+        options: Options(contentType: Headers.multipartFormDataContentType),
+      );
+      return ApiResponseModel<Response>.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel<Response>.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
   // block user 04/11/2025 by aoanhan
   Future<ApiResponseModel<Response>> blockUser({
      required String targetUserId,

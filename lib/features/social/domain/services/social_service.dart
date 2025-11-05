@@ -589,6 +589,55 @@ class SocialService implements SocialServiceInterface {
     throw Exception('Toggle follow failed');
   }
 
+
+  // report user 05/11/2025
+  @override
+  Future<String> reportUser({
+    required String targetUserId,
+    required String text,
+  }) async {
+    final resp = await socialRepository.reportUser(
+      targetUserId: targetUserId,
+      text: text,
+    );
+
+    // thành công ở tầng transport
+    if (resp.isSuccess && resp.response != null) {
+      final Response raw = resp.response!;
+      final code = raw.statusCode ?? 0;
+
+      // cố gắng đọc payload WoWonder
+      try {
+        final data = (raw.data is Map) ? (raw.data as Map) : const {};
+        final apiStatus = data['api_status'] ?? data['status'] ?? data['code'];
+
+        if (code == 200 && apiStatus == 200) {
+          final msg = (data['message'] ??
+              data['api_text'] ??
+              data['message_text'] ??
+              'Báo cáo người dùng thành công')
+              .toString();
+          return msg;
+        }
+
+        // server trả 200 nhưng payload báo lỗi
+        final err = (data['errors']?['error_text'] ??
+            data['error'] ??
+            data['message'] ??
+            'Không thể gửi báo cáo người dùng')
+            .toString();
+        throw Exception(err);
+      } catch (_) {
+        // fallback: status 200 nhưng payload lạ -> coi như ok
+        if (code == 200) return 'Báo cáo người dùng thành công';
+        throw Exception('Không thể gửi báo cáo người dùng (HTTP $code)');
+      }
+    }
+
+    // lỗi ở tầng repo (network/timeout/parse…)
+    throw Exception(resp.error ?? 'Không thể gửi báo cáo người dùng');
+  }
+
   //block user 11/04/2025
   @override
   Future<List<SocialUser>> getBlockedUsers() async {

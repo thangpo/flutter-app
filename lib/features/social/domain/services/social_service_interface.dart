@@ -114,6 +114,10 @@ abstract class SocialServiceInterface {
   });
   Future<List<SocialUser>> getBlockedUsers();
   Future<bool> blockUser({required String targetUserId, required bool block});
+  Future<String> reportUser({
+    required String targetUserId,
+    required String text,
+  });
 
 
 

@@ -88,6 +88,10 @@ class SocialController with ChangeNotifier {
       UnmodifiableListView(_blockedUsers);
   bool isUserBlocked(String userId) => _blockedIds.contains(userId);
   //end
+  //05/11/2025 report user
+  final Set<String> _reportBusy = {};
+  bool isReportBusy(String userId) => _reportBusy.contains(userId);
+  //end
 
   bool get hasMoreFollowers =>
       _followersAfter != null && _followersAfter!.isNotEmpty;
@@ -417,6 +421,65 @@ class SocialController with ChangeNotifier {
       return !blocked; // true = đã bỏ chặn thành công
     } catch (_) {
       rethrow;
+    }
+  }
+
+  //report user
+  /// Trả về message từ server (nếu có), đồng thời show snackbar nếu có context.
+  Future<String> reportUser({
+    String? targetUserId,
+    required String text,
+  }) async {
+    final String trimmed = text.trim();
+
+    // Xác định id mục tiêu: ưu tiên tham số, fallback header user
+    final String? id = (targetUserId != null && targetUserId.isNotEmpty)
+        ? targetUserId
+        : _profileHeaderUser?.id;
+
+    if (id == null || id.isEmpty) {
+      throw Exception('Không xác định người cần báo cáo.');
+    }
+
+    // Không cho báo cáo chính mình
+    if (_currentUser?.id == id) {
+      throw Exception('Bạn không thể báo cáo chính mình.');
+    }
+
+    if (trimmed.isEmpty) {
+      throw Exception('Vui lòng nhập nội dung báo cáo.');
+    }
+
+    // Chặn double-tap
+    if (_reportBusy.contains(id)) {
+      throw Exception('Đang gửi báo cáo, vui lòng đợi...');
+    }
+    _reportBusy.add(id);
+    notifyListeners();
+
+    try {
+      // YÊU CẦU: SocialServiceInterface phải có reportUser(targetUserId, text)
+      // Service nên trả về String message (hoặc throw nếu lỗi).
+      final String msg = await service.reportUser(
+        targetUserId: id,
+        text: trimmed,
+      );
+
+      final ctx = Get.context; // nếu bạn đang dùng GetX cho context
+      if (ctx != null) {
+        final okMsg = (msg.isNotEmpty) ? msg : 'Đã gửi báo cáo';
+        showCustomSnackBar(okMsg, ctx, isError: false);
+      }
+      return msg;
+    } catch (e) {
+      final ctx = Get.context;
+      if (ctx != null) {
+        showCustomSnackBar(e.toString(), ctx, isError: true);
+      }
+      rethrow;
+    } finally {
+      _reportBusy.remove(id);
+      notifyListeners();
     }
   }
 

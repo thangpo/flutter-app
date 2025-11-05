@@ -1622,17 +1622,18 @@ void _showOtherProfileMenu(
                     const Divider(height: 1),
 
                     // Báo cáo
+                    // Báo cáo
                     ListTile(
-                      leading: const Icon(Icons.flag_outlined,
-                          color: Colors.red),
+                      leading: const Icon(Icons.flag_outlined, color: Colors.red),
                       title: const Text('Báo cáo'),
-                      subtitle:
-                      const Text('Báo cáo trang cá nhân này'),
+                      subtitle: const Text('Báo cáo trang cá nhân này'),
                       onTap: () {
-                        Navigator.pop(context);
-                        // TODO: mở form báo cáo
+                        Navigator.pop(context); // đóng sheet trước
+                        // mở dialog báo cáo (lấy đúng targetId)
+                        Future.microtask(() => _showReportUserDialog(context, targetUserId: user.id));
                       },
                     ),
+
                     const Divider(height: 1),
 
                     // Chặn / Bỏ chặn (động theo trạng thái)
@@ -1946,5 +1947,88 @@ Future<bool?> _confirmUnblockFromList(
         ),
       ],
     ),
+  );
+}
+// === REPORT USER DIALOG ===
+void _showReportUserDialog(BuildContext context, {String? targetUserId}) {
+  final sc = context.read<SocialController>();
+  final String? id = targetUserId ?? sc.profileHeaderUser?.id;
+
+  if (id == null || id.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Không xác định người cần báo cáo')),
+    );
+    return;
+  }
+
+  final textCtrl = TextEditingController();
+  bool sending = false;
+
+  showDialog(
+    context: context,
+    barrierDismissible: !sending,
+    builder: (ctx) {
+      return StatefulBuilder(builder: (ctx, setState) {
+        final canSend = !sending && textCtrl.text.trim().isNotEmpty;
+        return AlertDialog(
+          title: const Text('Báo cáo người dùng'),
+          content: TextField(
+            controller: textCtrl,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              hintText: 'Nhập lý do/ mô tả vi phạm...',
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+          actions: [
+            TextButton(
+              onPressed: sending ? null : () => Navigator.pop(ctx),
+              child: const Text('Hủy'),
+            ),
+            ElevatedButton(
+              onPressed: canSend
+                  ? () async {
+                setState(() => sending = true);
+                try {
+                  // Gọi service qua controller (đã có trong Service/Repo)
+                  final msg = await sc.service.reportUser(
+                    targetUserId: id,
+                    text: textCtrl.text.trim(),
+                  );
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          (msg is String && msg.trim().isNotEmpty)
+                              ? msg
+                              : 'Đã gửi báo cáo',
+                        ),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  setState(() => sending = false);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(e.toString())),
+                    );
+                  }
+                }
+              }
+                  : null,
+              child: sending
+                  ? const SizedBox(
+                height: 18,
+                width: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+                  : const Text('Gửi báo cáo'),
+            ),
+          ],
+        );
+      });
+    },
   );
 }
