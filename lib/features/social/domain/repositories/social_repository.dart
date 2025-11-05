@@ -285,44 +285,47 @@ class SocialRepository {
 
   // block user 04/11/2025 by aoanhan
   Future<ApiResponseModel<Response>> blockUser({
-     required String targetUserId,
+    required String targetUserId,
     required bool block,
-  })async{
-    try{
-      final token=_getSocialAccessToken();
-      final url='${AppConstants.socialBaseUrl}${AppConstants.socialBlockUser}?access_token=$token';
-      final form=FormData.fromMap({
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      final url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialBlockUser}?access_token=$token';
+      final form = FormData.fromMap({
         'server_key': AppConstants.socialServerKey,
         'user_id': targetUserId,
         'block_action': block ? 'block' : 'un-block',
       });
-      final res=await dioClient.post(
+      final res = await dioClient.post(
         url,
         data: form,
         options: Options(contentType: Headers.multipartFormDataContentType),
       );
       return ApiResponseModel<Response>.withSuccess(res);
     } catch (e) {
-      return ApiResponseModel<Response>.withError(ApiErrorHandler.getMessage(e));
+      return ApiResponseModel<Response>.withError(
+          ApiErrorHandler.getMessage(e));
     }
   }
 
-  Future<ApiResponseModel<Response>> getBlockUser()
-  async{
-    try{
-      final token=_getSocialAccessToken();
-      final url='${AppConstants.socialBaseUrl}${AppConstants.socialGetBlockUser}?access_token=$token';
-      final form=FormData.fromMap({
+  Future<ApiResponseModel<Response>> getBlockUser() async {
+    try {
+      final token = _getSocialAccessToken();
+      final url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialGetBlockUser}?access_token=$token';
+      final form = FormData.fromMap({
         'server_key': AppConstants.socialServerKey,
       });
-      final res=await dioClient.post(
+      final res = await dioClient.post(
         url,
         data: form,
         options: Options(contentType: Headers.multipartFormDataContentType),
       );
       return ApiResponseModel<Response>.withSuccess(res);
     } catch (e) {
-      return ApiResponseModel<Response>.withError(ApiErrorHandler.getMessage(e));
+      return ApiResponseModel<Response>.withError(
+          ApiErrorHandler.getMessage(e));
     }
   }
 
@@ -2637,6 +2640,8 @@ class SocialRepository {
 
   Future<ApiResponseModel<Response>> searchSocial({
     String searchKey = '',
+    int limit = 35,
+    int userOffset = 0,
   }) async {
     try {
       final token = _getSocialAccessToken();
@@ -2651,6 +2656,8 @@ class SocialRepository {
       final form = FormData.fromMap({
         'server_key': AppConstants.socialServerKey,
         'search_key': searchKey,
+        'limit': limit.toString(),
+        'user_offset': userOffset.toString(),
       });
 
       final Response resp = await dioClient.post(
@@ -2908,6 +2915,90 @@ class SocialRepository {
       );
     }
     return requests;
+  }
+
+  List<SocialUser> parseUsers(Response res, {int? max}) {
+    final Set<String> seen = <String>{};
+    final List<SocialUser> users = <SocialUser>[];
+
+    bool addUser(SocialUser? user) {
+      if (user == null) return false;
+      if (!seen.add(user.id)) return false;
+      users.add(user);
+      if (max != null && users.length >= max) {
+        return true;
+      }
+      return false;
+    }
+
+    bool visit(dynamic raw, [int depth = 0]) {
+      if (raw == null || depth > 5) return false;
+      if (raw is Map) {
+        final Map<String, dynamic> map =
+            raw is Map<String, dynamic> ? raw : Map<String, dynamic>.from(raw);
+        if (addUser(_parseUser(map))) {
+          return true;
+        }
+        for (final dynamic value in map.values) {
+          if (visit(value, depth + 1)) {
+            return true;
+          }
+        }
+      } else if (raw is Iterable) {
+        for (final dynamic value in raw) {
+          if (visit(value, depth + 1)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    visit(res.data);
+    if (max != null && users.length > max) {
+      return users.sublist(0, max);
+    }
+    return users;
+  }
+
+  Future<ApiResponseModel<Response>> fetchUserByUsername({
+    required String username,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError(
+            'Please log in to your social network account');
+      }
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialGetUsername}?access_token=$token';
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'fetch': 'user_data',
+        'username': username,
+        'send_notify': '1',
+      });
+      final Response resp = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      return ApiResponseModel.withSuccess(resp);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+  SocialUser? parseSingleUser(Response res) {
+    final dynamic data = res.data;
+    if (data is Map) {
+      final dynamic candidate =
+          data['user_data'] ?? data['data'] ?? data['user'] ?? data['profile'];
+      if (candidate is Map) {
+        return _parseUser(candidate);
+      }
+    }
+    return null;
   }
 
   Iterable<dynamic> _extractListCandidates(dynamic data) {

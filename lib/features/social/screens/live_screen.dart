@@ -9,6 +9,7 @@ import 'package:flutter_sixvalley_ecommerce/di_container.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_comment.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_live_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_service_interface.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
@@ -68,6 +69,7 @@ class _LiveScreenState extends State<LiveScreen> {
   Timer? _commentsTimer;
   bool _commentsLoading = false;
   String? _commentsError;
+  bool _showComments = true;
   final TextEditingController _commentController = TextEditingController();
   final ScrollController _commentsScrollController = ScrollController();
   bool _sendingComment = false;
@@ -277,7 +279,11 @@ class _LiveScreenState extends State<LiveScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildCommentsList(theme),
+            if (_showComments) _buildCommentsList(theme),
+            if (!_showComments)
+              const SizedBox(
+                height: 12,
+              ),
             if (_commentsError != null && _comments.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
@@ -330,12 +336,7 @@ class _LiveScreenState extends State<LiveScreen> {
     Widget content;
     if (_comments.isEmpty) {
       if (_commentsLoading) {
-        content = const Center(
-          child: Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: CircularProgressIndicator(color: Colors.white),
-          ),
-        );
+        content = const SizedBox.shrink();
       } else if (_commentsError != null) {
         content = Padding(
           padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
@@ -386,23 +387,42 @@ class _LiveScreenState extends State<LiveScreen> {
                 child: content,
               ),
             ),
-            if (_commentsLoading && _comments.isNotEmpty)
-              const Positioned(
-                top: 12,
-                right: 16,
-                child: SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
           ],
         ),
       ),
     );
+  }
+
+  String? _formatCommentTime(SocialComment comment) {
+    DateTime? timestamp = comment.createdAt;
+    if (timestamp == null) {
+      final String? raw = comment.timeText?.trim();
+      if (raw != null && raw.isNotEmpty) {
+        final int? epoch = int.tryParse(raw);
+        if (epoch != null) {
+          if (epoch > 1000000000000) {
+            timestamp = DateTime.fromMillisecondsSinceEpoch(epoch, isUtc: true);
+          } else if (epoch > 0) {
+            timestamp =
+                DateTime.fromMillisecondsSinceEpoch(epoch * 1000, isUtc: true);
+          }
+        }
+      }
+    }
+    if (timestamp == null) {
+      final String? fallback = comment.timeText;
+      return (fallback != null && fallback.isNotEmpty) ? fallback : null;
+    }
+    timestamp = timestamp.toLocal();
+    final DateTime now = DateTime.now();
+    final Duration diff = now.difference(timestamp);
+    if (diff.inSeconds < 60) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    String two(int value) => value.toString().padLeft(2, '0');
+    return '${two(timestamp.day)}/${two(timestamp.month)}/${timestamp.year} '
+        '${two(timestamp.hour)}:${two(timestamp.minute)}';
   }
 
   Widget _buildCommentTile(
@@ -416,6 +436,10 @@ class _LiveScreenState extends State<LiveScreen> {
     final String? message = comment.text;
     final bool hasAvatar =
         comment.userAvatar != null && comment.userAvatar!.trim().isNotEmpty;
+
+    // ✅ TÍNH TRƯỚC
+    final String? formattedTime = _formatCommentTime(comment);
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -446,10 +470,9 @@ class _LiveScreenState extends State<LiveScreen> {
                     const SizedBox(height: 4),
                     Text(message, style: textStyle),
                   ],
-                  if (comment.timeText != null &&
-                      comment.timeText!.isNotEmpty) ...[
+                  if (formattedTime != null) ...[
                     const SizedBox(height: 4),
-                    Text(comment.timeText!, style: timeStyle),
+                    Text(formattedTime, style: timeStyle),
                   ],
                 ],
               ),
@@ -546,11 +569,21 @@ class _LiveScreenState extends State<LiveScreen> {
       );
       if (!mounted) return;
       bool appended = false;
+      final List<SocialComment> systemEvents = <SocialComment>[
+        for (final SocialUser user in page.joinedUsers)
+          _createLiveEventComment(user, joined: true),
+        for (final SocialUser user in page.leftUsers)
+          _createLiveEventComment(user, joined: false),
+      ];
       final int? viewerCount = page.viewerCount;
       final bool? isLive = page.isLive;
       final String? statusWord = page.statusWord;
       setState(() {
-        for (final SocialComment comment in page.comments) {
+        final List<SocialComment> incoming = <SocialComment>[
+          ...page.comments,
+          ...systemEvents,
+        ];
+        for (final SocialComment comment in incoming) {
           if (_commentIds.add(comment.id)) {
             _comments.add(comment);
             appended = true;
@@ -723,6 +756,35 @@ class _LiveScreenState extends State<LiveScreen> {
     }
   }
 
+  SocialComment _createLiveEventComment(
+    SocialUser user, {
+    required bool joined,
+  }) {
+    String? candidate(String? value) {
+      if (value == null) return null;
+      final String trimmed = value.trim();
+      return trimmed.isEmpty ? null : trimmed;
+    }
+
+    final String displayName = candidate(user.displayName) ??
+        candidate(user.userName) ??
+        candidate(user.firstName) ??
+        candidate(user.lastName) ??
+        user.id;
+    final String message =
+        joined ? 'joined the livestream' : 'left the livestream';
+    final String identifier =
+        'system_${joined ? 'join' : 'leave'}_${user.id}_${DateTime.now().microsecondsSinceEpoch}';
+
+    return SocialComment(
+      id: identifier,
+      text: message,
+      userName: displayName,
+      userAvatar: candidate(user.avatarUrl),
+      createdAt: DateTime.now(),
+    );
+  }
+
   Future<void> _endLive({bool silent = false}) async {
     if (!_isHost) return;
     if (_endRequested) return;
@@ -877,6 +939,7 @@ class _LiveScreenState extends State<LiveScreen> {
         channelId: widget.streamName,
         uid: widget.broadcasterUid,
         options: const ChannelMediaOptions(
+          channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
           clientRoleType: ClientRoleType.clientRoleBroadcaster,
           publishCameraTrack: true,
           publishMicrophoneTrack: true,
@@ -893,6 +956,7 @@ class _LiveScreenState extends State<LiveScreen> {
         channelId: widget.streamName,
         uid: uid,
         options: const ChannelMediaOptions(
+          channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
           clientRoleType: ClientRoleType.clientRoleAudience,
           publishCameraTrack: false,
           publishMicrophoneTrack: false,
@@ -1182,6 +1246,11 @@ class _LiveScreenState extends State<LiveScreen> {
             icon: Icons.chat_bubble_outline,
             label: commentCount.toString(),
             style: labelStyle,
+            onTap: () {
+              setState(() {
+                _showComments = !_showComments;
+              });
+            },
           ),
           // const SizedBox(height: 18),
           // _buildSideActionButton(
@@ -1202,24 +1271,33 @@ class _LiveScreenState extends State<LiveScreen> {
   Widget _buildSideActionButton({
     required IconData icon,
     required String label,
-    TextStyle? style, // bỏ required
+    TextStyle? style,
+    VoidCallback? onTap,
   }) {
-    final textStyle = style ??
+    final TextStyle textStyle = style ??
         const TextStyle(
-            color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500);
-    return Column(
-      children: [
-        Container(
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        );
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
             width: 56,
             height: 56,
             decoration: BoxDecoration(
               color: Colors.black.withOpacity(0.35),
               borderRadius: BorderRadius.circular(28),
             ),
-            child: Icon(icon, color: Colors.white, size: 26)),
-        const SizedBox(height: 6),
-        Text(label, style: textStyle),
-      ],
+            child: Icon(icon, color: Colors.white, size: 26),
+          ),
+          const SizedBox(height: 6),
+          Text(label, style: textStyle),
+        ],
+      ),
     );
   }
 

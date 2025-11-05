@@ -84,7 +84,10 @@ class _SharePostScreenState extends State<SharePostScreen> {
                 style: theme.textTheme.titleSmall,
               ),
               const SizedBox(height: 8),
-              SharedPostPreviewCard(post: widget.post),
+              SharedPostPreviewCard(
+                post: widget.post,
+                parentPostId: widget.post.id,
+              ),
             ],
           ),
         ),

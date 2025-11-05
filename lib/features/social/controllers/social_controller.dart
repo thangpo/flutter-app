@@ -81,7 +81,7 @@ class SocialController with ChangeNotifier {
   final Set<String> _blockBusy = {};
   bool isBlockBusy(String userId) => _blockBusy.contains(userId);
 
-  List<SocialUser> _blockedUsers = <SocialUser>[];       // danh sách user đã chặn
+  List<SocialUser> _blockedUsers = <SocialUser>[]; // danh sách user đã chặn
   Set<String> _blockedIds = <String>{};
   bool _loadingBlocked = false;
   bool get isLoadingBlocked => _loadingBlocked;
@@ -158,6 +158,10 @@ class SocialController with ChangeNotifier {
   final Set<String> _postActionBusy = <String>{};
   bool isPostActionBusy(String id) => _postActionBusy.contains(id);
   bool _pendingLoadMore = false;
+  final Map<String, List<SocialUser>> _mentionCache =
+      <String, List<SocialUser>>{};
+  final Map<String, SocialUser> _userCacheById = <String, SocialUser>{};
+  final Map<String, SocialUser> _userCacheByUsername = <String, SocialUser>{};
 
   // ========== USER PROFILE STATE (MERGED FROM PROFILE CONTROLLER) ==========
   List<SocialUser> _followers = const [];
@@ -208,9 +212,6 @@ class SocialController with ChangeNotifier {
     _storyReactionLoading.clear();
     _storyViewers.clear();
     _blockBusy.clear();
-
-
-
     // Clear profile state
     _followers = const [];
     _following = const [];
@@ -379,18 +380,21 @@ class SocialController with ChangeNotifier {
         final added = _blockedIds.add(id);
         // Nếu chưa có trong list, thêm 1 item tối thiểu để hiển thị ngay
         if (added && !_blockedUsers.any((u) => u.id == id)) {
-          final src = (_profileHeaderUser != null && _profileHeaderUser!.id == id)
-              ? _profileHeaderUser
-              : null;
-          _blockedUsers.insert(0, SocialUser(
-            id: id,
-            displayName: src?.displayName,
-            userName: src?.userName,
-            avatarUrl: src?.avatarUrl,
-            coverUrl: src?.coverUrl,
-          ));
+          final src =
+              (_profileHeaderUser != null && _profileHeaderUser!.id == id)
+                  ? _profileHeaderUser
+                  : null;
+          _blockedUsers.insert(
+              0,
+              SocialUser(
+                id: id,
+                displayName: src?.displayName,
+                userName: src?.userName,
+                avatarUrl: src?.avatarUrl,
+                coverUrl: src?.coverUrl,
+              ));
         }
-      }  else {
+      } else {
         // Bỏ chặn: xóa khỏi set + list
         _blockedIds.remove(id);
         _blockedUsers.removeWhere((u) => u.id == id);
@@ -408,6 +412,7 @@ class SocialController with ChangeNotifier {
       notifyListeners();
     }
   }
+
   Future<void> refreshBlockedUsers({bool force = false}) async {
     if (_loadingBlocked) return;
     if (!force && _blockedUsers.isNotEmpty) return;
@@ -435,6 +440,7 @@ class SocialController with ChangeNotifier {
       notifyListeners();
     }
   }
+
   Future<void> loadBlockedUsersIfEmpty({bool force = false}) async {
     // Nếu force => luôn tải lại; nếu không => chỉ tải khi list đang trống
     if (force) {
@@ -658,10 +664,6 @@ class SocialController with ChangeNotifier {
   }
 
   //photo
-
-
-
-
 
 
   //edit prodile user by aoanhan
@@ -1797,7 +1799,18 @@ class SocialController with ChangeNotifier {
     try {
       final SocialPost shared =
           await service.sharePost(postId: post.id, text: text);
-      _posts.insert(0, shared);
+      SocialPost resolved = shared;
+      try {
+        final SocialPost? refreshed =
+            await service.getPostById(postId: shared.id);
+        if (refreshed != null) {
+          resolved = refreshed;
+        }
+      } catch (_) {
+        // ignore fallback, optimistic shared data will be used
+      }
+      resolved = _ensureSharedLiveMetadata(resolved, post);
+      _posts.insert(0, resolved);
       notifyListeners();
       final ctx = Get.context!;
       final successMsg = getTranslated('share_post_success', ctx) ??
@@ -1811,6 +1824,187 @@ class SocialController with ChangeNotifier {
     } finally {
       _sharingPosts.remove(post.id);
       notifyListeners();
+    }
+  }
+
+  SocialPost _ensureSharedLiveMetadata(
+    SocialPost response,
+    SocialPost original,
+  ) {
+    final String? originalType = original.postType?.toLowerCase();
+    if (originalType != 'live') {
+      return response;
+    }
+
+    SocialPost? shared = response.sharedPost;
+    if (shared == null) {
+      return response.copyWith(sharedPost: original);
+    }
+
+    bool changed = false;
+    bool isBlank(String? value) => value == null || value.trim().isEmpty;
+
+    if (isBlank(shared.postType) && !isBlank(original.postType)) {
+      shared = shared.copyWith(postType: original.postType);
+      changed = true;
+    }
+    if (isBlank(shared.liveStreamName) && !isBlank(original.liveStreamName)) {
+      shared = shared.copyWith(liveStreamName: original.liveStreamName);
+      changed = true;
+    }
+    if (isBlank(shared.liveAgoraToken) && !isBlank(original.liveAgoraToken)) {
+      shared = shared.copyWith(liveAgoraToken: original.liveAgoraToken);
+      changed = true;
+    }
+    if (isBlank(shared.liveResourceId) && !isBlank(original.liveResourceId)) {
+      shared = shared.copyWith(liveResourceId: original.liveResourceId);
+      changed = true;
+    }
+    if (isBlank(shared.liveSid) && !isBlank(original.liveSid)) {
+      shared = shared.copyWith(liveSid: original.liveSid);
+      changed = true;
+    }
+    if (shared.liveStartedAt == null && original.liveStartedAt != null) {
+      shared = shared.copyWith(liveStartedAt: original.liveStartedAt);
+      changed = true;
+    }
+
+    final String? fallbackThumbnail =
+        !isBlank(original.thumbnailUrl) ? original.thumbnailUrl : null;
+    final String? fallbackImage =
+        !isBlank(original.imageUrl) ? original.imageUrl : fallbackThumbnail;
+    if (isBlank(shared.thumbnailUrl) && !isBlank(fallbackThumbnail)) {
+      shared = shared.copyWith(thumbnailUrl: fallbackThumbnail);
+      changed = true;
+    }
+    if (isBlank(shared.imageUrl) && !isBlank(fallbackImage)) {
+      shared = shared.copyWith(imageUrl: fallbackImage);
+      changed = true;
+    }
+    if (shared.imageUrls.isEmpty && original.imageUrls.isNotEmpty) {
+      shared = shared.copyWith(imageUrls: original.imageUrls);
+      changed = true;
+    }
+    if (isBlank(shared.imageUrl) && shared.imageUrls.isNotEmpty) {
+      shared = shared.copyWith(imageUrl: shared.imageUrls.first);
+      changed = true;
+    }
+    if (isBlank(shared.thumbnailUrl) && !isBlank(shared.imageUrl)) {
+      shared = shared.copyWith(thumbnailUrl: shared.imageUrl);
+      changed = true;
+    }
+    if (isBlank(shared.videoUrl) && !isBlank(original.videoUrl)) {
+      shared = shared.copyWith(videoUrl: original.videoUrl);
+      changed = true;
+    }
+    if (isBlank(shared.fileUrl) && !isBlank(original.fileUrl)) {
+      shared = shared.copyWith(fileUrl: original.fileUrl);
+      changed = true;
+    }
+
+    final bool liveEnded = shared.liveEnded || original.liveEnded;
+    if (liveEnded != shared.liveEnded) {
+      shared = shared.copyWith(liveEnded: liveEnded);
+      changed = true;
+    }
+
+    return changed ? response.copyWith(sharedPost: shared) : response;
+  }
+
+  Future<List<SocialUser>> searchMentionUsers({
+    required String keyword,
+    int limit = 8,
+  }) async {
+    final String normalized = keyword.trim().toLowerCase();
+    if (normalized.isEmpty) return const <SocialUser>[];
+    final List<SocialUser>? cached = _mentionCache[normalized];
+    if (cached != null) {
+      if (cached.length > limit) {
+        return cached.sublist(0, limit);
+      }
+      return List<SocialUser>.from(cached);
+    }
+    try {
+      final List<SocialUser> results =
+          await service.searchUsers(keyword: keyword, limit: limit);
+      final List<SocialUser> filtered = results
+          .where(
+              (SocialUser user) => (user.userName?.trim().isNotEmpty ?? false))
+          .toList();
+      for (final SocialUser user in filtered) {
+        _cacheUser(user);
+      }
+      _mentionCache[normalized] = filtered;
+      if (filtered.length > limit) {
+        return filtered.sublist(0, limit);
+      }
+      return filtered;
+    } catch (_) {
+      _mentionCache.putIfAbsent(normalized, () => const <SocialUser>[]);
+      return const <SocialUser>[];
+    }
+  }
+
+  SocialUser? getCachedUserById(String id) {
+    final String key = id.trim();
+    if (key.isEmpty) return null;
+    return _userCacheById[key];
+  }
+
+  SocialUser? getCachedUserByUsername(String username) {
+    final String key = username.trim().toLowerCase();
+    if (key.isEmpty) return null;
+    return _userCacheByUsername[key];
+  }
+
+  String? getCachedMentionLabelById(String id) {
+    final SocialUser? user = getCachedUserById(id);
+    if (user == null) return null;
+    if (user.userName?.isNotEmpty ?? false) return user.userName;
+    if (user.displayName?.isNotEmpty ?? false) return user.displayName;
+    return null;
+  }
+
+  Future<SocialUser?> resolveUserById(String id) async {
+    final String key = id.trim();
+    if (key.isEmpty) return null;
+    final SocialUser? cached = _userCacheById[key];
+    if (cached != null) return cached;
+    try {
+      final SocialUser? user = await service.getUserById(userId: key);
+      if (user != null) {
+        _cacheUser(user);
+      }
+      return user;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<SocialUser?> resolveUserByUsername(String username) async {
+    final String key = username.trim().toLowerCase();
+    if (key.isEmpty) return null;
+    final SocialUser? cached = _userCacheByUsername[key];
+    if (cached != null) return cached;
+    try {
+      final SocialUser? user =
+          await service.getUserByUsername(username: username);
+      if (user != null) {
+        _cacheUser(user);
+      }
+      return user;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void rememberUser(SocialUser user) => _cacheUser(user);
+
+  void _cacheUser(SocialUser user) {
+    _userCacheById[user.id] = user;
+    final String? username = user.userName?.trim();
+    if (username != null && username.isNotEmpty) {
+      _userCacheByUsername[username.toLowerCase()] = user;
     }
   }
 
