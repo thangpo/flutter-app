@@ -782,6 +782,7 @@ class SocialPostCard extends StatelessWidget {
             post: sharedPost!,
             compact: true,
             padding: const EdgeInsets.all(10),
+            parentPostId: post.id,
             onTap: () => _openSharedPostDetail(context, sharedPost),
           )
         : buildSocialPostMedia(context, post);

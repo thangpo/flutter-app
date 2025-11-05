@@ -238,6 +238,19 @@ class _LivePostPlayer extends StatefulWidget {
 class _LivePostPlayerState extends State<_LivePostPlayer>
     with AutomaticKeepAliveClientMixin {
   static final Random _random = Random();
+  static _LivePostPlayerState? _activePlayer;
+  static int _nextInstanceId = 0;
+  late final int _instanceId;
+  static Future<void> _reserveEngineFor(_LivePostPlayerState requester) async {
+    final _LivePostPlayerState? previous = _activePlayer;
+    if (previous == requester) return;
+    if (previous != null) {
+      previous._shouldPlay = false;
+      previous._autoPlayEnabled = false;
+      await previous._stopPlayback();
+    }
+    _activePlayer = requester;
+  }
 
   final SocialLiveRepository _liveRepository = const SocialLiveRepository(
     apiBaseUrl: AppConstants.socialBaseUrl,
@@ -250,6 +263,7 @@ class _LivePostPlayerState extends State<_LivePostPlayer>
   int? _remoteUid;
   bool _isJoining = false;
   bool _shouldPlay = false;
+  bool _autoPlayEnabled = true;
   String? _errorMessage;
   String? _viewerToken;
   int? _viewerUid;
@@ -258,7 +272,8 @@ class _LivePostPlayerState extends State<_LivePostPlayer>
   @override
   void initState() {
     super.initState();
-    _visibilityKey = ValueKey<String>('live-${widget.post.id}');
+    _instanceId = _nextInstanceId++;
+    _visibilityKey = ValueKey<String>('live-${widget.post.id}#$_instanceId');
   }
 
   @override
@@ -292,11 +307,16 @@ class _LivePostPlayerState extends State<_LivePostPlayer>
     final double threshold = widget.compact ? 0.75 : 0.6;
     final bool shouldPlayNow =
         info.visibleFraction >= threshold && info.visibleBounds.height > 0;
+    if (!_autoPlayEnabled && shouldPlayNow) {
+      return;
+    }
     if (shouldPlayNow == _shouldPlay) return;
     _shouldPlay = shouldPlayNow;
     if (shouldPlayNow) {
       _startPlayback();
     } else {
+      // Reset autoplay once card is no longer prominently visible
+      _autoPlayEnabled = true;
       unawaited(_stopPlayback());
     }
   }
@@ -316,6 +336,7 @@ class _LivePostPlayerState extends State<_LivePostPlayer>
       _errorMessage = null;
     });
     try {
+      await _reserveEngineFor(this);
       await _ensureViewerToken(streamName);
       if (!mounted) return;
       await _initializeEngine(streamName);
@@ -453,6 +474,7 @@ class _LivePostPlayerState extends State<_LivePostPlayer>
       channelId: streamName,
       uid: uid,
       options: const ChannelMediaOptions(
+        channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
         clientRoleType: ClientRoleType.clientRoleAudience,
         publishCameraTrack: false,
         publishMicrophoneTrack: false,
@@ -470,6 +492,7 @@ class _LivePostPlayerState extends State<_LivePostPlayer>
     setState(() {
       _engine = engine;
     });
+    _activePlayer = this;
   }
 
   Future<void> _stopPlayback() async {
@@ -491,18 +514,25 @@ class _LivePostPlayerState extends State<_LivePostPlayer>
         await engine.release();
       } catch (_) {}
     }
+    if (_activePlayer == this) {
+      _activePlayer = null;
+    }
   }
 
   void _retryPlayback() {
     if (!mounted) return;
     setState(() {
       _errorMessage = null;
+      _autoPlayEnabled = true;
     });
     _startPlayback();
   }
 
   @override
   void dispose() {
+    if (_activePlayer == this) {
+      _activePlayer = null;
+    }
     unawaited(_stopPlayback());
     super.dispose();
   }

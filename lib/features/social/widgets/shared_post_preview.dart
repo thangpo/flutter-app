@@ -10,12 +10,14 @@ class SharedPostPreviewCard extends StatelessWidget {
   final EdgeInsetsGeometry? padding;
   final bool compact;
   final VoidCallback? onTap;
+  final String? parentPostId;
   const SharedPostPreviewCard({
     super.key,
     required this.post,
     this.padding,
     this.compact = false,
     this.onTap,
+    this.parentPostId,
   });
 
   @override
@@ -25,9 +27,12 @@ class SharedPostPreviewCard extends StatelessWidget {
     final avatar = post.userAvatar;
     final EdgeInsetsGeometry resolvedPadding =
         padding ?? const EdgeInsets.all(12);
+    final SocialPost mediaPost = (parentPostId == null)
+        ? post.copyWith(id: '${post.id}_shared_${hashCode}')
+        : post.copyWith(id: '${post.id}_shared_${parentPostId!}');
     final Widget? media = buildSocialPostMedia(
       context,
-      post,
+      mediaPost,
       compact: true,
     );
 

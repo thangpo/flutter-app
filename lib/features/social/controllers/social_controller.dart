@@ -1557,7 +1557,17 @@ class SocialController with ChangeNotifier {
     try {
       final SocialPost shared =
           await service.sharePost(postId: post.id, text: text);
-      _posts.insert(0, shared);
+      SocialPost resolved = shared;
+      try {
+        final SocialPost? refreshed =
+            await service.getPostById(postId: shared.id);
+        if (refreshed != null) {
+          resolved = refreshed;
+        }
+      } catch (_) {
+        // ignore fallback, optimistic shared data will be used
+      }
+      _posts.insert(0, resolved);
       notifyListeners();
       final ctx = Get.context!;
       final successMsg = getTranslated('share_post_success', ctx) ??
