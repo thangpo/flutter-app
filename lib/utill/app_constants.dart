@@ -287,7 +287,11 @@ class AppConstants {
   static const String setCurrentLanguage = '/api/v1/customer/language-change';
   static const String registerWithSocialMedia =
       '/api/v1/auth/registration-with-social-media';
-
+  // fcm firebase token
+  static const String fcmApiKey='AIzaSyCGsaNtMwBGlqphpTXuI02-LrU3DRWXq0c';
+  static const String fcmMobilesdkAppId='1:948810422905:android:e0118faea13be3d29d12a8';
+  static const String fcmProjectNumber='948810422905';
+  static const String fcmProjectId='vnshop247-1fb1d';
   // sharePreference
   static const String userLoginToken = 'user_login_token';
   static const String socialAccessToken = 'social_access_token';

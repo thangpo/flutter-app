@@ -66,7 +66,9 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_notification_service.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/call_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/notification/screens/notification_screen.dart';
-
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/firebase_token_updater.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/push_navigation_helper.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/prefs_debug.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -75,38 +77,46 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 final database = AppDatabase();
 
 // Handler cho background message (khi app tắt)
-Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+Future<void> myBackgroundMessageHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
-  print("🔔 Background message: ${message.notification?.title}");
 }
 
 Future<void> main() async {
   HttpOverrides.global = MyHttpOverrides();
   WidgetsFlutterBinding.ensureInitialized();
-
   // Khởi tạo Firebase một lần duy nhất.
   if(Firebase.apps.isEmpty) {
     if(Platform.isAndroid) {
       await Firebase.initializeApp(options: const FirebaseOptions(
-          apiKey: "AIzaSyCGsaNtMwBGlqphpTXuI02-LrU3DRWXq0c",
-          appId: "1:948810422905:android:e0118faea13be3d29d12a8",
-          messagingSenderId: "948810422905",
-          projectId: "vnshop247-1fb1d"));
+          apiKey: AppConstants.fcmApiKey,
+          appId: AppConstants.fcmMobilesdkAppId,
+          messagingSenderId: AppConstants.fcmProjectNumber,
+          projectId: AppConstants.fcmProjectId)
+      );
     }
   }
+  await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+    alert: false, // 🔥 tắt auto popup
+    badge: true,
+    sound: true,
+  );
 
-
+  NotificationSettings settings = await FirebaseMessaging.instance.requestPermission(
+    alert: true,
+    announcement: false,
+    badge: true,
+    carPlay: false,
+    criticalAlert: false,
+    provisional: false,
+    sound: true,
+  );
   await FlutterDownloader.initialize(debug: true, ignoreSsl: true);
   await di.init();
-
-  flutterLocalNotificationsPlugin
-      .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
-      ?.requestNotificationsPermission();
-  await flutterLocalNotificationsPlugin
-      .resolvePlatformSpecificImplementation<
-      AndroidFlutterLocalNotificationsPlugin>()
-      ?.requestNotificationsPermission();
+// 🔔 Sau khi app chạy, tự động gửi Firebase token
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    await FirebaseTokenUpdater.update();
+  });
+  //
 
   NotificationBody? body;
   try {
@@ -117,8 +127,20 @@ Future<void> main() async {
     }
     await NotificationHelper.initialize(flutterLocalNotificationsPlugin);
     String? token = await FirebaseMessaging.instance.getToken();
-    print("📱 FCM Device Token: $token");
     FirebaseMessaging.onBackgroundMessage(myBackgroundMessageHandler);
+    // Khi người dùng nhấn vào thông báo (app đang background)
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      if (message.data.isNotEmpty) {
+        handlePushNavigation(message);
+      }
+    });
+
+// Khi app bị tắt hoàn toàn và mở bằng click notification
+    final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+    if (initialMessage != null) {
+      handlePushNavigation(initialMessage);
+    }
+
     const AndroidNotificationChannel channel = AndroidNotificationChannel(
       'high_importance_channel',
       'Thông báo VNShop247',
@@ -133,9 +155,7 @@ Future<void> main() async {
 
     // Sau khi FirebaseMessaging.onBackgroundMessage(myBackgroundMessageHandler);
     FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-      print('💬 message.data[\'type\']: ${message.data['type']}');
       final type = message.data['type'] ?? '';
-
       // ❌ Không tự điều hướng ở đây nữa — chỉ hiển thị local notification thôi
       RemoteNotification? notification = message.notification;
       AndroidNotification? android = message.notification?.android;
@@ -154,30 +174,14 @@ Future<void> main() async {
           notification.title,
           notification.body,
           details,
+          payload: jsonEncode(message.data),
         );
       }
     });
 
-    // Khi người dùng nhấn vào thông báo
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      print('📬 Notification opened: ${message.data}');
-      final type = message.data['type'] ?? '';
-      if (type == 'order') {
-        navigatorKey.currentState?.pushNamed('/booking-confirm');
-      } else if (type == 'chatting') {
-        // mở màn hình chat nếu cần
-      } else if (type == 'notification' || type == 'test') {
-        navigatorKey.currentState?.push(MaterialPageRoute(
-          builder: (_) => const NotificationScreen(fromNotification: true),
-        ));
-      }
-    });
-
-
-  } catch (_) {}
+      } catch (_) {}
 
   // await NotificationHelper.initialize(flutterLocalNotificationsPlugin);
-  // FirebaseMessaging.onBackgroundMessage(myBackgroundMessageHandler);
 
   runApp(MultiProvider(
     providers: [
