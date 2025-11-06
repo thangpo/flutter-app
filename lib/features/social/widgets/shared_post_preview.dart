@@ -1,9 +1,10 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_html/flutter_html.dart';
+
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/social_feeling_helper.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/social_post_media.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/widgets/social_post_text_block.dart';
 
 class SharedPostPreviewCard extends StatelessWidget {
   final SocialPost post;
@@ -27,6 +28,8 @@ class SharedPostPreviewCard extends StatelessWidget {
     final avatar = post.userAvatar;
     final EdgeInsetsGeometry resolvedPadding =
         padding ?? const EdgeInsets.all(12);
+    final String? location = post.postMap?.trim();
+    final bool hasLocation = location != null && location.isNotEmpty;
     final SocialPost mediaPost = (parentPostId == null)
         ? post.copyWith(id: '${post.id}_shared_${hashCode}')
         : post.copyWith(id: '${post.id}_shared_${parentPostId!}');
@@ -87,31 +90,72 @@ class SharedPostPreviewCard extends StatelessWidget {
                             style: theme.textTheme.bodySmall
                                 ?.copyWith(color: onSurface.withOpacity(.6)),
                           ),
+                        if (hasLocation)
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.place_outlined,
+                                size: compact ? 14 : 16,
+                                color: onSurface.withOpacity(.65),
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  location!,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: onSurface.withOpacity(.75),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
                       ],
                     ),
                   ),
                 ],
               ),
+              if (SocialFeelingHelper.hasFeeling(post)) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Builder(builder: (context) {
+                      final String? emoji =
+                          SocialFeelingHelper.emojiForPost(post);
+                      if (emoji != null) {
+                        return Text(
+                          emoji,
+                          style: theme.textTheme.titleMedium
+                              ?.copyWith(fontSize: compact ? 18 : 20),
+                        );
+                      }
+                      return Icon(
+                        SocialFeelingHelper.iconForPost(post),
+                        size: compact ? 16 : 18,
+                        color: theme.colorScheme.primary,
+                      );
+                    }),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        SocialFeelingHelper.labelForPost(context, post) ?? '',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          fontSize: compact ? 13 : 14,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               if ((post.text ?? '').isNotEmpty) ...[
                 const SizedBox(height: 12),
-                Html(
-                  data: post.text!,
-                  style: {
-                    'body': Style(
-                      color: onSurface,
-                      fontSize: FontSize(compact ? 14 : 15),
-                      lineHeight: LineHeight(1.3),
-                      margin: Margins.zero,
-                      padding: HtmlPaddings.zero,
-                    ),
-                  },
-                  onLinkTap: (url, _, __) async {
-                    if (url != null) {
-                      final uri = Uri.parse(url);
-                      await launchUrl(uri,
-                          mode: LaunchMode.externalApplication);
-                    }
-                  },
+                SocialPostTextBlock(
+                  post: post,
+                  padding: EdgeInsets.zero,
+                  compact: compact,
                 ),
               ],
               if (post.pollOptions != null && post.pollOptions!.isNotEmpty)

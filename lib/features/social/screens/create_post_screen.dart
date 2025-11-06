@@ -11,6 +11,10 @@ import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_c
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/live_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/social_feeling_constants.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/social_feeling_helper.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/post_background_presets.dart';
 
 class SocialCreatePostScreen extends StatefulWidget {
   final String? groupId;
@@ -44,6 +48,10 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
   bool _mentionPromptVisible = false;
   int _mentionStartIndex = -1;
   String _currentMentionQuery = '';
+  String? _selectedFeelingType;
+  String? _selectedFeelingValue;
+  String? _selectedLocation;
+  String? _selectedBackgroundId;
 
   @override
   void initState() {
@@ -104,6 +112,15 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
   }
 
   Future<void> _pickImages() async {
+    if (_hasBackground) {
+      showCustomSnackBar(
+        getTranslated('background_color_only_text', context) ??
+            'Background posts can only contain text',
+        context,
+        isError: true,
+      );
+      return;
+    }
     if (_video != null) {
       showCustomSnackBar(
         getTranslated('remove_video_before_adding_images', context) ??
@@ -123,6 +140,15 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
   }
 
   Future<void> _pickVideo() async {
+    if (_hasBackground) {
+      showCustomSnackBar(
+        getTranslated('background_color_only_text', context) ??
+            'Background posts can only contain text',
+        context,
+        isError: true,
+      );
+      return;
+    }
     if (_images.isNotEmpty) {
       showCustomSnackBar(
         getTranslated('remove_images_before_adding_video', context) ??
@@ -153,6 +179,20 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
     if (_submitting) return;
     setState(() {
       _video = null;
+    });
+  }
+
+  void _clearFeelingSelection() {
+    if (_submitting) return;
+    if (!SocialFeelingHelper.hasSelection(
+      _selectedFeelingType,
+      _selectedFeelingValue,
+    )) {
+      return;
+    }
+    setState(() {
+      _selectedFeelingType = null;
+      _selectedFeelingValue = null;
     });
   }
 
@@ -222,11 +262,336 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
     }
   }
 
+  void _clearBackgroundSelection() {
+    if (_submitting || !_hasBackground) return;
+    setState(() {
+      _selectedBackgroundId = null;
+    });
+  }
+
+  Future<void> _openLocationInput() async {
+    if (_submitting) return;
+    FocusScope.of(context).unfocus();
+    final TextEditingController controller =
+        TextEditingController(text: _selectedLocation ?? '');
+    final ThemeData theme = Theme.of(context);
+    final String title =
+        getTranslated('select_location', context) ?? 'Select location';
+    final String hint = getTranslated('add_the_location_correctly', context) ??
+        'Enter the location';
+    final String cancel = getTranslated('cancel', context) ?? 'Cancel';
+    final String save =
+        getTranslated('save_location', context) ?? 'Save location';
+
+    final String? result = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (BuildContext ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 24,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
+          child: StatefulBuilder(
+            builder: (BuildContext ctx, StateSetter setModalState) {
+              final String trimmed = controller.text.trim();
+              final bool canSave = trimmed.isNotEmpty;
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    textInputAction: TextInputAction.done,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: InputDecoration(
+                      hintText: hint,
+                      prefixIcon: const Icon(Icons.place_outlined),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                    ),
+                    onChanged: (_) => setModalState(() {}),
+                    onSubmitted: (_) {
+                      final String value = controller.text.trim();
+                      if (value.isEmpty) return;
+                      Navigator.of(ctx).pop(value);
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        child: Text(cancel),
+                      ),
+                      const Spacer(),
+                      ElevatedButton(
+                        onPressed: canSave
+                            ? () =>
+                                Navigator.of(ctx).pop(controller.text.trim())
+                            : null,
+                        child: Text(save),
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+    if (!mounted) {
+      controller.dispose();
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      controller.dispose();
+    });
+    if (result == null) return;
+    final String trimmed = result.trim();
+    setState(() {
+      _selectedLocation = trimmed.isEmpty ? null : trimmed;
+    });
+  }
+
+  void _clearSelectedLocation() {
+    if (_submitting || !_hasLocation) return;
+    setState(() {
+      _selectedLocation = null;
+    });
+  }
+
+  Future<void> _openBackgroundPicker() async {
+    if (_images.isNotEmpty || _video != null) {
+      showCustomSnackBar(
+        getTranslated('background_color_only_text', context) ??
+            'Background posts can only contain text',
+        context,
+        isError: true,
+      );
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    final TextEditingController controller =
+        TextEditingController(text: _textController.text);
+    String selectedId = _selectedBackgroundId ??
+        (PostBackgroundPresets.presets.isNotEmpty
+            ? PostBackgroundPresets.presets.first.id
+            : '1');
+    final _BackgroundPickerResult? result =
+        await showModalBottomSheet<_BackgroundPickerResult>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (BuildContext ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom,
+          ),
+          child: StatefulBuilder(
+            builder: (BuildContext ctx, StateSetter setModalState) {
+              final ThemeData theme = Theme.of(ctx);
+              final PostBackgroundPreset preset =
+                  PostBackgroundPresets.findById(selectedId) ??
+                      PostBackgroundPresets.presets.first;
+              final bool canSave = controller.text.trim().isNotEmpty;
+              return SingleChildScrollView(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            getTranslated('select_background_color', context) ??
+                                'Select background',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        if (_hasBackground)
+                          TextButton(
+                            onPressed: () => Navigator.of(ctx).pop(
+                              _BackgroundPickerResult(
+                                null,
+                                controller.text.trim(),
+                              ),
+                            ),
+                            child: Text(
+                              getTranslated('remove_background', context) ??
+                                  'Remove',
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 36,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: preset.gradient,
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: TextField(
+                        controller: controller,
+                        maxLines: 5,
+                        minLines: 3,
+                        textAlign: TextAlign.center,
+                        textCapitalization: TextCapitalization.sentences,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          color: preset.textColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        cursorColor: preset.textColor,
+                        decoration: InputDecoration(
+                          hintText: getTranslated(
+                                'post_background_hint',
+                                context,
+                              ) ??
+                              'Share something...',
+                          hintStyle: TextStyle(
+                            color: preset.textColor.withOpacity(.7),
+                          ),
+                          border: InputBorder.none,
+                        ),
+                        onChanged: (_) => setModalState(() {}),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: PostBackgroundPresets.presets
+                          .map(
+                            (PostBackgroundPreset option) => GestureDetector(
+                              onTap: () {
+                                setModalState(() {
+                                  selectedId = option.id;
+                                });
+                              },
+                              child: Container(
+                                width: 58,
+                                height: 58,
+                                decoration: BoxDecoration(
+                                  gradient: option.gradient,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: selectedId == option.id
+                                      ? Border.all(
+                                          color: theme.colorScheme.primary,
+                                          width: 3,
+                                        )
+                                      : null,
+                                ),
+                                child: selectedId == option.id
+                                    ? Icon(
+                                        Icons.check,
+                                        color: option.textColor,
+                                      )
+                                    : null,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          child: Text(
+                              getTranslated('cancel', context) ?? 'Cancel'),
+                        ),
+                        const Spacer(),
+                        ElevatedButton(
+                          onPressed: canSave
+                              ? () => Navigator.of(ctx).pop(
+                                    _BackgroundPickerResult(
+                                      selectedId,
+                                      controller.text.trim(),
+                                    ),
+                                  )
+                              : null,
+                          child: Text(
+                            getTranslated('apply_background', context) ??
+                                'Apply',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+    if (!mounted) {
+      controller.dispose();
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      controller.dispose();
+    });
+    if (result == null) return;
+    setState(() {
+      _selectedBackgroundId = result.backgroundId;
+      final String trimmed = result.text.trim();
+      _textController
+        ..text = trimmed
+        ..selection = TextSelection.fromPosition(
+          TextPosition(offset: trimmed.length),
+        );
+    });
+  }
+
   bool get _hasContent {
+    final bool hasFeeling = SocialFeelingHelper.hasSelection(
+      _selectedFeelingType,
+      _selectedFeelingValue,
+    );
     return _textController.text.trim().isNotEmpty ||
         _images.isNotEmpty ||
-        _video != null;
+        _video != null ||
+        hasFeeling ||
+        _hasLocation;
   }
+
+  bool get _hasLocation =>
+      _selectedLocation != null && _selectedLocation!.trim().isNotEmpty;
+  bool get _hasBackground => _selectedBackgroundId != null;
+  PostBackgroundPreset? get _backgroundPreset =>
+      PostBackgroundPresets.findById(_selectedBackgroundId);
 
   bool get _shouldShowMentionSuggestions =>
       _mentionStartIndex >= 0 &&
@@ -250,6 +615,7 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
     });
     try {
       final SocialController sc = context.read<SocialController>();
+
       final SocialPost? created = await sc.createPost(
         text: _textController.text.trim().isNotEmpty
             ? _textController.text.trim()
@@ -258,7 +624,11 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
             _video == null ? _images.map((XFile f) => f.path).toList() : null,
         videoPath: _video?.path,
         privacy: _privacy,
+        feelingType: _selectedFeelingType,
+        feelingValue: _selectedFeelingValue?.trim(),
         groupId: widget.groupId,
+        postMap: _selectedLocation?.trim(),
+        backgroundColorId: _selectedBackgroundId,
       );
       if (mounted && created != null) {
         Navigator.of(context).pop<SocialPost>(created);
@@ -305,13 +675,13 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
         color: Colors.orange,
         label:
             getTranslated('feelings_activity', context) ?? 'Feeling/Activity',
-        onTap: () => _showComingSoon('feelings_activity'),
+        onTap: _openFeelingPicker,
       ),
       _ComposeAction(
         icon: Icons.place_outlined,
         color: Colors.redAccent,
         label: getTranslated('check_in', context) ?? 'Check in',
-        onTap: () => _showComingSoon('check_in'),
+        onTap: _openLocationInput,
       ),
       _ComposeAction(
         icon: Icons.videocam_outlined,
@@ -323,7 +693,7 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
         icon: Icons.format_color_fill_outlined,
         color: Colors.teal,
         label: getTranslated('background_color', context) ?? 'Background color',
-        onTap: () => _showComingSoon('background_color'),
+        onTap: _openBackgroundPicker,
       ),
     ];
 
@@ -375,6 +745,17 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
                     ),
                     const SizedBox(height: 16),
                     _buildTextField(theme),
+                    if (SocialFeelingHelper.hasSelection(
+                      _selectedFeelingType,
+                      _selectedFeelingValue,
+                    )) ...[
+                      const SizedBox(height: 12),
+                      _buildSelectedFeeling(theme),
+                    ],
+                    if (_hasLocation) ...[
+                      const SizedBox(height: 12),
+                      _buildSelectedLocation(theme),
+                    ],
                     if (_images.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       _buildImagesPreview(theme),
@@ -546,6 +927,55 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
   }
 
   Widget _buildTextField(ThemeData theme) {
+    final PostBackgroundPreset? preset = _backgroundPreset;
+    final InputBorder border = InputBorder.none;
+    if (preset != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              gradient: preset.gradient,
+              borderRadius: BorderRadius.circular(24),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 36),
+            child: TextField(
+              controller: _textController,
+              focusNode: _textFocusNode,
+              textAlign: TextAlign.center,
+              maxLines: null,
+              decoration: InputDecoration(
+                border: border,
+                hintText: getTranslated('post_background_hint', context) ??
+                    'Share something...',
+                hintStyle: theme.textTheme.titleLarge?.copyWith(
+                  color: preset.textColor.withOpacity(.7),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              style: theme.textTheme.titleLarge?.copyWith(
+                color: preset.textColor,
+                fontWeight: FontWeight.w700,
+              ),
+              cursorColor: preset.textColor,
+              textCapitalization: TextCapitalization.sentences,
+            ),
+          ),
+          if (_shouldShowMentionSuggestions) _buildMentionSuggestions(theme),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: _submitting ? null : _clearBackgroundSelection,
+              icon: const Icon(Icons.close),
+              label: Text(
+                getTranslated('remove_background', context) ??
+                    'Remove background',
+              ),
+            ),
+          ),
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -563,6 +993,85 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
         ),
         if (_shouldShowMentionSuggestions) _buildMentionSuggestions(theme),
       ],
+    );
+  }
+
+  Widget _buildSelectedFeeling(ThemeData theme) {
+    final String type = _selectedFeelingType!;
+    final String value = _selectedFeelingValue!;
+    final ColorScheme cs = theme.colorScheme;
+    final String? emoji =
+        SocialFeelingHelper.emojiForValue(type, _selectedFeelingValue);
+    final IconData icon = SocialFeelingHelper.iconForType(type);
+    final String label = SocialFeelingHelper.buildLabel(
+      context,
+      type,
+      value,
+    );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: cs.surfaceVariant,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          if (emoji != null)
+            Text(
+              emoji,
+              style: theme.textTheme.titleLarge?.copyWith(fontSize: 24),
+            )
+          else
+            Icon(icon, color: cs.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close),
+            tooltip: getTranslated('remove', context) ?? 'Remove',
+            onPressed: _submitting ? null : _clearFeelingSelection,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectedLocation(ThemeData theme) {
+    final ColorScheme cs = theme.colorScheme;
+    final String location = _selectedLocation ?? '';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: cs.primary.withOpacity(.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.primary.withOpacity(.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.place, color: cs.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              location,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close),
+            tooltip: getTranslated('remove', context) ?? 'Remove',
+            onPressed: _submitting ? null : _clearSelectedLocation,
+          ),
+        ],
+      ),
     );
   }
 
@@ -719,6 +1228,43 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
         icon: Icons.lock,
       ),
     ];
+  }
+
+  Future<void> _openFeelingPicker() async {
+    if (_submitting) return;
+    FocusScope.of(context).unfocus();
+    final _FeelingPickerResult? result =
+        await showModalBottomSheet<_FeelingPickerResult>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (BuildContext ctx) {
+        return _FeelingPickerSheet(
+          initialType: _selectedFeelingType,
+          initialValue: _selectedFeelingValue,
+        );
+      },
+    );
+    if (!mounted || result == null) return;
+    if (result.cleared) {
+      setState(() {
+        _selectedFeelingType = null;
+        _selectedFeelingValue = null;
+      });
+      return;
+    }
+    final String? type = result.type;
+    final String? value = result.value;
+    if (!SocialFeelingHelper.hasSelection(type, value)) {
+      return;
+    }
+    setState(() {
+      _selectedFeelingType = type;
+      _selectedFeelingValue = value!.trim();
+    });
   }
 
   void _showComingSoon(String featureKey) {
@@ -1065,6 +1611,263 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
   }
 }
 
+class _FeelingPickerResult {
+  final String? type;
+  final String? value;
+  final bool cleared;
+
+  const _FeelingPickerResult._({
+    required this.type,
+    required this.value,
+    required this.cleared,
+  });
+
+  const _FeelingPickerResult.selection({
+    required String type,
+    required String value,
+  }) : this._(type: type, value: value, cleared: false);
+
+  const _FeelingPickerResult.cleared()
+      : this._(type: null, value: null, cleared: true);
+}
+
+class _FeelingPickerSheet extends StatefulWidget {
+  final String? initialType;
+  final String? initialValue;
+
+  const _FeelingPickerSheet({
+    required this.initialType,
+    required this.initialValue,
+  });
+
+  @override
+  State<_FeelingPickerSheet> createState() => _FeelingPickerSheetState();
+}
+
+class _FeelingPickerSheetState extends State<_FeelingPickerSheet> {
+  late String _currentType;
+  String? _selectedFeeling;
+  late final TextEditingController _textController;
+  final FocusNode _textFocusNode = FocusNode();
+
+  bool get _isTextCategory => _currentType != SocialFeelingType.feelings;
+
+  @override
+  void initState() {
+    super.initState();
+    final String? initialType = widget.initialType;
+    final String? initialValue = widget.initialValue;
+    _currentType = SocialFeelingType.contains(initialType)
+        ? initialType!
+        : SocialFeelingType.feelings;
+    _selectedFeeling =
+        _currentType == SocialFeelingType.feelings ? initialValue : null;
+    _textController = TextEditingController(
+      text: _isTextCategory ? (initialValue ?? '') : '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    _textFocusNode.dispose();
+    super.dispose();
+  }
+
+  String? get _currentValue {
+    if (_currentType == SocialFeelingType.feelings) {
+      return _selectedFeeling;
+    }
+    return _textController.text.trim();
+  }
+
+  bool get _canSubmit {
+    final String? value = _currentValue;
+    return value != null && value.trim().isNotEmpty;
+  }
+
+  void _selectCategory(String type) {
+    if (_currentType == type) return;
+    setState(() {
+      _currentType = type;
+      if (_currentType == SocialFeelingType.feelings) {
+        _selectedFeeling = widget.initialType == SocialFeelingType.feelings
+            ? widget.initialValue
+            : null;
+        _textController.clear();
+      } else {
+        _selectedFeeling = null;
+        final bool restorePrevious =
+            widget.initialType == type && widget.initialValue != null;
+        _textController.text =
+            restorePrevious ? widget.initialValue!.trim() : '';
+      }
+    });
+    if (_currentType == SocialFeelingType.feelings) {
+      _textFocusNode.unfocus();
+    } else {
+      FocusScope.of(context).requestFocus(_textFocusNode);
+    }
+  }
+
+  void _selectFeeling(String value) {
+    setState(() {
+      _selectedFeeling = value;
+    });
+  }
+
+  void _submit() {
+    final String? value = _currentValue;
+    if (value == null || value.isEmpty) return;
+    Navigator.of(context).pop(
+      _FeelingPickerResult.selection(
+        type: _currentType,
+        value: value.trim(),
+      ),
+    );
+  }
+
+  void _clearSelection() {
+    Navigator.of(context).pop(const _FeelingPickerResult.cleared());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme cs = theme.colorScheme;
+    final EdgeInsets viewInsets = MediaQuery.of(context).viewInsets;
+    final bool showClear = SocialFeelingHelper.hasSelection(
+        widget.initialType, widget.initialValue);
+
+    final List<Widget> categoryChips =
+        socialFeelingCategories.map((SocialFeelingCategoryOption option) {
+      final bool selected = option.type == _currentType;
+      final String label =
+          getTranslated(option.labelKey, context) ?? option.defaultLabel;
+      return ChoiceChip(
+        avatar: Icon(option.icon, size: 18),
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) => _selectCategory(option.type),
+      );
+    }).toList();
+
+    final Widget valueInput = _currentType == SocialFeelingType.feelings
+        ? _buildFeelingsWrap(theme)
+        : _buildTextCategoryField(theme);
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(bottom: viewInsets.bottom),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: cs.outlineVariant.withOpacity(.6),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                getTranslated('feeling_picker_title', context) ??
+                    'How are you feeling?',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: categoryChips,
+              ),
+              const SizedBox(height: 20),
+              valueInput,
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  if (showClear)
+                    TextButton(
+                      onPressed: _clearSelection,
+                      child: Text(
+                        getTranslated('remove', context) ?? 'Remove',
+                      ),
+                    ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(getTranslated('cancel', context) ?? 'Cancel'),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: _canSubmit ? _submit : null,
+                    child: Text(getTranslated('done', context) ?? 'Done'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFeelingsWrap(ThemeData theme) {
+    final ColorScheme cs = theme.colorScheme;
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: socialFeelingOptions.map((SocialFeelingOption option) {
+        final bool selected = option.value == _selectedFeeling;
+        final String? emoji =
+            SocialFeelingConstants.emojiForFeeling(option.value);
+        return ChoiceChip(
+          avatar: emoji != null
+              ? Text(
+                  emoji,
+                  style: theme.textTheme.titleMedium?.copyWith(fontSize: 18),
+                )
+              : const Icon(Icons.emoji_emotions_outlined, size: 18),
+          label: Text(option.label),
+          selected: selected,
+          labelStyle: theme.textTheme.bodyMedium?.copyWith(
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+          ),
+          selectedColor: cs.primary.withOpacity(.15),
+          onSelected: (_) => _selectFeeling(option.value),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildTextCategoryField(ThemeData theme) {
+    return TextField(
+      controller: _textController,
+      focusNode: _textFocusNode,
+      textInputAction: TextInputAction.done,
+      decoration: InputDecoration(
+        hintText: getTranslated('feeling_picker_input_hint', context) ??
+            'Describe it...',
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      ),
+      onChanged: (_) => setState(() {}),
+      onSubmitted: (_) => _submit(),
+    );
+  }
+}
+
 class _PrivacyOption {
   final int value;
   final String label;
@@ -1099,4 +1902,11 @@ class _MentionToken {
     required this.start,
     required this.query,
   });
+}
+
+class _BackgroundPickerResult {
+  final String? backgroundId;
+  final String text;
+
+  const _BackgroundPickerResult(this.backgroundId, this.text);
 }

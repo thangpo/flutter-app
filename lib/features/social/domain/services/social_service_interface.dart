@@ -8,7 +8,6 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_photo.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_reel.dart';
 
-
 abstract class SocialServiceInterface {
   Future<List<SocialPost>> getNewsFeed({int limit, String? afterPostId});
   Future<List<SocialStory>> getStories({int limit, int offset});
@@ -76,7 +75,10 @@ abstract class SocialServiceInterface {
     String? videoThumbnailPath,
     int privacy = 0,
     String? backgroundColorId,
+    String? feelingType,
+    String? feelingValue,
     String? groupId,
+    String? postMap,
   });
   Future<SocialPost> sharePost({required String postId, String? text});
   Future<SocialFeedPage> getGroupFeed({
@@ -138,5 +140,4 @@ abstract class SocialServiceInterface {
     int limit = 20,
     String? offset,
   });
-
 }

@@ -5,8 +5,6 @@ import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_c
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
-import 'package:flutter_html/flutter_html.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_post_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_story_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_post_detail_screen.dart';
@@ -22,7 +20,8 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_scre
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_group_detail_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/utils/mention_formatter.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/widgets/social_post_text_block.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/social_feeling_helper.dart';
 
 class SocialFeedScreen extends StatefulWidget {
   const SocialFeedScreen({super.key});
@@ -777,6 +776,13 @@ class SocialPostCard extends StatelessWidget {
     final Color baseColor = Theme.of(context).scaffoldBackgroundColor;
     final SocialPost? sharedPost = post.sharedPost;
     final bool hasSharedPost = sharedPost != null;
+    final bool hasFeeling = SocialFeelingHelper.hasFeeling(post);
+    final bool showFeelingInHeader = hasFeeling && !hasSharedPost;
+    final String? feelingLabel = showFeelingInHeader
+        ? SocialFeelingHelper.labelForPost(context, post)
+        : null;
+    final String? feelingEmoji =
+        showFeelingInHeader ? SocialFeelingHelper.emojiForPost(post) : null;
     final Widget? mediaContent = hasSharedPost
         ? SharedPostPreviewCard(
             post: sharedPost!,
@@ -803,6 +809,8 @@ class SocialPostCard extends StatelessWidget {
     final bool showComments = commentCount > 0;
     final bool showShares = shareCount > 0;
     final bool showStats = showReactions || showComments || showShares;
+    final String? postLocation = post.postMap?.trim();
+    final bool hasLocation = postLocation != null && postLocation.isNotEmpty;
 
     return Container(
       margin: const EdgeInsets.only(top: 8),
@@ -911,7 +919,35 @@ class SocialPostCard extends StatelessWidget {
                                 ),
                               ),
                             ],
-                            if ((post.postType ?? '').isNotEmpty) ...[
+                            if (feelingLabel != null &&
+                                feelingLabel.isNotEmpty) ...[
+                              const SizedBox(width: 6),
+                              if (feelingEmoji != null)
+                                Text(
+                                  feelingEmoji,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium
+                                      ?.copyWith(fontSize: 18),
+                                )
+                              else
+                                Icon(
+                                  SocialFeelingHelper.iconForPost(post),
+                                  size: 16,
+                                  color: onSurface.withOpacity(.7),
+                                ),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  feelingLabel,
+                                  style: TextStyle(
+                                    color: onSurface.withOpacity(.75),
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ] else if ((post.postType ?? '').isNotEmpty) ...[
                               const SizedBox(width: 6),
                               Icon(
                                 post.postType == 'profile_picture'
@@ -953,6 +989,30 @@ class SocialPostCard extends StatelessWidget {
                             fontSize: 13,
                           ),
                         ),
+                        if (hasLocation)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.place_outlined,
+                                  size: 14,
+                                  color: onSurface.withOpacity(.65),
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    postLocation!,
+                                    style: TextStyle(
+                                      color: onSurface.withOpacity(.7),
+                                      fontSize: 13,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         if (hasSharedPost)
                           Padding(
                             padding: const EdgeInsets.only(top: 2),
@@ -994,44 +1054,7 @@ class SocialPostCard extends StatelessWidget {
           ),
 
           // Text
-          if ((post.text ?? '').isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Builder(
-                builder: (BuildContext context) {
-                  final SocialController controller =
-                      context.read<SocialController>();
-                  final String formatted = MentionFormatter.decorate(
-                    post.text!,
-                    controller,
-                  );
-                  return Html(
-                    data: formatted,
-                    style: {
-                      'body': Style(
-                        color: onSurface,
-                        fontSize: FontSize(15),
-                        lineHeight: LineHeight(1.35),
-                        margin: Margins.zero,
-                        padding: HtmlPaddings.zero,
-                      ),
-                    },
-                    onLinkTap: (url, _, __) async {
-                      if (url == null) return;
-                      if (MentionFormatter.isMentionLink(url)) {
-                        await MentionFormatter.handleMentionTap(context, url);
-                        return;
-                      }
-                      final uri = Uri.parse(url);
-                      await launchUrl(
-                        uri,
-                        mode: LaunchMode.externalApplication,
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
+          SocialPostTextBlock(post: post),
 
           // Poll
           if (post.pollOptions != null && post.pollOptions!.isNotEmpty)
