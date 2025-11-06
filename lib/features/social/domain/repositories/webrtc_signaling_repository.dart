@@ -1,73 +1,143 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 
-/// Simple HTTP repository for WoWonder WebRTC signaling.
-/// baseUrl ví dụ: https://social.vnshop247.com/api/webrtc
+import '../models/ice_candidate_lite.dart';
+
+class CreateCallResult {
+  final int callId;
+  final String status; // ringing | answered | declined | ended
+  final String mediaType; // audio | video
+  CreateCallResult({
+    required this.callId,
+    required this.status,
+    required this.mediaType,
+  });
+}
+
+class PollResult {
+  final String? callStatus; // ringing | answered | declined | ended
+  final String? mediaType; // audio | video
+  final String? sdpOffer; // raw SDP
+  final String? sdpAnswer; // raw SDP
+  final List<IceCandidateLite> iceCandidates;
+
+  PollResult({
+    this.callStatus,
+    this.mediaType,
+    this.sdpOffer,
+    this.sdpAnswer,
+    this.iceCandidates = const [],
+  });
+}
+
 class WebRTCSignalingRepository {
+  WebRTCSignalingRepository({
+    String? baseUrl,
+    String? serverKey,
+    this.accessTokenKey = 'socialAccessToken',
+    http.Client? client,
+  })  : baseUrl =
+            (baseUrl ?? AppConstants.baseUrl).replaceAll(RegExp(r'/$'), ''),
+        serverKey = serverKey ?? _defaultServerKey,
+        _client = client ?? http.Client();
+
+  final http.Client _client;
   final String baseUrl;
-  final String accessToken;
+
+  /// ⚠️ Điền server_key WoWonder thật tại đây HOẶC truyền qua constructor
+  static const String _defaultServerKey = 'f6e69c898ddd643154c9bd4b152555842e26a868-d195c100005dddb9f1a30a67a5ae42d4-19845955';
   final String serverKey;
 
-  WebRTCSignalingRepository({
-    required this.baseUrl,
-    required this.accessToken,
-    required this.serverKey,
-  });
+  final String accessTokenKey;
 
-  Future<Map<String, dynamic>> _post(Map<String, String> fields) async {
-    final uri = Uri.parse('$baseUrl?access_token=$accessToken');
+  /// Nếu server chưa route `/api/webrtc`, đổi return thành:
+  ///   return '$baseUrl/api/v2/endpoints/webrtc.php';
+  String get _endpoint => '$baseUrl/api/v2/endpoints/webrtc.php';
+
+  Future<String> _getAccessToken() async {
+    final sp = await SharedPreferences.getInstance();
+    final token = sp.getString(accessTokenKey);
+    if (token == null || token.isEmpty) {
+      throw Exception(
+        'Không có access_token mạng xã hội trong SharedPreferences ($accessTokenKey).',
+      );
+    }
+    return token;
+  }
+
+  Future<Map<String, dynamic>> _multipartPost(
+      Map<String, String> fields) async {
+    final uri = Uri.parse(_endpoint);
     final req = http.MultipartRequest('POST', uri);
+
+    // Bắt buộc có server_key + access_token
     req.fields['server_key'] = serverKey;
-    fields.forEach((k, v) => req.fields[k] = v);
+    req.fields['access_token'] = await _getAccessToken();
 
-    final res = await req.send();
-    final body = await res.stream.bytesToString();
+    // ✅ Thay vì putIfAbsent (sai kiểu), dùng addAll
+    req.fields.addAll(fields);
 
-    Map<String, dynamic> data;
-    try {
-      data = json.decode(body) as Map<String, dynamic>;
-    } catch (_) {
-      throw Exception('Bad JSON: $body');
-    }
-
+    final streamed = await _client.send(req);
+    final res = await http.Response.fromStream(streamed);
     if (res.statusCode != 200) {
-      throw Exception('HTTP ${res.statusCode}: $body');
+      throw Exception(
+          'WebRTC API ${fields['type']} thất bại (HTTP ${res.statusCode}): ${res.body}');
     }
-    final apiStatus = data['api_status'];
-    if ((apiStatus is int && apiStatus != 200) ||
-        (apiStatus is String && apiStatus != '200')) {
-      throw Exception('API error: ${data['errors'] ?? data}');
+    final Map<String, dynamic> json = jsonDecode(res.body);
+    final apiStatus = json['api_status'];
+    if (apiStatus == '400' || apiStatus == 400) {
+      final err = json['errors']?['error_text'] ??
+          json['error'] ??
+          json['error_message'] ??
+          'Unknown error';
+      throw Exception('WebRTC API ${fields['type']} lỗi: $err');
     }
-    return data;
+    return json;
   }
 
-  Future<int> createCall({
+  // ------------------------
+  // Public APIs
+  // ------------------------
+
+  Future<CreateCallResult> create({
     required int recipientId,
-    String mediaType = 'audio', // 'audio' | 'video'
+    required String mediaType, // 'audio' | 'video'
   }) async {
-    final res = await _post({
+    final json = await _multipartPost({
       'type': 'create',
-      'recipient_id': '$recipientId',
-      'media_type': mediaType,
+      'recipient_id': recipientId.toString(),
+      'media_type': (mediaType == 'video') ? 'video' : 'audio',
     });
-    return (res['call_id'] as num).toInt();
+
+    final id = int.tryParse('${json['call_id'] ?? 0}') ?? 0;
+    if (id <= 0) {
+      throw Exception(
+          'Create call không trả về call_id hợp lệ: ${jsonEncode(json)}');
+    }
+    final status = (json['status'] ?? 'ringing').toString();
+    final mtype = (json['media_type'] ?? mediaType).toString();
+    return CreateCallResult(callId: id, status: status, mediaType: mtype);
   }
 
-  Future<void> sendOffer({
-    required int callId,
-    required String sdp,
-  }) async {
-    await _post({'type': 'offer', 'call_id': '$callId', 'sdp': sdp});
+  Future<void> offer({required int callId, required String sdp}) async {
+    await _multipartPost({
+      'type': 'offer',
+      'call_id': '$callId',
+      'sdp': sdp,
+    });
   }
 
-  Future<void> sendAnswer({
-    required int callId,
-    required String sdp,
-  }) async {
-    await _post({'type': 'answer', 'call_id': '$callId', 'sdp': sdp});
+  Future<void> answer({required int callId, required String sdp}) async {
+    await _multipartPost({
+      'type': 'answer',
+      'call_id': '$callId',
+      'sdp': sdp,
+    });
   }
 
-  Future<void> sendCandidate({
+  Future<void> candidate({
     required int callId,
     required String candidate,
     String? sdpMid,
@@ -80,90 +150,68 @@ class WebRTCSignalingRepository {
     };
     if (sdpMid != null) fields['sdp_mid'] = sdpMid;
     if (sdpMLineIndex != null) fields['sdp_mline_index'] = '$sdpMLineIndex';
-    await _post(fields);
+
+    await _multipartPost(fields);
   }
 
   Future<PollResult> poll({required int callId}) async {
-    final res = await _post({'type': 'poll', 'call_id': '$callId'});
-    return PollResult.fromJson(res);
-  }
+    final json = await _multipartPost({
+      'type': 'poll',
+      'call_id': '$callId',
+    });
 
-  /// action: 'answer' | 'decline' | 'end'
-  Future<String> action({required int callId, required String action}) async {
-    final res =
-        await _post({'type': 'action', 'call_id': '$callId', 'action': action});
-    return '${res['status']}';
-  }
-}
+    String? callStatus;
+    String? mediaType;
+    String? sdpOffer;
+    String? sdpAnswer;
+    final List<IceCandidateLite> ice = [];
 
-class PollResult {
-  final String callStatus;
-  final String mediaType;
-  final String? sdpOffer;
-  final String? sdpAnswer;
-  final List<IceCandidatePayload> iceCandidates;
-
-  PollResult({
-    required this.callStatus,
-    required this.mediaType,
-    required this.sdpOffer,
-    required this.sdpAnswer,
-    required this.iceCandidates,
-  });
-
-  factory PollResult.fromJson(Map<String, dynamic> json) {
-    String? readSdp(dynamic obj) {
-      if (obj == null) return null;
-      if (obj is Map<String, dynamic>) {
-        final sdp = obj['sdp'];
-        if (sdp is String) return sdp;
-      }
-      return null;
+    if (json['call_status'] != null && '${json['call_status']}'.isNotEmpty) {
+      callStatus = '${json['call_status']}';
+    }
+    if (json['media_type'] != null && '${json['media_type']}'.isNotEmpty) {
+      mediaType = '${json['media_type']}' == 'video' ? 'video' : 'audio';
     }
 
-    final cands = <IceCandidatePayload>[];
-    final arr = json['ice_candidates'];
-    if (arr is List) {
-      for (final item in arr) {
-        if (item is Map<String, dynamic>) {
-          cands.add(IceCandidatePayload.fromJson(item));
+    final o = json['sdp_offer'];
+    if (o is Map && o['sdp'] != null && '${o['sdp']}'.isNotEmpty) {
+      sdpOffer = '${o['sdp']}';
+    }
+    final a = json['sdp_answer'];
+    if (a is Map && a['sdp'] != null && '${a['sdp']}'.isNotEmpty) {
+      sdpAnswer = '${a['sdp']}';
+    }
+
+    final cands = json['ice_candidates'];
+    if (cands is List) {
+      for (final c in cands) {
+        if (c is Map &&
+            c['candidate'] != null &&
+            '${c['candidate']}'.isNotEmpty) {
+          ice.add(IceCandidateLite.fromJson(
+            c.map((k, v) => MapEntry('$k', v)),
+          ));
         }
       }
     }
 
     return PollResult(
-      callStatus: json['call_status']?.toString() ?? '',
-      mediaType: json['media_type']?.toString() ?? 'audio',
-      sdpOffer: readSdp(json['sdp_offer']),
-      sdpAnswer: readSdp(json['sdp_answer']),
-      iceCandidates: cands,
+      callStatus: callStatus,
+      mediaType: mediaType,
+      sdpOffer: sdpOffer,
+      sdpAnswer: sdpAnswer,
+      iceCandidates: ice,
     );
   }
-}
 
-class IceCandidatePayload {
-  final String candidate;
-  final String? sdpMid;
-  final int? sdpMLineIndex;
-
-  IceCandidatePayload({
-    required this.candidate,
-    this.sdpMid,
-    this.sdpMLineIndex,
-  });
-
-  factory IceCandidatePayload.fromJson(Map<String, dynamic> json) {
-    int? toInt(dynamic v) {
-      if (v == null) return null;
-      if (v is int) return v;
-      if (v is String) return int.tryParse(v);
-      return null;
-    }
-
-    return IceCandidatePayload(
-      candidate: json['candidate']?.toString() ?? '',
-      sdpMid: json['sdp_mid']?.toString(),
-      sdpMLineIndex: toInt(json['sdp_mline_index']),
-    );
+  /// action: 'answer' | 'decline' | 'end'
+  Future<String> action({required int callId, required String action}) async {
+    final json = await _multipartPost({
+      'type': 'action',
+      'call_id': '$callId',
+      'action': action,
+    });
+    final status = (json['status'] ?? '').toString();
+    return status.isEmpty ? 'ended' : status;
   }
 }
