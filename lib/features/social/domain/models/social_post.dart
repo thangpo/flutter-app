@@ -60,6 +60,15 @@ class SocialPost {
   final List<Map<String, dynamic>>? pollOptions; // each: {text, percentage_num}
   final List<PostMention> mentions;
 
+  // Feeling / activity
+  final String?
+      feelingType; // feelings | traveling | watching | playing | listening
+  final String? feelingValue; // raw value or description
+  final String? feelingIconName; // icon code from backend (feelings only)
+  // Location / check-in
+  final String? postMap;
+  final String? backgroundColorId;
+
   const SocialPost({
     required this.id,
     this.publisherId, // <-- NEW
@@ -108,6 +117,11 @@ class SocialPost {
     this.productSlug,
     this.pollOptions,
     this.mentions = const <PostMention>[],
+    this.feelingType,
+    this.feelingValue,
+    this.feelingIconName,
+    this.postMap,
+    this.backgroundColorId,
   });
 
   SocialPost copyWith({
@@ -158,6 +172,11 @@ class SocialPost {
     String? productSlug,
     List<Map<String, dynamic>>? pollOptions,
     List<PostMention>? mentions,
+    String? feelingType,
+    String? feelingValue,
+    String? feelingIconName,
+    String? postMap,
+    String? backgroundColorId,
   }) {
     return SocialPost(
       id: id ?? this.id,
@@ -207,6 +226,11 @@ class SocialPost {
       productSlug: productSlug ?? this.productSlug,
       pollOptions: pollOptions ?? this.pollOptions,
       mentions: mentions ?? this.mentions,
+      feelingType: feelingType ?? this.feelingType,
+      feelingValue: feelingValue ?? this.feelingValue,
+      feelingIconName: feelingIconName ?? this.feelingIconName,
+      postMap: postMap ?? this.postMap,
+      backgroundColorId: backgroundColorId ?? this.backgroundColorId,
     );
   }
 

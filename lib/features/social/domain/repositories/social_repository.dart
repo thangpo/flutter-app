@@ -14,6 +14,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_feed_page.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user_profile.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group_join_request.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/social_feeling_constants.dart';
 
 bool _isImageUrl(String url) {
   final u = url.toLowerCase();
@@ -1337,7 +1338,10 @@ class SocialRepository {
     String? videoThumbnailPath,
     int privacy = 0,
     String? backgroundColorId,
+    String? feelingType,
+    String? feelingValue,
     String? groupId,
+    String? postMap,
   }) async {
     try {
       final token = _getSocialAccessToken();
@@ -1362,8 +1366,20 @@ class SocialRepository {
         fields['post_color'] = backgroundColorId;
       }
 
+      if (feelingType != null &&
+          feelingType.isNotEmpty &&
+          feelingValue != null &&
+          feelingValue.trim().isNotEmpty) {
+        fields['feeling_type'] = feelingType;
+        fields['feeling'] = feelingValue.trim();
+      }
+
       if (groupId != null && groupId.trim().isNotEmpty) {
         fields['group_id'] = groupId.trim();
+      }
+
+      if (postMap != null && postMap.trim().isNotEmpty) {
+        fields['postMap'] = postMap.trim();
       }
 
       final List<String> images = imagePaths ?? const [];
@@ -1664,6 +1680,47 @@ class SocialRepository {
     final int? privacyType =
         _coerceInt(map['postPrivacy'] ?? map['privacy_type'] ?? map['privacy']);
 
+    final String? postFeeling =
+        _normalizeString(map['postFeeling'] ?? map['post_feeling']);
+    final String? postTraveling =
+        _normalizeString(map['postTraveling'] ?? map['post_traveling']);
+    final String? postWatching =
+        _normalizeString(map['postWatching'] ?? map['post_watching']);
+    final String? postPlaying =
+        _normalizeString(map['postPlaying'] ?? map['post_playing']);
+    final String? postListening =
+        _normalizeString(map['postListening'] ?? map['post_listening']);
+    final String? postFeelingIcon =
+        _normalizeString(map['postFeelingIcon'] ?? map['post_feeling_icon']);
+    final String? postMapText = _normalizeString(
+      map['postMap'] ?? map['post_map'] ?? map['post_map_text'],
+    );
+    final String? backgroundColorId =
+        _normalizeString(map['color_id'] ?? map['post_color']);
+
+    String? feelingType;
+    String? feelingValue;
+    String? feelingIconName;
+
+    if (postFeeling != null && postFeeling.isNotEmpty) {
+      feelingType = SocialFeelingType.feelings;
+      feelingValue = postFeeling;
+      feelingIconName = postFeelingIcon ??
+          SocialFeelingConstants.iconNameForFeeling(postFeeling);
+    } else if (postTraveling != null && postTraveling.isNotEmpty) {
+      feelingType = SocialFeelingType.traveling;
+      feelingValue = postTraveling;
+    } else if (postWatching != null && postWatching.isNotEmpty) {
+      feelingType = SocialFeelingType.watching;
+      feelingValue = postWatching;
+    } else if (postPlaying != null && postPlaying.isNotEmpty) {
+      feelingType = SocialFeelingType.playing;
+      feelingValue = postPlaying;
+    } else if (postListening != null && postListening.isNotEmpty) {
+      feelingType = SocialFeelingType.listening;
+      feelingValue = postListening;
+    }
+
     SocialPost? sharedPost;
     if (includeSharedInfo) {
       final sharedRaw = map['shared_info'];
@@ -1725,6 +1782,11 @@ class SocialRepository {
       pageId: pageId,
       privacyType: privacyType,
       mentions: mentions,
+      feelingType: feelingType,
+      feelingValue: feelingValue,
+      feelingIconName: feelingIconName,
+      postMap: postMapText,
+      backgroundColorId: backgroundColorId,
     );
   }
 

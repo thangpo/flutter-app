@@ -94,7 +94,7 @@ class SocialController with ChangeNotifier {
   bool isReportBusy(String userId) => _reportBusy.contains(userId);
   List<SocialPhoto> _profilePhotos = <SocialPhoto>[];
   bool _loadingProfilePhotos = false;
-  String? _photosOffset;     // nếu backend trả offset/id tiếp theo
+  String? _photosOffset; // nếu backend trả offset/id tiếp theo
   bool _hasMoreProfilePhotos = true;
   String? _photosForUserId;
 
@@ -102,13 +102,12 @@ class SocialController with ChangeNotifier {
   bool get isLoadingProfilePhotos => _loadingProfilePhotos;
   bool get hasMoreProfilePhotos => _hasMoreProfilePhotos;
 
-
   // --- REELS STATE ---
   List<SocialReel> _profileReels = <SocialReel>[];
   bool _loadingProfileReels = false;
-  String? _reelsOffset;             // nếu backend có trả offset/id trang tiếp theo
+  String? _reelsOffset; // nếu backend có trả offset/id trang tiếp theo
   bool _hasMoreProfileReels = true;
-  String? _reelsForUserId;          // cache theo user đang xem
+  String? _reelsForUserId; // cache theo user đang xem
 
   List<SocialReel> get profileReels => List.unmodifiable(_profileReels);
   bool get isLoadingProfileReels => _loadingProfileReels;
@@ -116,7 +115,6 @@ class SocialController with ChangeNotifier {
   String? get reelsForUserId => _reelsForUserId;
 
   //end
-
 
   bool get hasMoreFollowers =>
       _followersAfter != null && _followersAfter!.isNotEmpty;
@@ -468,6 +466,7 @@ class SocialController with ChangeNotifier {
       rethrow;
     }
   }
+
   //photo
   Future<void> refreshProfilePhotos({String? targetUserId}) async {
     if (_loadingProfilePhotos) return;
@@ -478,7 +477,8 @@ class SocialController with ChangeNotifier {
 
     try {
       final photos = await service.getUserPhotos(
-        targetUserId: targetUserId ?? _profileHeaderUser?.id ?? _currentUser?.id,
+        targetUserId:
+            targetUserId ?? _profileHeaderUser?.id ?? _currentUser?.id,
         limit: 35,
         offset: null,
       );
@@ -502,7 +502,8 @@ class SocialController with ChangeNotifier {
 
     try {
       final photos = await service.getUserPhotos(
-        targetUserId: targetUserId ?? _profileHeaderUser?.id ?? _currentUser?.id,
+        targetUserId:
+            targetUserId ?? _profileHeaderUser?.id ?? _currentUser?.id,
         limit: 35,
         offset: _photosOffset,
       );
@@ -519,8 +520,8 @@ class SocialController with ChangeNotifier {
     }
   }
 
-
-  Future<void> refreshProfileReels({String? targetUserId, int limit = 20}) async {
+  Future<void> refreshProfileReels(
+      {String? targetUserId, int limit = 20}) async {
     if (_loadingProfileReels) return;
 
     final String? viewedId =
@@ -564,8 +565,8 @@ class SocialController with ChangeNotifier {
     }
   }
 
-
-  Future<void> loadMoreProfileReels({String? targetUserId, int limit = 20}) async {
+  Future<void> loadMoreProfileReels(
+      {String? targetUserId, int limit = 20}) async {
     if (_loadingProfileReels || !_hasMoreProfileReels) return;
 
     final String? viewedId =
@@ -601,8 +602,6 @@ class SocialController with ChangeNotifier {
       notifyListeners();
     }
   }
-
-
 
   //report user
   /// Trả về message từ server (nếu có), đồng thời show snackbar nếu có context.
@@ -664,7 +663,6 @@ class SocialController with ChangeNotifier {
   }
 
   //photo
-
 
   //edit prodile user by aoanhan
 
@@ -1084,7 +1082,10 @@ class SocialController with ChangeNotifier {
     String? videoThumbnailPath,
     int privacy = 0,
     String? backgroundColorId,
+    String? feelingType,
+    String? feelingValue,
     String? groupId,
+    String? postMap,
   }) async {
     if (_creatingPost) return null;
     _creatingPost = true;
@@ -1097,7 +1098,10 @@ class SocialController with ChangeNotifier {
         videoThumbnailPath: videoThumbnailPath,
         privacy: privacy,
         backgroundColorId: backgroundColorId,
+        feelingType: feelingType,
+        feelingValue: feelingValue,
         groupId: groupId,
+        postMap: postMap,
       );
       final SocialPost normalized = groupId != null
           ? post.copyWith(

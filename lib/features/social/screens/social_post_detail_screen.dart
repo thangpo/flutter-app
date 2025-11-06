@@ -2,7 +2,6 @@ import 'package:flutter_sixvalley_ecommerce/features/product_details/controllers
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_html/flutter_html.dart';
 import 'package:flutter_sixvalley_ecommerce/di_container.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_comment.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
@@ -18,10 +17,11 @@ import 'package:flutter_sixvalley_ecommerce/features/product_details/screens/pro
 import 'package:flutter_sixvalley_ecommerce/helper/price_converter.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/share_post_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/shared_post_preview.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/social_feeling_helper.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/social_post_media.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/live_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/utils/mention_formatter.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/widgets/social_post_text_block.dart';
 
 enum CommentSortOrder { newest, oldest }
 
@@ -356,6 +356,8 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                 ? current
                 : (p.sharedPost != null ? p : current);
             final onSurface = Theme.of(ctx).colorScheme.onSurface;
+            final String? location = displayPost.postMap?.trim();
+            final bool hasLocation = location != null && location.isNotEmpty;
 
             return Row(
               children: [
@@ -393,6 +395,33 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                           style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
                                 color: onSurface.withOpacity(.6),
                               ),
+                        ),
+                      if (hasLocation)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.place_outlined,
+                                size: 14,
+                                color: onSurface.withOpacity(.65),
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  location!,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(ctx)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: onSurface.withOpacity(.75),
+                                      ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       if (displayPost.sharedPost != null)
                         Text(
@@ -511,58 +540,64 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                             final bool showShares = shareCount > 0;
                             final bool showStats =
                                 showReactions || showComments || showShares;
+                            final bool hasFeeling =
+                                SocialFeelingHelper.hasFeeling(displayPost);
 
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                if ((postText ?? '').isNotEmpty) ...[
+                                if (hasFeeling)
                                   Padding(
                                     padding: const EdgeInsets.symmetric(
-                                        horizontal: 12),
-                                    child: Builder(
-                                      builder: (BuildContext context) {
-                                        final SocialController controller =
-                                            context.read<SocialController>();
-                                        final String formatted =
-                                            MentionFormatter.decorate(
-                                                postText!, controller,
-                                                mentions: current.mentions);
-                                        return Html(
-                                          data: formatted,
-                                          style: {
-                                            'body': Style(
-                                              color: onSurface,
-                                              fontSize: FontSize(15),
-                                              lineHeight: LineHeight(1.35),
-                                              margin: Margins.zero,
-                                              padding: HtmlPaddings.zero,
-                                            ),
-                                            'a.tagged-user': Style(
+                                        horizontal: 12, vertical: 6),
+                                    child: Row(
+                                      children: [
+                                        Builder(
+                                          builder: (context) {
+                                            final String? emoji =
+                                                SocialFeelingHelper
+                                                    .emojiForPost(displayPost);
+                                            if (emoji != null) {
+                                              return Text(
+                                                emoji,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .titleMedium
+                                                    ?.copyWith(fontSize: 20),
+                                              );
+                                            }
+                                            return Icon(
+                                              SocialFeelingHelper.iconForPost(
+                                                  displayPost),
+                                              size: 18,
                                               color: Theme.of(context)
                                                   .colorScheme
                                                   .primary,
-                                              fontWeight: FontWeight.w600,
-                                              textDecoration:
-                                                  TextDecoration.none,
-                                            ),
+                                            );
                                           },
-                                          onLinkTap: (url, _, __) async {
-                                            if (url == null) return;
-                                            if (MentionFormatter.isMentionLink(
-                                                url)) {
-                                              await MentionFormatter
-                                                  .handleMentionTap(
-                                                      context, url);
-                                              return;
-                                            }
-                                            final uri = Uri.parse(url);
-                                            await launchUrl(uri,
-                                                mode: LaunchMode
-                                                    .externalApplication);
-                                          },
-                                        );
-                                      },
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            SocialFeelingHelper.labelForPost(
+                                                    context, displayPost) ??
+                                                '',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodyMedium
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
+                                  ),
+                                if ((postText ?? '').isNotEmpty) ...[
+                                  SocialPostTextBlock(
+                                    post: current,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12),
                                   ),
                                   const SizedBox(height: 12),
                                 ],

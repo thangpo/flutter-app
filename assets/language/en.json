@@ -1166,5 +1166,18 @@
   "events": "Events",
   "video": "Video",
   "no_group_posts": "No group posts",
-  "live_replay": "Live replay"
+  "live_replay": "Live replay",
+
+  "feeling_picker_title": "How are you feeling?",
+  "feeling_picker_input_hint": "Describe it...",
+  "feeling_category_feelings": "Feeling",
+  "feeling_category_traveling": "Traveling",
+  "feeling_category_watching": "Watching",
+  "feeling_category_playing": "Playing",
+  "feeling_category_listening": "Listening",
+  "background_color_only_text": "Background posts can only contain text",
+  "select_background_color": "Select background",
+  "remove_background": "Remove background",
+  "post_background_hint": "Share something...",
+  "apply_background": "Apply"
 }

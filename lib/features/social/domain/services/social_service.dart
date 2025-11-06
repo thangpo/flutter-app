@@ -751,7 +751,6 @@ class SocialService implements SocialServiceInterface {
     throw Exception('Toggle follow failed');
   }
 
-
   // report user 05/11/2025
   @override
   Future<String> reportUser({
@@ -775,18 +774,18 @@ class SocialService implements SocialServiceInterface {
 
         if (code == 200 && apiStatus == 200) {
           final msg = (data['message'] ??
-              data['api_text'] ??
-              data['message_text'] ??
-              'Báo cáo người dùng thành công')
+                  data['api_text'] ??
+                  data['message_text'] ??
+                  'Báo cáo người dùng thành công')
               .toString();
           return msg;
         }
 
         // server trả 200 nhưng payload báo lỗi
         final err = (data['errors']?['error_text'] ??
-            data['error'] ??
-            data['message'] ??
-            'Không thể gửi báo cáo người dùng')
+                data['error'] ??
+                data['message'] ??
+                'Không thể gửi báo cáo người dùng')
             .toString();
         throw Exception(err);
       } catch (_) {
@@ -814,9 +813,12 @@ class SocialService implements SocialServiceInterface {
       offset: offset,
     );
 
-    if (resp.isSuccess && resp.response != null && resp.response!.statusCode == 200) {
+    if (resp.isSuccess &&
+        resp.response != null &&
+        resp.response!.statusCode == 200) {
       final data = resp.response!.data; // Map<String, dynamic>
-      final baseUrl = AppConstants.socialBaseUrl.replaceAll(RegExp(r'/$'), '') + '/';
+      final baseUrl =
+          AppConstants.socialBaseUrl.replaceAll(RegExp(r'/$'), '') + '/';
 
       final photos = SocialPhoto.parseFromGetAlbums(
         data,
@@ -830,7 +832,6 @@ class SocialService implements SocialServiceInterface {
 
   //reefs
 
-
 // service impl
   @override
   Future<List<SocialReel>> getUserReels({
@@ -840,21 +841,19 @@ class SocialService implements SocialServiceInterface {
   }) async {
     final resp = await socialRepository.getAlbumUser(
       targetUserId: targetUserId,
-      type: 'video',     // hoặc 'video' tùy API của bạn
+      type: 'video', // hoặc 'video' tùy API của bạn
       limit: limit,
       offset: offset,
     );
 
     if (resp.isSuccess && resp.response?.statusCode == 200) {
       final data = resp.response!.data;
-      final baseUrl = AppConstants.socialBaseUrl.replaceAll(RegExp(r'/$'), '') + '/';
+      final baseUrl =
+          AppConstants.socialBaseUrl.replaceAll(RegExp(r'/$'), '') + '/';
       return SocialReel.parseFromGetAlbums(data, baseUrl: baseUrl);
     }
     throw Exception(resp.error ?? 'getUserReels failed');
   }
-
-
-
 
   //block user 11/04/2025
   @override
@@ -1284,7 +1283,10 @@ class SocialService implements SocialServiceInterface {
     String? videoThumbnailPath,
     int privacy = 0,
     String? backgroundColorId,
+    String? feelingType,
+    String? feelingValue,
     String? groupId,
+    String? postMap,
   }) async {
     final resp = await socialRepository.createPost(
       text: text,
@@ -1293,7 +1295,10 @@ class SocialService implements SocialServiceInterface {
       videoThumbnailPath: videoThumbnailPath,
       privacy: privacy,
       backgroundColorId: backgroundColorId,
+      feelingType: feelingType,
+      feelingValue: feelingValue,
       groupId: groupId,
+      postMap: postMap,
     );
     if (resp.isSuccess && resp.response != null) {
       final data = resp.response!.data;
