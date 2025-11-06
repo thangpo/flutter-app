@@ -13,11 +13,10 @@ class CreateAdsScreen extends StatefulWidget {
 class _CreateAdsScreenState extends State<CreateAdsScreen> {
   final _formKey = GlobalKey<FormState>();
   final ImagePicker _picker = ImagePicker();
-  final PageController _pageController = PageController(); // ĐÚNG: PageController
+  final PageController _pageController = PageController();
 
   int _currentStep = 0;
 
-  // === DỮ LIỆU CHUNG ===
   File? _mediaFile;
   final _nameCtrl = TextEditingController();
   final _headlineCtrl = TextEditingController();
@@ -25,7 +24,7 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
   DateTime? _startDate;
   DateTime? _endDate;
   final _websiteCtrl = TextEditingController();
-  final _pageTextCtrl = TextEditingController(); // ĐỔI TÊN tránh trùng
+  final _pageTextCtrl = TextEditingController();
   final _locationCtrl = TextEditingController();
   final List<String> _audienceList = [];
   final _audienceCtrl = TextEditingController();
@@ -36,7 +35,7 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
 
   @override
   void dispose() {
-    _pageController.dispose(); // Chỉ dispose PageController
+    _pageController.dispose();
     _nameCtrl.dispose();
     _headlineCtrl.dispose();
     _descCtrl.dispose();
@@ -48,7 +47,6 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
     super.dispose();
   }
 
-  // === CHỌN ẢNH ===
   Future<void> _pickImage() async {
     final XFile? image = await _picker.pickImage(
       source: ImageSource.gallery,
@@ -60,7 +58,6 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
     }
   }
 
-  // === CHỌN NGÀY ===
   Future<void> _pickDate(bool isStart) async {
     final date = await showDatePicker(
       context: context,
@@ -76,7 +73,6 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
     }
   }
 
-  // === CHUYỂN BƯỚC ===
   void _next() {
     if (_currentStep < 2) {
       _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.ease);
@@ -122,7 +118,6 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
           key: _formKey,
           child: Column(
             children: [
-              // === TIẾN ĐỘ ===
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
@@ -130,8 +125,6 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
                   children: List.generate(3, (i) => _buildStepIndicator(i)),
                 ),
               ),
-
-              // === NỘI DUNG 3 BƯỚC ===
               Expanded(
                 child: PageView(
                   controller: _pageController,
@@ -150,7 +143,7 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
                       startDate: _startDate,
                       endDate: _endDate,
                       websiteCtrl: _websiteCtrl,
-                      pageCtrl: _pageTextCtrl, // DÙNG TÊN MỚI
+                      pageCtrl: _pageTextCtrl,
                       onPickStartDate: () => _pickDate(true),
                       onPickEndDate: () => _pickDate(false),
                       isDark: isDark,
@@ -181,8 +174,6 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
                   ],
                 ),
               ),
-
-              // === NÚT ĐIỀU KHIỂN ===
               Container(
                 padding: const EdgeInsets.all(16),
                 child: Row(
@@ -229,10 +220,6 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
     );
   }
 }
-
-// ====================================================================
-// WIDGET 1: HÌNH ẢNH + TÊN CÔNG TY
-// ====================================================================
 class Step1Widget extends StatelessWidget {
   final File? mediaFile;
   final TextEditingController nameCtrl;
@@ -302,10 +289,6 @@ class Step1Widget extends StatelessWidget {
     );
   }
 }
-
-// ====================================================================
-// WIDGET 2: NỘI DUNG CHIẾN DỊCH
-// ====================================================================
 class Step2Widget extends StatelessWidget {
   final TextEditingController headlineCtrl, descCtrl, websiteCtrl, pageCtrl;
   final DateTime? startDate, endDate;
@@ -388,10 +371,6 @@ class Step2Widget extends StatelessWidget {
     );
   }
 }
-
-// ====================================================================
-// WIDGET 3: ĐỊA ĐIỂM, ĐỐI TƯỢNG, NGÂN SÁCH...
-// ====================================================================
 class Step3Widget extends StatelessWidget {
   final TextEditingController locationCtrl, audienceCtrl, budgetCtrl;
   final List<String> audienceList;
