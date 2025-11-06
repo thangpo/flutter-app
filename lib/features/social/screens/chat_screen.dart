@@ -1,19 +1,26 @@
+// G:\flutter-app\lib\features\social\screens\chat_screen.dart
+import 'dart:convert';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:provider/provider.dart';
 
+// UI + data
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/chat_message_bubble.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_chat_repository.dart';
+
+// 🔔 Calling
+import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/call_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/call_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/call_invite.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/incoming_call_screen.dart';
-import 'package:encrypt/encrypt.dart' as enc;
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/call_screen.dart';
 
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:encrypt/encrypt.dart' as enc;
 
 
 class ChatScreen extends StatefulWidget {
@@ -36,11 +43,9 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final repo = SocialChatRepository();
-  int? _inviteSentForCallId;
+
   final _inputCtrl = TextEditingController();
   final _scroll = ScrollController();
-
-final Set<int> _handledCallIds = {}; // chặn popup lặp
 
   bool _loading = false;
   bool _sending = false;
@@ -93,6 +98,48 @@ final Set<int> _handledCallIds = {}; // chặn popup lặp
   }
 
   // ===== utils =====
+
+  String _plainTextOf(Map<String, dynamic> m) {
+    final display = (m['display_text'] ?? '').toString();
+    if (display.isNotEmpty) return display;
+
+    final raw = (m['text'] ?? '').toString();
+    final timeStr = '${m['time'] ?? ''}';
+    final dec = _tryDecryptWoWonder(raw, timeStr);
+    return (dec ?? raw).trim();
+  }
+
+  /// Giải mã theo chuẩn WoWonder: AES-ECB, key = 16 byte từ 'time'
+  String? _tryDecryptWoWonder(String base64Text, String timeStr) {
+    if (base64Text.isEmpty || timeStr.isEmpty) return null;
+    final keyStr = timeStr.padRight(16, '0').substring(0, 16);
+    try {
+      final data = base64.decode(base64.normalize(base64Text));
+      // Thử PKCS7
+      final e1 = enc.Encrypter(enc.AES(
+        enc.Key(Uint8List.fromList(utf8.encode(keyStr))),
+        mode: enc.AESMode.ecb,
+        padding: 'PKCS7',
+      ));
+      final p1 = e1.decrypt(enc.Encrypted(data));
+      return p1.replaceAll('\x00', '').trim();
+    } catch (_) {
+      try {
+        final data = base64.decode(base64.normalize(base64Text));
+        // Thử no padding
+        final e2 = enc.Encrypter(enc.AES(
+          enc.Key.fromUtf8(keyStr),
+          mode: enc.AESMode.ecb,
+          padding: null,
+        ));
+        final p2 = e2.decrypt(enc.Encrypted(data));
+        return p2.replaceAll('\x00', '').trim();
+      } catch (_) {
+        return null;
+      }
+    }
+  }
+
   int _msgId(Map<String, dynamic> m) =>
       int.tryParse('${m['id'] ?? m['message_id'] ?? m['msg_id'] ?? ''}') ?? 0;
 
@@ -140,80 +187,6 @@ final Set<int> _handledCallIds = {}; // chặn popup lặp
     setState(() {});
   }
 
-  void _checkIncomingInviteAndPrompt() {
-    for (var i = _messages.length - 1; i >= 0; i--) {
-      final msg = _messages[i];
-
-      // chỉ nhận invite từ đối phương
-      final isMe = (msg['position'] == 'right');
-      if (isMe) continue;
-
-      final plain = _plainTextOf(msg) ?? '';
-      final invite = CallInvite.tryParse(plain);
-      if (invite == null || invite.isExpired()) continue;
-      if (_handledCallIds.contains(invite.callId)) continue;
-
-      _handledCallIds.add(invite.callId);
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => IncomingCallScreen(
-              callId: invite.callId,
-              mediaType: invite.media,
-              callerName: widget.peerName,
-              callerAvatar: widget.peerAvatar,
-            ),
-          ),
-        );
-      });
-      break;
-    }
-  }
-
-
-  String? _plainTextOf(Map<String, dynamic> msg) {
-    final disp = (msg['display_text'] ?? '').toString();
-    if (disp.isNotEmpty) return disp;
-
-    final raw = (msg['text'] ?? '').toString();
-    if (raw.isEmpty) return null;
-
-    final timeKey = (msg['time'] ?? '').toString();
-    return _tryDecryptWoText(raw, timeKey) ?? raw;
-  }
-
-  String? _tryDecryptWoText(String base64Text, String timeKey) {
-    try {
-      final clean = base64Text.replaceAll(RegExp(r'[^A-Za-z0-9+/=]'), '');
-      final k16 = timeKey.padRight(16, '0').substring(0, 16);
-
-      try {
-        final e1 = enc.Encrypter(
-          enc.AES(enc.Key.fromUtf8(k16),
-              mode: enc.AESMode.ecb, padding: 'PKCS7'),
-        );
-        return _stripZeros(e1.decrypt64(clean));
-      } catch (_) {}
-
-      try {
-        final e2 = enc.Encrypter(
-          enc.AES(enc.Key.fromUtf8(k16), mode: enc.AESMode.ecb, padding: null),
-        );
-        return _stripZeros(e2.decrypt64(clean));
-      } catch (_) {}
-
-      return null;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  String _stripZeros(String s) => s.replaceAll(RegExp(r'\x00+$'), '');
-
-
   Future<bool> _ensureMic() async {
     final st = await Permission.microphone.status;
     if (st.isGranted) return true;
@@ -226,7 +199,6 @@ final Set<int> _handledCallIds = {}; // chặn popup lặp
     await _fetchNew();
     await repo.readChats(token: widget.accessToken, peerUserId: _peerId);
     _scrollToBottom(immediate: true); // vào là ở tin mới nhất
-    _checkIncomingInviteAndPrompt(); 
   }
 
   Future<void> _fetchNew() async {
@@ -244,8 +216,6 @@ final Set<int> _handledCallIds = {}; // chặn popup lặp
       _hasMore = list.length >= 30;
       setState(() {});
       _scrollToBottom(immediate: true);
-      _checkIncomingInviteAndPrompt(); // 👈 thêm dòng này
-
     } catch (e) {
       debugPrint('load messages error: $e');
     } finally {
@@ -380,7 +350,6 @@ final Set<int> _handledCallIds = {}; // chặn popup lặp
             _mergeIncoming([sent], toTail: true);
             setState(() {});
             _scrollToBottom();
-            _checkIncomingInviteAndPrompt(); 
           }
         } catch (e) {
           debugPrint('send voice error: $e');
@@ -410,37 +379,58 @@ final Set<int> _handledCallIds = {}; // chặn popup lặp
   Future<void> _onRefresh() async {
     await _fetchNew();
     await repo.readChats(token: widget.accessToken, peerUserId: _peerId);
-    _checkIncomingInviteAndPrompt(); 
   }
 
-  // ====== GỌI 1-1 qua CallController ======
+  // ====== NEW: Bắt đầu cuộc gọi, gửi invite và hiển thị "Đang gọi..." ======
   Future<void> _startCall(String mediaType) async {
     final call = context.read<CallController>();
-    if (!call.ready) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('CallController chưa sẵn sàng')),
-      );
-      return;
-    }
-
-    final calleeId = int.tryParse(_peerId) ?? 0;
-    if (calleeId <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('peerUserId không hợp lệ')),
-      );
-      return;
-    }
-
     try {
-      await call.startCall(calleeId: calleeId, mediaType: mediaType);
-      _showCallingDialog(mediaType: mediaType);
+      if (!call.ready) {
+        await call.init();
+      }
+
+      final calleeId = int.tryParse(_peerId) ?? 0;
+      if (calleeId <= 0) throw 'peerUserId không hợp lệ';
+
+      // 1) Tạo cuộc gọi trên server signaling
+      final callId = await call.startCall(
+        calleeId: calleeId,
+        mediaType: mediaType, // 'audio' | 'video'
+      );
+
+      // 2) Gửi message mời gọi (để bên kia thấy “Cuộc gọi thoại/video”)
+      final payload = {
+        'type': 'call_invite',
+        'call_id': callId, // <- giờ là int hợp lệ
+        'media': mediaType, // 'audio' | 'video'
+        'ts': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      };
+
+
+
+      final sent = await repo.sendMessage(
+        token: widget.accessToken,
+        peerUserId: _peerId,
+        text: jsonEncode(payload),  
+      );
+      if (sent != null) {
+        _mergeIncoming([sent], toTail: true);
+        setState(() {});
+        _scrollToBottom();
+      }
+
+      // 3) Mở dialog chờ trả lời
+      if (mounted) _showCallingDialog(mediaType: mediaType);
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lỗi tạo cuộc gọi: $e')),
+        SnackBar(content: Text('Không thể bắt đầu cuộc gọi: $e')),
       );
     }
   }
 
+
+  // ====== Calling dialog (vào CallScreen sau khi answer) ======
   void _showCallingDialog({required String mediaType}) {
     showDialog(
       context: context,
@@ -448,24 +438,6 @@ final Set<int> _handledCallIds = {}; // chặn popup lặp
       builder: (ctx) {
         return Consumer<CallController>(
           builder: (ctx, call, _) {
-            // 👉 GỬI CALL-INVITE đúng 1 lần / mỗi call_id
-            final callId = call.activeCallId;
-            if (callId != null && _inviteSentForCallId != callId) {
-              _inviteSentForCallId = callId;
-              final inviteText = CallInvite.encode(
-                callId: callId,
-                media: call.activeMediaType, // 'audio' | 'video'
-              );
-              // gửi tin nhắn mời gọi vào chat (không chặn UI)
-              repo
-                  .sendMessage(
-                    token: widget.accessToken,
-                    peerUserId: _peerId,
-                    text: inviteText,
-                  )
-                  .catchError((e) => debugPrint('send invite error: $e'));
-            }
-
             if (call.callStatus == 'answered') {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
@@ -492,11 +464,9 @@ final Set<int> _handledCallIds = {}; // chặn popup lặp
             }
 
             return AlertDialog(
-              title: Text(
-                mediaType == 'audio'
-                    ? 'Đang gọi thoại...'
-                    : 'Đang gọi video...',
-              ),
+              title: Text(mediaType == 'audio'
+                  ? 'Đang gọi thoại...'
+                  : 'Đang gọi video...'),
               content: const Text('Chờ đối phương trả lời...'),
               actions: [
                 TextButton(
@@ -549,18 +519,27 @@ final Set<int> _handledCallIds = {}; // chặn popup lặp
         ),
         elevation: 0,
         centerTitle: false,
-        // 2 nút gọi nhanh (thoại / video)
+
+        // 👇 Nút gọi thoại & video
         actions: [
-          IconButton(
-            tooltip: 'Gọi thoại',
-            icon: const Icon(Icons.call),
-            onPressed: () => _startCall('audio'),
+          Consumer<CallController>(
+            builder: (ctx, call, _) {
+              final enabled = call.ready;
+              return Row(children: [
+                IconButton(
+                  tooltip: 'Gọi thoại',
+                  icon: const Icon(Icons.call),
+                  onPressed: enabled ? () => _startCall('audio') : null,
+                ),
+                IconButton(
+                  tooltip: 'Gọi video',
+                  icon: const Icon(Icons.videocam),
+                  onPressed: enabled ? () => _startCall('video') : null,
+                ),
+              ]);
+            },
           ),
-          IconButton(
-            tooltip: 'Gọi video',
-            icon: const Icon(Icons.videocam),
-            onPressed: () => _startCall('video'),
-          ),
+          const SizedBox(width: 4),
         ],
       ),
       body: Stack(
@@ -581,6 +560,52 @@ final Set<int> _handledCallIds = {}; // chặn popup lặp
                     itemBuilder: (ctx, i) {
                       final m = _messages[i];
                       final isMe = (m['position'] == 'right');
+
+                      // 🔍 NEW: Bắt CallInvite trong text/display_text
+                      final dText =
+                          (m['display_text'] ?? m['text'] ?? '').toString();
+                          debugPrint('[INV-DEBUG] plain=${_plainTextOf(m)}');
+                      final inv = CallInvite.tryParse(dText);
+                      if (inv != null && !inv.isExpired()) {
+                        if (!isMe) {
+                          final msgAvatar =
+                              (m['user_data']?['avatar'] ?? '').toString();
+                          final leftAvatar =
+                              msgAvatar.isNotEmpty ? msgAvatar : peerAvatar;
+
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4.0),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                CircleAvatar(
+                                  radius: 16,
+                                  backgroundImage: leftAvatar.isNotEmpty
+                                      ? NetworkImage(leftAvatar)
+                                      : null,
+                                  child: leftAvatar.isEmpty
+                                      ? const Icon(Icons.person, size: 18)
+                                      : null,
+                                ),
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: _buildCallInviteTile(inv, isMe: false),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              Flexible(
+                                  child: _buildCallInviteTile(inv, isMe: true)),
+                            ],
+                          ),
+                        );
+                      }
 
                       // avatar trái cho đối phương (kiểu Messenger)
                       if (!isMe) {
@@ -719,6 +744,45 @@ final Set<int> _handledCallIds = {}; // chặn popup lặp
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  // ===== NEW: tile hiển thị lời mời gọi + mở IncomingCallScreen =====
+  Widget _buildCallInviteTile(CallInvite inv, {required bool isMe}) {
+    final isVideo = inv.mediaType == 'video';
+    final bg = isMe ? const Color(0xFF2F80ED) : const Color(0xFFEFEFEF);
+    final fg = isMe ? Colors.white : Colors.black87;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => IncomingCallScreen(
+              callId: inv.callId,
+              mediaType: inv.mediaType,
+              peerName: widget.peerName, // đổi về peerName
+              peerAvatar: widget.peerAvatar, 
+            ),
+          ),
+        );
+      },
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 260),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration:
+            BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(isVideo ? Icons.videocam : Icons.call, color: fg, size: 16),
+            const SizedBox(width: 8),
+            Text(isVideo ? 'Cuộc gọi video' : 'Cuộc gọi thoại',
+                style: TextStyle(color: fg)),
+          ],
+        ),
       ),
     );
   }

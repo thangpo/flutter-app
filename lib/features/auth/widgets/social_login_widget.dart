@@ -362,9 +362,6 @@ Future<void> googleLogin(BuildContext context) async {
       socialLogin.name = name;
 
       await Provider.of<AuthController>(Get.context!, listen: false).socialLogin(socialLogin, route);
-      // ✅ Sau khi đăng nhập thành công → gửi token FCM lên server
-      await FirebaseTokenUpdater.update();
-
     }
   } catch (er) {
     debugPrint('access token error is : $er');
@@ -388,8 +385,6 @@ Future<void> facebookLogin(BuildContext context) async {
       socialLogin.token = token;
       socialLogin.uniqueId = id;
       await Provider.of<AuthController>(Get.context!, listen: false).socialLogin(socialLogin, route);
-      // ✅ Sau khi đăng nhập thành công → gửi token FCM lên server
-      await FirebaseTokenUpdater.update();
 
     }
   } catch (er) {
@@ -419,8 +414,6 @@ Future<void> appleLogin(BuildContext context) async {
     socialLogin.uniqueId = id;
     socialLogin.name = credential.givenName ?? '';
     await Provider.of<AuthController>(Get.context!, listen: false).socialLogin(socialLogin, route);
-// ✅ Sau khi đăng nhập thành công → gửi token FCM lên server
-    await FirebaseTokenUpdater.update();
 
     log('id token =>${credential.identityToken}\n===> Identifier${credential.userIdentifier}\n==>Given Name ${credential.familyName}');
   } catch (er) {
