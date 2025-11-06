@@ -158,14 +158,14 @@ Future<void> main() async {
   HttpOverrides.global = MyHttpOverrides();
   WidgetsFlutterBinding.ensureInitialized();
   // Khởi tạo Firebase một lần duy nhất.
-  if(Firebase.apps.isEmpty) {
-    if(Platform.isAndroid) {
-      await Firebase.initializeApp(options: const FirebaseOptions(
-          apiKey: AppConstants.fcmApiKey,
-          appId: AppConstants.fcmMobilesdkAppId,
-          messagingSenderId: AppConstants.fcmProjectNumber,
-          projectId: AppConstants.fcmProjectId)
-      );
+  if (Firebase.apps.isEmpty) {
+    if (Platform.isAndroid) {
+      await Firebase.initializeApp(
+          options: const FirebaseOptions(
+              apiKey: AppConstants.fcmApiKey,
+              appId: AppConstants.fcmMobilesdkAppId,
+              messagingSenderId: AppConstants.fcmProjectNumber,
+              projectId: AppConstants.fcmProjectId));
     }
   }
   await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
@@ -174,7 +174,8 @@ Future<void> main() async {
     sound: true,
   );
 
-  NotificationSettings settings = await FirebaseMessaging.instance.requestPermission(
+  NotificationSettings settings =
+      await FirebaseMessaging.instance.requestPermission(
     alert: true,
     announcement: false,
     badge: true,
@@ -189,15 +190,13 @@ Future<void> main() async {
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     await FirebaseTokenUpdater.update();
   });
- 
+
   await flutterLocalNotificationsPlugin
       .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(_callInviteChannel);
 
-  
-  FirebaseMessaging.onBackgroundMessage(
-      _firebaseMessagingBackgroundHandler); 
+  FirebaseMessaging.onBackgroundMessage(myBackgroundMessageHandler);
   NotificationBody? body;
   try {
     final RemoteMessage? remoteMessage =
@@ -270,8 +269,7 @@ Future<void> main() async {
         );
       }
     });
-    
-      } catch (_) {}
+  } catch (_) {}
 
   // await NotificationHelper.initialize(flutterLocalNotificationsPlugin);
   runApp(MultiProvider(
@@ -337,17 +335,12 @@ Future<void> main() async {
       ChangeNotifierProvider(
         create: (_) => GroupChatController(GroupChatRepository()),
       ),
-
-      
       ChangeNotifierProvider(
         create: (_) => CallController(
           signaling: WebRTCSignalingRepository(
-            baseUrl: AppConstants
-                .socialBaseUrl, 
-            serverKey:
-                AppConstants.socialServerKey,
-            accessTokenKey:
-                AppConstants.socialAccessToken, 
+            baseUrl: AppConstants.socialBaseUrl,
+            serverKey: AppConstants.socialServerKey,
+            accessTokenKey: AppConstants.socialAccessToken,
           ),
         )..init(),
       ),
