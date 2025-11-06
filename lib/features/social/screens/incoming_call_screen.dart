@@ -1,22 +1,25 @@
-// lib/features/social/screens/incoming_call_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'package:flutter_sixvalley_ecommerce/features/social/controllers/call_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/call_screen.dart';
+import '../controllers/call_controller.dart';
+import 'call_screen.dart';
 
 class IncomingCallScreen extends StatefulWidget {
   final int callId;
   final String mediaType; // 'audio' | 'video'
-  final String? peerName;
-  final String? peerAvatar;
+  final String? callerName; // nếu bạn đã có
+  final String? peerName; // <<< THÊM
+  final String? peerAvatar; 
+  final String? callerAvatar;
 
   const IncomingCallScreen({
     super.key,
     required this.callId,
     required this.mediaType,
-    this.peerName,
-    this.peerAvatar,
+    this.callerName,
+    this.peerName, // <<< THÊM
+    this.peerAvatar,  
+    this.callerAvatar,
   });
 
   @override
@@ -24,132 +27,106 @@ class IncomingCallScreen extends StatefulWidget {
 }
 
 class _IncomingCallScreenState extends State<IncomingCallScreen> {
-  @override
-  void initState() {
-    super.initState();
-    // attach to the ringing call so controller starts polling
-    context
-        .read<CallController>()
-        .attachIncoming(callId: widget.callId, mediaType: widget.mediaType);
-  }
+  bool _handling = false;
 
-  Future<void> _answer() async {
-    final call = context.read<CallController>();
-    try {
-      await call.action('answer');
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => CallScreen(
-            isCaller: false,
-            callId: widget.callId,
-            mediaType: widget.mediaType,
-            peerName: widget.peerName,
-            peerAvatar: widget.peerAvatar,
-          ),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Không thể trả lời: $e')));
-    }
-  }
+  Future<void> _onAccept() async {
+    if (_handling) return;
+    setState(() => _handling = true);
 
-  Future<void> _decline() async {
+    // Đánh dấu answered trên server (nếu fail cũng không sao, vào CallScreen vẫn xử lý tiếp)
     try {
-      await context.read<CallController>().action('decline');
+      await context.read<CallController>().action('answer');
     } catch (_) {}
-    if (mounted) Navigator.pop(context);
-  }
 
-  @override
-  Widget build(BuildContext context) {
-    final isVideo = widget.mediaType == 'video';
-    final name = widget.peerName ?? 'Cuộc gọi đến';
-
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Consumer<CallController>(
-          builder: (ctx, call, _) {
-            // auto-close if caller ended/declined
-            if (call.callStatus == 'ended' || call.callStatus == 'declined') {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
-              });
-            }
-
-            return Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const SizedBox(height: 24),
-                CircleAvatar(
-                  radius: 56,
-                  backgroundImage: (widget.peerAvatar?.isNotEmpty ?? false)
-                      ? NetworkImage(widget.peerAvatar!)
-                      : null,
-                  child: (widget.peerAvatar?.isEmpty ?? true)
-                      ? const Icon(Icons.person, size: 56)
-                      : null,
-                ),
-                const SizedBox(height: 16),
-                Text(name,
-                    style: const TextStyle(color: Colors.white, fontSize: 22)),
-                const SizedBox(height: 8),
-                Text(isVideo ? 'Cuộc gọi video' : 'Cuộc gọi thoại',
-                    style: const TextStyle(color: Colors.white70)),
-                const SizedBox(height: 40),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _bigRoundBtn(
-                      icon: Icons.call_end,
-                      color: Colors.red,
-                      onTap: _decline,
-                      label: 'Từ chối',
-                    ),
-                    const SizedBox(width: 48),
-                    _bigRoundBtn(
-                      icon: isVideo ? Icons.videocam : Icons.call,
-                      color: Colors.green,
-                      onTap: _answer,
-                      label: 'Trả lời',
-                    ),
-                  ],
-                ),
-              ],
-            );
-          },
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CallScreen(
+          isCaller: false, // callee
+          callId: widget.callId,
+          mediaType: widget.mediaType, // 'audio' | 'video'
+          peerName: widget.callerName,
+          peerAvatar: widget.callerAvatar,
         ),
       ),
     );
   }
 
-  Widget _bigRoundBtn({
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTap,
-    required String label,
-  }) {
-    return Column(
-      children: [
-        Material(
-          color: color,
-          shape: const CircleBorder(),
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.all(22),
-              child: Icon(icon, color: Colors.white, size: 32), // <-- use param
+  Future<void> _onDecline() async {
+    if (_handling) return;
+    setState(() => _handling = true);
+
+    try {
+      await context.read<CallController>().action('decline');
+    } catch (_) {}
+
+    if (!mounted) return;
+    Navigator.of(context).maybePop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isVideo = widget.mediaType == 'video';
+    final name = widget.callerName ?? 'Cuộc gọi đến';
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Positioned.fill(child: Container(color: Colors.black)),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 40),
+                CircleAvatar(
+                  radius: 56,
+                  backgroundColor: Colors.white12,
+                  child: Icon(
+                    isVideo ? Icons.videocam : Icons.call,
+                    size: 48,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  isVideo ? 'Video call' : 'Audio call',
+                  style: const TextStyle(color: Colors.white70),
+                ),
+                const SizedBox(height: 40),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    FloatingActionButton(
+                      heroTag: 'decline',
+                      backgroundColor: Colors.red,
+                      onPressed: _onDecline,
+                      child: const Icon(Icons.call_end),
+                    ),
+                    FloatingActionButton(
+                      heroTag: 'accept',
+                      backgroundColor: Colors.green,
+                      onPressed: _onAccept,
+                      child: Icon(isVideo ? Icons.videocam : Icons.call),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ),
+          ],
         ),
-        const SizedBox(height: 8),
-        Text(label, style: const TextStyle(color: Colors.white70)),
-      ],
+      ),
     );
   }
 }
