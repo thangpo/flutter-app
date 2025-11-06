@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/data/datasource/remote/dio/dio_client.dart';
 import 'package:flutter_sixvalley_ecommerce/data/datasource/remote/exception/api_error_handler.dart';
 import 'package:flutter_sixvalley_ecommerce/data/model/api_response.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/post_mention.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_comment.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
@@ -224,26 +225,26 @@ class SocialRepository {
 
   //thêm
   //report user 05/11/2025
-  Future<ApiResponseModel<Response>> reportUser({
-    required String targetUserId,
-    required String text
-})async{
-    try{
-      final token=_getSocialAccessToken();
-      final url='${AppConstants.socialBaseUrl}${AppConstants.socialReportUser}?access_token=$token';
-      final form=FormData.fromMap({
-        'server_key':AppConstants.socialServerKey,
-        'user':targetUserId,
-        'text':text
+  Future<ApiResponseModel<Response>> reportUser(
+      {required String targetUserId, required String text}) async {
+    try {
+      final token = _getSocialAccessToken();
+      final url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialReportUser}?access_token=$token';
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'user': targetUserId,
+        'text': text
       });
-      final res=await dioClient.post(
+      final res = await dioClient.post(
         url,
-        data:form,
+        data: form,
         options: Options(contentType: Headers.multipartFormDataContentType),
       );
       return ApiResponseModel<Response>.withSuccess(res);
     } catch (e) {
-      return ApiResponseModel<Response>.withError(ApiErrorHandler.getMessage(e));
+      return ApiResponseModel<Response>.withError(
+          ApiErrorHandler.getMessage(e));
     }
   }
 
@@ -256,7 +257,8 @@ class SocialRepository {
   }) async {
     try {
       final token = _getSocialAccessToken();
-      final url = '${AppConstants.socialBaseUrl}${AppConstants.socialGetAlbumUser}?access_token=$token';
+      final url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialGetAlbumUser}?access_token=$token';
       final userId = (targetUserId != null && targetUserId.isNotEmpty)
           ? targetUserId
           : _getSocialUserId();
@@ -265,7 +267,7 @@ class SocialRepository {
         'server_key': AppConstants.socialServerKey,
         'user_id': userId,
         'type': type,
-        'limit': limit.toString(),          // <-- thêm
+        'limit': limit.toString(), // <-- thêm
         if (offset != null && offset.isNotEmpty) 'offset': offset, // <-- thêm
       });
 
@@ -276,12 +278,10 @@ class SocialRepository {
       );
       return ApiResponseModel<Response>.withSuccess(res);
     } catch (e) {
-      return ApiResponseModel<Response>.withError(ApiErrorHandler.getMessage(e));
+      return ApiResponseModel<Response>.withError(
+          ApiErrorHandler.getMessage(e));
     }
   }
-
-
-
 
   // block user 04/11/2025 by aoanhan
   Future<ApiResponseModel<Response>> blockUser({
@@ -1444,8 +1444,14 @@ class SocialRepository {
     final String id = (map['post_id'] ?? map['id'] ?? '').toString();
     if (id.isEmpty) return null;
 
-    final String text =
-        (map['postText_API'] ?? map['postText'] ?? '').toString();
+    final String primaryText = (map['postText'] ?? '').toString();
+    final String fallbackText = (map['postText_API'] ?? '').toString();
+    final String text = primaryText.isNotEmpty ? primaryText : fallbackText;
+    final List<PostMention> mentions = _extractPostMentions(
+      map,
+      preferredText: primaryText,
+      fallbackText: fallbackText,
+    );
     final String? originalText = _normalizeString(
       map['OrginaltextDecoded'] ??
           map['Orginaltext'] ??
@@ -1718,6 +1724,7 @@ class SocialRepository {
       rawText: originalText,
       pageId: pageId,
       privacyType: privacyType,
+      mentions: mentions,
     );
   }
 
@@ -3287,6 +3294,136 @@ class SocialRepository {
   //map public
   SocialPost? mapToSocialPost(Map<String, dynamic> raw) {
     return _mapToSocialPost(Map<String, dynamic>.from(raw));
+  }
+
+  List<PostMention> _extractPostMentions(
+    Map<String, dynamic> map, {
+    String? preferredText,
+    String? fallbackText,
+  }) {
+    final String text = (preferredText?.isNotEmpty ?? false)
+        ? preferredText!
+        : (fallbackText ?? '');
+    if (text.isEmpty) return const <PostMention>[];
+
+    final RegExp spanRegex = RegExp(
+      """<span[^>]*class=['"][^'"]*user-popover[^'"]*['"][^>]*data-id=['"](\\d+)['"][^>]*>(.*?)</span>""",
+      caseSensitive: false,
+      dotAll: true,
+    );
+
+    final RegExp dataAjaxRegex = RegExp(
+      """data-ajax=['"]([^'"]+)['"]""",
+      caseSensitive: false,
+    );
+
+    final RegExp hrefRegex = RegExp(
+      """href=['"][^'"]*/([^/'"]+)['"]""",
+      caseSensitive: false,
+    );
+
+    final Map<String, dynamic> mentionUsersRaw = map['mentions_users'] is Map
+        ? Map<String, dynamic>.from(map['mentions_users'] as Map)
+        : const <String, dynamic>{};
+    final Map<String, String> mentionUserLabels = <String, String>{};
+    final Map<String, String> mentionUserOriginal = <String, String>{};
+    mentionUsersRaw.forEach((dynamic key, dynamic value) {
+      if (key == null) return;
+      final String usernameRaw = key.toString();
+      if (usernameRaw.isEmpty) return;
+      final String labelRaw = value == null ? '' : value.toString();
+      final String normalized = usernameRaw.toLowerCase();
+      mentionUserLabels[normalized] =
+          labelRaw.trim().isNotEmpty ? labelRaw.trim() : usernameRaw;
+      mentionUserOriginal[normalized] = usernameRaw;
+    });
+
+    final List<PostMention> mentions = <PostMention>[];
+    final Set<String> seenIds = <String>{};
+    final Set<String> seenUsernames = <String>{};
+
+    final Iterable<RegExpMatch> matches = spanRegex.allMatches(text);
+    for (final RegExpMatch match in matches) {
+      final String id = (match.group(1) ?? '').trim();
+      if (id.isEmpty || seenIds.contains(id)) continue;
+
+      final String spanHtml = match.group(0) ?? '';
+      final String innerHtml = match.group(2) ?? '';
+
+      String? username;
+      final RegExpMatch? dataAjaxMatch = dataAjaxRegex.firstMatch(spanHtml);
+      if (dataAjaxMatch != null) {
+        final String value = dataAjaxMatch.group(1)!;
+        final String query = value.startsWith('?') ? value.substring(1) : value;
+        final String normalized =
+            query.replaceAll('&amp;', '&').replaceAll('&quot;', '"');
+        try {
+          final Uri uri = Uri.parse('https://placeholder/?$normalized');
+          username =
+              uri.queryParameters['u'] ?? uri.queryParameters['username'];
+        } catch (_) {}
+      }
+      if (username == null || username.isEmpty) {
+        final RegExpMatch? hrefMatch = hrefRegex.firstMatch(spanHtml);
+        if (hrefMatch != null) {
+          username = hrefMatch.group(1);
+        }
+      }
+      String? normalizedUsername;
+      if (username != null && username.isNotEmpty) {
+        normalizedUsername = username.toLowerCase();
+        seenUsernames.add(normalizedUsername);
+      }
+
+      String label = '';
+      if (normalizedUsername != null) {
+        label = mentionUserLabels[normalizedUsername] ?? '';
+      }
+      if (label.isEmpty) {
+        label = _stripHtml(innerHtml).trim();
+      }
+      label = label.replaceAll('&nbsp;', ' ').trim();
+      if (label.isEmpty && username != null && username.isNotEmpty) {
+        label = username;
+      }
+      if (label.isEmpty) {
+        label = 'user$id';
+      }
+
+      mentions.add(
+        PostMention(
+          id: id,
+          username: username ??
+              (normalizedUsername != null
+                  ? mentionUserOriginal[normalizedUsername]
+                  : null),
+          label: label,
+        ),
+      );
+      seenIds.add(id);
+    }
+
+    mentionUserLabels.forEach((key, value) {
+      if (seenUsernames.contains(key)) return;
+      final String cleanedValue = value.replaceAll('&nbsp;', ' ').trim();
+      final String label = cleanedValue.isNotEmpty ? cleanedValue : key;
+      final String originalUsername = mentionUserOriginal[key] ?? key;
+      mentions.add(
+        PostMention(
+          id: '',
+          username: originalUsername,
+          label: label,
+        ),
+      );
+      seenUsernames.add(key);
+    });
+
+    return mentions;
+  }
+
+  String _stripHtml(String source) {
+    if (source.isEmpty) return source;
+    return source.replaceAll(RegExp(r'<[^>]+>'), '');
   }
 
   DateTime? _parseCommentDate(dynamic raw) {

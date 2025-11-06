@@ -1,9 +1,13 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/widgets/social_post_media.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/mention_formatter.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/widgets/social_post_media.dart';
 
 class SharedPostPreviewCard extends StatelessWidget {
   final SocialPost post;
@@ -94,25 +98,43 @@ class SharedPostPreviewCard extends StatelessWidget {
               ),
               if ((post.text ?? '').isNotEmpty) ...[
                 const SizedBox(height: 12),
-                Html(
-                  data: post.text!,
-                  style: {
-                    'body': Style(
-                      color: onSurface,
-                      fontSize: FontSize(compact ? 14 : 15),
-                      lineHeight: LineHeight(1.3),
-                      margin: Margins.zero,
-                      padding: HtmlPaddings.zero,
-                    ),
-                  },
-                  onLinkTap: (url, _, __) async {
-                    if (url != null) {
+                Builder(builder: (context) {
+                  final SocialController controller =
+                      context.read<SocialController>();
+                  final String formatted = MentionFormatter.decorate(
+                    post.text!,
+                    controller,
+                    mentions: post.mentions,
+                  );
+                  return Html(
+                    data: formatted,
+                    style: {
+                      'body': Style(
+                        color: onSurface,
+                        fontSize: FontSize(compact ? 14 : 15),
+                        lineHeight: LineHeight(1.3),
+                        margin: Margins.zero,
+                        padding: HtmlPaddings.zero,
+                      ),
+                      'a.tagged-user': Style(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                        textDecoration: TextDecoration.none,
+                      ),
+                    },
+                    onLinkTap: (url, _, __) async {
+                      if (url == null) return;
+                      if (MentionFormatter.isMentionLink(url)) {
+                        await MentionFormatter.handleMentionTap(
+                            context, url);
+                        return;
+                      }
                       final uri = Uri.parse(url);
                       await launchUrl(uri,
                           mode: LaunchMode.externalApplication);
-                    }
-                  },
-                ),
+                    },
+                  );
+                }),
               ],
               if (post.pollOptions != null && post.pollOptions!.isNotEmpty)
                 Padding(

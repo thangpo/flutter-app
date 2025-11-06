@@ -525,7 +525,8 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                             context.read<SocialController>();
                                         final String formatted =
                                             MentionFormatter.decorate(
-                                                postText!, controller);
+                                                postText!, controller,
+                                                mentions: current.mentions);
                                         return Html(
                                           data: formatted,
                                           style: {
@@ -535,6 +536,14 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                               lineHeight: LineHeight(1.35),
                                               margin: Margins.zero,
                                               padding: HtmlPaddings.zero,
+                                            ),
+                                            'a.tagged-user': Style(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .primary,
+                                              fontWeight: FontWeight.w600,
+                                              textDecoration:
+                                                  TextDecoration.none,
                                             ),
                                           },
                                           onLinkTap: (url, _, __) async {

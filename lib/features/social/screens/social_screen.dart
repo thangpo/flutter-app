@@ -1004,6 +1004,7 @@ class SocialPostCard extends StatelessWidget {
                   final String formatted = MentionFormatter.decorate(
                     post.text!,
                     controller,
+                    mentions: post.mentions,
                   );
                   return Html(
                     data: formatted,
@@ -1014,6 +1015,11 @@ class SocialPostCard extends StatelessWidget {
                         lineHeight: LineHeight(1.35),
                         margin: Margins.zero,
                         padding: HtmlPaddings.zero,
+                      ),
+                      'a.tagged-user': Style(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                        textDecoration: TextDecoration.none,
                       ),
                     },
                     onLinkTap: (url, _, __) async {

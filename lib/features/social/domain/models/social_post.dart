@@ -1,3 +1,5 @@
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/post_mention.dart';
+
 class SocialPost {
   final String id;
   final String? publisherId;
@@ -56,6 +58,7 @@ class SocialPost {
 
   // Poll
   final List<Map<String, dynamic>>? pollOptions; // each: {text, percentage_num}
+  final List<PostMention> mentions;
 
   const SocialPost({
     required this.id,
@@ -104,6 +107,7 @@ class SocialPost {
     this.ecommerceProductId,
     this.productSlug,
     this.pollOptions,
+    this.mentions = const <PostMention>[],
   });
 
   SocialPost copyWith({
@@ -153,6 +157,7 @@ class SocialPost {
     int? ecommerceProductId,
     String? productSlug,
     List<Map<String, dynamic>>? pollOptions,
+    List<PostMention>? mentions,
   }) {
     return SocialPost(
       id: id ?? this.id,
@@ -201,6 +206,7 @@ class SocialPost {
       ecommerceProductId: ecommerceProductId ?? this.ecommerceProductId,
       productSlug: productSlug ?? this.productSlug,
       pollOptions: pollOptions ?? this.pollOptions,
+      mentions: mentions ?? this.mentions,
     );
   }
 
