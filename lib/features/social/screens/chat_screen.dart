@@ -1,4 +1,5 @@
 // G:\flutter-app\lib\features\social\screens\chat_screen.dart
+import 'dart:convert';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -392,15 +393,25 @@ class _ChatScreenState extends State<ChatScreen> {
       if (calleeId <= 0) throw 'peerUserId không hợp lệ';
 
       // 1) Tạo cuộc gọi trên server signaling
-      final callId =
-          await call.startCall(calleeId: calleeId, mediaType: mediaType);
+      final callId = await call.startCall(
+        calleeId: calleeId,
+        mediaType: mediaType, // 'audio' | 'video'
+      );
 
       // 2) Gửi message mời gọi (để bên kia thấy “Cuộc gọi thoại/video”)
-      final payload = CallInvite.build(callId, mediaType);
+      final payload = {
+        'type': 'call_invite',
+        'call_id': callId, // <- giờ là int hợp lệ
+        'media': mediaType, // 'audio' | 'video'
+        'ts': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      };
+
+
+
       final sent = await repo.sendMessage(
         token: widget.accessToken,
         peerUserId: _peerId,
-        text: payload,
+        text: jsonEncode(payload),  
       );
       if (sent != null) {
         _mergeIncoming([sent], toTail: true);
