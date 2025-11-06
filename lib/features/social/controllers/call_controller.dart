@@ -4,8 +4,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/webrtc_signaling_repository.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/call_invite.dart';
 
-/// Quản lý WebRTC signaling (server WoWonder).
+/// Quản lý WebRTC signaling (server WoWonder) + API tương thích ChatScreen.
+/// - Tạo/nhận cuộc gọi 1-1 (audio/video)
+/// - Poll trạng thái (ringing/answered/declined/ended) + SDP/ICE
 class CallController extends ChangeNotifier {
   WebRTCSignalingRepository? _repo;
 
@@ -21,6 +24,10 @@ class CallController extends ChangeNotifier {
   String? sdpOffer;
   String? sdpAnswer;
   List<IceCandidatePayload> iceCandidates = const [];
+
+  // === Thêm cho tương thích ChatScreen ===
+  CallInvite? _incomingInvite;
+  CallInvite? get incomingInvite => _incomingInvite;
 
   Future<void> init() async {
     try {
@@ -46,15 +53,77 @@ class CallController extends ChangeNotifier {
 
   bool get isInCall => activeCallId != null;
 
+  // ================== API tương thích với ChatScreen ==================
+
+  /// Wrapper tương thích ChatScreen:
+  /// createCall(token: ..., peerUserId: '341', mediaType: 'video'|'audio')
+  Future<int> createCall({
+    required String token, // để tương thích, không dùng ở đây
+    required String peerUserId,
+    required String mediaType,
+  }) async {
+    final calleeId = int.tryParse(peerUserId) ?? 0;
+    if (calleeId <= 0) {
+      throw ArgumentError('peerUserId không hợp lệ: $peerUserId');
+    }
+    return await startCall(calleeId: calleeId, mediaType: mediaType);
+  }
+
+  /// Khi bắt được message mời call (CallInvite), set vào controller
+  /// để UI hiển thị đổ chuông (IncomingCallScreen/AlertDialog).
+  void setIncomingInvite(CallInvite invite) {
+    _incomingInvite = invite;
+    activeCallId = invite.callId;
+    activeMediaType = invite.media; // 'audio' | 'video'
+    // Đính kèm để bắt đầu poll luôn
+    _startPolling();
+    notifyListeners();
+  }
+
+  /// Bên nhận bấm "Trả lời"
+  Future<void> answerCall() async {
+    try {
+      await action('answer');
+      _incomingInvite = null;
+      // thường server sẽ trả "answered" trong poll kế tiếp,
+      // nhưng set tạm để UI điều hướng ngay:
+      callStatus = 'answered';
+      notifyListeners();
+    } catch (e) {
+      lastError = 'answerCall: $e';
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  /// Bên nhận bấm "Từ chối"
+  Future<void> declineCall() async {
+    try {
+      await action('decline');
+      _incomingInvite = null;
+      callStatus = 'declined';
+      notifyListeners();
+    } catch (e) {
+      lastError = 'declineCall: $e';
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  // ================== API gốc (server WoWonder) ==================
+
   /// Caller bắt đầu gọi
-  Future<int> startCall(
-      {required int calleeId, String mediaType = 'video'}) async {
+  Future<int> startCall({
+    required int calleeId,
+    String mediaType = 'video',
+  }) async {
     _ensureRepo();
     try {
       final id =
           await _repo!.createCall(recipientId: calleeId, mediaType: mediaType);
       activeCallId = id;
       activeMediaType = mediaType;
+      _incomingInvite = null; // caller không có incoming invite
       _startPolling();
       notifyListeners();
       return id;
@@ -66,8 +135,10 @@ class CallController extends ChangeNotifier {
   }
 
   /// Callee gắn vào một cuộc gọi đang đổ chuông (để poll & thao tác).
-  Future<void> attachIncoming(
-      {required int callId, required String mediaType}) async {
+  Future<void> attachIncoming({
+    required int callId,
+    required String mediaType,
+  }) async {
     _ensureRepo();
     activeCallId = callId;
     activeMediaType = mediaType;
@@ -85,6 +156,7 @@ class CallController extends ChangeNotifier {
         await _repo!.action(callId: id, action: 'end');
       } catch (_) {}
     }
+    _incomingInvite = null;
     _clearState();
   }
 

@@ -1,23 +1,22 @@
+// lib/features/social/screens/incoming_call_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/call_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/call_screen.dart';
 
-/// Màn nhận cuộc gọi.
-/// Mở màn này khi bạn biết callId + mediaType (từ push/Firebase, hoặc socket).
 class IncomingCallScreen extends StatefulWidget {
   final int callId;
   final String mediaType; // 'audio' | 'video'
-  final String? callerName;
-  final String? callerAvatar;
+  final String? peerName;
+  final String? peerAvatar;
 
   const IncomingCallScreen({
     super.key,
     required this.callId,
     required this.mediaType,
-    this.callerName,
-    this.callerAvatar,
+    this.peerName,
+    this.peerAvatar,
   });
 
   @override
@@ -28,54 +27,54 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   @override
   void initState() {
     super.initState();
-    final call = context.read<CallController>();
-    // Gắn vào cuộc gọi để controller bắt đầu poll
-    call.attachIncoming(callId: widget.callId, mediaType: widget.mediaType);
+    // attach to the ringing call so controller starts polling
+    context
+        .read<CallController>()
+        .attachIncoming(callId: widget.callId, mediaType: widget.mediaType);
   }
 
   Future<void> _answer() async {
     final call = context.read<CallController>();
     try {
-      await call.action('answer'); // báo server: đã nhận
+      await call.action('answer');
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
+      Navigator.pushReplacement(
+        context,
         MaterialPageRoute(
           builder: (_) => CallScreen(
             isCaller: false,
             callId: widget.callId,
             mediaType: widget.mediaType,
-            peerName: widget.callerName,
-            peerAvatar: widget.callerAvatar,
+            peerName: widget.peerName,
+            peerAvatar: widget.peerAvatar,
           ),
         ),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Không thể trả lời: $e')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Không thể trả lời: $e')));
     }
   }
 
   Future<void> _decline() async {
-    final call = context.read<CallController>();
     try {
-      await call.action('decline');
+      await context.read<CallController>().action('decline');
     } catch (_) {}
-    if (mounted) Navigator.of(context).pop();
+    if (mounted) Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
-    final name = widget.callerName ?? 'Cuộc gọi đến';
     final isVideo = widget.mediaType == 'video';
+    final name = widget.peerName ?? 'Cuộc gọi đến';
 
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
         child: Consumer<CallController>(
           builder: (ctx, call, _) {
-            // Nếu caller đã end/decline, tự đóng
+            // auto-close if caller ended/declined
             if (call.callStatus == 'ended' || call.callStatus == 'declined') {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
@@ -88,12 +87,10 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
                 const SizedBox(height: 24),
                 CircleAvatar(
                   radius: 56,
-                  backgroundImage: (widget.callerAvatar != null &&
-                          widget.callerAvatar!.isNotEmpty)
-                      ? NetworkImage(widget.callerAvatar!)
+                  backgroundImage: (widget.peerAvatar?.isNotEmpty ?? false)
+                      ? NetworkImage(widget.peerAvatar!)
                       : null,
-                  child: (widget.callerAvatar == null ||
-                          widget.callerAvatar!.isEmpty)
+                  child: (widget.peerAvatar?.isEmpty ?? true)
                       ? const Icon(Icons.person, size: 56)
                       : null,
                 ),
@@ -121,7 +118,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
                       label: 'Trả lời',
                     ),
                   ],
-                )
+                ),
               ],
             );
           },
@@ -144,9 +141,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
           child: InkWell(
             customBorder: const CircleBorder(),
             onTap: onTap,
-            child: const Padding(
-              padding: EdgeInsets.all(22),
-              child: Icon(Icons.call, color: Colors.white, size: 32),
+            child: Padding(
+              padding: const EdgeInsets.all(22),
+              child: Icon(icon, color: Colors.white, size: 32), // <-- use param
             ),
           ),
         ),

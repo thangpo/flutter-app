@@ -11,9 +11,13 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:encrypt/encrypt.dart' as enc;
-
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/call_invite.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/call_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/call_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/incoming_call_screen.dart';
+
+
 
 class ChatMessageBubble extends StatefulWidget {
   final Map<String, dynamic> message;
@@ -225,6 +229,77 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
   Widget build(BuildContext context) {
     // 🔔 ƯU TIÊN: nếu là lời mời gọi thì render bubble đặc biệt
     final invite = CallInvite.tryParse(_getPlainTextForInvite() ?? '');
+Widget _buildInviteBubble(CallInvite inv) {
+      final isVideo = inv.mediaType == 'video';
+      final title = widget.isMe
+          ? 'Bạn đã mời gọi ${isVideo ? 'video' : 'thoại'}'
+          : 'Mời bạn gọi ${isVideo ? 'video' : 'thoại'}';
+
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color:
+              widget.isMe ? const Color(0xFF2F80ED) : const Color(0xFFEFEFEF),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (!widget.isMe) ...[
+                TextButton(
+                  onPressed: () async {
+                    final call = context.read<CallController>();
+                    try {
+                      // gắn vào cuộc gọi => controller bắt đầu poll
+                      await call.attachIncoming(
+                          callId: inv.callId, mediaType: inv.mediaType);
+
+                      // báo trả lời để caller chuyển sang "answered"
+                      await call.action('answer');
+
+                      if (!mounted) return;
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CallScreen(
+                            isCaller: false,
+                            callId: inv.callId,
+                            mediaType: inv.mediaType, // 'audio' | 'video'
+                            peerName: (m['user_data']?['name'] ??
+                                    m['user_data']?['username'] ??
+                                    '')
+                                .toString(),
+                            peerAvatar:
+                                (m['user_data']?['avatar'] ?? '').toString(),
+                          ),
+                        ),
+                      );
+                    } catch (e) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Không thể nhận cuộc gọi: $e')),
+                      );
+                    }
+                  },
+                  child: const Text('Nhận'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    final call = context.read<CallController>();
+                    try {
+                      await call.attachIncoming(
+                          callId: inv.callId, mediaType: inv.mediaType);
+                      await call.action('decline');
+                    } catch (_) {}
+                  },
+                  child: const Text('Từ chối'),
+                ),
+              ],
+            ],
+          )
+
+      );
+    }
 
     if (invite != null) {
       return _buildInviteBubble(invite);
