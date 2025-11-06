@@ -1,11 +1,12 @@
+// lib/features/social/screens/edit_profile_screen.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
-
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user_profile.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final SocialUserProfile profile;
@@ -39,8 +40,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   bool _showCurrentPwd = false;
   bool _showNewPwd = false;
 
-  // Dropdown
-  String? _genderValue; // 'Nam' | 'Nữ' | 'Khác' | null
+  // Dropdown: lưu CODE ổn định, không phải label hiển thị
+  // 'male' | 'female' | 'other' | null
+  String? _genderCode;
 
   // Preview local
   String? _avatarLocalPath;
@@ -54,19 +56,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.initState();
     final p = widget.profile;
 
-    // Nếu model chưa có firstName/lastName thì để chuỗi rỗng
-    _firstNameCtrl   = TextEditingController(text: p.firstName ?? '');
-    _lastNameCtrl    = TextEditingController(text: p.lastName ?? '');
+    _firstNameCtrl = TextEditingController(text: p.firstName ?? '');
+    _lastNameCtrl = TextEditingController(text: p.lastName ?? '');
 
     _displayNameCtrl = TextEditingController(text: p.displayName ?? '');
-    _aboutCtrl       = TextEditingController(text: p.about ?? '');
-    _addressCtrl     = TextEditingController(text: p.address ?? '');
-    _websiteCtrl     = TextEditingController(text: p.website ?? '');
-    _birthdayCtrl    = TextEditingController(text: _toUiDate(p.birthday));
-    _genderValue     = _normalizeGender(p.genderText);
+    _aboutCtrl = TextEditingController(text: p.about ?? '');
+    _addressCtrl = TextEditingController(text: p.address ?? '');
+    _websiteCtrl = TextEditingController(text: p.website ?? '');
+    _birthdayCtrl = TextEditingController(text: _toUiDate(p.birthday));
 
-    _currentPwdCtrl  = TextEditingController();
-    _newPwdCtrl      = TextEditingController();
+    // Chuyển text giới tính (việt/anh/zh/...) -> code ổn định
+    _genderCode = _normalizeGenderToCode(p.genderText);
+
+    _currentPwdCtrl = TextEditingController();
+    _newPwdCtrl = TextEditingController();
   }
 
   @override
@@ -112,14 +115,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     String? _nullIfEmpty(String s) => s.trim().isEmpty ? null : s.trim();
 
-    final String? firstName   = _nullIfEmpty(_firstNameCtrl.text);
-    final String? lastName    = _nullIfEmpty(_lastNameCtrl.text);
+    final String? firstName = _nullIfEmpty(_firstNameCtrl.text);
+    final String? lastName = _nullIfEmpty(_lastNameCtrl.text);
     final String? displayName = _nullIfEmpty(_displayNameCtrl.text);
-    final String? about       = _nullIfEmpty(_aboutCtrl.text);
-    final String? address     = _nullIfEmpty(_addressCtrl.text);
-    final String? website     = _normalizeWebsite(_websiteCtrl.text.trim());
+    final String? about = _nullIfEmpty(_aboutCtrl.text);
+    final String? address = _nullIfEmpty(_addressCtrl.text);
+    final String? website = _normalizeWebsite(_websiteCtrl.text.trim());
     final String? birthdayIso = _toIsoDate(_birthdayCtrl.text.trim());
-    final String? genderText  = _genderValue;
+
+    // Map code -> text hiển thị theo locale (để giữ API cũ genderText)
+    final String? genderText = _codeToDisplay(_genderCode);
 
     final String cp = _currentPwdCtrl.text.trim();
     final String np = _newPwdCtrl.text.trim();
@@ -127,9 +132,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     try {
       if (changingPwd) {
-        if (cp.isEmpty) throw 'Vui lòng nhập mật khẩu hiện tại';
-        if (np.length < 6) throw 'Mật khẩu mới tối thiểu 6 ký tự';
-        if (np == cp) throw 'Mật khẩu mới phải khác mật khẩu hiện tại';
+        if (cp.isEmpty) {
+          throw getTranslated('current_password_required', context) ??
+              'Vui lòng nhập mật khẩu hiện tại';
+        }
+        if (np.length < 6) {
+          throw getTranslated('new_password_min_6', context) ??
+              'Mật khẩu mới tối thiểu 6 ký tự';
+        }
+        if (np == cp) {
+          throw getTranslated('new_password_different', context) ??
+              'Mật khẩu mới phải khác mật khẩu hiện tại';
+        }
       }
 
       final controller = context.read<SocialController>();
@@ -139,38 +153,51 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       // Tạo bản sao profile với dữ liệu mới (đánh dấu file local bằng scheme file://)
       final edited = widget.profile.copyWith(
-        firstName  : firstName,
-        lastName   : lastName,
+        firstName: firstName,
+        lastName: lastName,
         displayName: displayName,
-        about      : about,
-        address    : address,
-        website    : website,
-        birthday   : birthdayIso,
-        genderText : genderText,
-        avatarUrl  : (_avatarLocalPath != null) ? 'file://$_avatarLocalPath' : widget.profile.avatarUrl,
-        coverUrl   : (_coverLocalPath  != null) ? 'file://$_coverLocalPath'  : widget.profile.coverUrl,
+        about: about,
+        address: address,
+        website: website,
+        birthday: birthdayIso,
+        genderText: genderText,
+        avatarUrl: (_avatarLocalPath != null)
+            ? 'file://$_avatarLocalPath'
+            : widget.profile.avatarUrl,
+        coverUrl: (_coverLocalPath != null)
+            ? 'file://$_coverLocalPath'
+            : widget.profile.coverUrl,
       );
 
       // Gọi controller: TRUYỀN KÈM ecomToken để service tự đồng bộ E-com
       final updatedProfile = await controller.updateDataUserFromEdit(
         edited,
         currentPassword: changingPwd ? cp : null,
-        newPassword    : changingPwd ? np : null,
-        ecomToken      : ecomToken,                 // <<< THÊM DÒNG NÀY
+        newPassword: changingPwd ? np : null,
+        ecomToken: ecomToken,
       );
 
       if (!mounted) return;
 
       widget.onSave(updatedProfile);
 
-      // Nếu muốn, có thể cảnh báo nhẹ khi thiếu token (đồng bộ E-com sẽ tự bỏ qua)
       if (ecomToken.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Đã cập nhật MXH. Chưa đồng bộ E-com vì bạn chưa đăng nhập E-com.')),
+          SnackBar(
+            content: Text(
+              getTranslated('update_social_only', context) ??
+                  'Đã cập nhật MXH. Chưa đồng bộ E-com vì bạn chưa đăng nhập E-com.',
+            ),
+          ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cập nhật hồ sơ thành công')),
+          SnackBar(
+            content: Text(
+              getTranslated('update_success', context) ??
+                  'Cập nhật hồ sơ thành công',
+            ),
+          ),
         );
       }
 
@@ -178,13 +205,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lỗi cập nhật: $e')),
+        SnackBar(
+          content: Text(
+            '${getTranslated('update_error', context) ?? 'Lỗi cập nhật'}: $e',
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
-
 
   // ===== Utils =====
   String _toUiDate(String? iso) {
@@ -217,13 +247,31 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     return 'https://$u';
   }
 
-  String? _normalizeGender(String? txt) {
+  // Chuẩn hoá về code ổn định
+  String? _normalizeGenderToCode(String? txt) {
     if (txt == null) return null;
     final s = txt.trim().toLowerCase();
-    if (s == 'male' || s == 'm' || s.contains('nam')) return 'Nam';
-    if (s == 'female' || s == 'f' || s.contains('nữ')) return 'Nữ';
     if (s.isEmpty) return null;
-    return 'Khác';
+    if (s == 'male' || s == 'm' || s.contains('nam') || s.contains('男')) {
+      return 'male';
+    }
+    if (s == 'female' || s == 'f' || s.contains('nữ') || s.contains('女')) {
+      return 'female';
+    }
+    return 'other';
+  }
+
+  // Map code -> label hiển thị (dịch)
+  String? _codeToDisplay(String? code) {
+    if (code == null) return null;
+    switch (code) {
+      case 'male':
+        return getTranslated('male', context) ?? 'Nam';
+      case 'female':
+        return getTranslated('female', context) ?? 'Nữ';
+      default:
+        return getTranslated('other', context) ?? 'Khác';
+    }
   }
 
   bool _isHttp(String? s) =>
@@ -239,11 +287,25 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final p = widget.profile;
 
     final avatarPreview = _avatarLocalPath ?? p.avatarUrl;
-    final coverPreview  = _coverLocalPath  ?? p.coverUrl;
+    final coverPreview = _coverLocalPath ?? p.coverUrl;
+
+    // Build items cho dropdown giới tính: value = code, child = label dịch
+    final genderItems = <MapEntry<String, String>>[
+      MapEntry('male', getTranslated('male', context) ?? 'Nam'),
+      MapEntry('female', getTranslated('female', context) ?? 'Nữ'),
+      MapEntry('other', getTranslated('other', context) ?? 'Khác'),
+    ];
+
+    final allowedCodes = genderItems.map((e) => e.key).toSet();
+    final effectiveGenderValue =
+    allowedCodes.contains(_genderCode) ? _genderCode : null;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Chỉnh sửa trang cá nhân'),
+        title: Text(
+          getTranslated('edit_profile_title', context) ??
+              'Chỉnh sửa trang cá nhân',
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: _saving ? null : () => Navigator.pop(context),
@@ -257,7 +319,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               height: 16,
               child: CircularProgressIndicator(strokeWidth: 2),
             )
-                : const Text('Lưu'),
+                : Text(getTranslated('save', context) ?? 'Lưu'),
           ),
           const SizedBox(width: 8),
         ],
@@ -297,8 +359,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               )
                             else if (_isLocalFile(coverPreview))
                               Image.file(
-                                File(coverPreview!
-                                    .replaceFirst('file://', '')),
+                                File(coverPreview!.replaceFirst('file://', '')),
                                 fit: BoxFit.cover,
                               )
                             else
@@ -330,8 +391,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               height: 96,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                border: Border.all(
-                                    color: Colors.white, width: 4),
+                                border:
+                                Border.all(color: Colors.white, width: 4),
                                 boxShadow: const [
                                   BoxShadow(
                                     color: Colors.black26,
@@ -353,8 +414,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                       );
                                     } else if (_isLocalFile(src)) {
                                       return Image.file(
-                                        File(src!
-                                            .replaceFirst('file://', '')),
+                                        File(src!.replaceFirst('file://', '')),
                                         fit: BoxFit.cover,
                                       );
                                     }
@@ -391,47 +451,67 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               const SizedBox(height: 16),
 
               // -------- Thông tin chính --------
-              const _SectionHeader(title: 'Thông tin chính'),
+              _SectionHeader(
+                  title: getTranslated('main_info', context) ??
+                      'Thông tin chính'),
               _LabeledField(
-                label: 'Họ (first_name)',
+                label:
+                getTranslated('first_name', context) ?? 'Họ (first_name)',
                 controller: _firstNameCtrl,
-                hint: 'VD: Nguyễn',
+                hint: getTranslated('first_name_hint', context) ?? 'VD: Nguyễn',
                 textInputAction: TextInputAction.next,
               ),
               _LabeledField(
-                label: 'Tên (last_name)',
+                label:
+                getTranslated('last_name', context) ?? 'Tên (last_name)',
                 controller: _lastNameCtrl,
-                hint: 'VD: Văn A',
+                hint: getTranslated('last_name_hint', context) ?? 'VD: Văn A',
                 textInputAction: TextInputAction.next,
               ),
               _LabeledField(
-                label: 'Tên hiển thị *',
+                label: getTranslated('display_name', context) ??
+                    'Tên hiển thị *',
                 controller: _displayNameCtrl,
-                hint: 'VD: Nguyễn Văn A',
+                hint: getTranslated('display_name_hint', context) ??
+                    'VD: Nguyễn Văn A',
                 validator: (v) => (v == null || v.trim().isEmpty)
-                    ? 'Vui lòng nhập tên hiển thị'
+                    ? (getTranslated('display_name_required', context) ??
+                    'Vui lòng nhập tên hiển thị')
                     : null,
                 textInputAction: TextInputAction.next,
               ),
               _LabeledField(
-                label: 'Giới thiệu',
+                label: getTranslated('about', context) ?? 'Giới thiệu',
                 controller: _aboutCtrl,
-                hint: 'Mô tả ngắn về bạn…',
+                hint: getTranslated('about_hint', context) ??
+                    'Mô tả ngắn về bạn…',
                 maxLines: 3,
               ),
 
               _SeparatorLine(color: dividerColor),
 
               // -------- Thông tin cá nhân --------
-              const _SectionHeader(title: 'Thông tin cá nhân'),
+              _SectionHeader(
+                  title: getTranslated('personal_info', context) ??
+                      'Thông tin cá nhân'),
+
+              // Gender dropdown: value = code, items = label dịch
               _DropdownField(
-                label: 'Giới tính',
-                value: _genderValue,
-                items: const ['Nam', 'Nữ', 'Khác'],
-                onChanged: (v) => setState(() => _genderValue = v),
+                label: getTranslated('gender', context) ?? 'Giới tính',
+                value: effectiveGenderValue,
+                items: genderItems
+                    .map(
+                      (e) => DropdownMenuItem<String>(
+                    value: e.key,
+                    child: Text(e.value),
+                  ),
+                )
+                    .toList(),
+                onChanged: (code) => setState(() => _genderCode = code),
               ),
+
               _DateField(
-                label: 'Ngày sinh',
+                label: getTranslated('birthday', context) ?? 'Ngày sinh',
                 controller: _birthdayCtrl,
                 hint: 'dd/MM/yyyy',
                 onPick: _pickBirthday,
@@ -440,15 +520,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               _SeparatorLine(color: dividerColor),
 
               // -------- Liên hệ --------
-              const _SectionHeader(title: 'Liên hệ'),
+              _SectionHeader(
+                  title:
+                  getTranslated('contact', context) ?? 'Liên hệ'),
               _LabeledField(
-                label: 'Địa chỉ',
+                label: getTranslated('address', context) ?? 'Địa chỉ',
                 controller: _addressCtrl,
-                hint: 'VD: 123 Nguyễn Trãi, Thanh Xuân, Hà Nội',
+                hint: getTranslated('address_hint', context) ??
+                    'VD: 123 Nguyễn Trãi, Thanh Xuân, Hà Nội',
                 textInputAction: TextInputAction.next,
               ),
               _LabeledField(
-                label: 'Website',
+                label: getTranslated('website', context) ?? 'Website',
                 controller: _websiteCtrl,
                 hint: 'https://...',
                 keyboardType: TextInputType.url,
@@ -457,16 +540,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               _SeparatorLine(color: dividerColor),
 
               // -------- Bảo mật --------
-              const _SectionHeader(title: 'Bảo mật'),
+              _SectionHeader(
+                  title: getTranslated('security', context) ?? 'Bảo mật'),
               _PasswordField(
-                label: 'Mật khẩu hiện tại',
+                label: getTranslated('current_password', context) ??
+                    'Mật khẩu hiện tại',
                 controller: _currentPwdCtrl,
                 obscure: !_showCurrentPwd,
                 onToggleObscure: () =>
                     setState(() => _showCurrentPwd = !_showCurrentPwd),
               ),
               _PasswordField(
-                label: 'Mật khẩu mới',
+                label:
+                getTranslated('new_password', context) ?? 'Mật khẩu mới',
                 controller: _newPwdCtrl,
                 obscure: !_showNewPwd,
                 onToggleObscure: () =>
@@ -518,9 +604,8 @@ class _CircleButton extends StatelessWidget {
         color: isDark ? Colors.black87 : Colors.white.withOpacity(.9),
         borderRadius: BorderRadius.circular(30),
         border: Border.all(
-          color: isDark
-              ? Colors.white.withOpacity(.2)
-              : Colors.black.withOpacity(.06),
+          color:
+          isDark ? Colors.white.withOpacity(.2) : Colors.black.withOpacity(.06),
         ),
         boxShadow: [
           BoxShadow(color: Colors.black.withOpacity(.2), blurRadius: 4),
@@ -617,8 +702,7 @@ class _LabeledField extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label,
-              style:
-              const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
           TextFormField(
             controller: controller,
@@ -632,8 +716,7 @@ class _LabeledField extends StatelessWidget {
               hintStyle: TextStyle(color: theme.hintColor),
               contentPadding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              border:
-              OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide(
@@ -643,8 +726,7 @@ class _LabeledField extends StatelessWidget {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide:
-                BorderSide(color: theme.colorScheme.primary, width: 1.4),
+                borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.4),
               ),
             ),
           ),
@@ -656,8 +738,8 @@ class _LabeledField extends StatelessWidget {
 
 class _DropdownField extends StatelessWidget {
   final String label;
-  final String? value;
-  final List<String> items;
+  final String? value; // code
+  final List<DropdownMenuItem<String>> items; // value=code, child=label
   final ValueChanged<String?> onChanged;
 
   const _DropdownField({
@@ -676,24 +758,17 @@ class _DropdownField extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label,
-              style:
-              const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
           DropdownButtonFormField<String>(
             value: value,
-            items: items
-                .map((e) => DropdownMenuItem<String>(
-              value: e,
-              child: Text(e),
-            ))
-                .toList(),
+            items: items,
             onChanged: onChanged,
             decoration: InputDecoration(
               isDense: true,
               contentPadding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              border:
-              OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide(
@@ -703,8 +778,7 @@ class _DropdownField extends StatelessWidget {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide:
-                BorderSide(color: theme.colorScheme.primary, width: 1.4),
+                borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.4),
               ),
             ),
           ),
@@ -736,8 +810,7 @@ class _DateField extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label,
-              style:
-              const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
           GestureDetector(
             onTap: onPick,
@@ -762,10 +835,8 @@ class _DateField extends StatelessWidget {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(
-                      color: theme.colorScheme.primary,
-                      width: 1.4,
-                    ),
+                    borderSide:
+                    BorderSide(color: theme.colorScheme.primary, width: 1.4),
                   ),
                 ),
               ),
@@ -799,8 +870,7 @@ class _PasswordField extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label,
-              style:
-              const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
           TextFormField(
             controller: controller,
@@ -811,8 +881,7 @@ class _PasswordField extends StatelessWidget {
               isDense: true,
               contentPadding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              border:
-              OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide(
@@ -822,8 +891,7 @@ class _PasswordField extends StatelessWidget {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide:
-                BorderSide(color: theme.colorScheme.primary, width: 1.4),
+                borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.4),
               ),
               suffixIcon: IconButton(
                 icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),

@@ -5,37 +5,23 @@ import 'dart:ui';
 import 'package:flutter/services.dart'; // Clipboard
 import 'dart:typed_data';
 import 'package:video_thumbnail/video_thumbnail.dart';
-import 'package:collection/collection.dart'; // nếu cần firstWhereOrNull ở chỗ khác
-
+import 'package:collection/collection.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/dimensions.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
-
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/chat_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/edit_profile_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_post_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_story_screen.dart';
-
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user_profile.dart';
-// NEW: Reels model
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_reel.dart';
-
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_screen.dart'
-    show SocialPostCard;
-
-// NEW: sheet component (đã tạo file riêng)
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_screen.dart' show SocialPostCard;
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/member_list_bottom_sheet.dart';
-
-// ví
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/wallet_screen.dart';
-
-// NEW: video player cho màn xem reel
 import 'package:video_player/video_player.dart';
 
 /// Tab hiện tại
@@ -44,7 +30,6 @@ enum _ProfileTab { posts, about, reels, photos }
 class ProfileScreen extends StatefulWidget {
   final String? targetUserId;
   const ProfileScreen({super.key, this.targetUserId});
-
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
@@ -53,19 +38,16 @@ class _ImageTab extends StatelessWidget {
   final ImageProvider image;
   final bool active;
   final VoidCallback onTap;
-  final bool showDropdown; // nếu vẫn muốn mũi tên nhỏ
-
+  final bool showDropdown;
   const _ImageTab({
     required this.image,
     required this.onTap,
     this.active = false,
     this.showDropdown = false,
   });
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     return InkWell(
       borderRadius: BorderRadius.circular(20),
       onTap: onTap,
@@ -73,32 +55,16 @@ class _ImageTab extends StatelessWidget {
         margin: const EdgeInsets.only(right: 12),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
-          color: active
-              ? theme.colorScheme.primary.withOpacity(0.12)
-              : Colors.transparent,
+          color: active ? theme.colorScheme.primary.withOpacity(0.12) : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
-          border: active
-              ? Border.all(
-            color: theme.colorScheme.primary.withOpacity(0.6),
-            width: 1.2,
-          )
-              : null,
+          border: active ? Border.all(color: theme.colorScheme.primary.withOpacity(0.6), width: 1.2) : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ImageIcon(
-              image, // AssetImage / NetworkImage đều được
-              size: 18,
-              color: active ? theme.colorScheme.primary : theme.hintColor,
-            ),
+            ImageIcon(image, size: 18, color: active ? theme.colorScheme.primary : theme.hintColor),
             if (showDropdown) const SizedBox(width: 4),
-            if (showDropdown)
-              Icon(
-                Icons.keyboard_arrow_down,
-                size: 16,
-                color: active ? theme.colorScheme.primary : theme.hintColor,
-              ),
+            if (showDropdown) Icon(Icons.keyboard_arrow_down, size: 16, color: active ? theme.colorScheme.primary : theme.hintColor),
           ],
         ),
       ),
@@ -108,12 +74,15 @@ class _ImageTab extends StatelessWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   @override
+  @override
   void initState() {
     super.initState();
-    // load profile đúng user được bấm
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<SocialController>().loadUserProfile(
         targetUserId: widget.targetUserId,
+        force: false,            // KHÔNG ép tải lại
+        useCache: true,          // ƯU TIÊN cache để render ngay
+        backgroundRefresh: true, // cache cũ thì refresh NGẦM
       );
     });
   }
@@ -122,7 +91,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        // truyền targetUserId xuống body
         child: _ProfileBody(targetUserId: widget.targetUserId),
       ),
     );
@@ -132,19 +100,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
 class _ProfileBody extends StatefulWidget {
   final String? targetUserId;
   const _ProfileBody({required this.targetUserId});
-
   @override
   State<_ProfileBody> createState() => _ProfileBodyState();
 }
 
 class _ProfileBodyState extends State<_ProfileBody> {
-  // tab mặc định là "Bài viết"
   _ProfileTab _currentTab = _ProfileTab.posts;
-
+  @override
+  bool get wantKeepAlive => true;
   Future<void> _handleRefresh() async {
     final sc = context.read<SocialController>();
-    await sc.loadUserProfile(targetUserId: widget.targetUserId);
+    await sc.loadUserProfile(
+      targetUserId: widget.targetUserId,
+      force: true,            // ÉP tải mới
+      useCache: true,         // vẫn render cache trước khi tải
+      backgroundRefresh: false,
+    );
   }
+
 
   void _switchToAbout() {
     setState(() => _currentTab = _ProfileTab.about);
@@ -156,7 +129,6 @@ class _ProfileBodyState extends State<_ProfileBody> {
       builder: (context, sc, _) {
         final loadingProfile = sc.isLoadingProfile;
         final loadingPosts = sc.isLoadingProfilePosts;
-
         final headerUser = sc.profileHeaderUser;
         final safeHeaderUser = headerUser ??
             const SocialUserProfile(
@@ -186,31 +158,21 @@ class _ProfileBodyState extends State<_ProfileBody> {
               isFollowingMe: false,
             );
 
-        // Lấy list followers để hiển thị hàng avatar nhỏ + mở sheet
         final recentFollowers = sc.followers.toList();
         final posts = sc.profilePosts;
-
-        // xác định có phải đang xem profile của chính mình không
         final myId = sc.currentUser?.id;
-        final bool isSelf = (widget.targetUserId == null ||
-            widget.targetUserId!.isEmpty ||
-            widget.targetUserId == myId);
+        final bool isSelf = (widget.targetUserId == null || widget.targetUserId!.isEmpty || widget.targetUserId == myId);
 
-        // === Chọn nội dung theo tab (dưới dạng RenderBox) ===
         Widget tabContent;
         switch (_currentTab) {
           case _ProfileTab.about:
             tabContent = _ProfileAboutSection(user: safeHeaderUser);
             break;
           case _ProfileTab.photos:
-            tabContent = _ProfilePhotosSection(
-              targetUserId: widget.targetUserId,
-            );
+            tabContent = _ProfilePhotosSection(targetUserId: widget.targetUserId);
             break;
           case _ProfileTab.reels:
-            tabContent = _ProfileReelsSection(
-              targetUserId: widget.targetUserId,
-            );
+            tabContent = _ProfileReelsSection(targetUserId: widget.targetUserId);
             break;
           case _ProfileTab.posts:
           default:
@@ -219,10 +181,7 @@ class _ProfileBodyState extends State<_ProfileBody> {
               posts: posts,
               isLoadingMore: loadingPosts,
               onLoadMore: () {
-                sc.loadMoreProfilePosts(
-                  targetUserId: widget.targetUserId,
-                  limit: 10,
-                );
+                sc.loadMoreProfilePosts(targetUserId: widget.targetUserId, limit: 10);
               },
               onShowAbout: _switchToAbout,
               isSelf: isSelf,
@@ -232,11 +191,10 @@ class _ProfileBodyState extends State<_ProfileBody> {
         return RefreshIndicator(
           onRefresh: _handleRefresh,
           child: CustomScrollView(
+            key: const PageStorageKey('profile_scroll'),
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
               _ProfileAppBar(user: safeHeaderUser),
-
-              // HEADER (cover, avatar, stats, nút hành động tùy isSelf, tab bar)
               SliverToBoxAdapter(
                 child: _ProfileHeaderSection(
                   user: safeHeaderUser,
@@ -244,34 +202,18 @@ class _ProfileBodyState extends State<_ProfileBody> {
                   currentTab: _currentTab,
                   onTabSelected: (_ProfileTab tab) async {
                     setState(() => _currentTab = tab);
-                    // NEW: khi chuyển sang Reels thì refresh nếu cần
                     if (tab == _ProfileTab.reels) {
-                      final viewedId = widget.targetUserId ??
-                          sc.profileHeaderUser?.id ??
-                          sc.currentUser?.id;
-                      if ((sc.profileReels.isEmpty ||
-                          sc.reelsForUserId != viewedId) &&
-                          !sc.isLoadingProfileReels) {
-                        await sc.refreshProfileReels(
-                          targetUserId: viewedId,
-                          limit: 20,
-                        );
+                      final viewedId = widget.targetUserId ?? sc.profileHeaderUser?.id ?? sc.currentUser?.id;
+                      if ((sc.profileReels.isEmpty || sc.reelsForUserId != viewedId) && !sc.isLoadingProfileReels) {
+                        await sc.refreshProfileReels(targetUserId: viewedId, limit: 20);
                       }
                     }
                   },
                   isSelf: isSelf,
                 ),
               ),
-
-              // NỘI DUNG THEO TAB
               SliverToBoxAdapter(child: tabContent),
-
-              // khoảng đệm dưới cùng
-              const SliverToBoxAdapter(
-                child: SizedBox(height: Dimensions.paddingSizeExtraLarge),
-              ),
-
-              // Nếu muốn hiển thị shimmer/skeleton khi chưa có dữ liệu cơ bản
+              const SliverToBoxAdapter(child: SizedBox(height: Dimensions.paddingSizeExtraLarge)),
               if (loadingProfile && headerUser == null)
                 const SliverToBoxAdapter(
                   child: Padding(
@@ -297,15 +239,12 @@ class _ProfileAppBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    // Ưu tiên họ + tên; nếu thiếu cả hai thì dùng username
     final hasFirst = user.firstName?.trim().isNotEmpty == true;
     final hasLast = user.lastName?.trim().isNotEmpty == true;
     final hasFullName = hasFirst || hasLast;
-
     final primaryTitle = hasFullName
         ? '${user.firstName ?? ''} ${user.lastName ?? ''}'.trim()
-        : (user.userName ?? 'Profile');
+        : (user.userName ?? getTranslated('profile', context) ?? 'Profile');
 
     return SliverAppBar(
       pinned: true,
@@ -332,9 +271,7 @@ class _ProfileAppBar extends StatelessWidget {
             ),
         ],
       ),
-      actions: const [
-        // tuỳ ý
-      ],
+      actions: const [],
     );
   }
 }
@@ -348,7 +285,6 @@ class _ProfileHeaderSection extends StatelessWidget {
   final _ProfileTab currentTab;
   final ValueChanged<_ProfileTab> onTabSelected;
   final bool isSelf;
-
   const _ProfileHeaderSection({
     required this.user,
     required this.recentFollowers,
@@ -360,20 +296,13 @@ class _ProfileHeaderSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    // Tên hiển thị lớn
     final fullName = (() {
       final first = (user.firstName ?? '').trim();
       final last = (user.lastName ?? '').trim();
-      final firstLast =
-      [first, last].where((s) => s.isNotEmpty).join(' ').trim();
-
-      // Ưu tiên first + last; nếu cả hai đều trống thì fallback sang displayName, rồi userName
+      final firstLast = [first, last].where((s) => s.isNotEmpty).join(' ').trim();
       if (firstLast.isNotEmpty) return firstLast;
-      if (user.displayName?.trim().isNotEmpty == true) {
-        return user.displayName!.trim();
-      }
-      return user.userName ?? 'Người dùng';
+      if (user.displayName?.trim().isNotEmpty == true) return user.displayName!.trim();
+      return user.userName ?? getTranslated('user', context) ?? 'Người dùng';
     })();
 
     return Column(
@@ -385,26 +314,18 @@ class _ProfileHeaderSection extends StatelessWidget {
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              // Cover
               Positioned.fill(
                 child: user.coverUrl?.isNotEmpty == true
                     ? Image.network(
                   user.coverUrl!,
                   fit: BoxFit.cover,
-                  loadingBuilder: (_, child, progress) =>
-                  progress == null
+                  loadingBuilder: (_, child, progress) => progress == null
                       ? child
-                      : Container(
-                    color: Colors.grey.shade200,
-                    child: const Center(
-                        child: CircularProgressIndicator()),
-                  ),
+                      : Container(color: Colors.grey.shade200, child: const Center(child: CircularProgressIndicator())),
                   errorBuilder: (_, __, ___) => _CoverFallback(),
                 )
                     : _CoverFallback(),
               ),
-
-              // Avatar
               Positioned(
                 left: 16,
                 bottom: -40,
@@ -414,13 +335,7 @@ class _ProfileHeaderSection extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white, width: 4),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Colors.black26,
-                        blurRadius: 12,
-                        offset: Offset(0, 6),
-                      ),
-                    ],
+                    boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 12, offset: Offset(0, 6))],
                   ),
                   child: ClipOval(
                     child: user.avatarUrl?.isNotEmpty == true
@@ -433,51 +348,25 @@ class _ProfileHeaderSection extends StatelessWidget {
                   ),
                 ),
               ),
-
-              // === NÚT VÍ HIỂN THỊ NGANG VỚI AVATAR ===
+              // === NÚT VÍ ===
               Positioned(
                 right: 16,
-                bottom: -15, // căn ngang avatar
+                bottom: -15,
                 child: GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const WalletScreen()),
-                    );
-                  },
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WalletScreen())),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 10,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(40),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.15),
-                          blurRadius: 10,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 10, offset: const Offset(0, 3))],
                     ),
                     child: Row(
                       children: const [
-                        Icon(
-                          Icons.account_balance_wallet_rounded,
-                          color: Colors.blue,
-                          size: 22,
-                        ),
+                        Icon(Icons.account_balance_wallet_rounded, color: Colors.blue, size: 22),
                         SizedBox(width: 8),
-                        Text(
-                          "Ví của tôi",
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black87,
-                          ),
-                        ),
+                        Text("Ví của tôi", style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black87)),
                       ],
                     ),
                   ),
@@ -486,10 +375,8 @@ class _ProfileHeaderSection extends StatelessWidget {
             ],
           ),
         ),
-
         const SizedBox(height: 70),
-
-        // ===== NAME (HỌ + TÊN) + VERIFIED BADGE =====
+        // ===== NAME + VERIFIED BADGE =====
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
@@ -498,8 +385,7 @@ class _ProfileHeaderSection extends StatelessWidget {
               Expanded(
                 child: Text(
                   fullName,
-                  style: const TextStyle(
-                      fontSize: 24, fontWeight: FontWeight.w800),
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -509,10 +395,7 @@ class _ProfileHeaderSection extends StatelessWidget {
                 Container(
                   width: 20,
                   height: 20,
-                  decoration: const BoxDecoration(
-                    color: Colors.red,
-                    shape: BoxShape.circle,
-                  ),
+                  decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
                   alignment: Alignment.center,
                   child: const Icon(Icons.check, size: 14, color: Colors.white),
                 ),
@@ -521,29 +404,21 @@ class _ProfileHeaderSection extends StatelessWidget {
             ],
           ),
         ),
-
-        // ===== USERNAME nhỏ bên dưới (chỉ hiện khi có HỌ + TÊN) =====
+        // ===== USERNAME =====
         Builder(
           builder: (_) {
             final hasFirst = user.firstName?.trim().isNotEmpty == true;
             final hasLast = user.lastName?.trim().isNotEmpty == true;
             final hasFullName = hasFirst || hasLast;
             final handle = (user.userName?.trim().isNotEmpty == true)
-                ? (user.userName!.startsWith('@')
-                ? user.userName!
-                : '@${user.userName!}')
+                ? (user.userName!.startsWith('@') ? user.userName! : '@${user.userName!}')
                 : null;
-
             if (hasFullName && handle != null) {
               return Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
                 child: Text(
                   handle,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Theme.of(context).hintColor,
-                  ),
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: theme.hintColor),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -552,58 +427,66 @@ class _ProfileHeaderSection extends StatelessWidget {
             return const SizedBox.shrink();
           },
         ),
-
         const SizedBox(height: 4),
-
-        // ===== DÒNG CHỮ FOLLOWERS/FOLLOWING (tap để mở sheet) =====
+        // ===== FOLLOWERS/FOLLOWING =====
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 6,
-            children: [
-              InkWell(
-                onTap: () => _showFollowersSheet(context),
-                child: Text(
-                  '${_formatCount(user.followersCount)} người theo dõi',
-                  style: TextStyle(fontSize: 14, color: theme.hintColor),
+          child: Builder(builder: (context) {
+            final theme = Theme.of(context);
+            final sc = context.watch<SocialController>(); // lắng nghe để rebuild
+            final isViewingSame = sc.profileHeaderUser?.id == user.id;
+
+            // Ưu tiên length của state nếu đang xem đúng user;
+            // fallback về số trong user.*Count khi list chưa có.
+            final followersCount = isViewingSame && sc.followers.isNotEmpty
+                ? sc.followers.length
+                : (user.followersCount ?? 0);
+
+            final followingCount = isViewingSame && sc.following.isNotEmpty
+                ? sc.following.length
+                : (user.followingCount ?? 0);
+
+            return Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 6,
+              children: [
+                InkWell(
+                  onTap: () => _showFollowersSheet(context),
+                  child: Text(
+                    '${_formatCount(followersCount)} ${getTranslated('followers', context) ?? 'người theo dõi'}',
+                    style: TextStyle(fontSize: 14, color: theme.hintColor),
+                  ),
                 ),
-              ),
-              Text('•', style: TextStyle(fontSize: 14, color: theme.hintColor)),
-              InkWell(
-                onTap: () => _showFollowingSheet(context),
-                child: Text(
-                  '${_formatCount(user.followingCount)} đang theo dõi',
-                  style: TextStyle(fontSize: 14, color: theme.hintColor),
+                Text('•', style: TextStyle(fontSize: 14, color: theme.hintColor)),
+                InkWell(
+                  onTap: () => _showFollowingSheet(context),
+                  child: Text(
+                    '${_formatCount(followingCount)} ${getTranslated('following', context) ?? 'đang theo dõi'}',
+                    style: TextStyle(fontSize: 14, color: theme.hintColor),
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            );
+          }),
         ),
 
         const SizedBox(height: 16),
-
-        // FOLLOWERS STACK (nếu có) — tap mở sheet Followers
+        // FOLLOWERS STACK
         if (recentFollowers.isNotEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: GestureDetector(
               onTap: () => _showFollowersSheet(context),
-              child: _CompactFollowersRow(
-                followers: recentFollowers.take(6).toList(),
-              ),
+              child: _CompactFollowersRow(followers: recentFollowers.take(6).toList()),
             ),
           ),
-
         const SizedBox(height: 20),
-
         // ===== ACTION BUTTONS =====
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Column(
             children: [
               if (isSelf) ...[
-                // Hàng 1: Công cụ chuyên nghiệp + Thêm vào tin
                 Row(
                   children: [
                     Expanded(
@@ -611,23 +494,17 @@ class _ProfileHeaderSection extends StatelessWidget {
                       child: FilledButton.icon(
                         onPressed: () {},
                         icon: const Icon(Icons.work_outline, size: 18),
-                        label: const Text(
-                          'Công cụ chuyên nghiệp',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13.5,
-                          ),
+                        label: Text(
+                          getTranslated('professional_tools', context) ?? 'Công cụ chuyên nghiệp',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
                         ),
                         style: FilledButton.styleFrom(
                           backgroundColor: const Color(0xFF3B82F6),
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 16, horizontal: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                           elevation: 1,
                         ),
                       ),
@@ -637,30 +514,19 @@ class _ProfileHeaderSection extends StatelessWidget {
                       flex: 2,
                       child: OutlinedButton(
                         onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const SocialCreateStoryScreen(),
-                              fullscreenDialog: true,
-                            ),
-                          );
+                          Navigator.of(context).push(MaterialPageRoute(
+                            builder: (_) => const SocialCreateStoryScreen(),
+                            fullscreenDialog: true,
+                          ));
                         },
                         style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 16, horizontal: 10),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          side: BorderSide(
-                            color: theme.dividerColor,
-                            width: 1.2,
-                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                          side: BorderSide(color: theme.dividerColor, width: 1.2),
                         ),
-                        child: const Text(
-                          '+ Thêm vào tin',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
+                        child: Text(
+                          getTranslated('add_to_story', context) ?? '+ Thêm vào tin',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
                         ),
@@ -668,55 +534,35 @@ class _ProfileHeaderSection extends StatelessWidget {
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 10),
-
-                // Hàng 2: Chỉnh sửa trang cá nhân
                 Row(
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => EditProfileScreen(
-                                profile: user,
-                                onSave: (updatedProfile) {},
-                              ),
-                            ),
-                          );
+                          Navigator.of(context).push(MaterialPageRoute(
+                            builder: (_) => EditProfileScreen(profile: user, onSave: (updatedProfile) {}),
+                          ));
                         },
                         icon: const Icon(Icons.edit, size: 18),
-                        label: const Text(
-                          'Chỉnh sửa trang cá nhân',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13.5,
-                          ),
+                        label: Text(
+                          getTranslated('edit_profile', context) ?? 'Chỉnh sửa trang cá nhân',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
                         ),
                         style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 14, horizontal: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          side: BorderSide(
-                            color: theme.dividerColor,
-                            width: 1.2,
-                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                          side: BorderSide(color: theme.dividerColor, width: 1.2),
                         ),
                       ),
                     ),
                     const SizedBox(width: 10),
-                    _MoreCircleButton(
-                      onPressed: () => _showSelfProfileMenu(context, user),
-                    ),
+                    _MoreCircleButton(onPressed: () => _showSelfProfileMenu(context, user)),
                   ],
                 ),
               ] else ...[
-                // Trang của người khác
                 Row(
                   children: [
                     Expanded(
@@ -724,49 +570,29 @@ class _ProfileHeaderSection extends StatelessWidget {
                       child: Consumer<SocialController>(
                         builder: (context, sc, __) {
                           final bool busy = sc.isFollowBusy(user.id);
-                          final bool following =
-                          sc.profileHeaderUser?.id == user.id
-                              ? (sc.profileHeaderUser?.isFollowing ??
-                              user.isFollowing)
+                          final bool following = sc.profileHeaderUser?.id == user.id
+                              ? (sc.profileHeaderUser?.isFollowing ?? user.isFollowing)
                               : user.isFollowing;
-
                           return FilledButton.icon(
                             onPressed: busy
                                 ? null
                                 : () async {
-                              await context
-                                  .read<SocialController>()
-                                  .toggleFollowUser(
-                                  targetUserId: user.id);
+                              await context.read<SocialController>().toggleFollowUser(targetUserId: user.id);
                             },
                             icon: busy
-                                ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2),
-                            )
-                                : Icon(
-                              following
-                                  ? Icons.check
-                                  : Icons.person_add_alt_1,
-                              size: 18,
-                            ),
+                                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                                : Icon(following ? Icons.check : Icons.person_add_alt_1, size: 18),
                             label: Text(
-                              following ? 'Đang theo dõi' : 'Theo dõi',
+                              following
+                                  ? (getTranslated('following', context) ?? 'Đang theo dõi')
+                                  : (getTranslated('follow', context) ?? 'Theo dõi'),
                               overflow: TextOverflow.ellipsis,
                               maxLines: 1,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13.5,
-                              ),
+                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
                             ),
                             style: FilledButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 16, horizontal: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(30),
-                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                               elevation: 1,
                             ),
                           );
@@ -774,20 +600,15 @@ class _ProfileHeaderSection extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 10),
-
-                    // NHẮN TIN
                     Expanded(
                       flex: 2,
                       child: OutlinedButton.icon(
                         onPressed: () async {
                           final sp = await SharedPreferences.getInstance();
-                          final token =
-                          sp.getString(AppConstants.socialAccessToken);
+                          final token = sp.getString(AppConstants.socialAccessToken);
                           if (token == null || token.isEmpty) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Bạn chưa đăng nhập MXH'),
-                              ),
+                              SnackBar(content: Text(getTranslated('not_logged_in_social', context) ?? 'Bạn chưa đăng nhập MXH')),
                             );
                             return;
                           }
@@ -797,49 +618,33 @@ class _ProfileHeaderSection extends StatelessWidget {
                               builder: (_) => ChatScreen(
                                 peerUserId: user.id,
                                 accessToken: token,
-                                peerName: user.displayName ??
-                                    user.userName ??
-                                    'Đoạn chat',
+                                peerName: user.displayName ?? user.userName ?? getTranslated('chat', context) ?? 'Đoạn chat',
                                 peerAvatar: user.avatarUrl,
                               ),
                             ),
                           );
                         },
-                        icon:
-                        const Icon(Icons.chat_bubble_outline, size: 18),
-                        label: const Text(
-                          'Nhắn tin',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13.5,
-                          ),
+                        icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                        label: Text(
+                          getTranslated('messages', context) ?? 'Nhắn tin',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
                         ),
                         style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 14, horizontal: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          side: BorderSide(
-                            color: Theme.of(context).dividerColor,
-                            width: 1.2,
-                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                          side: BorderSide(color: theme.dividerColor, width: 1.2),
                         ),
                       ),
                     ),
                     const SizedBox(width: 10),
-                    _MoreCircleButton(
-                      onPressed: () => _showOtherProfileMenu(context, user),
-                    ),
+                    _MoreCircleButton(onPressed: () => _showOtherProfileMenu(context, user)),
                   ],
                 ),
               ],
             ],
           ),
         ),
-
         const SizedBox(height: 24),
-
         // ===== TAB BAR =====
         SizedBox(
           height: 44,
@@ -848,40 +653,33 @@ class _ProfileHeaderSection extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             children: [
               _SimpleTab(
-                label: 'Bài viết',
+                label: getTranslated('posts', context) ?? 'Bài viết',
                 active: currentTab == _ProfileTab.posts,
                 onTap: () => onTabSelected(_ProfileTab.posts),
               ),
               _SimpleTab(
-                label: 'Giới thiệu',
+                label: getTranslated('about', context) ?? 'Giới thiệu',
                 active: currentTab == _ProfileTab.about,
                 onTap: () => onTabSelected(_ProfileTab.about),
               ),
               _SimpleTab(
-                label: 'Reels',
+                label: getTranslated('reels', context) ?? 'Reels',
                 active: currentTab == _ProfileTab.reels,
                 onTap: () => onTabSelected(_ProfileTab.reels),
               ),
               _SimpleTab(
-                label: 'Ảnh',
+                label: getTranslated('photos', context) ?? 'Ảnh',
                 active: currentTab == _ProfileTab.photos,
                 onTap: () => onTabSelected(_ProfileTab.photos),
               ),
             ],
           ),
         ),
-
-        // Divider ngăn header với phần nội dung
-        Divider(
-          height: 1,
-          thickness: 0.8,
-          color: theme.dividerColor.withOpacity(0.5),
-        ),
+        Divider(height: 1, thickness: 0.8, color: theme.dividerColor.withOpacity(0.5)),
       ],
     );
   }
 
-  // ===== Helpers =====
   String _formatCount(int count) {
     if (count >= 1000) {
       final k = count / 1000;
@@ -890,10 +688,8 @@ class _ProfileHeaderSection extends StatelessWidget {
     return count.toString();
   }
 
-  // ===== OPEN SHEETS (MemberListBottomSheet) =====
   void _showFollowersSheet(BuildContext context) {
     final sc = context.read<SocialController>();
-
     showModalBottomSheet(
       context: context,
       useRootNavigator: true,
@@ -902,23 +698,17 @@ class _ProfileHeaderSection extends StatelessWidget {
       builder: (_) => FractionallySizedBox(
         heightFactor: 0.92,
         child: MemberListBottomSheet(
-          title: 'Người theo dõi',
+          title: getTranslated('followers', context) ?? 'Người theo dõi',
           totalCount: sc.profileHeaderUser?.followersCount,
-          // Phân trang từ list đã có trong controller
           pageLoader: (after) async {
             const pageSize = 30;
             final start = int.tryParse(after ?? '0') ?? 0;
             final List<SocialUser> all = sc.followers.toList();
             final pageUsers = all.skip(start).take(pageSize).toList();
-            final next =
-            (start + pageSize < all.length) ? '${start + pageSize}' : null;
+            final next = (start + pageSize < all.length) ? '${start + pageSize}' : null;
             return MemberPage(users: pageUsers, nextCursor: next);
           },
-          onUserTap: (u) {
-            Navigator.of(context).pop();
-            // Nếu muốn mở profile user đó:
-            // Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProfileScreen(targetUserId: u.id)));
-          },
+          onUserTap: (u) => Navigator.of(context).pop(),
         ),
       ),
     );
@@ -926,7 +716,6 @@ class _ProfileHeaderSection extends StatelessWidget {
 
   void _showFollowingSheet(BuildContext context) {
     final sc = context.read<SocialController>();
-
     showModalBottomSheet(
       context: context,
       useRootNavigator: true,
@@ -935,23 +724,17 @@ class _ProfileHeaderSection extends StatelessWidget {
       builder: (_) => FractionallySizedBox(
         heightFactor: 0.92,
         child: MemberListBottomSheet(
-          title: 'Đang theo dõi',
+          title: getTranslated('following', context) ?? 'Đang theo dõi',
           totalCount: sc.profileHeaderUser?.followingCount,
-          // Phân trang từ list đã có trong controller
           pageLoader: (after) async {
             const pageSize = 30;
             final start = int.tryParse(after ?? '0') ?? 0;
             final List<SocialUser> all = sc.following.toList();
             final pageUsers = all.skip(start).take(pageSize).toList();
-            final next =
-            (start + pageSize < all.length) ? '${start + pageSize}' : null;
+            final next = (start + pageSize < all.length) ? '${start + pageSize}' : null;
             return MemberPage(users: pageUsers, nextCursor: next);
           },
-          onUserTap: (u) {
-            Navigator.of(context).pop();
-            // Nếu muốn mở profile user đó:
-            // Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProfileScreen(targetUserId: u.id)));
-          },
+          onUserTap: (u) => Navigator.of(context).pop(),
         ),
       ),
     );
@@ -966,18 +749,10 @@ class _CoverFallback extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        gradient: LinearGradient(colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)], begin: Alignment.topLeft, end: Alignment.bottomRight),
       ),
       alignment: Alignment.center,
-      child: const Icon(
-        Icons.image,
-        size: 60,
-        color: Colors.white54,
-      ),
+      child: const Icon(Icons.image, size: 60, color: Colors.white54),
     );
   }
 }
@@ -990,27 +765,21 @@ class _AvatarFallback extends StatelessWidget {
     return Container(
       color: theme.dividerColor,
       alignment: Alignment.center,
-      child: Icon(
-        Icons.person,
-        size: 36,
-        color: theme.hintColor,
-      ),
+      child: Icon(Icons.person, size: 36, color: theme.hintColor),
     );
   }
 }
 
 // ==============================
-// FOLLOWERS ROW (hàng avatar chồng)
+// FOLLOWERS ROW
 // ==============================
 class _CompactFollowersRow extends StatelessWidget {
   final List<SocialUser> followers;
   const _CompactFollowersRow({required this.followers});
-
   @override
   Widget build(BuildContext context) {
     final display = followers.take(6).toList();
     final remain = followers.length - display.length;
-
     return SizedBox(
       height: 40,
       child: Stack(
@@ -1023,12 +792,8 @@ class _CompactFollowersRow extends StatelessWidget {
                 backgroundColor: Colors.white,
                 child: CircleAvatar(
                   radius: 16,
-                  backgroundImage: display[i].avatarUrl?.isNotEmpty == true
-                      ? NetworkImage(display[i].avatarUrl!)
-                      : null,
-                  child: display[i].avatarUrl?.isNotEmpty != true
-                      ? const Icon(Icons.person, size: 16, color: Colors.grey)
-                      : null,
+                  backgroundImage: display[i].avatarUrl?.isNotEmpty == true ? NetworkImage(display[i].avatarUrl!) : null,
+                  child: display[i].avatarUrl?.isNotEmpty != true ? const Icon(Icons.person, size: 16, color: Colors.grey) : null,
                 ),
               ),
             ),
@@ -1038,13 +803,7 @@ class _CompactFollowersRow extends StatelessWidget {
               child: CircleAvatar(
                 radius: 18,
                 backgroundColor: Colors.grey.shade400,
-                child: Text(
-                  '+$remain',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                child: Text('+$remain', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
               ),
             ),
         ],
@@ -1059,16 +818,8 @@ class _CompactFollowersRow extends StatelessWidget {
 class _SimpleTab extends StatelessWidget {
   final String label;
   final bool active;
-  final bool hasDropdown;
   final VoidCallback onTap;
-
-  const _SimpleTab({
-    required this.label,
-    required this.onTap,
-    this.active = false,
-    this.hasDropdown = false,
-  });
-
+  const _SimpleTab({required this.label, required this.onTap, this.active = false});
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1079,39 +830,17 @@ class _SimpleTab extends StatelessWidget {
         margin: const EdgeInsets.only(right: 12),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
-          color: active
-              ? theme.colorScheme.primary.withOpacity(0.12)
-              : Colors.transparent,
+          color: active ? theme.colorScheme.primary.withOpacity(0.12) : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
-          border: active
-              ? Border.all(
-            color: theme.colorScheme.primary.withOpacity(0.6),
-            width: 1.2,
-          )
-              : null,
+          border: active ? Border.all(color: theme.colorScheme.primary.withOpacity(0.6), width: 1.2) : null,
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13.5,
-                fontWeight: active ? FontWeight.w700 : FontWeight.w600,
-                color: active
-                    ? theme.colorScheme.primary
-                    : theme.textTheme.bodyMedium?.color?.withOpacity(0.9),
-              ),
-            ),
-            if (hasDropdown) const SizedBox(width: 4),
-            if (hasDropdown)
-              Icon(
-                Icons.keyboard_arrow_down,
-                size: 16,
-                color:
-                active ? theme.colorScheme.primary : theme.hintColor,
-              ),
-          ],
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13.5,
+            fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+            color: active ? theme.colorScheme.primary : theme.textTheme.bodyMedium?.color?.withOpacity(0.9),
+          ),
         ),
       ),
     );
@@ -1119,87 +848,49 @@ class _SimpleTab extends StatelessWidget {
 }
 
 // ==============================
-// BLOCK "CHI TIẾT" + "BÀI VIẾT" (đầu tab Bài viết)
+// CHI TIẾT + BÀI VIẾT BLOCK
 // ==============================
 class _ProfileDetailsBlock extends StatelessWidget {
   final SocialUserProfile user;
   final VoidCallback onShowAbout;
-  final bool isSelf; // cờ để biết có hiện ô "Bạn đang nghĩ gì?" không
-
-  const _ProfileDetailsBlock({
-    required this.user,
-    required this.onShowAbout,
-    required this.isSelf,
-  });
+  final bool isSelf;
+  const _ProfileDetailsBlock({required this.user, required this.onShowAbout, required this.isSelf});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final onSurface = cs.onSurface;
-
     final String? avatarUrl = user.avatarUrl;
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ====== TIÊU ĐỀ "Chi tiết" ======
-          const Text(
-            'Chi tiết',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
+          Text(
+            getTranslated('details', context) ?? 'Chi tiết',
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 12),
-
-          // ====== DÒNG 1: "Trang cá nhân · ..." ======
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ô vuông xám
-              Container(
-                width: 20,
-                height: 20,
-                decoration: BoxDecoration(
-                  color: theme.dividerColor,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
+              Container(width: 20, height: 20, decoration: BoxDecoration(color: theme.dividerColor, borderRadius: BorderRadius.circular(4))),
               const SizedBox(width: 10),
               Expanded(
                 child: RichText(
                   text: TextSpan(
-                    style: TextStyle(
-                      color: theme.textTheme.bodyMedium?.color,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      height: 1.4,
-                    ),
+                    style: TextStyle(color: theme.textTheme.bodyMedium?.color, fontSize: 14, fontWeight: FontWeight.w500, height: 1.4),
                     children: [
-                      const TextSpan(
-                        text: 'Trang cá nhân',
-                        style: TextStyle(fontWeight: FontWeight.w700),
-                      ),
+                      TextSpan(text: getTranslated('personal_page', context) ?? 'Trang cá nhân', style: const TextStyle(fontWeight: FontWeight.w700)),
                       const TextSpan(text: ' · '),
-                      TextSpan(
-                        text: (user.about != null &&
-                            user.about!.trim().isNotEmpty)
-                            ? user.about!.trim()
-                            : 'Người sáng tạo nội dung',
-                      ),
+                      TextSpan(text: (user.about?.trim().isNotEmpty == true) ? user.about!.trim() : (getTranslated('content_creator', context) ?? 'Người sáng tạo nội dung')),
                     ],
                   ),
                 ),
               ),
             ],
           ),
-
           const SizedBox(height: 12),
-
-          // ====== DÒNG 2: "Xem thông tin giới thiệu..." ======
           InkWell(
             borderRadius: BorderRadius.circular(4),
             onTap: onShowAbout,
@@ -1210,126 +901,68 @@ class _ProfileDetailsBlock extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Xem thông tin giới thiệu của bạn',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      height: 1.4,
-                      color: onSurface,
-                    ),
+                    getTranslated('view_about_info', context) ?? 'Xem thông tin giới thiệu của bạn',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, height: 1.4, color: cs.onSurface),
                   ),
                 ),
               ],
             ),
           ),
-
           const SizedBox(height: 20),
-
-          // ====== HEADER "Bài viết" + nút Bộ lọc ======
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Bài viết',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
+              Text(
+                getTranslated('posts_title', context) ?? 'Bài viết',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
               TextButton(
-                onPressed: () {
-                  // TODO: bộ lọc
-                },
-                style: TextButton.styleFrom(
-                  padding: EdgeInsets.zero,
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
+                onPressed: () {},
+                style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
                 child: Text(
-                  'Bộ lọc',
-                  style: TextStyle(
-                    color: theme.colorScheme.primary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  getTranslated('filter', context) ?? 'Bộ lọc',
+                  style: TextStyle(color: theme.colorScheme.primary, fontSize: 13, fontWeight: FontWeight.w600),
                 ),
               ),
             ],
           ),
-
           const SizedBox(height: 12),
-
-          // ====== Ô "Bạn đang nghĩ gì?" chỉ hiện NẾU là trang của chính mình ======
-          if (isSelf) ...[
+          if (isSelf)
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // avatar
                 CircleAvatar(
                   radius: 20,
                   backgroundColor: cs.surfaceVariant,
-                  backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
-                      ? NetworkImage(avatarUrl)
-                      : null,
-                  child: (avatarUrl == null || avatarUrl.isEmpty)
-                      ? Icon(Icons.person, color: cs.onSurface.withOpacity(.6))
-                      : null,
+                  backgroundImage: (avatarUrl?.isNotEmpty == true) ? NetworkImage(avatarUrl!) : null,
+                  child: (avatarUrl?.isEmpty ?? true) ? Icon(Icons.person, color: cs.onSurface.withOpacity(.6)) : null,
                 ),
                 const SizedBox(width: 12),
-
-                // input giả
                 Expanded(
                   child: InkWell(
                     borderRadius: BorderRadius.circular(12),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const SocialCreatePostScreen(),
-                          fullscreenDialog: true,
-                        ),
-                      );
-                    },
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SocialCreatePostScreen(), fullscreenDialog: true)),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: cs.surfaceVariant.withOpacity(.5),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(color: cs.surfaceVariant.withOpacity(.5), borderRadius: BorderRadius.circular(12)),
                       child: Text(
-                        'Bạn đang nghĩ gì?',
-                        style: TextStyle(
-                          color: cs.onSurface.withOpacity(.7),
-                          fontSize: 16,
-                        ),
+                        getTranslated('what_are_you_thinking', context) ?? 'Bạn đang nghĩ gì?',
+                        style: TextStyle(color: cs.onSurface.withOpacity(.7), fontSize: 16),
                       ),
                     ),
                   ),
                 ),
-
                 const SizedBox(width: 12),
-
-                // nút media nhỏ
                 Container(
                   width: 36,
                   height: 36,
-                  decoration: BoxDecoration(
-                    color: Colors.green.shade100,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+                  decoration: BoxDecoration(color: Colors.green.shade100, borderRadius: BorderRadius.circular(8)),
                   alignment: Alignment.center,
-                  child: Icon(
-                    Icons.image,
-                    size: 20,
-                    color: Colors.green.shade700,
-                  ),
+                  child: Icon(Icons.image, size: 20, color: Colors.green.shade700),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-          ],
+          if (isSelf) const SizedBox(height: 16),
         ],
       ),
     );
@@ -1337,7 +970,7 @@ class _ProfileDetailsBlock extends StatelessWidget {
 }
 
 // ==============================
-// GIỚI THIỆU TAB CONTENT
+// GIỚI THIỆU TAB
 // ==============================
 class _ProfileAboutSection extends StatelessWidget {
   final SocialUserProfile user;
@@ -1346,91 +979,34 @@ class _ProfileAboutSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    final locationText = () {
-      final parts = <String>[];
-      if (user.city?.isNotEmpty == true) parts.add(user.city!);
-      if (user.country?.isNotEmpty == true) parts.add(user.country!);
-      return parts.join(', ');
-    }();
-
+    final locationText = [user.city, user.country].where((s) => s?.isNotEmpty == true).join(', ');
     final rows = <_AboutRowData>[];
+    if (user.work?.isNotEmpty == true) rows.add(_AboutRowData(Icons.work_outline, user.work!));
+    if (user.education?.isNotEmpty == true) rows.add(_AboutRowData(Icons.school_outlined, user.education!));
+    if (locationText.isNotEmpty) rows.add(_AboutRowData(Icons.location_on_outlined, locationText));
+    if (user.website?.isNotEmpty == true) rows.add(_AboutRowData(Icons.link, user.website!, isLink: true));
+    if (user.genderText?.isNotEmpty == true) rows.add(_AboutRowData(Icons.wc_rounded, user.genderText!));
+    if (user.birthday?.isNotEmpty == true) rows.add(_AboutRowData(Icons.cake_outlined, user.birthday!));
+    if (user.relationshipStatus?.isNotEmpty == true) rows.add(_AboutRowData(Icons.favorite_border, user.relationshipStatus!));
+    if (user.lastSeenText?.isNotEmpty == true) rows.add(_AboutRowData(Icons.schedule, '${getTranslated('active', context) ?? 'Hoạt động'} ${user.lastSeenText} trước'));
 
-    if (user.work?.isNotEmpty == true) {
-      rows.add(_AboutRowData(Icons.work_outline, user.work!));
-    }
-    if (user.education?.isNotEmpty == true) {
-      rows.add(_AboutRowData(Icons.school_outlined, user.education!));
-    }
-    if (locationText.isNotEmpty) {
-      rows.add(_AboutRowData(Icons.location_on_outlined, locationText));
-    }
-    if (user.website?.isNotEmpty == true) {
-      rows.add(_AboutRowData(Icons.link, user.website!, isLink: true));
-    }
-    if (user.genderText?.isNotEmpty == true) {
-      rows.add(_AboutRowData(Icons.wc_rounded, user.genderText!));
-    }
-    if (user.birthday?.isNotEmpty == true) {
-      rows.add(_AboutRowData(Icons.cake_outlined, user.birthday!));
-    }
-    if (user.relationshipStatus?.isNotEmpty == true) {
-      rows.add(
-          _AboutRowData(Icons.favorite_border, user.relationshipStatus!));
-    }
-    if (user.lastSeenText?.isNotEmpty == true) {
-      rows.add(_AboutRowData(
-          Icons.schedule, 'Hoạt động ${user.lastSeenText} trước'));
-    }
-
-    final bool hasAnyInfo =
-        (user.about?.trim().isNotEmpty == true) || rows.isNotEmpty;
+    final hasAnyInfo = (user.about?.trim().isNotEmpty == true) || rows.isNotEmpty;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: Dimensions.paddingSizeDefault,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeDefault),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 16),
-
-          const Text(
-            'Giới thiệu',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          Text(getTranslated('about', context) ?? 'Giới thiệu', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
-
           if (user.about?.trim().isNotEmpty == true) ...[
-            Text(
-              user.about!.trim(),
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                height: 1.4,
-                color: theme.textTheme.bodyMedium?.color,
-              ),
-            ),
+            Text(user.about!.trim(), style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, height: 1.4, color: theme.textTheme.bodyMedium?.color)),
             const SizedBox(height: 16),
           ],
-
-          if (rows.isEmpty && user.about?.trim().isEmpty != false)
-            Text(
-              'Chưa có thông tin giới thiệu.',
-              style: TextStyle(
-                fontSize: 14,
-                color: theme.hintColor,
-              ),
-            ),
-
-          for (final r in rows) ...[
-            _AboutInfoRow(data: r),
-            const SizedBox(height: 12),
-          ],
-
+          if (!hasAnyInfo)
+            Text(getTranslated('no_about_info', context) ?? 'Chưa có thông tin giới thiệu.', style: TextStyle(fontSize: 14, color: theme.hintColor)),
+          for (final r in rows) ...[_AboutInfoRow(data: r), const SizedBox(height: 12)],
           if (hasAnyInfo) const SizedBox(height: 24),
         ],
       ),
@@ -1448,7 +1024,6 @@ class _AboutRowData {
 class _AboutInfoRow extends StatelessWidget {
   final _AboutRowData data;
   const _AboutInfoRow({required this.data});
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1456,27 +1031,22 @@ class _AboutInfoRow extends StatelessWidget {
       fontSize: 14,
       fontWeight: FontWeight.w500,
       color: data.isLink ? Colors.blue : theme.textTheme.bodyMedium?.color,
-      decoration:
-      data.isLink ? TextDecoration.underline : TextDecoration.none,
+      decoration: data.isLink ? TextDecoration.underline : TextDecoration.none,
       height: 1.3,
     );
-
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Icon(data.icon, size: 20, color: theme.hintColor),
         const SizedBox(width: 10),
-        Expanded(
-          child: Text(data.text, style: textStyle),
-        ),
+        Expanded(child: Text(data.text, style: textStyle)),
       ],
     );
   }
 }
 
 // ==============================
-// DANH SÁCH BÀI VIẾT (TAB "Bài viết")
-// Có block "Chi tiết" + "Bài viết" ở đầu
+// DANH SÁCH BÀI VIẾT
 // ==============================
 class _ProfilePostsSection extends StatelessWidget {
   final SocialUserProfile user;
@@ -1484,8 +1054,7 @@ class _ProfilePostsSection extends StatelessWidget {
   final bool isLoadingMore;
   final VoidCallback onLoadMore;
   final VoidCallback onShowAbout;
-  final bool isSelf; // ẩn/hiện composer
-
+  final bool isSelf;
   const _ProfilePostsSection({
     required this.user,
     required this.posts,
@@ -1497,28 +1066,19 @@ class _ProfilePostsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Nếu chưa có bài viết -> vẫn show block Chi tiết (và composer tùy isSelf)
     if (posts.isEmpty) {
       return Padding(
-        padding: const EdgeInsets.only(
-          bottom: Dimensions.paddingSizeDefault,
-        ),
+        padding: const EdgeInsets.only(bottom: Dimensions.paddingSizeDefault),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: 16),
-            _ProfileDetailsBlock(
-              user: user,
-              onShowAbout: onShowAbout,
-              isSelf: isSelf,
-            ),
+            _ProfileDetailsBlock(user: user, onShowAbout: onShowAbout, isSelf: isSelf),
             const SizedBox(height: 24),
             Padding(
-              padding:
-              const EdgeInsets.all(Dimensions.paddingSizeDefault),
+              padding: const EdgeInsets.all(Dimensions.paddingSizeDefault),
               child: Text(
-                getTranslated('no_posts_yet', context) ??
-                    'Chưa có bài viết nào',
+                getTranslated('no_posts_yet', context) ?? 'Chưa có bài viết nào',
                 style: TextStyle(color: Theme.of(context).hintColor),
                 textAlign: TextAlign.center,
               ),
@@ -1528,29 +1088,18 @@ class _ProfilePostsSection extends StatelessWidget {
       );
     }
 
-    // Có bài viết -> block Chi tiết (composer tùy isSelf), rồi danh sách post
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: Dimensions.paddingSizeDefault,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeDefault),
       child: Column(
         children: [
           const SizedBox(height: 16),
-          _ProfileDetailsBlock(
-            user: user,
-            onShowAbout: onShowAbout,
-            isSelf: isSelf,
-          ),
+          _ProfileDetailsBlock(user: user, onShowAbout: onShowAbout, isSelf: isSelf),
           const SizedBox(height: 24),
-
           for (int i = 0; i < posts.length; i++) ...[
             SocialPostCard(post: posts[i]),
-            if (i != posts.length - 1)
-              const SizedBox(height: Dimensions.paddingSizeSmall),
+            if (i != posts.length - 1) const SizedBox(height: Dimensions.paddingSizeSmall),
           ],
-
           const SizedBox(height: Dimensions.paddingSizeDefault),
-
           if (isLoadingMore)
             const Center(child: CircularProgressIndicator())
           else
@@ -1558,7 +1107,7 @@ class _ProfilePostsSection extends StatelessWidget {
               child: TextButton(
                 onPressed: onLoadMore,
                 child: Text(
-                  getTranslated('load_more_posts', context) ?? 'Tải thêm',
+                  getTranslated('load_more', context) ?? 'Tải thêm',
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
@@ -1570,374 +1119,212 @@ class _ProfilePostsSection extends StatelessWidget {
 }
 
 // ==============================
-// Nút tròn dấu "…"
+// NÚT MORE
 // ==============================
 class _MoreCircleButton extends StatelessWidget {
   final VoidCallback onPressed;
   const _MoreCircleButton({required this.onPressed});
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-
     return Container(
       height: 50,
       width: 50,
       decoration: BoxDecoration(
         color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
         borderRadius: BorderRadius.circular(30),
-        border: Border.all(
-          color: theme.dividerColor,
-          width: 1.2,
-        ),
+        border: Border.all(color: theme.dividerColor, width: 1.2),
       ),
-      child: IconButton(
-        onPressed: onPressed,
-        icon: const Icon(Icons.more_horiz, size: 22),
-      ),
+      child: IconButton(onPressed: onPressed, icon: const Icon(Icons.more_horiz, size: 22)),
     );
   }
 }
 
-void _showOtherProfileMenu(
-    BuildContext context, SocialUserProfile user) {
+// ==============================
+// MENU CHO NGƯỜI KHÁC
+// ==============================
+void _showOtherProfileMenu(BuildContext context, SocialUserProfile user) {
   final theme = Theme.of(context);
   final sc = context.read<SocialController>();
-  final bool isBlocked =
-      sc.profileHeaderUser?.isBlocked ?? user.isBlocked;
+  final bool isBlocked = sc.profileHeaderUser?.isBlocked ?? user.isBlocked;
 
   showModalBottomSheet(
     context: context,
     useRootNavigator: true,
     isScrollControlled: false,
     backgroundColor: Colors.transparent,
-    builder: (_) {
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Card chính của sheet
-              Container(
-                decoration: BoxDecoration(
-                  color: theme.cardColor,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
-                      blurRadius: 12,
-                      offset: const Offset(0, 6),
-                    )
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Handle
-                    Padding(
-                      padding:
-                      const EdgeInsets.symmetric(vertical: 10),
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: theme.dividerColor,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-
-                    // Header: avatar + tên
-                    ListTile(
-                      leading: CircleAvatar(
-                        radius: 20,
-                        backgroundImage:
-                        (user.avatarUrl?.isNotEmpty ?? false)
-                            ? NetworkImage(user.avatarUrl!)
-                            : null,
-                        child: (user.avatarUrl?.isEmpty ?? true)
-                            ? const Icon(Icons.person)
-                            : null,
-                      ),
-                      title: Text(
-                        user.displayName?.isNotEmpty == true
-                            ? user.displayName!
-                            : (user.userName ?? 'Người dùng'),
-                        style:
-                        const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      subtitle:
-                      Text('@${user.userName ?? user.id}'),
-                    ),
-                    const Divider(height: 1),
-
-                    // Báo cáo
-                    ListTile(
-                      leading: const Icon(Icons.flag_outlined, color: Colors.red),
-                      title: const Text('Báo cáo'),
-                      subtitle: const Text('Báo cáo trang cá nhân này'),
-                      onTap: () {
-                        Navigator.pop(context); // đóng sheet trước
-                        // mở dialog báo cáo (lấy đúng targetId)
-                        Future.microtask(() => _showReportUserDialog(context, targetUserId: user.id));
-                      },
-                    ),
-
-                    const Divider(height: 1),
-
-                    // Chặn / Bỏ chặn (động theo trạng thái)
-                    ListTile(
-                      leading:
-                      const Icon(Icons.block, color: Colors.red),
-                      title: Text(isBlocked ? 'Bỏ chặn' : 'Chặn'),
-                      subtitle: Text(
-                        isBlocked
-                            ? 'Cho phép xem & tương tác lại'
-                            : 'Không thấy nội dung và tương tác',
-                      ),
-                      onTap: () async {
-                        Navigator.pop(context);
-                        await _confirmBlock(context, user,
-                            unblock: isBlocked);
-                      },
-                    ),
-                    const Divider(height: 1),
-
-                    // Chia sẻ
-                    ListTile(
-                      leading:
-                      const Icon(Icons.share_outlined),
-                      title: const Text('Chia sẻ trang cá nhân'),
-                      onTap: () {
-                        Navigator.pop(context);
-                        // TODO: mở share sheet / sao chép liên kết
-                      },
-                    ),
-                  ],
-                ),
+    builder: (_) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                color: theme.cardColor,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 12, offset: const Offset(0, 6))],
               ),
-
-              const SizedBox(height: 8),
-
-              // Nút Hủy
-              Container(
-                decoration: BoxDecoration(
-                  color: theme.cardColor,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: ListTile(
-                  title: const Center(child: Text('Hủy')),
-                  onTap: () => Navigator.pop(context),
-                ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(padding: const EdgeInsets.symmetric(vertical: 10), child: Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.dividerColor, borderRadius: BorderRadius.circular(2)))),
+                  ListTile(
+                    leading: CircleAvatar(radius: 20, backgroundImage: (user.avatarUrl?.isNotEmpty ?? false) ? NetworkImage(user.avatarUrl!) : null, child: (user.avatarUrl?.isEmpty ?? true) ? const Icon(Icons.person) : null),
+                    title: Text(user.displayName?.isNotEmpty == true ? user.displayName! : (user.userName ?? getTranslated('user', context) ?? 'Người dùng'), style: const TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: Text('@${user.userName ?? user.id}'),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.flag_outlined, color: Colors.red),
+                    title: Text(getTranslated('report', context) ?? 'Báo cáo'),
+                    subtitle: Text(getTranslated('report_this_profile', context) ?? 'Báo cáo trang cá nhân này'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Future.microtask(() => _showReportUserDialog(context, targetUserId: user.id));
+                    },
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.block, color: Colors.red),
+                    title: Text(isBlocked ? (getTranslated('unblock', context) ?? 'Bỏ chặn') : (getTranslated('block', context) ?? 'Chặn')),
+                    subtitle: Text(isBlocked ? (getTranslated('allow_interaction', context) ?? 'Cho phép xem & tương tác lại') : (getTranslated('block_interaction', context) ?? 'Không thấy nội dung và tương tác')),
+                    onTap: () async {
+                      Navigator.pop(context);
+                      await _confirmBlock(context, user, unblock: isBlocked);
+                    },
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.share_outlined),
+                    title: Text(getTranslated('share_profile', context) ?? 'Chia sẻ trang cá nhân'),
+                    onTap: () => Navigator.pop(context),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              decoration: BoxDecoration(color: theme.cardColor, borderRadius: BorderRadius.circular(16)),
+              child: ListTile(title: Center(child: Text(getTranslated('cancel', context) ?? 'Hủy')), onTap: () => Navigator.pop(context)),
+            ),
+          ],
         ),
-      );
-    },
+      ),
+    ),
   );
 }
 
-Future<void> _confirmBlock(
-    BuildContext context,
-    SocialUserProfile user, {
-      bool unblock = false,
-    }) async {
+Future<void> _confirmBlock(BuildContext context, SocialUserProfile user, {bool unblock = false}) async {
   final theme = Theme.of(context);
   final sc = context.read<SocialController>();
-
-  final title = unblock ? 'Bỏ chặn người dùng?' : 'Chặn người dùng?';
+  final title = unblock ? (getTranslated('unblock_confirm', context) ?? 'Bỏ chặn người dùng?') : (getTranslated('block_confirm', context) ?? 'Chặn người dùng?');
   final content = unblock
-      ? 'Bạn có chắc muốn bỏ chặn ${user.displayName ?? user.userName ?? 'người này'}?'
-      : 'Bạn có chắc muốn chặn ${user.displayName ?? user.userName ?? 'người này'}?\nSau khi chặn, hai bên sẽ không nhìn thấy hoặc tương tác với nhau.';
-
-  final actionText = unblock ? 'Bỏ chặn' : 'Chặn';
+      ? '${getTranslated('unblock_message', context) ?? 'Bạn có chắc muốn bỏ chặn'} ${user.displayName ?? user.userName ?? 'người này'}?'
+      : '${getTranslated('block_message', context) ?? 'Bạn có chắc muốn chặn'} ${user.displayName ?? user.userName ?? 'người này'}?\n${getTranslated('block_effect', context) ?? 'Sau khi chặn, hai bên sẽ không nhìn thấy hoặc tương tác với nhau.'}';
+  final actionText = unblock ? (getTranslated('unblock', context) ?? 'Bỏ chặn') : (getTranslated('block', context) ?? 'Chặn');
 
   final shouldProceed = await showDialog<bool>(
     context: context,
-    builder: (_) {
-      return AlertDialog(
-        title: Text(title),
-        content: Text(content),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Hủy'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(actionText),
-          ),
-        ],
-      );
-    },
+    builder: (_) => AlertDialog(
+      title: Text(title),
+      content: Text(content),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: Text(getTranslated('cancel', context) ?? 'Hủy')),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+          onPressed: () => Navigator.pop(context, true),
+          child: Text(actionText),
+        ),
+      ],
+    ),
   );
 
   if (shouldProceed != true) return;
-
   try {
-    // unblock=true => block=false; unblock=false => block=true
-    await sc.toggleBlockUser(
-      targetUserId: user.id,
-      block: !unblock,
-    );
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(unblock ? 'Đã bỏ chặn' : 'Đã chặn')),
-    );
+    await sc.toggleBlockUser(targetUserId: user.id, block: !unblock);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(unblock ? (getTranslated('unblocked', context) ?? 'Đã bỏ chặn') : (getTranslated('blocked', context) ?? 'Đã chặn'))));
   } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(e.toString())),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
   }
 }
 
-void _showSelfProfileMenu(
-    BuildContext context, SocialUserProfile user) {
+// ==============================
+// MENU CÁ NHÂN
+// ==============================
+void _showSelfProfileMenu(BuildContext context, SocialUserProfile user) {
   final theme = Theme.of(context);
-
   showModalBottomSheet(
     context: context,
     useRootNavigator: true,
     isScrollControlled: false,
     backgroundColor: Colors.transparent,
-    builder: (_) {
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                decoration: BoxDecoration(
-                  color: theme.cardColor,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
-                      blurRadius: 12,
-                      offset: const Offset(0, 6),
-                    )
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Handle
-                    Padding(
-                      padding:
-                      const EdgeInsets.symmetric(vertical: 10),
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: theme.dividerColor,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-
-                    // Header: avatar + tên
-                    ListTile(
-                      leading: CircleAvatar(
-                        radius: 20,
-                        backgroundImage:
-                        (user.avatarUrl?.isNotEmpty ?? false)
-                            ? NetworkImage(user.avatarUrl!)
-                            : null,
-                        child: (user.avatarUrl?.isEmpty ?? true)
-                            ? const Icon(Icons.person)
-                            : null,
-                      ),
-                      title: Text(
-                        user.displayName?.isNotEmpty == true
-                            ? user.displayName!
-                            : (user.userName ?? 'Trang cá nhân của tôi'),
-                        style:
-                        const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      subtitle:
-                      Text('@${user.userName ?? user.id}'),
-                    ),
-                    const Divider(height: 1),
-
-                    // Danh sách đã chặn
-                    ListTile(
-                      leading: const Icon(Icons.block),
-                      title: const Text('Danh sách đã chặn'),
-                      subtitle:
-                      const Text('Xem và bỏ chặn người dùng'),
-                      onTap: () async {
-                        Navigator.pop(context);
-                        await _showBlockedUsersSheet(context);
-                      },
-                    ),
-                    const Divider(height: 1),
-
-                    // Chia sẻ trang cá nhân
-                    ListTile(
-                      leading:
-                      const Icon(Icons.share_outlined),
-                      title: const Text('Chia sẻ trang cá nhân'),
-                      onTap: () async {
-                        Navigator.pop(context);
-                        await _shareMyProfile(context, user);
-                      },
-                    ),
-                  ],
-                ),
+    builder: (_) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              decoration: BoxDecoration(color: theme.cardColor, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 12, offset: const Offset(0, 6))]),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(padding: const EdgeInsets.symmetric(vertical: 10), child: Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.dividerColor, borderRadius: BorderRadius.circular(2)))),
+                  ListTile(
+                    leading: CircleAvatar(radius: 20, backgroundImage: (user.avatarUrl?.isNotEmpty ?? false) ? NetworkImage(user.avatarUrl!) : null, child: (user.avatarUrl?.isEmpty ?? true) ? const Icon(Icons.person) : null),
+                    title: Text(user.displayName?.isNotEmpty == true ? user.displayName! : (user.userName ?? getTranslated('my_profile', context) ?? 'Trang cá nhân của tôi'), style: const TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: Text('@${user.userName ?? user.id}'),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.block),
+                    title: Text(getTranslated('blocked_list', context) ?? 'Danh sách đã chặn'),
+                    subtitle: Text(getTranslated('view_unblock', context) ?? 'Xem và bỏ chặn người dùng'),
+                    onTap: () async {
+                      Navigator.pop(context);
+                      await _showBlockedUsersSheet(context);
+                    },
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.share_outlined),
+                    title: Text(getTranslated('share_profile', context) ?? 'Chia sẻ trang cá nhân'),
+                    onTap: () async {
+                      Navigator.pop(context);
+                      await _shareMyProfile(context, user);
+                    },
+                  ),
+                ],
               ),
-
-              const SizedBox(height: 8),
-
-              // Nút Hủy
-              Container(
-                decoration: BoxDecoration(
-                  color: theme.cardColor,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: ListTile(
-                  title: const Center(child: Text('Hủy')),
-                  onTap: () => Navigator.pop(context),
-                ),
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              decoration: BoxDecoration(color: theme.cardColor, borderRadius: BorderRadius.circular(16)),
+              child: ListTile(title: Center(child: Text(getTranslated('cancel', context) ?? 'Hủy')), onTap: () => Navigator.pop(context)),
+            ),
+          ],
         ),
-      );
-    },
+      ),
+    ),
   );
 }
 
-Future<void> _shareMyProfile(
-    BuildContext context, SocialUserProfile user) async {
-  final base = AppConstants.socialBaseUrl
-      .replaceAll(RegExp(r'/$'), '');
-  // ưu tiên username, fallback sang id
-  final path =
-  (user.userName?.isNotEmpty ?? false) ? '/${user.userName}' : '/u/${user.id}';
+Future<void> _shareMyProfile(BuildContext context, SocialUserProfile user) async {
+  final base = AppConstants.socialBaseUrl.replaceAll(RegExp(r'/$'), '');
+  final path = (user.userName?.isNotEmpty ?? false) ? '/${user.userName}' : '/u/${user.id}';
   final url = '$base$path';
-
   await Clipboard.setData(ClipboardData(text: url));
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text('Đã sao chép liên kết: $url')),
-  );
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${getTranslated('copied_link', context) ?? 'Đã sao chép liên kết'}: $url')));
 }
 
 // ==============================
-// BỔ SUNG: SHEET "Danh sách đã chặn" + confirm dialog bỏ chặn
+// DANH SÁCH CHẶN
 // ==============================
 Future<void> _showBlockedUsersSheet(BuildContext context) async {
   final sc = context.read<SocialController>();
-
-  // Tải nếu đang trống (yêu cầu bạn có sc.loadBlockedUsersIfEmpty())
   await sc.loadBlockedUsersIfEmpty();
-
   showModalBottomSheet(
     context: context,
     useRootNavigator: true,
@@ -1946,69 +1333,67 @@ Future<void> _showBlockedUsersSheet(BuildContext context) async {
     builder: (_) => FractionallySizedBox(
       heightFactor: 0.92,
       child: MemberListBottomSheet(
-        title: 'Danh sách đã chặn',
-        // Nếu API không trả total, dùng length hiện có
+        title: getTranslated('blocked_list', context) ?? 'Danh sách đã chặn',
         totalCount: sc.blockedUsers.length,
         pageLoader: (after) async {
           const pageSize = 30;
           final start = int.tryParse(after ?? '0') ?? 0;
           final List<SocialUser> all = sc.blockedUsers.toList();
           final pageUsers = all.skip(start).take(pageSize).toList();
-          final next = (start + pageSize < all.length)
-              ? '${start + pageSize}'
-              : null;
+          final next = (start + pageSize < all.length) ? '${start + pageSize}' : null;
           return MemberPage(users: pageUsers, nextCursor: next);
         },
-        onUserTap: (u) async {
-          // Hỏi xác nhận
-          final ok = await _confirmUnblockFromList(context, u);
-          if (ok == true) {
-            await sc.unblockFromList(u.id);
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Đã bỏ chặn')),
-            );
+          onUserTap: (u) async {
+            final ok = await _confirmUnblockFromList(context, u);
+            if (ok == true) {
+              await sc.unblockFromList(u.id);
+
+              // Đóng sheet hiện tại
+              if (!context.mounted) return;
+              Navigator.pop(context);
+
+              // Chờ animation đóng (~200ms) để tránh “giựt”
+              await Future.delayed(const Duration(milliseconds: 220));
+
+              // Mở lại đúng sheet cũ với dữ liệu mới
+              if (!context.mounted) return;
+              _showBlockedUsersSheet(context);
+
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(const SnackBar(content: Text('Đã bỏ chặn')));
+            }
           }
-        },
       ),
     ),
   );
 }
 
-Future<bool?> _confirmUnblockFromList(
-    BuildContext context, SocialUser u) {
+Future<bool?> _confirmUnblockFromList(BuildContext context, SocialUser u) {
   return showDialog<bool>(
     context: context,
     builder: (_) => AlertDialog(
-      title: const Text('Bỏ chặn người dùng?'),
-      content: Text(
-          'Bạn có chắc muốn bỏ chặn ${u.displayName ?? u.userName ?? u.id}?'),
+      title: Text(getTranslated('unblock_confirm', context) ?? 'Bỏ chặn người dùng?'),
+      content: Text('${getTranslated('unblock_message', context) ?? 'Bạn có chắc muốn bỏ chặn'} ${u.displayName ?? u.userName ?? u.id}?'),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: const Text('Hủy'),
-        ),
+        TextButton(onPressed: () => Navigator.pop(context, false), child: Text(getTranslated('cancel', context) ?? 'Hủy')),
         FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: Colors.red,
-            foregroundColor: Colors.white,
-          ),
+          style: FilledButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
           onPressed: () => Navigator.pop(context, true),
-          child: const Text('Bỏ chặn'),
+          child: Text(getTranslated('unblock', context) ?? 'Bỏ chặn'),
         ),
       ],
     ),
   );
 }
 
-// === REPORT USER DIALOG ===
+// ==============================
+// BÁO CÁO
+// ==============================
 void _showReportUserDialog(BuildContext context, {String? targetUserId}) {
   final sc = context.read<SocialController>();
   final String? id = targetUserId ?? sc.profileHeaderUser?.id;
-
   if (id == null || id.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Không xác định người cần báo cáo')),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(getTranslated('report_error', context) ?? 'Không xác định người cần báo cáo')));
     return;
   }
 
@@ -2018,76 +1403,55 @@ void _showReportUserDialog(BuildContext context, {String? targetUserId}) {
   showDialog(
     context: context,
     barrierDismissible: !sending,
-    builder: (ctx) {
-      return StatefulBuilder(builder: (ctx, setState) {
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setState) {
         final canSend = !sending && textCtrl.text.trim().isNotEmpty;
         return AlertDialog(
-          title: const Text('Báo cáo người dùng'),
+          title: Text(getTranslated('report_user', context) ?? 'Báo cáo người dùng'),
           content: TextField(
             controller: textCtrl,
             maxLines: 4,
-            decoration: const InputDecoration(
-              hintText: 'Nhập lý do/ mô tả vi phạm...',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              hintText: getTranslated('report_hint', context) ?? 'Nhập lý do/ mô tả vi phạm...',
+              border: const OutlineInputBorder(),
             ),
             onChanged: (_) => setState(() {}),
           ),
           actions: [
-            TextButton(
-              onPressed: sending ? null : () => Navigator.pop(ctx),
-              child: const Text('Hủy'),
-            ),
+            TextButton(onPressed: sending ? null : () => Navigator.pop(ctx), child: Text(getTranslated('cancel', context) ?? 'Hủy')),
             ElevatedButton(
               onPressed: canSend
                   ? () async {
                 setState(() => sending = true);
                 try {
-                  // Gọi service qua controller (đã có trong Service/Repo)
-                  final msg = await sc.service.reportUser(
-                    targetUserId: id,
-                    text: textCtrl.text.trim(),
-                  );
+                  final msg = await sc.service.reportUser(targetUserId: id, text: textCtrl.text.trim());
                   if (ctx.mounted) Navigator.pop(ctx);
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          (msg is String && msg.trim().isNotEmpty)
-                              ? msg
-                              : 'Đã gửi báo cáo',
-                        ),
-                      ),
-                    );
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((msg is String && msg.trim().isNotEmpty) ? msg : (getTranslated('report_sent', context) ?? 'Đã gửi báo cáo'))));
                   }
                 } catch (e) {
                   setState(() => sending = false);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(e.toString())),
-                    );
-                  }
+                  if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
                 }
               }
                   : null,
               child: sending
-                  ? const SizedBox(
-                height: 18,
-                width: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-                  : const Text('Gửi báo cáo'),
+                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : Text(getTranslated('send_report', context) ?? 'Gửi báo cáo'),
             ),
           ],
         );
-      });
-    },
+      },
+    ),
   );
 }
 
+// ==============================
+// ẢNH
+// ==============================
 class _ProfilePhotosSection extends StatefulWidget {
   final String? targetUserId;
   const _ProfilePhotosSection({this.targetUserId});
-
   @override
   State<_ProfilePhotosSection> createState() => _ProfilePhotosSectionState();
 }
@@ -2098,7 +1462,6 @@ class _ProfilePhotosSectionState extends State<_ProfilePhotosSection> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final sc = context.read<SocialController>();
-      // Chỉ nạp khi chưa có dữ liệu
       if (sc.profilePhotos.isEmpty && !sc.isLoadingProfilePhotos) {
         sc.refreshProfilePhotos(targetUserId: widget.targetUserId);
       }
@@ -2111,26 +1474,15 @@ class _ProfilePhotosSectionState extends State<_ProfilePhotosSection> {
       builder: (context, sc, _) {
         final photos = sc.profilePhotos;
         final loading = sc.isLoadingProfilePhotos;
-
         if (loading && photos.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: CircularProgressIndicator()),
-          );
+          return const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: Center(child: CircularProgressIndicator()));
         }
-
         if (photos.isEmpty) {
           return Padding(
             padding: const EdgeInsets.all(16),
-            child: Center(
-              child: Text(
-                'Chưa có ảnh',
-                style: TextStyle(color: Theme.of(context).hintColor),
-              ),
-            ),
+            child: Center(child: Text(getTranslated('no_photos', context) ?? 'Chưa có ảnh', style: TextStyle(color: Theme.of(context).hintColor))),
           );
         }
-
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -2151,66 +1503,29 @@ class _ProfilePhotosSectionState extends State<_ProfilePhotosSection> {
                   final p = photos[i];
                   final thumb = p.thumbUrl ?? p.fullUrl;
                   final full = p.fullUrl ?? p.thumbUrl;
-
-                  // Nếu không có URL hợp lệ thì render ô hỏng và không cho mở
                   if (full == null && thumb == null) {
-                    return const ColoredBox(
-                      color: Color(0x11000000),
-                      child: Center(child: Icon(Icons.broken_image)),
-                    );
+                    return const ColoredBox(color: Color(0x11000000), child: Center(child: Icon(Icons.broken_image)));
                   }
-
-                  // Dùng URL làm heroTag để khớp 1-1 giữa grid và viewer
                   final heroTag = (full ?? thumb)!;
-
                   return ClipRRect(
                     borderRadius: BorderRadius.circular(6),
                     child: GestureDetector(
                       onTap: () {
-                        // Tạo danh sách URL ảnh full-size theo đúng thứ tự đang hiển thị
-                        final urls = photos
-                            .map((e) => e.fullUrl ?? e.thumbUrl)
-                            .whereType<String>()
-                            .toList();
-
-                        // Xác định index ảnh được chạm tương ứng trong mảng urls
+                        final urls = photos.map((e) => e.fullUrl ?? e.thumbUrl).whereType<String>().toList();
                         final tapped = full ?? thumb;
-                        final initialIndex =
-                        tapped == null ? i : urls.indexOf(tapped);
+                        final initialIndex = tapped == null ? i : urls.indexOf(tapped);
                         final safeIndex = initialIndex < 0 ? 0 : initialIndex;
-
-                        // heroTags dùng chính URLs để match Hero
-                        final heroTags = urls;
-
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => FullscreenGalleryLite(
-                              urls: urls,
-                              initialIndex: safeIndex,
-                              heroTags: heroTags,
-                            ),
-                          ),
-                        );
+                        Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) => FullscreenGalleryLite(urls: urls, initialIndex: safeIndex, heroTags: urls),
+                        ));
                       },
                       child: Hero(
                         tag: heroTag,
                         child: Image.network(
-                          // Ưu tiên thumb cho grid để tải nhanh
                           thumb ?? full!,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const ColoredBox(
-                            color: Color(0x11000000),
-                            child: Center(child: Icon(Icons.broken_image)),
-                          ),
-                          loadingBuilder: (context, child, progress) {
-                            if (progress == null) return child;
-                            return const ColoredBox(
-                              color: Color(0x11000000),
-                              child: Center(
-                                  child:
-                                  CircularProgressIndicator(strokeWidth: 2)),
-                            );
-                          },
+                          errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0x11000000), child: Center(child: Icon(Icons.broken_image))),
+                          loadingBuilder: (context, child, progress) => progress == null ? child : const ColoredBox(color: Color(0x11000000), child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
                         ),
                       ),
                     ),
@@ -2224,10 +1539,8 @@ class _ProfilePhotosSectionState extends State<_ProfilePhotosSection> {
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Center(
                   child: TextButton(
-                    onPressed: () => sc.loadMoreProfilePhotos(
-                      targetUserId: widget.targetUserId,
-                    ),
-                    child: const Text('Tải thêm'),
+                    onPressed: () => sc.loadMoreProfilePhotos(targetUserId: widget.targetUserId),
+                    child: Text(getTranslated('load_more', context) ?? 'Tải thêm'),
                   ),
                 ),
               ),
@@ -2239,37 +1552,35 @@ class _ProfilePhotosSectionState extends State<_ProfilePhotosSection> {
 }
 
 // ==============================
-// REELS SECTION (NEW)
+// REELS
 // ==============================
 class _ProfileReelsSection extends StatefulWidget {
   final String? targetUserId;
   const _ProfileReelsSection({this.targetUserId});
-
   @override
   State<_ProfileReelsSection> createState() => _ProfileReelsSectionState();
 }
 
 class _ProfileReelsSectionState extends State<_ProfileReelsSection> {
-  @override
   final Map<String, Future<Uint8List?>> _thumbFutureCache = {};
+
   Future<Uint8List?> _genThumb(String videoUrl) {
     return VideoThumbnail.thumbnailData(
-      video: videoUrl,                // chấp nhận file path hoặc URL
-      imageFormat: ImageFormat.JPEG,  // ra JPEG cho nhẹ
-      timeMs: 0,                      // frame đầu tiên của video
-      maxHeight: 480,                 // vừa đủ nét cho lưới 9:16
-      quality: 75,                    // chất lượng hợp lý
+      video: videoUrl,
+      imageFormat: ImageFormat.JPEG,
+      timeMs: 0,
+      maxHeight: 480,
+      quality: 75,
     );
   }
+
+  @override
   void initState() {
     super.initState();
-    // Nạp reels lần đầu nếu cần (phòng khi không prefetch)
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final sc = context.read<SocialController>();
-      final viewedId =
-          widget.targetUserId ?? sc.profileHeaderUser?.id ?? sc.currentUser?.id;
-      if ((sc.profileReels.isEmpty || sc.reelsForUserId != viewedId) &&
-          !sc.isLoadingProfileReels) {
+      final viewedId = widget.targetUserId ?? sc.profileHeaderUser?.id ?? sc.currentUser?.id;
+      if ((sc.profileReels.isEmpty || sc.reelsForUserId != viewedId) && !sc.isLoadingProfileReels) {
         await sc.refreshProfileReels(targetUserId: viewedId, limit: 20);
       }
     });
@@ -2281,26 +1592,15 @@ class _ProfileReelsSectionState extends State<_ProfileReelsSection> {
       builder: (context, sc, _) {
         final reels = sc.profileReels;
         final loading = sc.isLoadingProfileReels;
-
         if (loading && reels.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: CircularProgressIndicator()),
-          );
+          return const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: Center(child: CircularProgressIndicator()));
         }
-
         if (reels.isEmpty) {
           return Padding(
             padding: const EdgeInsets.all(16),
-            child: Center(
-              child: Text(
-                'Chưa có video',
-                style: TextStyle(color: Theme.of(context).hintColor),
-              ),
-            ),
+            child: Center(child: Text(getTranslated('no_videos', context) ?? 'Chưa có video', style: TextStyle(color: Theme.of(context).hintColor))),
           );
         }
-
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -2315,77 +1615,40 @@ class _ProfileReelsSectionState extends State<_ProfileReelsSection> {
                   crossAxisCount: 3,
                   mainAxisSpacing: 4,
                   crossAxisSpacing: 4,
-                  childAspectRatio: 9 / 16, // dọc kiểu reels
+                  childAspectRatio: 9 / 16,
                 ),
                 itemBuilder: (_, i) {
                   final r = reels[i];
-
-// Ưu tiên ảnh thumb từ API, nếu không có thì tự tạo từ video
                   Widget preview;
                   if (r.thumbUrl != null && r.thumbUrl!.isNotEmpty) {
                     preview = Image.network(
                       r.thumbUrl!,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const ColoredBox(
-                        color: Color(0x11000000),
-                        child: Center(child: Icon(Icons.broken_image)),
-                      ),
-                      loadingBuilder: (c, child, p) => p == null
-                          ? child
-                          : const ColoredBox(
-                        color: Color(0x11000000),
-                        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                      ),
+                      errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0x11000000), child: Center(child: Icon(Icons.broken_image))),
+                      loadingBuilder: (c, child, p) => p == null ? child : const ColoredBox(color: Color(0x11000000), child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
                     );
                   } else if (r.videoUrl != null && r.videoUrl!.isNotEmpty) {
-                    final fut = _thumbFutureCache.putIfAbsent(
-                      r.videoUrl!,
-                          () => _genThumb(r.videoUrl!),
-                    );
+                    final fut = _thumbFutureCache.putIfAbsent(r.videoUrl!, () => _genThumb(r.videoUrl!));
                     preview = FutureBuilder<Uint8List?>(
                       future: fut,
                       builder: (_, snap) {
-                        if (snap.hasData && snap.data != null) {
-                          return Image.memory(
-                            snap.data!,
-                            fit: BoxFit.cover,
-                          );
-                        }
-                        if (snap.hasError) {
-                          return const ColoredBox(
-                            color: Color(0x11000000),
-                            child: Center(child: Icon(Icons.videocam_off)),
-                          );
-                        }
-                        return const ColoredBox(
-                          color: Color(0x11000000),
-                          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                        );
+                        if (snap.hasData && snap.data != null) return Image.memory(snap.data!, fit: BoxFit.cover);
+                        if (snap.hasError) return const ColoredBox(color: Color(0x11000000), child: Center(child: Icon(Icons.videocam_off)));
+                        return const ColoredBox(color: Color(0x11000000), child: Center(child: CircularProgressIndicator(strokeWidth: 2)));
                       },
                     );
                   } else {
-                    preview = const ColoredBox(
-                      color: Color(0x11000000),
-                      child: Center(child: Icon(Icons.videocam_off)),
-                    );
+                    preview = const ColoredBox(color: Color(0x11000000), child: Center(child: Icon(Icons.videocam_off)));
                   }
-
                   return ClipRRect(
                     borderRadius: BorderRadius.circular(6),
                     child: GestureDetector(
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => _ReelPlayerScreen(reel: r)),
-                        );
-                      },
+                      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => _ReelPlayerScreen(reel: r))),
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
                           preview,
-                          const Align(
-                            alignment: Alignment.center,
-                            child: Icon(Icons.play_circle_outline, size: 36, color: Colors.white),
-                          ),
+                          const Align(alignment: Alignment.center, child: Icon(Icons.play_circle_outline, size: 36, color: Colors.white)),
                         ],
                       ),
                     ),
@@ -2399,11 +1662,8 @@ class _ProfileReelsSectionState extends State<_ProfileReelsSection> {
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Center(
                   child: TextButton(
-                    onPressed: () => sc.loadMoreProfileReels(
-                      targetUserId: widget.targetUserId,
-                      limit: 20,
-                    ),
-                    child: const Text('Tải thêm'),
+                    onPressed: () => sc.loadMoreProfileReels(targetUserId: widget.targetUserId, limit: 20),
+                    child: Text(getTranslated('load_more', context) ?? 'Tải thêm'),
                   ),
                 ),
               ),
@@ -2414,68 +1674,22 @@ class _ProfileReelsSectionState extends State<_ProfileReelsSection> {
   }
 }
 
-
-class _DurationChip extends StatelessWidget {
-  final int seconds;
-  const _DurationChip({required this.seconds});
-
-  String _fmt(int s) {
-    final m = s ~/ 60;
-    final r = s % 60;
-    if (m >= 60) {
-      final h = m ~/ 60;
-      final mm = m % 60;
-      return '${h.toString().padLeft(2, '0')}:${mm.toString().padLeft(2, '0')}:${r.toString().padLeft(2, '0')}';
-    }
-    return '${m.toString().padLeft(2, '0')}:${r.toString().padLeft(2, '0')}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: Colors.black87,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        _fmt(seconds),
-        style: const TextStyle(
-            color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
-      ),
-    );
-  }
-}
-
 // ==============================
-// FULLSCREEN GALLERY (thuần Flutter) cho ảnh
+// GALLERY
 // ==============================
 class FullscreenGalleryLite extends StatefulWidget {
-  final List<String> urls; // danh sách URL ảnh full-size
-  final int initialIndex; // mở tại ảnh thứ mấy
-  final List<String>? heroTags; // dùng để match Hero từ grid (nên trùng URL)
-
-  const FullscreenGalleryLite({
-    super.key,
-    required this.urls,
-    this.initialIndex = 0,
-    this.heroTags,
-  });
-
+  final List<String> urls;
+  final int initialIndex;
+  final List<String>? heroTags;
+  const FullscreenGalleryLite({super.key, required this.urls, this.initialIndex = 0, this.heroTags});
   @override
-  State<FullscreenGalleryLite> createState() =>
-      _FullscreenGalleryLiteState();
+  State<FullscreenGalleryLite> createState() => _FullscreenGalleryLiteState();
 }
 
-class _FullscreenGalleryLiteState extends State<FullscreenGalleryLite>
-    with SingleTickerProviderStateMixin {
+class _FullscreenGalleryLiteState extends State<FullscreenGalleryLite> with SingleTickerProviderStateMixin {
   late final PageController _pageController;
   late int _index;
-
-  // Mỗi trang có một TransformationController để zoom/pan
   final _controllers = <int, TransformationController>{};
-
-  // Double-tap zoom animation
   late final AnimationController _anim;
   Animation<Matrix4>? _matrixTween;
 
@@ -2484,48 +1698,32 @@ class _FullscreenGalleryLiteState extends State<FullscreenGalleryLite>
     super.initState();
     _index = widget.initialIndex.clamp(0, widget.urls.length - 1);
     _pageController = PageController(initialPage: _index);
-
-    _anim = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 180),
-    )..addListener(() {
+    _anim = AnimationController(vsync: this, duration: const Duration(milliseconds: 180))..addListener(() {
       final c = _controllers[_index];
       if (c != null && _matrixTween != null) c.value = _matrixTween!.value;
     });
   }
 
   @override
-
   void dispose() {
     _anim.dispose();
-    for (final c in _controllers.values) {
-      c.dispose();
-    }
+    for (final c in _controllers.values) c.dispose();
     super.dispose();
   }
 
-  bool _isZoomed(int i) {
-    final c = _controllers[i];
-    return c != null && !c.value.isIdentity();
-  }
+  bool _isZoomed(int i) => _controllers[i] != null && !_controllers[i]!.value.isIdentity();
 
   void _toggleZoom() {
     final c = _controllers[_index] ??= TransformationController();
     final isZoomed = !c.value.isIdentity();
-    final end =
-    isZoomed ? Matrix4.identity() : (Matrix4.identity()..scale(2.2));
-    _matrixTween = Matrix4Tween(begin: c.value, end: end)
-        .animate(CurvedAnimation(parent: _anim, curve: Curves.easeOut));
+    final end = isZoomed ? Matrix4.identity() : Matrix4.identity()..scale(2.2);
+    _matrixTween = Matrix4Tween(begin: c.value, end: end).animate(CurvedAnimation(parent: _anim, curve: Curves.easeOut));
     _anim.forward(from: 0);
   }
 
   @override
   Widget build(BuildContext context) {
-    // Nếu đang zoom ảnh hiện tại thì khoá vuốt PageView để không xung đột
-    final physics = _isZoomed(_index)
-        ? const NeverScrollableScrollPhysics()
-        : const PageScrollPhysics();
-
+    final physics = _isZoomed(_index) ? const NeverScrollableScrollPhysics() : const PageScrollPhysics();
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
@@ -2536,14 +1734,8 @@ class _FullscreenGalleryLiteState extends State<FullscreenGalleryLite>
             onPageChanged: (i) => setState(() => _index = i),
             itemCount: widget.urls.length,
             itemBuilder: (ctx, i) {
-              final tag = (widget.heroTags != null &&
-                  i < (widget.heroTags!.length))
-                  ? widget.heroTags![i]
-                  : widget.urls[i];
-
-              final controller =
-              _controllers[i] ??= TransformationController();
-
+              final tag = (widget.heroTags != null && i < widget.heroTags!.length) ? widget.heroTags![i] : widget.urls[i];
+              final controller = _controllers[i] ??= TransformationController();
               return Center(
                 child: Hero(
                   tag: tag,
@@ -2560,14 +1752,8 @@ class _FullscreenGalleryLiteState extends State<FullscreenGalleryLite>
                       child: Image.network(
                         widget.urls[i],
                         fit: BoxFit.contain,
-                        loadingBuilder: (c, child, p) =>
-                        p == null
-                            ? child
-                            : const Center(
-                            child: CircularProgressIndicator()),
-                        errorBuilder: (_, __, ___) =>
-                        const Icon(Icons.broken_image,
-                            color: Colors.white, size: 48),
+                        loadingBuilder: (c, child, p) => p == null ? child : const Center(child: CircularProgressIndicator()),
+                        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.white, size: 48),
                       ),
                     ),
                   ),
@@ -2575,8 +1761,6 @@ class _FullscreenGalleryLiteState extends State<FullscreenGalleryLite>
               );
             },
           ),
-
-          // Top bar: nút đóng + chỉ số
           Positioned(
             top: MediaQuery.of(context).padding.top + 8,
             left: 8,
@@ -2585,24 +1769,14 @@ class _FullscreenGalleryLiteState extends State<FullscreenGalleryLite>
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 IconButton.filled(
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.black54,
-                    foregroundColor: Colors.white,
-                  ),
+                  style: IconButton.styleFrom(backgroundColor: Colors.black54, foregroundColor: Colors.white),
                   onPressed: () => Navigator.pop(context),
                   icon: const Icon(Icons.close),
                 ),
                 Container(
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    '${_index + 1}/${widget.urls.length}',
-                    style: const TextStyle(color: Colors.white),
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(20)),
+                  child: Text('${_index + 1}/${widget.urls.length}', style: const TextStyle(color: Colors.white)),
                 ),
               ],
             ),
@@ -2614,12 +1788,11 @@ class _FullscreenGalleryLiteState extends State<FullscreenGalleryLite>
 }
 
 // ==============================
-// REEL PLAYER SCREEN (NEW)
+// REEL PLAYER
 // ==============================
 class _ReelPlayerScreen extends StatefulWidget {
   final SocialReel reel;
   const _ReelPlayerScreen({required this.reel});
-
   @override
   State<_ReelPlayerScreen> createState() => _ReelPlayerScreenState();
 }
@@ -2651,30 +1824,21 @@ class _ReelPlayerScreenState extends State<_ReelPlayerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final aspect = (_controller?.value.aspectRatio ?? 0) == 0
-        ? (9 / 16)
-        : _controller!.value.aspectRatio;
-
+    final aspect = (_controller?.value.aspectRatio ?? 0) == 0 ? (9 / 16) : _controller!.value.aspectRatio;
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         children: [
           Center(
             child: _ready && _controller != null
-                ? AspectRatio(
-              aspectRatio: aspect,
-              child: VideoPlayer(_controller!),
-            )
+                ? AspectRatio(aspectRatio: aspect, child: VideoPlayer(_controller!))
                 : const CircularProgressIndicator(),
           ),
           Positioned(
             top: MediaQuery.of(context).padding.top + 8,
             left: 8,
             child: IconButton.filled(
-              style: IconButton.styleFrom(
-                backgroundColor: Colors.black54,
-                foregroundColor: Colors.white,
-              ),
+              style: IconButton.styleFrom(backgroundColor: Colors.black54, foregroundColor: Colors.white),
               onPressed: () => Navigator.pop(context),
               icon: const Icon(Icons.arrow_back),
             ),
