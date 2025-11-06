@@ -13,7 +13,7 @@ class CreateAdsScreen extends StatefulWidget {
 class _CreateAdsScreenState extends State<CreateAdsScreen> {
   final _formKey = GlobalKey<FormState>();
   final ImagePicker _picker = ImagePicker();
-  final PageController _pageCtrl = PageController();
+  final PageController _pageController = PageController(); // ĐÚNG: PageController
 
   int _currentStep = 0;
 
@@ -25,7 +25,7 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
   DateTime? _startDate;
   DateTime? _endDate;
   final _websiteCtrl = TextEditingController();
-  final _pageCtrl = TextEditingController();
+  final _pageTextCtrl = TextEditingController(); // ĐỔI TÊN tránh trùng
   final _locationCtrl = TextEditingController();
   final List<String> _audienceList = [];
   final _audienceCtrl = TextEditingController();
@@ -36,12 +36,12 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
 
   @override
   void dispose() {
-    _pageCtrl.dispose();
+    _pageController.dispose(); // Chỉ dispose PageController
     _nameCtrl.dispose();
     _headlineCtrl.dispose();
     _descCtrl.dispose();
     _websiteCtrl.dispose();
-    _pageCtrl.dispose();
+    _pageTextCtrl.dispose();
     _locationCtrl.dispose();
     _audienceCtrl.dispose();
     _budgetCtrl.dispose();
@@ -79,7 +79,7 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
   // === CHUYỂN BƯỚC ===
   void _next() {
     if (_currentStep < 2) {
-      _pageCtrl.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.ease);
+      _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.ease);
     } else {
       _submit();
     }
@@ -87,7 +87,7 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
 
   void _prev() {
     if (_currentStep > 0) {
-      _pageCtrl.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.ease);
+      _pageController.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.ease);
     }
   }
 
@@ -134,7 +134,7 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
               // === NỘI DUNG 3 BƯỚC ===
               Expanded(
                 child: PageView(
-                  controller: _pageCtrl,
+                  controller: _pageController,
                   onPageChanged: (i) => setState(() => _currentStep = i),
                   physics: const NeverScrollableScrollPhysics(),
                   children: [
@@ -150,7 +150,7 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
                       startDate: _startDate,
                       endDate: _endDate,
                       websiteCtrl: _websiteCtrl,
-                      pageCtrl: _pageCtrl,
+                      pageCtrl: _pageTextCtrl, // DÙNG TÊN MỚI
                       onPickStartDate: () => _pickDate(true),
                       onPickEndDate: () => _pickDate(false),
                       isDark: isDark,
@@ -279,18 +279,25 @@ class Step1Widget extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
-          TextFormField(
-            controller: nameCtrl,
-            decoration: InputDecoration(
-              labelText: 'Tên công ty *',
-              prefixIcon: const Icon(Icons.business),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              filled: true,
-              fillColor: isDark ? Colors.grey[800] : Colors.grey[50],
-            ),
-            validator: (v) => v!.trim().isEmpty ? 'Bắt buộc' : null,
-          ),
+          _buildTextField(context, nameCtrl, 'Tên công ty *', Icons.business),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTextField(BuildContext context, TextEditingController ctrl, String label, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: TextFormField(
+        controller: ctrl,
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon, color: Colors.blue.shade700),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          filled: true,
+          fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey[800] : Colors.grey[50],
+        ),
+        validator: (v) => v!.trim().isEmpty ? 'Bắt buộc' : null,
       ),
     );
   }
@@ -325,19 +332,25 @@ class Step2Widget extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildField(headlineCtrl, 'Tiêu đề chiến dịch *', Icons.title, maxLines: 2),
-          _buildField(descCtrl, 'Mô tả chiến dịch *', Icons.description, maxLines: 4),
-          _buildDateField('Ngày bắt đầu *', startDate, onPickStartDate),
-          _buildDateField('Ngày kết thúc *', endDate, onPickEndDate),
-          _buildField(websiteCtrl, 'URL trang web *', Icons.link, keyboardType: TextInputType.url),
-          _buildField(pageCtrl, 'Trang của tôi *', Icons.pageview),
+          _buildField(context, headlineCtrl, 'Tiêu đề chiến dịch *', Icons.title, maxLines: 2),
+          _buildField(context, descCtrl, 'Mô tả chiến dịch *', Icons.description, maxLines: 4),
+          _buildDateField(context, 'Ngày bắt đầu *', startDate, onPickStartDate),
+          _buildDateField(context, 'Ngày kết thúc *', endDate, onPickEndDate),
+          _buildField(context, websiteCtrl, 'URL trang web *', Icons.link, keyboardType: TextInputType.url),
+          _buildField(context, pageCtrl, 'Trang của tôi *', Icons.pageview),
         ],
       ),
     );
   }
 
-  Widget _buildField(TextEditingController ctrl, String label, IconData icon,
-      {int maxLines = 1, TextInputType? keyboardType}) {
+  Widget _buildField(
+      BuildContext context,
+      TextEditingController ctrl,
+      String label,
+      IconData icon, {
+        int maxLines = 1,
+        TextInputType? keyboardType,
+      }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: TextFormField(
@@ -356,7 +369,7 @@ class Step2Widget extends StatelessWidget {
     );
   }
 
-  Widget _buildDateField(String label, DateTime? date, VoidCallback onTap) {
+  Widget _buildDateField(BuildContext context, String label, DateTime? date, VoidCallback onTap) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: InkWell(
@@ -414,7 +427,7 @@ class Step3Widget extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildField(locationCtrl, 'Địa điểm *', Icons.location_on),
+          _buildField(context, locationCtrl, 'Địa điểm *', Icons.location_on),
           const SizedBox(height: 16),
           const Text('Đối tượng tiếp cận', style: TextStyle(fontWeight: FontWeight.bold)),
           Row(
@@ -458,24 +471,30 @@ class Step3Widget extends StatelessWidget {
           const SizedBox(height: 16),
           const Text('Giới tính', style: TextStyle(fontWeight: FontWeight.bold)),
           Row(children: [
-            _buildRadio('Nam', 'male', gender, onGenderChanged),
-            _buildRadio('Nữ', 'female', gender, onGenderChanged),
-            _buildRadio('Cả hai', 'both', gender, onGenderChanged),
+            _buildRadio(context, 'Nam', 'male', gender, onGenderChanged),
+            _buildRadio(context, 'Nữ', 'female', gender, onGenderChanged),
+            _buildRadio(context, 'Cả hai', 'both', gender, onGenderChanged),
           ]),
           const SizedBox(height: 16),
           const Text('Vị trí hiển thị *', style: TextStyle(fontWeight: FontWeight.bold)),
-          _buildDropdown(appears, ['News Feed', 'Stories', 'Reels', 'Tất cả'], onAppearsChanged),
+          _buildDropdown(context, appears, ['News Feed', 'Stories', 'Reels', 'Tất cả'], onAppearsChanged),
           const SizedBox(height: 16),
-          _buildField(budgetCtrl, 'Ngân sách chiến dịch (đ) *', Icons.attach_money, keyboardType: TextInputType.number),
+          _buildField(context, budgetCtrl, 'Ngân sách chiến dịch (đ) *', Icons.attach_money, keyboardType: TextInputType.number),
           const SizedBox(height: 16),
           const Text('Hình thức đấu thầu', style: TextStyle(fontWeight: FontWeight.bold)),
-          _buildDropdown(bidding, ['CPM', 'CPC', 'CPA'], (v) => onBiddingChanged(v!)),
+          _buildDropdown(context, bidding, ['CPM', 'CPC', 'CPA'], (v) => onBiddingChanged(v!)),
         ],
       ),
     );
   }
 
-  Widget _buildField(TextEditingController ctrl, String label, IconData icon, {TextInputType? keyboardType}) {
+  Widget _buildField(
+      BuildContext context,
+      TextEditingController ctrl,
+      String label,
+      IconData icon, {
+        TextInputType? keyboardType,
+      }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: TextFormField(
@@ -493,7 +512,7 @@ class Step3Widget extends StatelessWidget {
     );
   }
 
-  Widget _buildDropdown(String? value, List<String> items, Function(String?) onChanged) {
+  Widget _buildDropdown(BuildContext context, String? value, List<String> items, Function(String?) onChanged) {
     return DropdownButtonFormField<String>(
       value: value,
       decoration: InputDecoration(
@@ -507,7 +526,7 @@ class Step3Widget extends StatelessWidget {
     );
   }
 
-  Widget _buildRadio(String label, String value, String? group, Function(String?) onChanged) {
+  Widget _buildRadio(BuildContext context, String label, String value, String? group, Function(String?) onChanged) {
     return Expanded(
       child: RadioListTile<String>(
         dense: true,
