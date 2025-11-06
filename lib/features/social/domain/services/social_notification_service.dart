@@ -1,7 +1,7 @@
 import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/constants/wowonder_api.dart';
-
 class SocialNotificationsService {
   Future<http.Response> fetchNotifications(String accessToken) async {
     final url = Uri.parse(
