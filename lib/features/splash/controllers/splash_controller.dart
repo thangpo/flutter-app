@@ -14,6 +14,9 @@ import 'package:flutter_sixvalley_ecommerce/features/splash/domain/services/spla
 import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
 import 'package:flutter_sixvalley_ecommerce/main.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/firebase_token_updater.dart';
 
 class SplashController extends ChangeNotifier {
   final SplashServiceInterface? splashServiceInterface;
@@ -108,7 +111,6 @@ class SplashController extends ChangeNotifier {
       String? currencyCode = splashServiceInterface!.getCurrency();
 
       try{
-        await FirebaseMessaging.instance.getToken();
         await FirebaseMessaging.instance.subscribeToTopic(AppConstants.maintenanceModeTopic);
       }catch (e) {
         debugPrint("====FirebaseException===>>$e");

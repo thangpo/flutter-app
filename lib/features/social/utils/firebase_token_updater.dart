@@ -1,42 +1,41 @@
 // lib/core/utils/firebase_token_updater.dart
 import 'dart:developer';
-import 'package:dio/dio.dart';
+import 'package:http/http.dart' as http;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
+import 'package:flutter_sixvalley_ecommerce/features/auth/domain/repositories/auth_repository.dart';
 
 class FirebaseTokenUpdater {
   static Future<void> update() async {
     try {
-      // 🔹 Lấy user_id lưu trong SharedPreferences (đăng nhập WoWonder)
       final prefs = await SharedPreferences.getInstance();
-      final userId = prefs.getString('social_user_id');
-
-      // 🔹 Lấy token Firebase hiện tại
-      final fcmToken = await FirebaseMessaging.instance.getToken();
-
-      if (userId == null || fcmToken == null) {
-        log('⚠️ Missing userId or FCM token, skipping update');
+      final accessToken = prefs.getString(AppConstants.socialAccessToken);
+      if (accessToken == null || accessToken.isEmpty) {
+        log('⚠️ Missing access_token, skip update_fcm_token');
         return;
       }
 
-      // 🔹 Gửi POST request đến API update_fcm_token
-      final dio = Dio();
-      final resp = await dio.post(
-        '${AppConstants.socialBaseUrl}/${AppConstants.socialApiUpdateFcmTokenUri}',
-        data: FormData.fromMap({
-          'user_id': userId,
-          'firebase_device_token': fcmToken,
-        }),
+      final fcmToken = await FirebaseMessaging.instance.getToken();
+      if (fcmToken == null || fcmToken.isEmpty) {
+        log('⚠️ Missing FCM token, skip');
+        return;
+      }
+      final url = Uri.parse(
+        '${AppConstants.socialBaseUrl}/${AppConstants.socialApiUpdateFcmTokenUri}?access_token=$accessToken',
       );
 
-      if (resp.statusCode == 200) {
-        log('✅ FCM token updated for user_id=$userId');
-      } else {
-        log('⚠️ Failed to update token: ${resp.statusCode} ${resp.data}');
-      }
-    } catch (e) {
-      log('❌ Error updating FCM token: $e');
+      // ✅ multipart/form-data như curl --form
+      final req = http.MultipartRequest('POST', url)
+        ..fields['server_key'] = AppConstants.socialServerKey
+        ..fields['firebase_device_token'] = fcmToken;
+
+      final streamed = await req.send();
+      final body = await streamed.stream.bytesToString();
+      log('update_fcm_token => ${streamed.statusCode}');
+      log('response => $body');
+    } catch (e, st) {
+      log('❌ Error updating FCM token: $e\n$st');
     }
   }
 }

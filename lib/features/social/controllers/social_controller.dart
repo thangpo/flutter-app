@@ -364,45 +364,75 @@ class SocialController with ChangeNotifier {
       // Cập nhật ngay header nếu đang mở profile user đó
       if (_profileHeaderUser?.id == id && _profileHeaderUser != null) {
         final cur = _profileHeaderUser!;
-        _profileHeaderUser = cur.copyWith(
-          isBlocked: blocked,
-          // Khi chặn thì coi như không follow nữa (tuỳ luật app của bạn)
-          isFollowing: blocked ? false : cur.isFollowing,
-        );
+
+        if (blocked) {
+          // Lưu trạng thái trước khi chặn để có thể khôi phục khi bỏ chặn
+          _preBlock[id] = _PreBlockSnapshot(
+            isFollowing: cur.isFollowing,
+            followersCount: cur.followersCount,
+            followingCount: cur.followingCount,
+          );
+
+          // Tuỳ luật: chặn thì coi như không còn follow nhau → có thể trừ số ngay (optimistic)
+          final wasFollowingMe = cur.isFollowingMe == true;
+          final wasIFollow     = cur.isFollowing   == true;
+
+          _profileHeaderUser = cur.copyWith(
+            isBlocked: true,
+            isFollowing: false,
+            followersCount: (cur.followersCount != null && wasFollowingMe)
+                ? (cur.followersCount! - 1).clamp(0, 1 << 30)
+                : cur.followersCount,
+            followingCount: (cur.followingCount != null && wasIFollow)
+                ? (cur.followingCount! - 1).clamp(0, 1 << 30)
+                : cur.followingCount,
+          );
+        } else {
+          // Bỏ chặn: khôi phục từ snapshot (nếu hệ thống/luật của bạn giữ follow sau unblock)
+          final snap = _preBlock.remove(id);
+          const restoreFollowRelation = true; // đổi false nếu KHÔNG muốn khôi phục follow
+
+          _profileHeaderUser = cur.copyWith(
+            isBlocked: false,
+            isFollowing: restoreFollowRelation
+                ? (snap?.isFollowing ?? cur.isFollowing)
+                : cur.isFollowing,
+            followersCount: restoreFollowRelation
+                ? (snap?.followersCount ?? cur.followersCount)
+                : cur.followersCount,
+            followingCount: restoreFollowRelation
+                ? (snap?.followingCount ?? cur.followingCount)
+                : cur.followingCount,
+          );
+        }
       }
+
 
       // (Tuỳ chọn) Nếu muốn đồng bộ list followers/following trong trang profile:
       // nếu blocked thì loại user khỏi danh sách… (bạn có thể bỏ nếu backend tự xử)
       if (blocked) {
-        // Thêm vào tập id đã chặn
-        final added = _blockedIds.add(id);
-        // Nếu chưa có trong list, thêm 1 item tối thiểu để hiển thị ngay
-        if (added && !_blockedUsers.any((u) => u.id == id)) {
-          final src =
-              (_profileHeaderUser != null && _profileHeaderUser!.id == id)
-                  ? _profileHeaderUser
-                  : null;
-          _blockedUsers.insert(
-              0,
-              SocialUser(
-                id: id,
-                displayName: src?.displayName,
-                userName: src?.userName,
-                avatarUrl: src?.avatarUrl,
-                coverUrl: src?.coverUrl,
-              ));
+        _blockedIds.add(id);
+        if (!_blockedUsers.any((u) => u.id == id)) {
+          final src = (_profileHeaderUser?.id == id) ? _profileHeaderUser : null;
+          // tạo list mới để đổi reference
+          _blockedUsers = [
+            SocialUser(
+              id: id,
+              displayName: src?.displayName,
+              userName: src?.userName,
+              avatarUrl: src?.avatarUrl,
+              coverUrl: src?.coverUrl,
+            ),
+            ..._blockedUsers,
+          ];
+        } else {
+          _blockedUsers = List<SocialUser>.from(_blockedUsers);
         }
       } else {
-        // Bỏ chặn: xóa khỏi set + list
         _blockedIds.remove(id);
         _blockedUsers.removeWhere((u) => u.id == id);
-
-        // 🔧 QUAN TRỌNG: tạo list mới để thay đổi reference => UI cập nhật ngay
-        _blockedUsers = List<SocialUser>.from(_blockedUsers);
-
-        notifyListeners();
+        _blockedUsers = List<SocialUser>.from(_blockedUsers); // đổi reference
       }
-
       notifyListeners();
       return blocked;
     } finally {
@@ -2227,11 +2257,42 @@ class SocialController with ChangeNotifier {
   // ========== USER PROFILE OPERATIONS (MERGED FROM PROFILE CONTROLLER) ==========
 
   /// Load profile đầy đủ (user + followers + following + liked_pages + posts)
-  Future<void> loadUserProfile({String? targetUserId}) async {
-    if (_loadingProfile && targetUserId == _profileHeaderUser?.id) {
+  Future<void> loadUserProfile({
+    String? targetUserId,
+    bool force = false,            // kéo-to-refresh => true
+    bool useCache = true,          // vào lại màn => true
+    bool backgroundRefresh = true, // có cache cũ thì refresh ngầm
+  }) async {
+    final String? id = targetUserId ?? _currentUser?.id;
+    if (id == null || id.isEmpty) return;
+
+    // Nếu đang tải cùng user -> bỏ
+    if (_loadingProfile && id == _profileHeaderUser?.id) return;
+
+    // 1) Dùng cache nếu có và không force
+    final cached = _profileCache[id];
+    final hasCache = cached != null;
+    final isStale = hasCache ? _isProfileStale(id) : true;
+
+    if (useCache && hasCache && !force) {
+      // render ngay dữ liệu cũ
+      _profileHeaderUser = cached!.user;
+      _followers         = List<SocialUser>.from(cached.followers);
+      _following         = List<SocialUser>.from(cached.following);
+      _likedPages        = List<dynamic>.from(cached.likedPages);
+      _profilePosts      = List<SocialPost>.from(cached.posts);
+      _lastProfilePostId = cached.lastPostId;
+      notifyListeners();
+
+      // refresh ngầm nếu cache đã cũ
+      if (backgroundRefresh && isStale) {
+        // không clear UI; tải lại âm thầm
+        _refreshProfileFromNetwork(id: id);
+      }
       return;
     }
 
+    // 2) Không có cache (hoặc force) => hiển thị loading như cũ
     _loadingProfile = true;
     _profileHeaderUser = null;
     _followers = const [];
@@ -2239,54 +2300,37 @@ class SocialController with ChangeNotifier {
     _likedPages = const [];
     _profilePosts = [];
     _lastProfilePostId = null;
-
     notifyListeners();
 
+    await _refreshProfileFromNetwork(id: id, showError: true);
+  }
+  Future<void> _refreshProfileFromNetwork({
+    required String id,
+    bool showError = false,
+  }) async {
     try {
       if (service is! SocialService) {
         throw Exception('Service must be SocialService to load profile');
       }
-
       final SocialService socialService = service as SocialService;
 
-      // gọi service để lấy profile bundle (đã sửa để trả SocialUserProfile trong bundle.user)
-      final bundle = await socialService.getUserProfile(
-        targetUserId: targetUserId,
-      );
-
-      // lưu header user đầy đủ (SocialUserProfile?)
+      // 1) Bundle profile
+      final bundle = await socialService.getUserProfile(targetUserId: id);
       _profileHeaderUser = bundle.user;
-      final viewedId = _profileHeaderUser?.id;
-      if (viewedId != null && viewedId.isNotEmpty) {
-        await refreshProfilePhotos(targetUserId: viewedId);
-        await refreshProfileReels(targetUserId: viewedId);
-      }
 
-      // nếu đây là profile của chính mình thì bạn có thể
-      // optionally sync lại _currentUser nếu muốn.
-      // Nhưng KHÔNG bắt buộc. Bạn có thể bỏ hẳn block này nếu không muốn đụng _currentUser.
-      if (targetUserId == null || (targetUserId == _currentUser?.id)) {
-        // ví dụ: chỉ cập nhật avatar / cover / displayName tạm thời,
-        // tránh gán cả object khác kiểu
-        if (_currentUser != null && bundle.user != null) {
-          _currentUser = SocialUser(
-            id: _currentUser!.id,
-            displayName: bundle.user!.displayName ?? _currentUser!.displayName,
-            userName: bundle.user!.userName ?? _currentUser!.userName,
-            avatarUrl: bundle.user!.avatarUrl ?? _currentUser!.avatarUrl,
-            coverUrl: bundle.user!.coverUrl ?? _currentUser!.coverUrl,
-            // ... các field khác mà SocialUser có
-          );
-        }
-        // nếu bạn không muốn sync gì hết thì có thể bỏ hết block if này luôn
-      }
+      // 2) Photos + Reels (song song cho nhanh)
+      // (không clear UI, chỉ cập nhật)
+      await Future.wait([
+        refreshProfilePhotos(targetUserId: id),
+        refreshProfileReels(targetUserId: id),
+      ]);
 
-      // followers / following / likedPages từ bundle (vẫn List<SocialUser>)
-      _followers = bundle.followers;
-      _following = bundle.following;
-      _likedPages = bundle.likedPages;
+      // 3) Followers/Following/LikedPages từ bundle
+      _followers   = bundle.followers;
+      _following   = bundle.following;
+      _likedPages  = bundle.likedPages;
 
-      // load posts cho profile này
+      // 4) Posts trang 1
       if (bundle.user != null && bundle.user!.id.isNotEmpty) {
         final feedPage = await socialService.getUserPosts(
           targetUserId: bundle.user!.id,
@@ -2299,13 +2343,40 @@ class SocialController with ChangeNotifier {
         _profilePosts = [];
         _lastProfilePostId = null;
       }
+
+      // 5) (tuỳ chọn) sync _currentUser một phần khi là profile của mình
+      if (id == _currentUser?.id && _currentUser != null && bundle.user != null) {
+        _currentUser = SocialUser(
+          id: _currentUser!.id,
+          displayName: bundle.user!.displayName ?? _currentUser!.displayName,
+          userName:    bundle.user!.userName    ?? _currentUser!.userName,
+          avatarUrl:   bundle.user!.avatarUrl   ?? _currentUser!.avatarUrl,
+          coverUrl:    bundle.user!.coverUrl    ?? _currentUser!.coverUrl,
+        );
+      }
+
+      // 6) Ghi cache
+      _profileCache[id] = _ProfileBundleCache(
+        user: _profileHeaderUser,
+        followers: _followers,
+        following: _following,
+        likedPages: _likedPages,
+        posts: _profilePosts,
+        lastPostId: _lastProfilePostId,
+        fetchedAt: DateTime.now(),
+      );
     } catch (e) {
-      showCustomSnackBar(e.toString(), Get.context!, isError: true);
+      if (showError) {
+        // giữ nguyên cách báo lỗi hiện tại của bạn
+        showCustomSnackBar(e.toString(), Get.context!, isError: true);
+      }
     } finally {
       _loadingProfile = false;
       notifyListeners();
     }
   }
+
+
 
   /// Load more profile posts (pagination)
   Future<void> loadMoreProfilePosts({
@@ -2413,4 +2484,39 @@ class _PendingStoryReaction {
   final String reaction;
 
   const _PendingStoryReaction({required this.reaction});
+}
+class _PreBlockSnapshot {
+  final bool? isFollowing;
+  final int? followersCount;
+  final int? followingCount;
+  const _PreBlockSnapshot({this.isFollowing, this.followersCount, this.followingCount});
+}
+
+final Map<String, _PreBlockSnapshot> _preBlock = <String, _PreBlockSnapshot>{};
+class _ProfileBundleCache {
+  final SocialUserProfile? user;
+  final List<SocialUser> followers;
+  final List<SocialUser> following;
+  final List<dynamic> likedPages;   // giữ nguyên kiểu bạn đang dùng
+  final List<SocialPost> posts;
+  final String? lastPostId;
+  final DateTime fetchedAt;
+  const _ProfileBundleCache({
+    required this.user,
+    required this.followers,
+    required this.following,
+    required this.likedPages,
+    required this.posts,
+    required this.lastPostId,
+    required this.fetchedAt,
+  });
+}
+
+final Map<String, _ProfileBundleCache> _profileCache = <String, _ProfileBundleCache>{};
+Duration get _profileTTL => const Duration(minutes: 5);
+
+bool _isProfileStale(String id) {
+  final dt = _profileCache[id]?.fetchedAt;
+  if (dt == null) return true;
+  return DateTime.now().difference(dt) > _profileTTL;
 }

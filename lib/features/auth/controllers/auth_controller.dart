@@ -167,7 +167,6 @@ class AuthController with ChangeNotifier {
                 'en');
         callback(true, token, null, null, message, socialLogin.medium, null,
             socialLogin.email, socialLogin.name);
-        await FirebaseTokenUpdater.update();
 
       }
 
@@ -309,7 +308,7 @@ class AuthController with ChangeNotifier {
       final String socialUserId = (data['user_id'] ?? '').toString();
       if (socialUserId.isNotEmpty) {
         await authServiceInterface.saveSocialUserId(socialUserId);
-        await FirebaseTokenUpdater.update();
+
 
       }
       try {
@@ -517,7 +516,7 @@ class AuthController with ChangeNotifier {
         // timezone: DateTime.now().timeZoneName,     // (tuỳ chọn)
         // deviceId: oneSignalId,                     // (tuỳ chọn)
       );
-
+      print('[SOCIAL LOGIN DEBUG] body: ${socialResp.response?.data}');
       // 1) Không có HTTP response hoặc status != 200
       if (socialResp.response == null ||
           socialResp.response!.statusCode != 200) {
@@ -561,19 +560,11 @@ class AuthController with ChangeNotifier {
       // 4) Lưu access_token Social
       await authServiceInterface.saveSocialAccessToken(socialAccessToken);
       final String socialUserId = (data['user_id'] ?? '').toString();
-      if (socialUserId.isNotEmpty) {
-        await authServiceInterface.saveSocialUserId(socialUserId);
-        await FirebaseTokenUpdater.update();
-
-      }
       try {
         await Provider.of<SocialController>(Get.context!, listen: false)
             .loadCurrentUser(force: true);
       } catch (_) {}
       // ========== END EXTERNAL SOCIAL AUTH ==========
-      // ✅ Gửi FCM token lên server
-      await FirebaseTokenUpdater.update();
-
       if (token != null && token.isNotEmpty) {
         authServiceInterface.saveUserToken(token);
         await authServiceInterface.updateDeviceToken();
@@ -1467,4 +1458,7 @@ class AuthController with ChangeNotifier {
   String? getGuestCartId() {
     return authServiceInterface.getGuestCartId();
   }
+
+
+
 }

@@ -897,10 +897,14 @@ class SocialService implements SocialServiceInterface {
       final data = resp.response!.data;
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
       if (status == 200) {
-        final raw = '${data?['block_status'] ?? ''}'.toLowerCase().trim();
+        var raw = '${data?['block_status'] ?? data?['status'] ?? ''}'
+            .toLowerCase()
+            .replaceAll('-', '')
+            .trim(); // "blocked" | "unblocked"
         if (raw == 'blocked') return true;
-        if (raw == 'un-blocked') return false;
-        throw Exception('Unknown block_status: $raw');
+        if (raw == 'unblocked') return false;
+        // fallback theo tham số gửi lên
+        return block;
       }
       final msg =
           (data?['errors']?['error_text'] ?? data?['message'] ?? 'Block failed')
