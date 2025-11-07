@@ -5,7 +5,7 @@ class Country {
   const Country(this.value, this.name);
 
   @override
-  String toString() => 'value="$value" $name';
+  String toString() => name;
 }
 
 final List<Country> countries = [

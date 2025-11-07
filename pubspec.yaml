@@ -13,6 +13,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
+  fl_chart: ^0.68.0
   mobile_scanner: ^5.1.1
   qr_flutter: ^4.1.0
   get: ^4.6.6

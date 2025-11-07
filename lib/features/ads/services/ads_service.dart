@@ -69,7 +69,6 @@ class AdsService {
     String appearsFixed = (formData['appears'] ?? 'post').toString();
     if (appearsFixed == 'entire') {
       appearsFixed = 'post';
-      dev.log('appears=entire → tự chuyển thành post (ảnh không hỗ trợ)');
     }
 
     request.fields.addAll({
@@ -117,20 +116,12 @@ class AdsService {
           contentType: MediaType.parse(mediaType),
         ),
       );
-
-      dev.log('Upload ảnh: ${size ~/ 1024} KB | Type: $mediaType');
     }
-
-
-    dev.log('Gửi fields: ${request.fields}');
-    dev.log('audience-list: $audienceList | appears: $appearsFixed');
 
     try {
       final streamedResponse = await request.send().timeout(const Duration(seconds: 90));
       final response = await http.Response.fromStream(streamedResponse);
       final jsonResponse = jsonDecode(response.body);
-
-      dev.log('📥 Response create ads: $jsonResponse (code: ${response.statusCode})');
 
       final apiStatus = jsonResponse['api_status']?.toString() ?? '0';
       if (apiStatus == "404") throw Exception("Server key sai");
@@ -140,8 +131,161 @@ class AdsService {
       }
       return jsonResponse;
     } catch (e) {
-      dev.log('💥 Exception tạo ads: $e');
       rethrow;
     }
   }
+
+  Future<Map<String, dynamic>> fetchAdById({
+    required String accessToken,
+    required int adId,
+  }) async {
+    final url = Uri.parse("$_baseUrl?access_token=$accessToken");
+
+    final response = await http.post(
+      url,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: {
+        'server_key': AppConstants.socialServerKey,
+        'type': 'fetch_ad_by_id',
+        'ad_id': adId.toString(),
+      },
+    );
+
+    final jsonRes = jsonDecode(response.body);
+
+    if (jsonRes['api_status'] == "404") {
+      throw Exception("Sai server key: ${jsonRes['errors']['error_text']}");
+    }
+
+    if (jsonRes['api_status'] != 200) {
+      throw Exception("API lỗi: ${jsonRes['errors']?['error_text'] ?? 'Unknown error'}");
+    }
+
+    return jsonRes;
+  }
+
+  Future<Map<String, dynamic>> updateCampaign({
+    required String accessToken,
+    required int adId,
+    required Map<String, dynamic> formData,
+    String? mediaPath,
+    String? oldMediaUrl,
+  }) async {
+    final url = Uri.parse("$_baseUrl?access_token=$accessToken");
+    var request = http.MultipartRequest('POST', url);
+
+    if (mediaPath == null || mediaPath.isEmpty) {
+      if (oldMediaUrl == null || oldMediaUrl.isEmpty) {
+        throw Exception('Không có ảnh để cập nhật');
+      }
+
+      final response = await http.get(Uri.parse(oldMediaUrl));
+      if (response.statusCode != 200) throw Exception('Không tải được ảnh cũ');
+
+      final tempDir = await Directory.systemTemp.createTemp();
+      final tempFile = File('${tempDir.path}/ad_media.jpg');
+      await tempFile.writeAsBytes(response.bodyBytes);
+
+      mediaPath = tempFile.path;
+    }
+
+    final file = File(mediaPath);
+    if (!await file.exists()) throw Exception('File không tồn tại');
+    final size = await file.length();
+    if (size > 5 * 1024 * 1024) throw Exception('Ảnh tối đa 5MB');
+    if (size == 0) throw Exception('File rỗng');
+
+    request.files.add(await http.MultipartFile.fromPath('media', mediaPath));
+
+    final countries = formData['countries'] as List<Country>? ?? [];
+    final audienceList = countries.map((c) => c.value).where((v) => v != "0").join(',');
+    if (audienceList.isEmpty) throw Exception('Chưa chọn quốc gia');
+
+    String genderValue() {
+      final g = formData['gender']?.toString() ?? 'all';
+      if (g == 'Nam') return 'male';
+      if (g == 'Nữ') return 'female';
+      return 'all';
+    }
+
+    String appearsFixed = (formData['appears'] ?? 'post').toString();
+    if (appearsFixed == 'entire') appearsFixed = 'post';
+
+    request.fields.addAll({
+      'server_key': AppConstants.socialServerKey,
+      'type': 'edit',
+      'ad_id': adId.toString(),
+      'name': (formData['name'] ?? '').toString(),
+      'website': (formData['website'] ?? '').toString(),
+      'headline': (formData['headline'] ?? '').toString(),
+      'description': (formData['description'] ?? '').toString(),
+      'start': (formData['start'] ?? '').toString(),
+      'end': (formData['end'] ?? '').toString(),
+      'budget': (formData['budget'] ?? '').toString(),
+      'bidding': (formData['bidding'] ?? 'clicks').toString(),
+      'appears': appearsFixed,
+      'audience-list': audienceList,
+      'gender': genderValue(),
+      'location': (formData['location'] ?? '').toString(),
+      'page': (formData['page'] ?? 'vnshop247page').toString(),
+    });
+
+    dev.log('UPDATE FIELDS: ${request.fields}');
+    dev.log('MEDIA: $mediaPath ($size bytes)');
+
+    final streamedResponse = await request.send();
+    final respStr = await streamedResponse.stream.bytesToString();
+    final json = jsonDecode(respStr);
+
+    dev.log('API RESPONSE: $respStr');
+
+    if (json['api_status'] != 200) {
+      String errorMsg = 'Cập nhật thất bại';
+      if (json['errors']?.isNotEmpty == true) {
+        errorMsg = json['errors']['error_text'] ?? errorMsg;
+      } else if (json['message'] != null) {
+        errorMsg = json['message'];
+      }
+      throw Exception(errorMsg);
+    }
+
+    return json;
+  }
+
+  Future<Map<String, dynamic>> deleteCampaign({
+    required String accessToken,
+    required int adId,
+  }) async {
+    final url = Uri.parse("$_baseUrl?access_token=$accessToken");
+
+    final response = await http.post(
+      url,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: {
+        'server_key': AppConstants.socialServerKey,
+        'type': 'delete',
+        'ad_id': adId.toString(),
+      },
+    );
+
+    final jsonResponse = jsonDecode(response.body);
+
+    if (jsonResponse['api_status'] == "404") {
+      throw Exception("Server key sai: ${jsonResponse['errors']['error_text']}");
+    }
+
+    if (jsonResponse['api_status'] != 200) {
+      final errorText = jsonResponse['errors']?['error_text'] ??
+          jsonResponse['message'] ??
+          'Xóa chiến dịch thất bại';
+      throw Exception(errorText);
+    }
+
+    return jsonResponse;
+  }
+
 }
