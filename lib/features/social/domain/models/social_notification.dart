@@ -176,6 +176,7 @@ class SocialNotification {
   String toString() => jsonEncode({
     'id': id,
     'type': type,
+    'type2': type2,
     'url': url,
     'notifierId': notifierId,
     'storyId': storyId,
