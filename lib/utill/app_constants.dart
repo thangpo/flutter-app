@@ -39,6 +39,8 @@ class AppConstants {
   static const String socialGenerateAgoraTokenUri = '/api/generate_agora_token';
   static const String socialAgoraAppId = '554e80e2bcfe401cbde32aaf13d48ce5';
   static const String socialCreateGroupUri = '/api/create-group';
+  static const String socialGetPostColorsUri = '/api/get-post-colors';
+  static const String socialGetPostColorByIdUri = '/api/get-post-color';
   static const String socialUpdateGroupUri = '/api/update-group-data';
   static const String socialJoinGroupUri = '/api/join-group';
   static const String socialGroupsUri = '/api/groups';

@@ -7,6 +7,7 @@ import 'package:flutter_sixvalley_ecommerce/data/model/api_response.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/post_mention.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_comment.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post_color.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group.dart';
@@ -697,6 +698,45 @@ class SocialRepository {
     );
   }
 
+  Future<ApiResponseModel<Response>> fetchPostColors() async {
+    try {
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialGetPostColorsUri}';
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+      });
+      final Response res = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+  Future<ApiResponseModel<Response>> fetchPostColorById({
+    required String colorId,
+  }) async {
+    try {
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialGetPostColorByIdUri}';
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'color_id': colorId,
+      });
+      final Response res = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
   //Stories
   Future<ApiResponseModel<Response>> fetchStories({
     int limit = 10,
@@ -745,6 +785,39 @@ class SocialRepository {
       }
     }
     return list;
+  }
+
+  List<SocialPostColor> parsePostColors(Response res) {
+    final data = res.data;
+    final List<SocialPostColor> colors = <SocialPostColor>[];
+    if (data is Map) {
+      final dynamic rawColors = data['post_colors'];
+      if (rawColors is List) {
+        for (final dynamic entry in rawColors) {
+          if (entry is Map) {
+            final SocialPostColor color =
+                SocialPostColor.fromJson(Map<String, dynamic>.from(entry));
+            if (color.id.isNotEmpty) {
+              colors.add(color);
+            }
+          }
+        }
+      }
+    }
+    return colors;
+  }
+
+  SocialPostColor? parsePostColor(Response res) {
+    final data = res.data;
+    if (data is Map) {
+      final dynamic color = data['color'];
+      if (color is Map) {
+        final SocialPostColor parsed =
+            SocialPostColor.fromJson(Map<String, dynamic>.from(color));
+        if (parsed.id.isNotEmpty) return parsed;
+      }
+    }
+    return null;
   }
 
   Future<ApiResponseModel<Response>> createStory({
@@ -1732,6 +1805,12 @@ class SocialRepository {
       }
     }
 
+    final List<Map<String, dynamic>>? pollOptions = (map['options'] is List)
+        ? List<Map<String, dynamic>>.from(map['options'])
+        : null;
+    final List<Map<String, dynamic>>? normalizedPollOptions =
+        (pollOptions == null || pollOptions.isEmpty) ? null : pollOptions;
+
     return SocialPost(
       id: id,
       publisherId: publisherId.isNotEmpty ? publisherId : null,
@@ -1775,9 +1854,7 @@ class SocialRepository {
       productDescription: productDescription,
       ecommerceProductId: ecommerceProductId,
       productSlug: productSlug,
-      pollOptions: (map['options'] is List)
-          ? List<Map<String, dynamic>>.from(map['options'])
-          : null,
+      pollOptions: normalizedPollOptions,
       rawText: originalText,
       pageId: pageId,
       privacyType: privacyType,

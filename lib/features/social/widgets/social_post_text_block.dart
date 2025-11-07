@@ -22,33 +22,47 @@ class SocialPostTextBlock extends StatelessWidget {
 
   bool get _hasText => (post.text ?? '').trim().isNotEmpty;
 
-  bool get _hasBackground =>
-      PostBackgroundPresets.findById(post.backgroundColorId) != null &&
-      post.imageUrls.isEmpty &&
-      (post.videoUrl == null || post.videoUrl!.isEmpty) &&
-      (post.fileUrl == null || post.fileUrl!.isEmpty) &&
-      (post.audioUrl == null || post.audioUrl!.isEmpty) &&
-      post.pollOptions == null &&
-      post.sharedPost == null &&
-      post.hasProduct == false;
+  bool _canUseBackground(PostBackgroundPreset? preset) {
+    if (preset == null) return false;
+    if ((post.videoUrl ?? '').isNotEmpty) return false;
+    if ((post.fileUrl ?? '').isNotEmpty) return false;
+    if ((post.audioUrl ?? '').isNotEmpty) return false;
+    if ((post.pollOptions?.isNotEmpty ?? false)) return false;
+    if (post.sharedPost != null) return false;
+    if (post.hasProduct) return false;
+    return true;
+  }
 
   @override
   Widget build(BuildContext context) {
     if (!_hasText) return const SizedBox.shrink();
-    final SocialController controller = context.read<SocialController>();
+    final SocialController controller = context.watch<SocialController>();
     final String formatted = MentionFormatter.decorate(
       post.text!,
       controller,
       mentions: post.mentions,
     );
     final Color onSurface = Theme.of(context).colorScheme.onSurface;
-    final Widget richText = _hasBackground
-        ? _buildBackgroundText(context, formatted)
+    final PostBackgroundPreset? preset =
+        controller.findBackgroundPreset(post.backgroundColorId);
+    final String? bgId = post.backgroundColorId;
+    if (preset == null && bgId != null && bgId.isNotEmpty) {
+      controller.ensureBackgroundPreset(bgId);
+    }
+    final bool hasBackground = _canUseBackground(preset);
+    final Widget richText = hasBackground
+        ? _buildBackgroundText(context, formatted, preset!)
         : _buildPlainText(context, formatted, onSurface, TextAlign.start);
-    return Padding(
-      padding: padding,
-      child: richText,
-    );
+    if (hasBackground) {
+      return MediaQuery.removePadding(
+        context: context,
+        removeLeft: true,
+        removeRight: true,
+        child: richText,
+      );
+    } else {
+      return Padding(padding: padding, child: richText);
+    }
   }
 
   Widget _buildPlainText(
@@ -90,56 +104,94 @@ class SocialPostTextBlock extends StatelessWidget {
     );
   }
 
-  Widget _buildBackgroundText(BuildContext context, String data) {
-    final PostBackgroundPreset preset =
-        PostBackgroundPresets.findById(post.backgroundColorId)!;
-    final int textLength = post.text!.trim().length;
-    final bool dense = textLength > 240;
-    final double fontSize = dense
-        ? (compact ? 16 : 18)
-        : (compact ? 18 : 22);
-    final double verticalPadding = dense ? 28 : 36;
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.symmetric(
-        horizontal: 24,
-        vertical: verticalPadding,
-      ),
-      decoration: BoxDecoration(
-        gradient: preset.gradient,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Html(
-        data: data,
-        style: {
-          'body': Style(
-            color: preset.textColor,
-            fontSize: FontSize(fontSize),
-            lineHeight: LineHeight(1.4),
-            margin: Margins.zero,
-            padding: HtmlPaddings.zero,
-            textAlign: TextAlign.center,
-            fontWeight: FontWeight.w600,
+  Widget _buildBackgroundText(
+    BuildContext context,
+    String data,
+    PostBackgroundPreset preset,
+  ) {
+    final int len = post.text!.trim().length;
+
+    // font + padding như bạn đã đặt
+    final double fontSize;
+    final double verticalPadding;
+    if (len <= 80) {
+      fontSize = compact ? 20 : 26;
+      verticalPadding = compact ? 48 : 64;
+    } else if (len <= 180) {
+      fontSize = compact ? 18 : 22;
+      verticalPadding = compact ? 40 : 52;
+    } else if (len <= 300) {
+      fontSize = compact ? 16 : 20;
+      verticalPadding = compact ? 28 : 40;
+    } else {
+      fontSize = compact ? 14 : 18;
+      verticalPadding = compact ? 24 : 32;
+    }
+
+    // Tỉ lệ “như ảnh”
+    // - Rất ngắn: vuông 1:1
+    // - Trung bình: 4:5 (0.8)
+    // - Dài: không ép (chỉ còn padding dọc)
+    double aspectFactor = 1.0;
+    // if (len <= 80) {
+    //   aspectFactor = 1.0; // vuông
+    // } else if (len <= 180) {
+    //   aspectFactor = 0.8; // 4:5
+    // } else {
+    //   aspectFactor = 0.0; // không ép minHeight
+    // }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double width = constraints.maxWidth;
+        final double minH = aspectFactor > 0 ? width * aspectFactor : 0;
+
+        return ConstrainedBox(
+          constraints: BoxConstraints(
+            minWidth: double.infinity,
+            minHeight: minH, // <-- chiều cao mặc định “như ảnh”
           ),
-          'a.tagged-user': Style(
-            color: preset.textColor,
-            fontWeight: FontWeight.w700,
-            textDecoration: TextDecoration.none,
+          child: Container(
+            width: double.infinity,
+            padding: EdgeInsets.symmetric(
+              horizontal: 0,
+              vertical: verticalPadding,
+            ),
+            decoration: preset.decoration(),
+            alignment: Alignment.center, // canh giữa theo chiều dọc
+            child: Html(
+              data: data,
+              style: {
+                'body': Style(
+                  color: preset.textColor,
+                  fontSize: FontSize(fontSize),
+                  lineHeight: LineHeight(1.4),
+                  margin: Margins.zero,
+                  padding: HtmlPaddings.symmetric(horizontal: 20),
+                  textAlign: TextAlign.center,
+                  fontWeight: FontWeight.w600,
+                  // (tuỳ chọn) hạn chế độ rộng nội dung để chữ không quá dài
+                  // maxLines: null,
+                ),
+                'a.tagged-user': Style(
+                  color: preset.textColor,
+                  fontWeight: FontWeight.w700,
+                  textDecoration: TextDecoration.none,
+                ),
+              },
+              onLinkTap: (String? url, _, __) async {
+                if (url == null) return;
+                if (MentionFormatter.isMentionLink(url)) {
+                  await MentionFormatter.handleMentionTap(context, url);
+                  return;
+                }
+                final Uri uri = Uri.parse(url);
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              },
+            ),
           ),
-        },
-        onLinkTap: (String? url, _, __) async {
-          if (url == null) return;
-          if (MentionFormatter.isMentionLink(url)) {
-            await MentionFormatter.handleMentionTap(
-              context,
-              url,
-            );
-            return;
-          }
-          final Uri uri = Uri.parse(url);
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-        },
-      ),
+        );
+      },
     );
   }
 }

@@ -7,9 +7,12 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user_profile.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_photo.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_reel.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post_color.dart';
 
 abstract class SocialServiceInterface {
   Future<List<SocialPost>> getNewsFeed({int limit, String? afterPostId});
+  Future<List<SocialPostColor>> getPostColors();
+  Future<SocialPostColor?> getPostColorById(String colorId);
   Future<List<SocialStory>> getStories({int limit, int offset});
   Future<List<SocialStory>> getMyStories({int limit, int offset});
   Future<SocialStory?> createStory({

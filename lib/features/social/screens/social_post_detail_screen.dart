@@ -55,6 +55,11 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
     super.initState();
     final svc = sl<SocialServiceInterface>();
     _postFuture = svc.getPostById(postId: widget.post.id);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        context.read<SocialController>().loadPostBackgrounds();
+      } catch (_) {}
+    });
     _loadMoreComments();
   }
 
