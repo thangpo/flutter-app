@@ -154,11 +154,9 @@ class _NotificationItemState extends State<NotificationItem> {
                           border: Border.all(color: Colors.white, width: 1.5),
                         ),
                         padding: const EdgeInsets.all(0),
-                        child: Icon(
-                          _iconByType(n.type),
-                          color: _colorByType(n.type),
-                          size: 14,
-                        ),
+                        child: (n.type == 'reaction')
+                            ? igReactionBadge(n.type2, badge: 20) // hoặc 18 nếu thích nhỏ hơn
+                            : Icon(_iconByType(n.type), color: _colorByType(n.type), size: 14),
                       ),
                     ),
                   ],
@@ -232,7 +230,7 @@ class _NotificationItemState extends State<NotificationItem> {
         .read<SocialNotificationsController>()
         .getNotificationDetail(n.id);
     debugPrint(
-        '[NOTI] id=${n.id}, post_id=${n.postId}, story_id=${n.storyId}, type=${n.type}, url=${n.url}');
+        '[NOTI] $n');
 
     // 🟣 1️⃣ Story trước
     if (n.type == 'viewed_story' ||
@@ -325,42 +323,83 @@ class _NotificationItemState extends State<NotificationItem> {
         return "đã tương tác với bạn.";
     }
   }
+  static Widget igReactionBadge(String? type2, {double badge = 20}) {
+    final t = (type2 ?? '').trim();
 
-  static IconData _iconByType(String type) {
+    // map icon + gradient (Instagram vibe)
+    final icon = <String, IconData>{
+      '1': Icons.thumb_up_alt_rounded,                 // Like
+      '2': Icons.favorite_rounded,                     // Tym
+      '3': Icons.emoji_emotions_rounded,               // Haha
+      '4': Icons.sentiment_very_satisfied_rounded,     // Wow
+      '5': Icons.sentiment_dissatisfied_rounded,       // Buồn
+      '6': Icons.sentiment_very_dissatisfied_rounded,  // Phẫn nộ
+    }[t] ?? Icons.favorite_border_rounded;
+
+    final colors = <String, List<Color>>{
+      '1': const [Color(0xFF56CCF2), Color(0xFF2F80ED)], // xanh ngọc → xanh biển
+      '2': const [Color(0xFFFF6CAB), Color(0xFFFF3A5A)], // hồng → đỏ neon
+      '3': const [Color(0xFFFFD200), Color(0xFFFFA751)], // vàng → cam nhạt
+      '4': const [Color(0xFFB24592), Color(0xFFF15F79)], // tím → hồng (story)
+      '5': const [Color(0xFF536976), Color(0xFF292E49)], // xanh lạnh → tím xám
+      '6': const [Color(0xFFFF512F), Color(0xFFF09819)], // đỏ cam → vàng cháy
+    }[t] ?? const [Color(0xFFFF6CAB), Color(0xFFFF3A5A)];
+
+    final iconSize = badge - 10; // ~10px khi badge=20 (đồng kích thước với icon 14px)
+
+    return Container(
+      width: badge,
+      height: badge,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          colors: colors,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: colors.last.withOpacity(0.30),
+            blurRadius: 3,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(2.0), // độ dày vòng gradient
+        child: Container(
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white, // lõi trắng
+          ),
+          child: Center(
+            child: Icon(icon, size: iconSize, color: colors.last),
+          ),
+        ),
+      ),
+    );
+  }
+
+
+  static IconData _iconByType(String type, [String? type2]) {
     switch (type) {
-      case 'reaction':
-        return Icons.favorite;
-      case 'comment':
-        return Icons.comment;
-      case 'shared_your_post':
-        return Icons.share;
-      case 'following':
-        return Icons.person_add;
-      case 'viewed_story':
-        return Icons.visibility;
-      case 'comment_reply':
-        return Icons.reply;
-      default:
-        return Icons.notifications;
+      case 'comment': return Icons.mode_comment_rounded;
+      case 'shared_your_post': return Icons.share_rounded;
+      case 'following': return Icons.person_add_rounded;
+      case 'viewed_story': return Icons.visibility_rounded;
+      case 'comment_reply': return Icons.reply_rounded;
+      default: return Icons.notifications_rounded;
     }
   }
 
-  static Color _colorByType(String type) {
+  static Color _colorByType(String type, [String? type2]) {
     switch (type) {
-      case 'reaction':
-        return Colors.redAccent;
-      case 'comment':
-        return Colors.blueAccent;
-      case 'shared_your_post':
-        return Colors.green;
-      case 'following':
-        return Colors.orange;
-      case 'viewed_story':
-        return Colors.purple;
-      case 'comment_reply':
-        return Colors.indigo;
-      default:
-        return Colors.grey;
+      case 'comment': return Colors.blueAccent;
+      case 'shared_your_post': return Colors.green;
+      case 'following': return Colors.orange;
+      case 'viewed_story': return Colors.purple;
+      case 'comment_reply': return Colors.indigo;
+      default: return Colors.grey;
     }
   }
 

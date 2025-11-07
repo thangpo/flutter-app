@@ -27,10 +27,10 @@ import 'package:flutter_sixvalley_ecommerce/features/notification/screens/notifi
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/push_navigation_helper.dart';
 
 class NotificationHelper {
   // {is_read: 0, image: , body: new-messages.demo_data_is_being_reset_to_default., type: demo_reset, title: Demo reset alert, order_id: }
-
   static Future<void> initialize(
       FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin) async {
     // 🟢 Tạo Channel mặc định (bắt buộc cho Android 8+)
@@ -56,51 +56,13 @@ class NotificationHelper {
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
         ?.requestNotificationsPermission();
-    flutterLocalNotificationsPlugin.initialize(initializationsSettings,
-        onDidReceiveNotificationResponse: (NotificationResponse load) async {
-      try {
-        log("tyyuuyypee88=11=>$load");
-        log("==Payload=11=>${load.payload}");
-        NotificationBody payload;
 
-        if (load.payload!.isNotEmpty) {
-          payload = NotificationBody.fromJson(jsonDecode(load.payload!));
-          log("-----------type==>${payload.type}");
-          log("=============Payload==>${load.payload}");
-          if (payload.type == 'order') {
-            Navigator.of(Get.context!).pushReplacement(MaterialPageRoute(
-                builder: (BuildContext context) => OrderDetailsScreen(
-                    orderId: payload.orderId, isNotification: true)));
-          } else if (payload.type == 'wallet') {
-            Navigator.of(Get.context!).pushReplacement(MaterialPageRoute(
-                builder: (BuildContext context) => const WalletScreen()));
-          } else if (payload.type == 'chatting') {
-            Navigator.of(Get.context!).pushReplacement(MaterialPageRoute(
-                builder: (BuildContext context) => InboxScreen(
-                    isBackButtonExist: true,
-                    initIndex: payload.messageKey == 'message_from_delivery_man'
-                        ? 0
-                        : 1,
-                    fromNotification: true)));
-          } else if (payload.type == 'product_restock_update') {
-            Navigator.of(Get.context!).pushReplacement(MaterialPageRoute(
-                builder: (BuildContext context) => ProductDetails(
-                    productId: int.parse(payload.productId!),
-                    slug: payload.slug,
-                    isNotification: true)));
-          } else if (payload.type == 'referral_code_used') {
-          } else {
-            Navigator.of(Get.context!).pushReplacement(MaterialPageRoute(
-                builder: (BuildContext context) => const NotificationScreen(
-                      fromNotification: true,
-                    )));
-          }
-        }
-      } catch (_) {}
-      return;
-    });
 
     FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
+      // --- SOCIAL payload → để main.dart show local notif (payload = message.data) ---
+      if (message.data.containsKey('api_status') || message.data.containsKey('detail')) {
+        return;
+      }
       if (kDebugMode) {
         print(
             "-----------onMessage: ${message.notification?.title}/${message.notification?.body}/${message.notification?.titleLocKey}");
@@ -179,6 +141,15 @@ class NotificationHelper {
     });
 
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
+      print('message onMessageOpenedApp: ${message.data}');
+
+      // 🟣 [1] SOCIAL notifications (WoWonder)
+      if ((message.data['api_status'] != null) ||
+          (message.data['detail'] != null)) {
+        debugPrint('📬 [SOCIAL] User tapped social notification');
+        await handlePushNavigation(message);
+        return; // Dừng ở đây, không xử lý tiếp eCommerce
+      }
       if (kDebugMode) {
         print(
             "onOpenApp: ${message.notification!.title}/${message.data}/${message.notification!.titleLocKey}");
