@@ -1257,5 +1257,13 @@
   "group_name_msg_hint":"E.g: Vnshop247",
   "stories": "Stories",
   "group_chat": "Group Chat",
-  "menu": "Menu"
+  "menu": "Menu",
+  "new_group": "New group",
+  "enter_group_name": "Enter group name",
+  "select_at_least_one_member": "Select at least one member",
+  "failed_to_create_group": "Failed to create group",
+  "create_msg":"CREATE",
+  "group_name_optional": "Group name (optional)",
+  "suggestions": "Suggestions",
+  "no_friends_to_select": "No friends to select"
 }

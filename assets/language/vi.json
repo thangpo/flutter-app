@@ -1256,6 +1256,14 @@
   "group_name_msg_hint": "Nhóm chat Vnshop247",
   "stories": "Tin",
   "group_chat": "Nhóm Chat",
-  "menu": "Menu"
+  "menu": "Menu",
+  "new_group": "Nhóm mới",
+  "enter_group_name": "Nhập tên nhóm",
+  "select_at_least_one_member": "Chọn ít nhất 1 thành viên",
+  "failed_to_create_group": "Tạo nhóm thất bại",
+  "create_msg": "TẠO",
+  "group_name_optional": "Tên nhóm (không bắt buộc)",
+  "suggestions": "Gợi ý",
+  "no_friends_to_select": "Không có bạn bè nào để chọn"
 }
 

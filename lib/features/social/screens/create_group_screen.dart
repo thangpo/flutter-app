@@ -8,6 +8,8 @@ import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_f
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_friends_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_chat_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_friend.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+
 
 class CreateGroupScreen extends StatefulWidget {
   final String accessToken;
@@ -50,9 +52,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Nhóm mới',
-          style: TextStyle(fontWeight: FontWeight.bold),
+       title: Text(
+          getTranslated('new_group', context)!,
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         actions: [
           TextButton(
@@ -62,14 +64,19 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                     final name = nameCtrl.text.trim();
                     if (name.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Nhập tên nhóm')),
+                        SnackBar(
+                          content:
+                              Text(getTranslated('enter_group_name', context)!),
+                        ),
                       );
                       return;
                     }
                     if (selectedIds.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text('Chọn ít nhất 1 thành viên')),
+                        SnackBar(
+                          content: Text(getTranslated(
+                              'select_at_least_one_member', context)!),
+                        ),
                       );
                       return;
                     }
@@ -86,8 +93,12 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                            content: Text(
-                                groupCtrl.lastError ?? 'Tạo nhóm thất bại')),
+                          content: Text(
+                            groupCtrl.lastError ??
+                                getTranslated(
+                                    'failed_to_create_group', context)!,
+                          ),
+                        ),
                       );
                     }
                   },
@@ -97,14 +108,15 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text(
-                    'TẠO',
-                    style: TextStyle(
+                : Text(
+                    getTranslated('create_msg', context)!,
+                    style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       color: Colors.blue,
                       fontSize: 16,
                     ),
                   ),
+
           ),
         ],
       ),
@@ -152,8 +164,8 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                 Expanded(
                   child: TextField(
                     controller: nameCtrl,
-                    decoration: const InputDecoration(
-                      hintText: 'Tên nhóm (không bắt buộc)',
+                    decoration: InputDecoration(
+                      hintText: getTranslated('group_name_optional', context),
                       border: InputBorder.none,
                     ),
                   ),
@@ -239,7 +251,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
               onChanged: friendsCtrl.search,
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.search),
-                hintText: 'Tìm kiếm',
+                hintText: getTranslated('search', context),
                 filled: true,
                 fillColor: Colors.grey[200],
                 border: OutlineInputBorder(
@@ -251,16 +263,17 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
             ),
           ),
 
-          const Padding(
-            padding: EdgeInsets.only(left: 16, top: 4),
+          Padding(
+            padding: const EdgeInsets.only(left: 16, top: 4),
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                'Gợi ý',
-                style: TextStyle(fontWeight: FontWeight.bold),
+                getTranslated('suggestions', context)!,
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
           ),
+
 
           // 🔹 Danh sách bạn bè
           Expanded(
@@ -270,8 +283,11 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                 return const Center(child: CircularProgressIndicator());
               }
               if (list.isEmpty) {
-                return const Center(child: Text('Không có bạn bè nào để chọn'));
+                return Center(
+                  child: Text(getTranslated('no_friends_to_select', context)!),
+                );
               }
+
 
               return ListView.builder(
                 itemCount: list.length,
