@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:developer' as dev;
 import 'package:http/http.dart' as http;
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
+import 'package:http_parser/http_parser.dart';
 import 'package:flutter_sixvalley_ecommerce/features/ads/domain/models/countries.dart';
 
 class AdsService {
@@ -39,7 +40,6 @@ class AdsService {
     return List<Map<String, dynamic>>.from(jsonResponse['data']);
   }
 
-  // === CREATE CAMPAIGN (HOÀN CHỈNH + SIÊU ỔN ĐỊNH) ===
   Future<Map<String, dynamic>> createCampaign({
     required String accessToken,
     required Map<String, dynamic> formData,
@@ -51,7 +51,6 @@ class AdsService {
     final url = Uri.parse("$_baseUrl?access_token=$accessToken");
     var request = http.MultipartRequest('POST', url);
 
-    // === FIX audience-list ===
     final countries = formData['countries'] as List<Country>? ?? [];
     final audienceList = countries
         .map((c) => c.value)
@@ -60,7 +59,6 @@ class AdsService {
 
     if (audienceList.isEmpty) throw Exception('Chưa chọn quốc gia hợp lệ');
 
-    // === FIX gender ===
     String genderValue() {
       final g = formData['gender']?.toString() ?? 'all';
       if (g == 'Nam') return 'male';
@@ -68,11 +66,10 @@ class AdsService {
       return 'all';
     }
 
-    // === FIX appears: entire → post (ảnh không hỗ trợ entire) ===
     String appearsFixed = (formData['appears'] ?? 'post').toString();
     if (appearsFixed == 'entire') {
       appearsFixed = 'post';
-      dev.log('⚠️ appears=entire → tự chuyển thành post (ảnh không hỗ trợ)');
+      dev.log('appears=entire → tự chuyển thành post (ảnh không hỗ trợ)');
     }
 
     request.fields.addAll({
@@ -90,21 +87,43 @@ class AdsService {
       'audience-list': audienceList,
       'gender': genderValue(),
       'location': (formData['location'] ?? '').toString(),
-      'page': '',
+      'page': 'vnshop247page',
     });
 
     if (mediaPath.isNotEmpty) {
       final file = File(mediaPath);
       if (!await file.exists()) throw Exception('File ảnh không tồn tại');
+
       final size = await file.length();
       if (size > 5 * 1024 * 1024) throw Exception('Ảnh tối đa 5MB');
       if (size == 0) throw Exception('File ảnh rỗng');
-      request.files.add(await http.MultipartFile.fromPath('ad_media', mediaPath));
-      dev.log('📸 Upload ảnh: ${size ~/ 1024} KB');
+
+      String mediaType = 'image/jpeg';
+      final ext = mediaPath.toLowerCase();
+      if (ext.endsWith('.png')) {
+        mediaType = 'image/png';
+      } else if (ext.endsWith('.jpg') || ext.endsWith('.jpeg')) {
+        mediaType = 'image/jpeg';
+      } else if (ext.endsWith('.gif')) {
+        mediaType = 'image/gif';
+      } else if (ext.endsWith('.mp4')) {
+        mediaType = 'video/mp4';
+      }
+
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'media',
+          mediaPath,
+          contentType: MediaType.parse(mediaType),
+        ),
+      );
+
+      dev.log('Upload ảnh: ${size ~/ 1024} KB | Type: $mediaType');
     }
 
-    dev.log('🚀 Gửi fields: ${request.fields}');
-    dev.log('🌍 audience-list: $audienceList | appears: $appearsFixed');
+
+    dev.log('Gửi fields: ${request.fields}');
+    dev.log('audience-list: $audienceList | appears: $appearsFixed');
 
     try {
       final streamedResponse = await request.send().timeout(const Duration(seconds: 90));

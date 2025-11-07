@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:image_picker/image_picker.dart';
@@ -15,7 +16,7 @@ class CreateAdsScreen extends StatefulWidget {
   State<CreateAdsScreen> createState() => _CreateAdsScreenState();
 }
 
-class _CreateAdsScreenState extends State<CreateAdsScreen> {
+class _CreateAdsScreenState extends State<CreateAdsScreen> with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final ImagePicker _picker = ImagePicker();
   final PageController _pageController = PageController();
@@ -24,6 +25,10 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
   GlobalKey? _imageHeroKey;
   int _currentStep = 0;
   bool _isSubmitting = false;
+  bool _isTransitioning = false;
+
+  // Animation Controllers
+  late AnimationController _shimmerController;
 
   File? _mediaFile;
   final _nameCtrl = TextEditingController();
@@ -43,8 +48,18 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
   int _ageTo = 65;
 
   @override
+  void initState() {
+    super.initState();
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat();
+  }
+
+  @override
   void dispose() {
     _pageController.dispose();
+    _shimmerController.dispose();
     _nameCtrl.dispose();
     _headlineCtrl.dispose();
     _descCtrl.dispose();
@@ -110,10 +125,17 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
 
   void _next() {
     if (_currentStep < 2) {
+      setState(() => _isTransitioning = true);
       _pageController.nextPage(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.ease,
-      );
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      ).then((_) {
+        Future.delayed(const Duration(milliseconds: 200), () {
+          if (mounted) {
+            setState(() => _isTransitioning = false);
+          }
+        });
+      });
     } else {
       _submit();
     }
@@ -121,20 +143,17 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
 
   void _prev() {
     if (_currentStep > 0) {
+      setState(() => _isTransitioning = true);
       _pageController.previousPage(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.ease,
-      );
-    }
-  }
-
-  Future<String?> _getAccessToken() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getString('access_token');
-    } catch (e) {
-      debugPrint('Lỗi lấy access token: $e');
-      return null;
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      ).then((_) {
+        Future.delayed(const Duration(milliseconds: 200), () {
+          if (mounted) {
+            setState(() => _isTransitioning = false);
+          }
+        });
+      });
     }
   }
 
@@ -226,7 +245,6 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
         debugPrint('⚠️ appears=entire → tự chuyển thành post (ảnh không hỗ trợ entire)');
       }
 
-      final appearsStr = _appears ?? 'post';
       final formData = {
         'name': _nameCtrl.text.trim(),
         'website': _websiteCtrl.text.trim(),
@@ -236,15 +254,11 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
         'end': _formatDate(_endDate!),
         'budget': budget,
         'bidding': _biddingStrategy.toLowerCase(),
-        'appears': appearsStr,
+        'appears': appearsFixed,
         'countries': _selectedCountries,
         'gender': genderValue(),
         'location': _locationCtrl.text.trim(),
       };
-
-      debugPrint('✅ Gửi appears: $appearsFixed');
-      debugPrint('✅ Gửi audience-list: $audienceList');
-      debugPrint('✅ Gửi gender: ${genderValue()}');
 
       final response = await _adsService.createCampaign(
         accessToken: accessToken,
@@ -254,11 +268,7 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
 
       if (mounted) {
         setState(() => _isSubmitting = false);
-
-        debugPrint('✅ Response: $response');
-
         _showSuccess('Tạo chiến dịch thành công!');
-
         await Future.delayed(const Duration(seconds: 1));
         if (mounted) {
           Navigator.pop(context, true);
@@ -289,13 +299,9 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
         key: _formKey,
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(3, (i) => _buildStepIndicator(i)),
-              ),
-            ),
+            // iOS 18 Style Liquid Glass Stepper
+            _buildIOSGlassStepper(isDark),
+
             Expanded(
               child: PageView(
                 controller: _pageController,
@@ -340,6 +346,7 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
                 ],
               ),
             ),
+
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -401,22 +408,208 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
     );
   }
 
-  Widget _buildStepIndicator(int step) {
-    final isActive = _currentStep == step;
-    final isPassed = _currentStep > step;
+  Widget _buildIOSGlassStepper(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: Column(
+        children: [
+          // 3 Glass Pills
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(3, (index) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: _buildGlassPill(index, isDark),
+              );
+            }),
+          ),
+
+          const SizedBox(height: 20),
+
+          // iOS Style Progress Bar
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              height: 4,
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withOpacity(0.1)
+                    : Colors.black.withOpacity(0.1),
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 600),
+                    curve: Curves.easeInOut,
+                    width: constraints.maxWidth * ((_currentStep + 1) / 3),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          const Color(0xFF007AFF), // iOS Blue
+                          const Color(0xFF5856D6), // iOS Purple
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGlassPill(int index, bool isDark) {
+    final isActive = index == _currentStep;
+    final isPassed = index < _currentStep;
+
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      width: isActive ? 32 : 12,
-      height: 12,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: BoxDecoration(
-        color: isActive || isPassed ? Colors.blue.shade700 : Colors.grey.shade400,
-        borderRadius: BorderRadius.circular(6),
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.easeOutCubic,
+      width: 56,
+      height: 56,
+      child: Stack(
+        children: [
+          // iOS Glass Background with Blur
+          ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(28),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: isActive
+                        ? [
+                      const Color(0xFF007AFF).withOpacity(0.25),
+                      const Color(0xFF5856D6).withOpacity(0.25),
+                    ]
+                        : isPassed
+                        ? [
+                      const Color(0xFF34C759).withOpacity(0.25),
+                      const Color(0xFF30D158).withOpacity(0.25),
+                    ]
+                        : [
+                      Colors.white.withOpacity(isDark ? 0.15 : 0.3),
+                      Colors.white.withOpacity(isDark ? 0.1 : 0.2),
+                    ],
+                  ),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(isDark ? 0.2 : 0.4),
+                    width: 0.5,
+                  ),
+                  boxShadow: [
+                    if (isActive)
+                      BoxShadow(
+                        color: const Color(0xFF007AFF).withOpacity(0.4),
+                        blurRadius: 16,
+                        spreadRadius: 0,
+                      ),
+                    if (isPassed)
+                      BoxShadow(
+                        color: const Color(0xFF34C759).withOpacity(0.3),
+                        blurRadius: 12,
+                        spreadRadius: 0,
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // Shimmer Effect (only active)
+          if (isActive)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: AnimatedBuilder(
+                animation: _shimmerController,
+                builder: (context, child) {
+                  return Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment(-1 + (_shimmerController.value * 2), -1),
+                        end: Alignment(1 + (_shimmerController.value * 2), 1),
+                        colors: [
+                          Colors.transparent,
+                          Colors.white.withOpacity(0.15),
+                          Colors.transparent,
+                        ],
+                        stops: const [0.0, 0.5, 1.0],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+          // Number/Checkmark
+          Center(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 400),
+              transitionBuilder: (child, animation) {
+                return ScaleTransition(
+                  scale: animation,
+                  child: child,
+                );
+              },
+              child: isPassed
+                  ? const Icon(
+                Icons.check_rounded,
+                key: ValueKey('check'),
+                color: Color(0xFF34C759),
+                size: 28,
+              )
+                  : Text(
+                '${index + 1}',
+                key: ValueKey('number_$index'),
+                style: TextStyle(
+                  color: isActive
+                      ? const Color(0xFF007AFF)
+                      : isDark
+                      ? Colors.white.withOpacity(0.7)
+                      : Colors.black.withOpacity(0.6),
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+
+          // Glass Reflection
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 28,
+            child: ClipRRect(
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(28),
+                topRight: Radius.circular(28),
+              ),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.white.withOpacity(0.3),
+                      Colors.white.withOpacity(0.0),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
+// _ImagePreviewScreen remains the same
 class _ImagePreviewScreen extends StatefulWidget {
   final File imageFile;
   final GlobalKey heroKey;
@@ -530,6 +723,7 @@ class _ImagePreviewScreenState extends State<_ImagePreviewScreen> with TickerPro
   }
 }
 
+// Step Widgets (copy from your original code)
 class Step1Widget extends StatelessWidget {
   final File? mediaFile;
   final TextEditingController nameCtrl;
@@ -798,7 +992,6 @@ class Step3Widget extends StatelessWidget {
   });
 
   final List<Map<String, String>> placementOptions = const [
-    {'value': 'entire', 'label': 'Toàn bộ (Định dạng tệp hình ảnh)'},
     {'value': 'post', 'label': 'Bưu kiện (Định dạng tệp hình ảnh)'},
     {'value': 'sidebar', 'label': 'Thanh bên (Định dạng tệp hình ảnh)'},
     {'value': 'jobs', 'label': 'Việc làm (Định dạng tệp hình ảnh)'},
