@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:image_picker/image_picker.dart';
@@ -15,15 +16,17 @@ class CreateAdsScreen extends StatefulWidget {
   State<CreateAdsScreen> createState() => _CreateAdsScreenState();
 }
 
-class _CreateAdsScreenState extends State<CreateAdsScreen> {
+class _CreateAdsScreenState extends State<CreateAdsScreen> with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final ImagePicker _picker = ImagePicker();
   final PageController _pageController = PageController();
   final AdsService _adsService = AdsService();
 
-  GlobalKey? _imageHeroKey;
   int _currentStep = 0;
   bool _isSubmitting = false;
+
+  late AnimationController _shimmerController;
+  late AnimationController _glowController;
 
   File? _mediaFile;
   final _nameCtrl = TextEditingController();
@@ -34,23 +37,34 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
   final _websiteCtrl = TextEditingController();
   final _locationCtrl = TextEditingController();
   List<Country> _selectedCountries = [];
-  final _audienceCtrl = TextEditingController();
   String? _gender;
   String? _appears;
   final _budgetCtrl = TextEditingController();
   String _biddingStrategy = 'Clicks';
-  int _ageFrom = 18;
-  int _ageTo = 65;
+
+  @override
+  void initState() {
+    super.initState();
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat();
+    _glowController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+  }
 
   @override
   void dispose() {
     _pageController.dispose();
+    _shimmerController.dispose();
+    _glowController.dispose();
     _nameCtrl.dispose();
     _headlineCtrl.dispose();
     _descCtrl.dispose();
     _websiteCtrl.dispose();
     _locationCtrl.dispose();
-    _audienceCtrl.dispose();
     _budgetCtrl.dispose();
     super.dispose();
   }
@@ -62,31 +76,9 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
       imageQuality: 85,
     );
     if (image != null && mounted) {
-      final tempFile = File(image.path);
-      final GlobalKey heroKey = GlobalKey();
-
-      await Navigator.of(context).push(
-        PageRouteBuilder(
-          opaque: false,
-          barrierColor: Colors.black.withOpacity(0.9),
-          transitionDuration: const Duration(milliseconds: 600),
-          reverseTransitionDuration: const Duration(milliseconds: 500),
-          pageBuilder: (_, animation, ___) {
-            return _ImagePreviewScreen(
-              imageFile: tempFile,
-              heroKey: heroKey,
-              onClose: () => Navigator.of(context).pop(),
-            );
-          },
-        ),
-      );
-
-      if (mounted) {
-        setState(() {
-          _mediaFile = tempFile;
-          _imageHeroKey = heroKey;
-        });
-      }
+      setState(() {
+        _mediaFile = File(image.path);
+      });
     }
   }
 
@@ -96,6 +88,17 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
       initialDate: DateTime.now(),
       firstDate: DateTime.now(),
       lastDate: DateTime(2030),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.dark(
+              primary: const Color(0xFF007AFF),
+              surface: Colors.grey[900]!,
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
     if (date != null) {
       setState(() {
@@ -111,8 +114,8 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
   void _next() {
     if (_currentStep < 2) {
       _pageController.nextPage(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.ease,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
       );
     } else {
       _submit();
@@ -122,19 +125,9 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
   void _prev() {
     if (_currentStep > 0) {
       _pageController.previousPage(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.ease,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
       );
-    }
-  }
-
-  Future<String?> _getAccessToken() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getString('access_token');
-    } catch (e) {
-      debugPrint('Lỗi lấy access token: $e');
-      return null;
     }
   }
 
@@ -147,8 +140,10 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.red,
-        duration: const Duration(seconds: 3),
+        backgroundColor: Colors.red[400],
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
       ),
     );
   }
@@ -158,8 +153,10 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.green,
-        duration: const Duration(seconds: 2),
+        backgroundColor: Colors.green[400],
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
       ),
     );
   }
@@ -214,19 +211,11 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
         return 'all';
       }
 
-      final audienceList = _selectedCountries
-          .map((c) => c.value)
-          .where((v) => v != "0" && v.isNotEmpty)
-          .join(',');
-      if (audienceList.isEmpty) throw Exception('Quốc gia không hợp lệ');
-
       String appearsFixed = _appears ?? 'post';
       if (appearsFixed == 'entire') {
         appearsFixed = 'post';
-        debugPrint('⚠️ appears=entire → tự chuyển thành post (ảnh không hỗ trợ entire)');
       }
 
-      final appearsStr = _appears ?? 'post';
       final formData = {
         'name': _nameCtrl.text.trim(),
         'website': _websiteCtrl.text.trim(),
@@ -236,15 +225,11 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
         'end': _formatDate(_endDate!),
         'budget': budget,
         'bidding': _biddingStrategy.toLowerCase(),
-        'appears': appearsStr,
+        'appears': appearsFixed,
         'countries': _selectedCountries,
         'gender': genderValue(),
         'location': _locationCtrl.text.trim(),
       };
-
-      debugPrint('✅ Gửi appears: $appearsFixed');
-      debugPrint('✅ Gửi audience-list: $audienceList');
-      debugPrint('✅ Gửi gender: ${genderValue()}');
 
       final response = await _adsService.createCampaign(
         accessToken: accessToken,
@@ -254,18 +239,11 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
 
       if (mounted) {
         setState(() => _isSubmitting = false);
-
-        debugPrint('✅ Response: $response');
-
         _showSuccess('Tạo chiến dịch thành công!');
-
-        await Future.delayed(const Duration(seconds: 1));
-        if (mounted) {
-          Navigator.pop(context, true);
-        }
+        await Future.delayed(const Duration(milliseconds: 1200));
+        Navigator.pop(context, true);
       }
     } catch (e) {
-      debugPrint('❌ Lỗi tạo chiến dịch: $e');
       if (mounted) {
         setState(() => _isSubmitting = false);
         _showError('Lỗi: ${e.toString().replaceAll('Exception: ', '')}');
@@ -275,256 +253,355 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
-      backgroundColor: isDark ? Colors.grey[900] : Colors.grey[50],
+      backgroundColor: Colors.grey[50],
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: Text(getTranslated('withdraw', context) ?? 'Tạo chiến dịch'),
-        backgroundColor: Colors.blue.shade700,
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios, color: Colors.grey[800]),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          'Tạo chiến dịch',
+          style: TextStyle(
+            color: Colors.grey[900],
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        centerTitle: true,
       ),
-      body: Form(
-        key: _formKey,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(3, (i) => _buildStepIndicator(i)),
-              ),
-            ),
-            Expanded(
-              child: PageView(
-                controller: _pageController,
-                onPageChanged: (i) => setState(() => _currentStep = i),
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  Step1Widget(
-                    mediaFile: _mediaFile,
-                    nameCtrl: _nameCtrl,
-                    onPickImage: _pickImage,
-                    isDark: isDark,
-                  ),
-                  Step2Widget(
-                    headlineCtrl: _headlineCtrl,
-                    descCtrl: _descCtrl,
-                    startDate: _startDate,
-                    endDate: _endDate,
-                    websiteCtrl: _websiteCtrl,
-                    onPickStartDate: () => _pickDate(true),
-                    onPickEndDate: () => _pickDate(false),
-                    isDark: isDark,
-                  ),
-                  Step3Widget(
-                    locationCtrl: _locationCtrl,
-                    budgetCtrl: _budgetCtrl,
-                    selectedCountries: _selectedCountries,
-                    onCountriesChanged: (list) => setState(() => _selectedCountries = list),
-                    gender: _gender,
-                    onGenderChanged: (v) => setState(() => _gender = v),
-                    appears: _appears,
-                    onAppearsChanged: (v) => setState(() => _appears = v),
-                    biddingStrategy: _biddingStrategy,
-                    onBiddingChanged: (v) => setState(() => _biddingStrategy = v ?? 'Clicks'),
-                    ageFrom: _ageFrom,
-                    ageTo: _ageTo,
-                    onAgeChanged: (from, to) => setState(() {
-                      _ageFrom = from;
-                      _ageTo = to;
-                    }),
-                    isDark: isDark,
-                  ),
+      body: Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.grey[50]!,
+                  Colors.white,
                 ],
               ),
             ),
-            Container(
-              padding: const EdgeInsets.all(16),
+          ),
+
+          Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                const SizedBox(height: 100),
+                _buildCameraControlStepper(),
+
+                Expanded(
+                  child: PageView(
+                    controller: _pageController,
+                    onPageChanged: (i) => setState(() => _currentStep = i),
+                    physics: const NeverScrollableScrollPhysics(),
+                    children: [
+                      Step1Widget(
+                        mediaFile: _mediaFile,
+                        nameCtrl: _nameCtrl,
+                        onPickImage: _pickImage,
+                      ),
+                      Step2Widget(
+                        headlineCtrl: _headlineCtrl,
+                        descCtrl: _descCtrl,
+                        startDate: _startDate,
+                        endDate: _endDate,
+                        websiteCtrl: _websiteCtrl,
+                        onPickStartDate: () => _pickDate(true),
+                        onPickEndDate: () => _pickDate(false),
+                      ),
+                      Step3Widget(
+                        locationCtrl: _locationCtrl,
+                        budgetCtrl: _budgetCtrl,
+                        selectedCountries: _selectedCountries,
+                        onCountriesChanged: (list) => setState(() => _selectedCountries = list),
+                        gender: _gender,
+                        onGenderChanged: (v) => setState(() => _gender = v),
+                        appears: _appears,
+                        onAppearsChanged: (v) => setState(() => _appears = v),
+                        biddingStrategy: _biddingStrategy,
+                        onBiddingChanged: (v) => setState(() => _biddingStrategy = v ?? 'Clicks'),
+                      ),
+                    ],
+                  ),
+                ),
+
+                _buildBottomNavigation(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCameraControlStepper() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(3, (index) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: _buildCameraButton(index),
+              );
+            }),
+          ),
+
+          const SizedBox(height: 24),
+
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              height: 3,
               decoration: BoxDecoration(
-                color: isDark ? Colors.grey[850] : Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, -2),
-                  ),
-                ],
+                color: Colors.white.withOpacity(0.1),
               ),
-              child: Row(
-                children: [
-                  if (_currentStep > 0)
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _isSubmitting ? null : _prev,
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          side: BorderSide(color: Colors.blue.shade700),
-                        ),
-                        child: const Text('Quay lại'),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 400),
+                    width: constraints.maxWidth * ((_currentStep + 1) / 3),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF007AFF), Color(0xFF5856D6)],
                       ),
                     ),
-                  if (_currentStep > 0) const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _isSubmitting ? null : _next,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue.shade700,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        disabledBackgroundColor: Colors.grey.shade400,
-                      ),
-                      child: _isSubmitting
-                          ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
-                          : Text(
-                        _currentStep == 2 ? 'TẠO CHIẾN DỊCH' : 'Tiếp theo',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                  );
+                },
               ),
             ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCameraButton(int index) {
+    final isActive = index == _currentStep;
+    final isPassed = index < _currentStep;
+
+    final icons = [
+      Icons.photo_camera_outlined,
+      Icons.description_outlined,
+      Icons.settings_outlined,
+    ];
+
+    final labels = ['MEDIA', 'CONTENT', 'TARGETING'];
+
+    return Column(
+      children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 400),
+          width: 64,
+          height: 64,
+          child: Stack(
+            children: [
+              // Glass Background
+              ClipRRect(
+                borderRadius: BorderRadius.circular(32),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(32),
+                      color: isActive
+                          ? const Color(0xFF007AFF).withOpacity(0.1)
+                          : isPassed
+                          ? Colors.green.withOpacity(0.1)
+                          : Colors.white.withOpacity(0.8),
+                      border: Border.all(
+                        color: isActive
+                            ? const Color(0xFF007AFF).withOpacity(0.5)
+                            : isPassed
+                            ? Colors.green.withOpacity(0.5)
+                            : Colors.grey.withOpacity(0.3),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        if (isActive)
+                          BoxShadow(
+                            color: const Color(0xFF007AFF).withOpacity(0.3),
+                            blurRadius: 20,
+                            spreadRadius: 2,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              // Icon
+              Center(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  child: isPassed
+                      ? const Icon(
+                    Icons.check_rounded,
+                    color: Colors.green,
+                    size: 28,
+                  )
+                      : Icon(
+                    icons[index],
+                    color: isActive ? const Color(0xFF007AFF) : Colors.grey[600],
+                    size: 28,
+                  ),
+                ),
+              ),
+
+              if (isActive)
+                AnimatedBuilder(
+                  animation: _glowController,
+                  builder: (context, child) {
+                    return Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(32),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF007AFF).withOpacity(0.3 * _glowController.value),
+                            blurRadius: 30,
+                            spreadRadius: 5,
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          labels[index],
+          style: TextStyle(
+            color: isActive
+                ? const Color(0xFF007AFF)
+                : isPassed
+                ? Colors.green
+                : Colors.grey[600],
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBottomNavigation() {
+    return ClipRRect(
+      borderRadius: const BorderRadius.only(
+        topLeft: Radius.circular(24),
+        topRight: Radius.circular(24),
+      ),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.9),
+            border: Border(
+              top: BorderSide(
+                color: Colors.grey.withOpacity(0.2),
+                width: 1,
+              ),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 20,
+                offset: const Offset(0, -5),
+              ),
+            ],
+          ),
+          child: SafeArea(
+            top: false,
+            child: Row(
+              children: [
+                if (_currentStep > 0)
+                  Expanded(
+                    child: _buildGlassButton(
+                      onPressed: _isSubmitting ? null : _prev,
+                      label: 'Quay lại',
+                      isPrimary: false,
+                    ),
+                  ),
+                if (_currentStep > 0) const SizedBox(width: 12),
+                Expanded(
+                  child: _buildGlassButton(
+                    onPressed: _isSubmitting ? null : _next,
+                    label: _currentStep == 2 ? 'Tạo chiến dịch' : 'Tiếp theo',
+                    isPrimary: true,
+                    isLoading: _isSubmitting,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildStepIndicator(int step) {
-    final isActive = _currentStep == step;
-    final isPassed = _currentStep > step;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      width: isActive ? 32 : 12,
-      height: 12,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: BoxDecoration(
-        color: isActive || isPassed ? Colors.blue.shade700 : Colors.grey.shade400,
-        borderRadius: BorderRadius.circular(6),
-      ),
-    );
-  }
-}
-
-class _ImagePreviewScreen extends StatefulWidget {
-  final File imageFile;
-  final GlobalKey heroKey;
-  final VoidCallback onClose;
-
-  const _ImagePreviewScreen({
-    required this.imageFile,
-    required this.heroKey,
-    required this.onClose,
-  });
-
-  @override
-  State<_ImagePreviewScreen> createState() => _ImagePreviewScreenState();
-}
-
-class _ImagePreviewScreenState extends State<_ImagePreviewScreen> with TickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _opacityAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
-
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.85).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-    _opacityAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeIn),
-    );
-
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        _controller.forward().then((_) {
-          widget.onClose();
-        });
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: GestureDetector(
-              onTap: () {
-                _controller.forward().then((_) => widget.onClose());
-              },
-              child: AnimatedBuilder(
-                animation: _opacityAnimation,
-                builder: (context, child) {
-                  return Container(color: Colors.black.withOpacity(0.9 * _opacityAnimation.value));
-                },
-              ),
+  Widget _buildGlassButton({
+    required VoidCallback? onPressed,
+    required String label,
+    required bool isPrimary,
+    bool isLoading = false,
+  }) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          height: 54,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: isPrimary
+                ? const LinearGradient(
+              colors: [Color(0xFF007AFF), Color(0xFF5856D6)],
+            )
+                : null,
+            color: isPrimary ? null : Colors.grey[200],
+            border: Border.all(
+              color: isPrimary ? Colors.transparent : Colors.grey.withOpacity(0.3),
+              width: 1,
             ),
           ),
-          Center(
-            child: AnimatedBuilder(
-              animation: _controller,
-              builder: (context, child) {
-                return Transform.scale(
-                  scale: _scaleAnimation.value,
-                  child: Opacity(
-                    opacity: _opacityAnimation.value,
-                    child: Hero(
-                      tag: 'selected_ad_image',
-                      key: widget.heroKey,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: Image.file(
-                          widget.imageFile,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onPressed,
+              child: Center(
+                child: isLoading
+                    ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                   ),
-                );
-              },
-            ),
-          ),
-          Positioned(
-            top: 50,
-            right: 20,
-            child: GestureDetector(
-              onTap: () {
-                _controller.forward().then((_) => widget.onClose());
-              },
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: const BoxDecoration(
-                  color: Colors.black54,
-                  shape: BoxShape.circle,
+                )
+                    : Text(
+                  label,
+                  style: TextStyle(
+                    color: isPrimary ? Colors.white : Colors.grey[800],
+                    fontSize: 16,
+                    fontWeight: isPrimary ? FontWeight.w600 : FontWeight.w500,
+                    letterSpacing: 0.3,
+                  ),
                 ),
-                child: const Icon(Icons.close, color: Colors.white, size: 28),
               ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -534,143 +611,179 @@ class Step1Widget extends StatelessWidget {
   final File? mediaFile;
   final TextEditingController nameCtrl;
   final VoidCallback onPickImage;
-  final bool isDark;
 
   const Step1Widget({
     super.key,
     required this.mediaFile,
     required this.nameCtrl,
     required this.onPickImage,
-    required this.isDark,
   });
 
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Hình ảnh chiến dịch *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          const SizedBox(height: 8),
+          const Text(
+            'MEDIA',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.5,
+            ),
+          ),
+          const SizedBox(height: 16),
+
           GestureDetector(
             onTap: onPickImage,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 800),
-              curve: Curves.easeOutCubic,
-              height: 220,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: mediaFile != null ? Colors.blue.shade700 : Colors.grey.shade400,
-                  width: mediaFile != null ? 3 : 2,
-                ),
-                borderRadius: BorderRadius.circular(20),
-                color: isDark ? Colors.grey[800] : Colors.grey[100],
-                boxShadow: [
-                  BoxShadow(
-                    color: mediaFile != null
-                        ? Colors.blue.shade700.withOpacity(0.4)
-                        : Colors.transparent,
-                    blurRadius: 25,
-                    spreadRadius: 5,
-                    offset: const Offset(0, 8),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                child: Container(
+                  height: 280,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    color: Colors.white.withOpacity(0.05),
+                    border: Border.all(
+                      color: mediaFile != null
+                          ? const Color(0xFF007AFF).withOpacity(0.5)
+                          : Colors.white.withOpacity(0.1),
+                      width: 2,
+                    ),
                   ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: Stack(
-                  children: [
-                    if (mediaFile != null)
-                      AnimatedScale(
-                        scale: mediaFile != null ? 1.0 : 0.8,
-                        duration: const Duration(milliseconds: 700),
-                        curve: Curves.easeOutBack,
-                        child: AnimatedOpacity(
-                          opacity: mediaFile != null ? 1.0 : 0.0,
-                          duration: const Duration(milliseconds: 900),
-                          curve: Curves.easeOutCubic,
+                  child: Stack(
+                    children: [
+                      if (mediaFile != null)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(18),
                           child: Image.file(
                             mediaFile!,
                             fit: BoxFit.cover,
                             width: double.infinity,
                             height: double.infinity,
                           ),
+                        )
+                      else
+                        Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 80,
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF007AFF).withOpacity(0.2),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: const Color(0xFF007AFF).withOpacity(0.3),
+                                    width: 2,
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.add_photo_alternate_outlined,
+                                  color: Color(0xFF007AFF),
+                                  size: 40,
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              const Text(
+                                'Chọn hình ảnh',
+                                style: TextStyle(
+                                  color: Color(0xFF007AFF),
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'JPG, PNG • Tối đa 5MB',
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    if (mediaFile == null)
-                      Container(
-                        color: Colors.transparent,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            AnimatedScale(
-                              scale: 1.2,
-                              duration: const Duration(milliseconds: 500),
-                              child: Icon(
-                                Icons.add_a_photo_outlined,
-                                size: 56,
-                                color: Colors.blue.shade600,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Nhấn để chọn ảnh',
-                              style: TextStyle(
-                                color: Colors.blue.shade700,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'JPG, PNG • Tối đa 5MB • Tỷ lệ đẹp nhất 1:1',
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(18),
-                        onTap: onPickImage,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 28),
-          _buildTextField(context, nameCtrl, 'Tên công ty *', Icons.business),
+
+          const SizedBox(height: 32),
+
+          _buildGlassTextField(
+            controller: nameCtrl,
+            label: 'TÊN CÔNG TY',
+            icon: Icons.business_outlined,
+            validator: (v) => v == null || v.trim().isEmpty ? 'Bắt buộc' : null,
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildTextField(BuildContext context, TextEditingController ctrl, String label, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: TextFormField(
-        controller: ctrl,
-        decoration: InputDecoration(
-          labelText: label,
-          prefixIcon: Icon(icon, color: Colors.blue.shade700),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-          filled: true,
-          fillColor: isDark ? Colors.grey[800] : Colors.grey[50],
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: Colors.blue.shade700, width: 2),
+  Widget _buildGlassTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    String? Function(String?)? validator,
+    int maxLines = 1,
+    TextInputType? keyboardType,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.grey[800],
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.2,
           ),
         ),
-        validator: (v) => v == null || v.trim().isEmpty ? 'Bắt buộc' : null,
-      ),
+        const SizedBox(height: 12),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                color: Colors.white,
+                border: Border.all(
+                  color: Colors.grey.withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+              child: TextFormField(
+                controller: controller,
+                maxLines: maxLines,
+                keyboardType: keyboardType,
+                style: TextStyle(color: Colors.grey[900], fontSize: 16),
+                decoration: InputDecoration(
+                  prefixIcon: Icon(icon, color: const Color(0xFF007AFF), size: 22),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  hintText: 'Nhập $label',
+                  hintStyle: TextStyle(
+                    color: Colors.grey[400],
+                    fontSize: 15,
+                  ),
+                ),
+                validator: validator,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -679,7 +792,6 @@ class Step2Widget extends StatelessWidget {
   final TextEditingController headlineCtrl, descCtrl, websiteCtrl;
   final DateTime? startDate, endDate;
   final VoidCallback onPickStartDate, onPickEndDate;
-  final bool isDark;
 
   const Step2Widget({
     super.key,
@@ -690,79 +802,193 @@ class Step2Widget extends StatelessWidget {
     required this.websiteCtrl,
     required this.onPickStartDate,
     required this.onPickEndDate,
-    required this.isDark,
   });
 
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildField(context, headlineCtrl, 'Tiêu đề chiến dịch *', Icons.title, maxLines: 2),
-          _buildField(context, descCtrl, 'Mô tả chiến dịch *', Icons.description, maxLines: 4),
-          _buildDateField(context, 'Ngày bắt đầu *', startDate, onPickStartDate),
-          _buildDateField(context, 'Ngày kết thúc *', endDate, onPickEndDate),
-          _buildField(context, websiteCtrl, 'URL trang web *', Icons.link, keyboardType: TextInputType.url),
+          const Text(
+            'CONTENT',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.5,
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          _buildGlassTextField(
+            controller: headlineCtrl,
+            label: 'TIÊU ĐỀ',
+            icon: Icons.title_outlined,
+            maxLines: 2,
+          ),
+          const SizedBox(height: 20),
+
+          _buildGlassTextField(
+            controller: descCtrl,
+            label: 'MÔ TẢ',
+            icon: Icons.description_outlined,
+            maxLines: 4,
+          ),
+          const SizedBox(height: 20),
+
+          _buildDateField(
+            context: context,
+            label: 'NGÀY BẮT ĐẦU',
+            date: startDate,
+            onTap: onPickStartDate,
+          ),
+          const SizedBox(height: 20),
+
+          _buildDateField(
+            context: context,
+            label: 'NGÀY KẾT THÚC',
+            date: endDate,
+            onTap: onPickEndDate,
+          ),
+          const SizedBox(height: 20),
+
+          _buildGlassTextField(
+            controller: websiteCtrl,
+            label: 'WEBSITE URL',
+            icon: Icons.link_outlined,
+            keyboardType: TextInputType.url,
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildField(
-      BuildContext context,
-      TextEditingController ctrl,
-      String label,
-      IconData icon, {
-        int maxLines = 1,
-        TextInputType? keyboardType,
-      }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: TextFormField(
-        controller: ctrl,
-        maxLines: maxLines,
-        keyboardType: keyboardType,
-        decoration: InputDecoration(
-          labelText: label,
-          prefixIcon: Icon(icon, color: Colors.blue.shade700),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          filled: true,
-          fillColor: isDark ? Colors.grey[800] : Colors.grey[50],
+  Widget _buildGlassTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    int maxLines = 1,
+    TextInputType? keyboardType,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.grey[800],
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.2,
+          ),
         ),
-        validator: (v) {
-          if (v == null || v.trim().isEmpty) return 'Bắt buộc';
-          if (keyboardType == TextInputType.url) {
-            if (!v.startsWith('http://') && !v.startsWith('https://')) {
-              return 'URL phải bắt đầu bằng http:// hoặc https://';
-            }
-          }
-          return null;
-        },
-      ),
+        const SizedBox(height: 12),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                color: Colors.white,
+                border: Border.all(
+                  color: Colors.grey.withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+              child: TextFormField(
+                controller: controller,
+                maxLines: maxLines,
+                keyboardType: keyboardType,
+                style: TextStyle(color: Colors.grey[900], fontSize: 16),
+                decoration: InputDecoration(
+                  prefixIcon: Icon(icon, color: const Color(0xFF007AFF), size: 22),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  hintText: 'Nhập $label',
+                  hintStyle: TextStyle(
+                    color: Colors.grey[400],
+                    fontSize: 15,
+                  ),
+                ),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'Bắt buộc';
+                  if (keyboardType == TextInputType.url) {
+                    if (!v.startsWith('http://') && !v.startsWith('https://')) {
+                      return 'URL phải bắt đầu bằng http:// hoặc https://';
+                    }
+                  }
+                  return null;
+                },
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildDateField(BuildContext context, String label, DateTime? date, VoidCallback onTap) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: InkWell(
-        onTap: onTap,
-        child: InputDecorator(
-          decoration: InputDecoration(
-            labelText: label,
-            prefixIcon: Icon(Icons.calendar_today, color: Colors.blue.shade700),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            filled: true,
-            fillColor: isDark ? Colors.grey[800] : Colors.grey[50],
-          ),
-          child: Text(
-            date != null ? '${date.day}/${date.month}/${date.year}' : 'Chọn ngày',
-            style: TextStyle(color: date == null ? Colors.grey : null),
+  Widget _buildDateField({
+    required BuildContext context,
+    required String label,
+    required DateTime? date,
+    required VoidCallback onTap,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.grey[800],
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.2,
           ),
         ),
-      ),
+        const SizedBox(height: 12),
+        GestureDetector(
+          onTap: onTap,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  color: Colors.white,
+                  border: Border.all(
+                    color: Colors.grey.withOpacity(0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.calendar_today_outlined,
+                      color: Color(0xFF007AFF),
+                      size: 22,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      date != null
+                          ? '${date.day}/${date.month}/${date.year}'
+                          : 'Chọn ngày',
+                      style: TextStyle(
+                        color: date != null ? Colors.grey[900] : Colors.grey[400],
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -775,9 +1001,6 @@ class Step3Widget extends StatelessWidget {
   final Function(String?) onGenderChanged, onAppearsChanged;
   final String biddingStrategy;
   final Function(String?) onBiddingChanged;
-  final int ageFrom, ageTo;
-  final Function(int, int) onAgeChanged;
-  final bool isDark;
 
   const Step3Widget({
     super.key,
@@ -791,22 +1014,18 @@ class Step3Widget extends StatelessWidget {
     required this.onAppearsChanged,
     required this.biddingStrategy,
     required this.onBiddingChanged,
-    required this.ageFrom,
-    required this.ageTo,
-    required this.onAgeChanged,
-    required this.isDark,
   });
 
   final List<Map<String, String>> placementOptions = const [
-    {'value': 'entire', 'label': 'Toàn bộ (Định dạng tệp hình ảnh)'},
-    {'value': 'post', 'label': 'Bưu kiện (Định dạng tệp hình ảnh)'},
-    {'value': 'sidebar', 'label': 'Thanh bên (Định dạng tệp hình ảnh)'},
-    {'value': 'jobs', 'label': 'Việc làm (Định dạng tệp hình ảnh)'},
-    {'value': 'forum', 'label': 'Diễn đàn (Định dạng tệp hình ảnh)'},
-    {'value': 'movies', 'label': 'Phim (Định dạng tệp hình ảnh)'},
-    {'value': 'offer', 'label': 'Lời đề nghị (Định dạng tệp hình ảnh)'},
-    {'value': 'funding', 'label': 'Kinh phí (Định dạng tệp hình ảnh)'},
-    {'value': 'story', 'label': 'Câu chuyện (Định dạng tệp hình ảnh)'},
+    {'value': 'entire', 'label': 'Toàn bộ trang'},
+    {'value': 'post', 'label': 'Bưu kiện'},
+    {'value': 'sidebar', 'label': 'Thanh bên'},
+    {'value': 'jobs', 'label': 'Việc làm'},
+    {'value': 'forum', 'label': 'Diễn đàn'},
+    {'value': 'movies', 'label': 'Phim'},
+    {'value': 'offer', 'label': 'Lời đề nghị'},
+    {'value': 'funding', 'label': 'Kinh phí'},
+    {'value': 'story', 'label': 'Câu chuyện'},
   ];
 
   void _showCountryPicker(BuildContext context) {
@@ -816,7 +1035,12 @@ class Step3Widget extends StatelessWidget {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setStateDialog) => AlertDialog(
-          title: const Text('Chọn quốc gia'),
+          backgroundColor: Colors.grey[900],
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text(
+            'Chọn quốc gia',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
           content: SizedBox(
             width: double.maxFinite,
             height: 400,
@@ -831,17 +1055,23 @@ class Step3Widget extends StatelessWidget {
                           temp = countries.where((c) => c.value != "0").toList();
                         });
                       },
-                      child: const Text('Chọn tất cả'),
+                      child: const Text(
+                        'Chọn tất cả',
+                        style: TextStyle(color: Color(0xFF007AFF)),
+                      ),
                     ),
                     TextButton(
                       onPressed: () {
                         setStateDialog(() => temp.clear());
                       },
-                      child: const Text('Bỏ chọn tất cả'),
+                      child: const Text(
+                        'Bỏ chọn',
+                        style: TextStyle(color: Colors.red),
+                      ),
                     ),
                   ],
                 ),
-                const Divider(),
+                const Divider(color: Colors.white24),
                 Expanded(
                   child: ListView.builder(
                     itemCount: countries.length - 1,
@@ -850,8 +1080,13 @@ class Step3Widget extends StatelessWidget {
                       final checked = temp.contains(country);
                       return CheckboxListTile(
                         dense: true,
-                        title: Text(country.toString()),
+                        title: Text(
+                          country.toString(),
+                          style: const TextStyle(color: Colors.white),
+                        ),
                         value: checked,
+                        activeColor: const Color(0xFF007AFF),
+                        checkColor: Colors.white,
                         onChanged: (v) {
                           setStateDialog(() {
                             if (v == true) {
@@ -869,8 +1104,15 @@ class Step3Widget extends StatelessWidget {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Hủy')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Hủy', style: TextStyle(color: Colors.white54)),
+            ),
             ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF007AFF),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
               onPressed: () {
                 onCountriesChanged(temp);
                 Navigator.pop(ctx);
@@ -886,153 +1128,297 @@ class Step3Widget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildField(context, locationCtrl, 'Địa điểm *', Icons.location_on),
-          const SizedBox(height: 16),
-          const Text('Quốc gia tiếp cận *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          const SizedBox(height: 8),
-          GestureDetector(
-            onTap: () => _showCountryPicker(context),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade400),
-                borderRadius: BorderRadius.circular(12),
-                color: isDark ? Colors.grey[800] : Colors.grey[50],
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      selectedCountries.isEmpty
-                          ? 'Chọn quốc gia (có thể chọn nhiều)'
-                          : '${selectedCountries.length} quốc gia được chọn',
-                      style: TextStyle(color: selectedCountries.isEmpty ? Colors.grey[600] : null),
-                    ),
-                  ),
-                  const Icon(Icons.arrow_drop_down),
-                ],
-              ),
+          const Text(
+            'TARGETING',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.5,
             ),
           ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            children: selectedCountries.map((c) {
-              return Chip(
-                label: Text(c.toString(), style: const TextStyle(fontSize: 12)),
-                backgroundColor: Colors.blue.shade50,
-                deleteIconColor: Colors.blue.shade700,
-                onDeleted: () {
-                  onCountriesChanged(selectedCountries.where((e) => e != c).toList());
-                },
-              );
-            }).toList(),
+          const SizedBox(height: 16),
+
+          _buildGlassTextField(
+            controller: locationCtrl,
+            label: 'ĐỊA ĐIỂM',
+            icon: Icons.location_on_outlined,
           ),
-          const SizedBox(height: 16),
-          const Text('Giới tính', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          const SizedBox(height: 8),
-          _buildDropdown(context, gender, ['Nam', 'Nữ', 'Cả hai'], onGenderChanged, hint: 'Chọn giới tính'),
-          const SizedBox(height: 16),
-          const Text('Vị trí hiển thị *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          const SizedBox(height: 8),
-          _buildPlacementDropdown(context),
-          const SizedBox(height: 16),
-          _buildField(context, budgetCtrl, 'Ngân sách chiến dịch (đ) *', Icons.attach_money, keyboardType: TextInputType.number),
-          const SizedBox(height: 16),
-          const Text('Hình thức đấu thầu', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          const SizedBox(height: 8),
-          _buildBiddingDropdown(context),
+          const SizedBox(height: 20),
+
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'QUỐC GIA',
+                style: TextStyle(
+                  color: Colors.grey[800],
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 12),
+              GestureDetector(
+                onTap: () => _showCountryPicker(context),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        color: Colors.white,
+                        border: Border.all(
+                          color: Colors.grey.withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.public_outlined,
+                                color: Color(0xFF007AFF),
+                                size: 22,
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                selectedCountries.isEmpty
+                                    ? 'Chọn quốc gia'
+                                    : '${selectedCountries.length} quốc gia',
+                                style: TextStyle(
+                                  color: selectedCountries.isEmpty
+                                      ? Colors.grey[400]
+                                      : Colors.grey[900],
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Icon(
+                            Icons.arrow_forward_ios_rounded,
+                            color: Colors.grey[400],
+                            size: 16,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              if (selectedCountries.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: selectedCountries.take(3).map((c) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF007AFF).withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: const Color(0xFF007AFF).withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        c.toString(),
+                        style: const TextStyle(
+                          color: Color(0xFF007AFF),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          _buildGlassDropdown(
+            label: 'GIỚI TÍNH',
+            icon: Icons.people_outline,
+            value: gender,
+            items: ['Nam', 'Nữ', 'Cả hai'],
+            onChanged: onGenderChanged,
+            hint: 'Chọn giới tính',
+          ),
+          const SizedBox(height: 20),
+
+          _buildGlassDropdown(
+            label: 'VỊ TRÍ HIỂN THỊ',
+            icon: Icons.visibility_outlined,
+            value: appears,
+            items: placementOptions.map((e) => e['value']!).toList(),
+            itemLabels: placementOptions.map((e) => e['label']!).toList(),
+            onChanged: onAppearsChanged,
+            hint: 'Chọn vị trí',
+          ),
+          const SizedBox(height: 20),
+
+          _buildGlassTextField(
+            controller: budgetCtrl,
+            label: 'NGÂN SÁCH (₫)',
+            icon: Icons.attach_money_outlined,
+            keyboardType: TextInputType.number,
+          ),
+          const SizedBox(height: 20),
+
+          _buildGlassDropdown(
+            label: 'HÌNH THỨC ĐẤU THẦU',
+            icon: Icons.trending_up_outlined,
+            value: biddingStrategy,
+            items: ['Clicks', 'Views'],
+            itemLabels: ['Clicks (mỗi click)', 'Views (mỗi hiển thị)'],
+            onChanged: onBiddingChanged,
+            hint: 'Chọn hình thức',
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildField(BuildContext context, TextEditingController ctrl, String label, IconData icon,
-      {TextInputType? keyboardType}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: TextFormField(
-        controller: ctrl,
-        keyboardType: keyboardType,
-        decoration: InputDecoration(
-          labelText: label,
-          prefixIcon: Icon(icon, color: Colors.blue.shade700),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          filled: true,
-          fillColor: isDark ? Colors.grey[800] : Colors.grey[50],
+  Widget _buildGlassTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType? keyboardType,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.grey[800],
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.2,
+          ),
         ),
-        validator: (v) {
-          if (v == null || v.trim().isEmpty) return 'Bắt buộc';
-          if (keyboardType == TextInputType.number) {
-            if (int.tryParse(v) == null) return 'Phải là số';
-            if (int.parse(v) <= 0) return 'Phải lớn hơn 0';
-          }
-          return null;
-        },
-      ),
-    );
-  }
-
-  Widget _buildDropdown(
-      BuildContext context,
-      String? value,
-      List<String> items,
-      Function(String?) onChanged, {
-        String? hint,
-      }) {
-    return DropdownButtonFormField<String>(
-      value: value,
-      hint: hint != null ? Text(hint) : null,
-      decoration: InputDecoration(
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        filled: true,
-        fillColor: isDark ? Colors.grey[800] : Colors.grey[50],
-      ),
-      items: items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-      onChanged: onChanged,
-    );
-  }
-
-  Widget _buildPlacementDropdown(BuildContext context) {
-    return DropdownButtonFormField<String>(
-      value: appears,
-      hint: const Text('Chọn vị trí hiển thị'),
-      decoration: InputDecoration(
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        filled: true,
-        fillColor: isDark ? Colors.grey[800] : Colors.grey[50],
-      ),
-      items: placementOptions.map((item) {
-        return DropdownMenuItem(
-          value: item['value'],
-          child: Text(item['label']!),
-        );
-      }).toList(),
-      onChanged: onAppearsChanged,
-      validator: (v) => v == null ? 'Vui lòng chọn vị trí hiển thị' : null,
-    );
-  }
-
-  Widget _buildBiddingDropdown(BuildContext context) {
-    return DropdownButtonFormField<String>(
-      value: biddingStrategy,
-      hint: const Text('Chọn hình thức đấu thầu'),
-      decoration: InputDecoration(
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        filled: true,
-        fillColor: isDark ? Colors.grey[800] : Colors.grey[50],
-      ),
-      items: const [
-        DropdownMenuItem(value: 'Clicks', child: Text('Clicks (cho mỗi lượt click)')),
-        DropdownMenuItem(value: 'Views', child: Text('Views (cho mỗi lần hiển thị)')),
+        const SizedBox(height: 12),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                color: Colors.white,
+                border: Border.all(
+                  color: Colors.grey.withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+              child: TextFormField(
+                controller: controller,
+                keyboardType: keyboardType,
+                style: TextStyle(color: Colors.grey[900], fontSize: 16),
+                decoration: InputDecoration(
+                  prefixIcon: Icon(icon, color: const Color(0xFF007AFF), size: 22),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  hintText: 'Nhập $label',
+                  hintStyle: TextStyle(
+                    color: Colors.grey[400],
+                    fontSize: 15,
+                  ),
+                ),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'Bắt buộc';
+                  if (keyboardType == TextInputType.number) {
+                    if (int.tryParse(v) == null) return 'Phải là số';
+                    if (int.parse(v) <= 0) return 'Phải lớn hơn 0';
+                  }
+                  return null;
+                },
+              ),
+            ),
+          ),
+        ),
       ],
-      onChanged: onBiddingChanged,
-      validator: (v) => v == null || v.isEmpty ? 'Vui lòng chọn hình thức đấu thầu' : null,
+    );
+  }
+
+  Widget _buildGlassDropdown({
+    required String label,
+    required IconData icon,
+    required String? value,
+    required List<String> items,
+    List<String>? itemLabels,
+    required Function(String?) onChanged,
+    String? hint,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.grey[800],
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.2,
+          ),
+        ),
+        const SizedBox(height: 12),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                color: Colors.white,
+                border: Border.all(
+                  color: Colors.grey.withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+              child: DropdownButtonFormField<String>(
+                value: value,
+                dropdownColor: Colors.white,
+                style: TextStyle(color: Colors.grey[900], fontSize: 16),
+                icon: Icon(
+                  Icons.arrow_drop_down_rounded,
+                  color: Colors.grey[600],
+                ),
+                decoration: InputDecoration(
+                  prefixIcon: Icon(icon, color: const Color(0xFF007AFF), size: 22),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  hintText: hint,
+                  hintStyle: TextStyle(
+                    color: Colors.grey[400],
+                    fontSize: 15,
+                  ),
+                ),
+                items: items.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final item = entry.value;
+                  final displayLabel = itemLabels != null ? itemLabels[index] : item;
+                  return DropdownMenuItem(
+                    value: item,
+                    child: Text(displayLabel),
+                  );
+                }).toList(),
+                onChanged: onChanged,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
