@@ -33,6 +33,8 @@ class CallController extends ChangeNotifier {
   bool _isPolling = false;
   bool _disposed = false;
 
+  String? lastError; // tiện debug
+
   // ====== getters (compat + extra) ======
   bool get ready => _ready;
   int? get activeCallId => _callId;
@@ -56,16 +58,21 @@ class CallController extends ChangeNotifier {
     required int calleeId,
     required String mediaType,
   }) async {
-    final created = await signaling.create(
-      recipientId: calleeId,
-      mediaType: mediaType,
-    );
-    _attachCall(
-      callId: created.callId,
-      mediaType: created.mediaType,
-      initialStatus: created.status,
-    );
-    return created.callId; // <<< quan trọng
+    try {
+      final created = await signaling.create(
+        recipientId: calleeId,
+        mediaType: mediaType,
+      );
+      _attachCall(
+        callId: created.callId,
+        mediaType: created.mediaType,
+        initialStatus: created.status,
+      );
+      return created.callId; // <<< quan trọng
+    } catch (e) {
+      lastError = '$e';
+      rethrow;
+    }
   }
 
   /// Callee/caller gắn vào call có sẵn (ví dụ từ tin nhắn invite).
@@ -82,7 +89,9 @@ class CallController extends ChangeNotifier {
     if (id != null) {
       try {
         await signaling.action(callId: id, action: 'end');
-      } catch (_) {}
+      } catch (e) {
+        lastError = '$e';
+      }
     }
     await detachCall();
   }
@@ -111,34 +120,49 @@ class CallController extends ChangeNotifier {
     String initialStatus = 'ringing',
   }) {
     _attachCall(
-        callId: callId, mediaType: mediaType, initialStatus: initialStatus);
+      callId: callId,
+      mediaType: mediaType,
+      initialStatus: initialStatus,
+    );
   }
 
   Future<void> detachCall() async {
     _stopPolling();
-    _callId = null;
-    _sdpOffer = null;
-    _sdpAnswer = null;
-    _iceCandidates.clear();
-    _seenOtherCandidates.clear();
-    _callStatus = 'ended';
+    _resetState(ended: true);
     notifyListeners();
   }
 
   Future<void> sendOffer(String sdp) async {
     final id = _callId;
     if (id == null) return;
-    await signaling.offer(callId: id, sdp: sdp);
-    // chờ answer qua poll
+    try {
+      await signaling.offer(callId: id, sdp: sdp);
+      // chờ answer qua poll
+    } catch (e) {
+      lastError = '$e';
+      rethrow;
+    }
   }
 
   Future<void> sendAnswer(String sdp) async {
     final id = _callId;
     if (id == null) return;
-    await signaling.answer(callId: id, sdp: sdp);
-    // server set status='answered'
-    _callStatus = 'answered';
-    notifyListeners();
+    try {
+      await signaling.answer(callId: id, sdp: sdp);
+      // server set status='answered' trong 'answer'
+      _callStatus = 'answered';
+      notifyListeners();
+
+      // gọi action('answer') để chắc trạng thái đồng bộ (idempotent)
+      try {
+        final st = await signaling.action(callId: id, action: 'answer');
+        _callStatus = st.isNotEmpty ? st : 'answered';
+        notifyListeners();
+      } catch (_) {}
+    } catch (e) {
+      lastError = '$e';
+      rethrow;
+    }
   }
 
   Future<void> sendCandidate({
@@ -148,24 +172,34 @@ class CallController extends ChangeNotifier {
   }) async {
     final id = _callId;
     if (id == null) return;
-    await signaling.candidate(
-      callId: id,
-      candidate: candidate,
-      sdpMid: sdpMid,
-      sdpMLineIndex: sdpMLineIndex,
-    );
+    try {
+      await signaling.candidate(
+        callId: id,
+        candidate: candidate,
+        sdpMid: sdpMid,
+        sdpMLineIndex: sdpMLineIndex,
+      );
+    } catch (e) {
+      lastError = '$e';
+      // không rethrow để không cản luồng ICE gửi tiếp
+    }
   }
 
   /// action: 'answer' | 'decline' | 'end'
   Future<void> action(String action) async {
     final id = _callId;
     if (id == null) return;
-    final st = await signaling.action(callId: id, action: action);
-    _callStatus = st; // answered / declined / ended
-    if (st == 'declined' || st == 'ended') {
-      _stopPolling();
+    try {
+      final st = await signaling.action(callId: id, action: action);
+      _callStatus = st; // answered / declined / ended
+      if (st == 'declined' || st == 'ended') {
+        _stopPolling();
+      }
+      notifyListeners();
+    } catch (e) {
+      lastError = '$e';
+      rethrow;
     }
-    notifyListeners();
   }
 
   // ====== internal ======
@@ -188,6 +222,10 @@ class CallController extends ChangeNotifier {
   void _startPolling() {
     if (_isPolling) return;
     _isPolling = true;
+
+    // Hủy timer cũ nếu lỡ còn
+    _pollTimer?.cancel();
+    _pollTimer = null;
 
     _pollOnce(); // poll ngay 1 nhịp
     _pollTimer = Timer.periodic(const Duration(milliseconds: 1200), (_) {
@@ -243,9 +281,19 @@ class CallController extends ChangeNotifier {
       }
 
       notifyListeners();
-    } catch (_) {
-      // im lặng 1 nhịp, tiếp tục poll
+    } catch (e) {
+      // im lặng 1 nhịp, tiếp tục poll; lưu lastError để debug
+      lastError = '$e';
     }
+  }
+
+  void _resetState({bool ended = false}) {
+    _callId = null;
+    _sdpOffer = null;
+    _sdpAnswer = null;
+    _iceCandidates.clear();
+    _seenOtherCandidates.clear();
+    _callStatus = ended ? 'ended' : 'ringing';
   }
 
   @override

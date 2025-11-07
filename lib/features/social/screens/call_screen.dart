@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/call_controller.dart';
-import '../controllers/call_controller.dart';
 
 class CallScreen extends StatefulWidget {
   final bool isCaller; // true: caller, false: callee
@@ -39,9 +38,15 @@ class _CallScreenState extends State<CallScreen> {
   bool _answerHandled = false;
   final Set<String> _addedCandidates = {};
 
+  // ---- Guards vòng đời UI/renderer
+  bool _viewAlive = false;
+  bool _ending = false;
+
   @override
   void initState() {
     super.initState();
+    _viewAlive = true;
+
     _cc = context.read<CallController>();
     _ccListener = _onControllerChanged;
     _cc.addListener(_ccListener);
@@ -50,13 +55,34 @@ class _CallScreenState extends State<CallScreen> {
   }
 
   Future<void> _initRenderers() async {
-    await _localRenderer.initialize();
-    await _remoteRenderer.initialize();
+    try {
+      await _localRenderer.initialize();
+    } catch (_) {}
+    try {
+      await _remoteRenderer.initialize();
+    } catch (_) {}
+  }
+
+  /// Gán stream vào renderer nhưng an toàn nếu renderer lỡ bị dispose/chưa init
+  Future<void> _safeAttach(RTCVideoRenderer r, MediaStream stream) async {
+    if (!_viewAlive || _ending) return;
+    try {
+      r.srcObject = stream;
+    } catch (_) {
+      // nếu bị dispose hoặc chưa init: init lại rồi gán
+      try {
+        await r.initialize();
+      } catch (_) {}
+      try {
+        r.srcObject = stream;
+      } catch (_) {}
+    }
+    if (mounted) setState(() {});
   }
 
   Future<void> _start() async {
     try {
-      // DỌN STATE CŨ
+      // DỌN STATE CŨ (close pc/stream, clear srcObject; KHÔNG dispose renderer)
       await _disposeRtc();
 
       // 1) TẠO PEER CONNECTION TRƯỚC (tránh NPE getTransceivers)
@@ -71,11 +97,9 @@ class _CallScreenState extends State<CallScreen> {
       _pc = await createPeerConnection(configuration, {});
 
       // REMOTE track/stream
-      _pc!.onTrack = (RTCTrackEvent e) {
-        if (e.streams.isNotEmpty) {
-          _remoteRenderer.srcObject = e.streams.first;
-          setState(() {});
-        }
+      _pc!.onTrack = (RTCTrackEvent e) async {
+        if (e.streams.isEmpty) return;
+        await _safeAttach(_remoteRenderer, e.streams.first);
       };
 
       // ICE local -> gửi lên server
@@ -85,7 +109,6 @@ class _CallScreenState extends State<CallScreen> {
             candidate: c.candidate!,
             sdpMid: c.sdpMid,
             sdpMLineIndex: c.sdpMLineIndex,
-
           );
         }
       };
@@ -98,7 +121,7 @@ class _CallScreenState extends State<CallScreen> {
         }
       };
 
-      // 2) LẤY MEDIA SAU KHI CÓ PC (KHÔNG truyền peerConnectionId)
+      // 2) LẤY MEDIA SAU KHI CÓ PC
       final isVideo = widget.mediaType == 'video';
       final constraints = <String, dynamic>{
         'audio': true,
@@ -112,7 +135,7 @@ class _CallScreenState extends State<CallScreen> {
             : false,
       };
       _localStream = await navigator.mediaDevices.getUserMedia(constraints);
-      _localRenderer.srcObject = _localStream;
+      await _safeAttach(_localRenderer, _localStream!);
 
       // 3) ADD TRACK VÀO PC
       for (final t in _localStream!.getTracks()) {
@@ -210,10 +233,14 @@ class _CallScreenState extends State<CallScreen> {
   }
 
   void _endAndPop() {
+    if (_ending) return;
+    _ending = true;
     _disposeRtc();
     if (mounted) Navigator.of(context).maybePop();
   }
 
+  /// Dọn state RTC: close pc/stream & clear renderer srcObject
+  /// KHÔNG dispose renderer ở đây (chỉ dispose trong dispose() của widget)
   Future<void> _disposeRtc() async {
     try {
       await _pc?.close();
@@ -221,13 +248,22 @@ class _CallScreenState extends State<CallScreen> {
     _pc = null;
 
     try {
+      _localStream?.getTracks().forEach((t) {
+        try {
+          t.stop();
+        } catch (_) {}
+      });
+    } catch (_) {}
+    try {
       await _localStream?.dispose();
     } catch (_) {}
     _localStream = null;
 
     try {
-      await _localRenderer.dispose();
-      await _remoteRenderer.dispose();
+      _localRenderer.srcObject = null;
+    } catch (_) {}
+    try {
+      _remoteRenderer.srcObject = null;
     } catch (_) {}
   }
 
@@ -238,8 +274,20 @@ class _CallScreenState extends State<CallScreen> {
 
   @override
   void dispose() {
+    _viewAlive = false;
+    _ending = true;
+
     _cc.removeListener(_ccListener);
-    _disposeRtc();
+    _disposeRtc(); // close pc/stream + clear srcObject
+
+    // Chỉ dispose renderer khi rời màn hình
+    try {
+      _localRenderer.dispose();
+    } catch (_) {}
+    try {
+      _remoteRenderer.dispose();
+    } catch (_) {}
+
     super.dispose();
   }
 

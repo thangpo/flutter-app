@@ -53,8 +53,9 @@ class WebRTCSignalingRepository {
   final String accessTokenKey;
 
   /// Nếu server chưa route `/api/webrtc`, đổi return thành:
-  ///   return '$baseUrl/api/v2/endpoints/webrtc.php';
-  String get _endpoint => '$baseUrl/api/v2/endpoints/webrtc.php';
+  ///   return '$baseUrl/api/webrtc.php';
+  String get _endpoint => '$baseUrl/api-v2.php';
+
 
   Future<String> _getAccessToken() async {
     final sp = await SharedPreferences.getInstance();
@@ -72,30 +73,37 @@ class WebRTCSignalingRepository {
     final uri = Uri.parse(_endpoint);
     final req = http.MultipartRequest('POST', uri);
 
-    // Bắt buộc có server_key + access_token
     req.fields['server_key'] = serverKey;
     req.fields['access_token'] = await _getAccessToken();
 
-    // ✅ Thay vì putIfAbsent (sai kiểu), dùng addAll
+    // ✅ báo cho PHP biết đây là router webrtc
+    req.fields['type'] = 'webrtc';
+
+    // ✅ giữ loại hành động riêng (create, offer, answer, ...)
+    final subType = fields['type'];
+    fields.remove('type');
+    req.fields['sub_type'] = subType ?? '';
+
     req.fields.addAll(fields);
 
     final streamed = await _client.send(req);
     final res = await http.Response.fromStream(streamed);
     if (res.statusCode != 200) {
       throw Exception(
-          'WebRTC API ${fields['type']} thất bại (HTTP ${res.statusCode}): ${res.body}');
+          'WebRTC API ${subType ?? '?'} thất bại (HTTP ${res.statusCode}): ${res.body}');
     }
     final Map<String, dynamic> json = jsonDecode(res.body);
     final apiStatus = json['api_status'];
-    if (apiStatus == '400' || apiStatus == 400) {
+    if (apiStatus == '400' || apiStatus == 400 || apiStatus == '404') {
       final err = json['errors']?['error_text'] ??
           json['error'] ??
           json['error_message'] ??
           'Unknown error';
-      throw Exception('WebRTC API ${fields['type']} lỗi: $err');
+      throw Exception('WebRTC API ${subType ?? '?'} lỗi: $err');
     }
     return json;
   }
+
 
   // ------------------------
   // Public APIs
