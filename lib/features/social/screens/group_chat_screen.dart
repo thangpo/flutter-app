@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_chat_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/group_chat_message_bubble.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/add_group_members_screen.dart';
 
 
@@ -594,15 +595,18 @@ Future<void> _openMembersSheet() async {
               Row(
                 children: [
                   const SizedBox(width: 8),
-                  const Expanded(
+                  Expanded(
                     child: Center(
                       child: Text(
-                        'Thông tin đoạn chat',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 16),
+                        getTranslated('chat_info', context)!,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
                       ),
                     ),
                   ),
+
                   PopupMenuButton<String>(
                     icon: const Icon(Icons.more_vert),
                     onSelected: (v) async {
@@ -628,19 +632,35 @@ Future<void> _openMembersSheet() async {
                         default:
                       }
                     },
-                    itemBuilder: (ctx) => const [
+                    itemBuilder: (ctx) => [
                       PopupMenuItem(
-                          value: 'bubble', child: Text('Mở bong bóng chat')),
+                        value: 'bubble',
+                        child:
+                            Text(getTranslated('open_chat_bubble', context)!),
+                      ),
                       PopupMenuItem(
-                          value: 'change_photo', child: Text('Đổi ảnh nhóm')),
+                        value: 'change_photo',
+                        child:
+                            Text(getTranslated('change_group_photo', context)!),
+                      ),
                       PopupMenuItem(
-                          value: 'change_name', child: Text('Đổi tên')),
+                        value: 'change_name',
+                        child: Text(getTranslated('change_name', context)!),
+                      ),
                       PopupMenuItem(
-                          value: 'delete', child: Text('Xoá cuộc trò chuyện')),
-                      PopupMenuItem(value: 'leave', child: Text('Rời nhóm')),
+                        value: 'delete',
+                        child: Text(
+                            getTranslated('delete_conversation', context)!),
+                      ),
                       PopupMenuItem(
-                          value: 'report',
-                          child: Text('Báo cáo sự cố kỹ thuật')),
+                        value: 'leave',
+                        child: Text(getTranslated('leave_group', context)!),
+                      ),
+                      PopupMenuItem(
+                        value: 'report',
+                        child: Text(
+                            getTranslated('report_technical_issue', context)!),
+                      ),
                     ],
                   )
                 ],
@@ -682,29 +702,38 @@ Future<void> _openMembersSheet() async {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  _circleAction(icon: Icons.call, label: 'Gọi thoại'),
-                  _circleAction(icon: Icons.videocam, label: 'Gọi video'),
                   _circleAction(
-                      icon: Icons.group_add,
-                      label: 'Thêm',
-                      onTap: _openAddMembersPicker),
-
+                    icon: Icons.call,
+                    label: getTranslated('voice_call', context)!,
+                  ),
                   _circleAction(
-                      icon: Icons.group,
-                      label: 'Thành viên',
-                      onTap: _openMembersSheet),
-
+                    icon: Icons.videocam,
+                    label: getTranslated('video_call', context)!,
+                  ),
+                  _circleAction(
+                    icon: Icons.group_add,
+                    label: getTranslated('add_members', context)!,
+                    onTap: _openAddMembersPicker,
+                  ),
+                  _circleAction(
+                    icon: Icons.group,
+                    label: getTranslated('members', context)!,
+                    onTap: _openMembersSheet,
+                  ),
                 ],
               ),
               const SizedBox(height: 12),
               // Hiển thị danh sách thành viên trong sheet
-              const Align(
+              Align(
                 alignment: Alignment.centerLeft,
                 child: Padding(
-                  padding: EdgeInsets.only(left: 12, bottom: 6),
+                  padding: const EdgeInsets.only(left: 12, bottom: 6),
                   child: Text(
-                    'Thành viên nhóm',
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                    getTranslated('group_members', context)!,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                    ),
                   ),
                 ),
               ),
@@ -720,11 +749,14 @@ Future<void> _openMembersSheet() async {
                       members.where((m) => '${m['is_owner']}' == '1').toList();
 
                   if (owners.isEmpty) {
-                    return const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: Text('Không tìm thấy chủ nhóm.'),
+                    return Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(
+                        getTranslated('no_group_owner_found', context)!,
+                      ),
                     );
                   }
+
 
                   final m = owners.first;
                   final name = '${m['name'] ?? m['username'] ?? 'Người dùng'}';
@@ -740,7 +772,8 @@ Future<void> _openMembersSheet() async {
                     ),
                     title: Text(name,
                         style: const TextStyle(fontWeight: FontWeight.w600)),
-                    subtitle: const Text('👑 Chủ nhóm'),
+                    subtitle:
+                        Text('👑 ${getTranslated('group_owner', context)!}'),
                   );
                 },
               ),

@@ -1265,5 +1265,18 @@
   "create_msg":"CREATE",
   "group_name_optional": "Group name (optional)",
   "suggestions": "Suggestions",
-  "no_friends_to_select": "No friends to select"
+  "no_friends_to_select": "No friends to select",
+  "search_group": "Search group",
+  "no_groups_joined": "You haven't joined any groups yet",
+  "chat_info": "Chat information",
+  "open_chat_bubble": "Open chat bubble",
+  "change_group_photo": "Change group photo",
+  "change_name": "Change name",
+  "delete_conversation": "Delete conversation",
+  "leave_group": "Leave group",
+  "report_technical_issue": "Report technical issue",
+  "voice_call": "Voice call",
+  "video_call": "Video call",
+  "add_members": "Add",
+  "no_group_owner_found": "No group owner found."
 }

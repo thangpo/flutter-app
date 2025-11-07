@@ -1264,6 +1264,19 @@
   "create_msg": "TẠO",
   "group_name_optional": "Tên nhóm (không bắt buộc)",
   "suggestions": "Gợi ý",
-  "no_friends_to_select": "Không có bạn bè nào để chọn"
+  "no_friends_to_select": "Không có bạn bè nào để chọn",
+  "search_group":"Tìm kiếm nhóm",
+  "no_groups_joined": "Chưa tham gia nhóm nào",
+  "chat_info": "Thông tin đoạn chat",
+  "open_chat_bubble": "Mở bong bóng chat",
+  "change_group_photo": "Đổi ảnh nhóm",
+  "change_name": "Đổi tên",
+  "delete_conversation": "Xoá cuộc trò chuyện",
+  "leave_group": "Rời nhóm",
+  "report_technical_issue": "Báo cáo sự cố kỹ thuật",
+  "voice_call": "Gọi thoại",
+  "video_call": "Gọi video",
+  "add_members": "Thêm",
+    "no_group_owner_found": "Không tìm thấy chủ nhóm."
 }
 

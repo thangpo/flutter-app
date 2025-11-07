@@ -4,6 +4,7 @@ import '../controllers/group_chat_controller.dart';
 import 'group_chat_screen.dart';
 import 'create_group_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_list_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 
 
 class GroupChatsScreen extends StatefulWidget {
@@ -111,11 +112,11 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Nhóm chat'),
+        title: Text(getTranslated('group_chat', context)!),
         elevation: 0,
         actions: [
           IconButton(
-            tooltip: 'Tạo nhóm chat',
+            tooltip: getTranslated('create_group_chat', context)!,
             icon: const Icon(Icons.group_add),
             onPressed: () async {
               final success = await Navigator.push(
@@ -128,7 +129,10 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
               if (!mounted) return;
               if (success == true) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Tạo nhóm thành công')),
+                  SnackBar(
+                    content:
+                        Text(getTranslated('group_created_success', context)!),
+                  ),
                 );
                 await _reloadGroups();
               }
@@ -148,7 +152,7 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
               onChanged: (v) =>
                   setState(() => _keyword = v.trim().toLowerCase()),
               decoration: InputDecoration(
-                hintText: 'Tìm kiếm nhóm',
+                 hintText: getTranslated('search_group', context),
                 prefixIcon: const Icon(Icons.search),
                 filled: true,
                 fillColor: cs.surfaceVariant.withOpacity(.35),
@@ -189,8 +193,11 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
                 }
 
                 if (groups.isEmpty) {
-                  return const Center(child: Text('Chưa tham gia nhóm nào'));
+                  return Center(
+                    child: Text(getTranslated('no_groups_joined', context)!),
+                  );
                 }
+
 
                 return RefreshIndicator(
                   onRefresh: _reloadGroups,
