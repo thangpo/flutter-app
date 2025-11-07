@@ -17,11 +17,15 @@ import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dar
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_reel.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post_color.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/post_background_presets.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_live_repository.dart';
 
 class SocialController with ChangeNotifier {
   final SocialServiceInterface service;
-  SocialController({required this.service});
+  SocialController({required this.service}) {
+    loadPostBackgrounds();
+  }
   //follow user in profile
   final Set<String> _followBusy = {};
   bool _updatingProfile = false;
@@ -113,6 +117,34 @@ class SocialController with ChangeNotifier {
   bool get isLoadingProfileReels => _loadingProfileReels;
   bool get hasMoreProfileReels => _hasMoreProfileReels;
   String? get reelsForUserId => _reelsForUserId;
+
+  // --- POST BACKGROUND COLORS ---
+  List<PostBackgroundPreset> _postBackgroundPresets =
+      List<PostBackgroundPreset>.from(PostBackgroundPresets.defaults);
+  final Set<String> _backgroundPresetIds =
+      PostBackgroundPresets.defaults.map((preset) => preset.id).toSet();
+  final Set<String> _pendingColorFetch = <String>{};
+  bool _loadingPostColors = false;
+  DateTime? _postColorsFetchedAt;
+
+  List<PostBackgroundPreset> get postBackgroundPresets =>
+      List.unmodifiable(_postBackgroundPresets);
+  bool get loadingPostColors => _loadingPostColors;
+  PostBackgroundPreset? findBackgroundPreset(String? id) {
+    if (id == null || id.isEmpty) return null;
+    final PostBackgroundPreset? preset =
+        PostBackgroundPresets.findById(_postBackgroundPresets, id);
+    if (preset != null) return preset;
+    return PostBackgroundPresets.findById(PostBackgroundPresets.defaults, id);
+  }
+
+  void _resetBackgroundPresetsToDefaults() {
+    _postBackgroundPresets =
+        List<PostBackgroundPreset>.from(PostBackgroundPresets.defaults);
+    _backgroundPresetIds
+      ..clear()
+      ..addAll(PostBackgroundPresets.defaults.map((preset) => preset.id));
+  }
 
   //end
 
@@ -1140,6 +1172,10 @@ class SocialController with ChangeNotifier {
             )
           : post;
       _posts.insert(0, normalized);
+      final String? colorId = backgroundColorId ?? normalized.backgroundColorId;
+      if (colorId != null && colorId.isNotEmpty) {
+        ensureBackgroundPreset(colorId);
+      }
       return normalized;
     } catch (e) {
       showCustomSnackBar(e.toString(), Get.context!, isError: true);
@@ -1340,6 +1376,73 @@ class SocialController with ChangeNotifier {
     }
   }
 
+  Future<void> loadPostBackgrounds({bool force = false}) async {
+    if (_loadingPostColors) return;
+    if (!force && _postColorsFetchedAt != null) return;
+    _loadingPostColors = true;
+    notifyListeners();
+    try {
+      final List<SocialPostColor> remote = await service.getPostColors();
+      final List<PostBackgroundPreset> presets =
+          PostBackgroundPresets.fromRemote(remote);
+      if (presets.isNotEmpty) {
+        _postBackgroundPresets = presets;
+        _backgroundPresetIds
+          ..clear()
+          ..addAll(presets.map((preset) => preset.id));
+      } else {
+        _resetBackgroundPresetsToDefaults();
+      }
+      _postColorsFetchedAt = DateTime.now();
+    } catch (_) {
+      _resetBackgroundPresetsToDefaults();
+    } finally {
+      _loadingPostColors = false;
+      notifyListeners();
+    }
+  }
+
+  void _prefetchBackgroundsForPosts(Iterable<SocialPost> posts) {
+    for (final SocialPost post in posts) {
+      final String? id = post.backgroundColorId;
+      if (id != null && id.isNotEmpty) {
+        ensureBackgroundPreset(id);
+      }
+    }
+  }
+
+  Future<void> ensureBackgroundPreset(String id) async {
+    if (id.isEmpty) return;
+    if (_backgroundPresetIds.contains(id)) return;
+    if (_pendingColorFetch.contains(id)) return;
+
+    final PostBackgroundPreset? fallback =
+        PostBackgroundPresets.findById(PostBackgroundPresets.defaults, id);
+    if (fallback != null) {
+      _backgroundPresetIds.add(id);
+      _postBackgroundPresets.add(fallback);
+      notifyListeners();
+      return;
+    }
+
+    _pendingColorFetch.add(id);
+    try {
+      final SocialPostColor? color = await service.getPostColorById(id);
+      if (color == null) return;
+      final PostBackgroundPreset preset =
+          PostBackgroundPreset.fromSocialColor(color);
+      if (!preset.hasGradient && !preset.hasImage) return;
+      if (_backgroundPresetIds.contains(preset.id)) return;
+      _backgroundPresetIds.add(preset.id);
+      _postBackgroundPresets.add(preset);
+      notifyListeners();
+    } catch (_) {
+      // ignore failures
+    } finally {
+      _pendingColorFetch.remove(id);
+    }
+  }
+
   // ========== NEWS FEED OPERATIONS ==========
   Future<void> refresh() async {
     if (_loading) return;
@@ -1351,6 +1454,7 @@ class SocialController with ChangeNotifier {
         ..clear()
         ..addAll(list);
       _afterId = list.isNotEmpty ? list.last.id : null;
+      _prefetchBackgroundsForPosts(list);
 
       final userStories = await service.getMyStories(limit: 10, offset: 0);
       _replaceStories(userStories);
@@ -1385,6 +1489,7 @@ class SocialController with ChangeNotifier {
       if (list.isNotEmpty) {
         _posts.addAll(list);
         _afterId = list.last.id;
+        _prefetchBackgroundsForPosts(list);
       }
     } catch (e) {
       showCustomSnackBar(e.toString(), Get.context!);

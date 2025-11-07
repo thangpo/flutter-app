@@ -41,6 +41,7 @@ class _SocialFeedScreenState extends State<SocialFeedScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final sc = context.read<SocialController>();
       sc.loadCurrentUser();
+      sc.loadPostBackgrounds();
       if (sc.posts.isEmpty) {
         sc.refresh();
       }

@@ -61,6 +61,7 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final sc = context.read<SocialController>();
       sc.loadCurrentUser();
+      sc.loadPostBackgrounds();
     });
   }
 
@@ -112,15 +113,15 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
   }
 
   Future<void> _pickImages() async {
-    if (_hasBackground) {
-      showCustomSnackBar(
-        getTranslated('background_color_only_text', context) ??
-            'Background posts can only contain text',
-        context,
-        isError: true,
-      );
-      return;
-    }
+    // if (_hasBackground) {
+    //   showCustomSnackBar(
+    //     getTranslated('background_color_only_text', context) ??
+    //         'Background posts can only contain text',
+    //     context,
+    //     isError: true,
+    //   );
+    //   return;
+    // }
     if (_video != null) {
       showCustomSnackBar(
         getTranslated('remove_video_before_adding_images', context) ??
@@ -382,7 +383,7 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
   }
 
   Future<void> _openBackgroundPicker() async {
-    if (_images.isNotEmpty || _video != null) {
+    if (_video != null) {
       showCustomSnackBar(
         getTranslated('background_color_only_text', context) ??
             'Background posts can only contain text',
@@ -394,10 +395,17 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
     FocusScope.of(context).unfocus();
     final TextEditingController controller =
         TextEditingController(text: _textController.text);
+    final SocialController socialController = context.read<SocialController>();
+    if (!socialController.loadingPostColors &&
+        socialController.postBackgroundPresets.isEmpty) {
+      socialController.loadPostBackgrounds(force: true);
+    }
     String selectedId = _selectedBackgroundId ??
-        (PostBackgroundPresets.presets.isNotEmpty
-            ? PostBackgroundPresets.presets.first.id
-            : '1');
+        (socialController.postBackgroundPresets.isNotEmpty
+            ? socialController.postBackgroundPresets.first.id
+            : (PostBackgroundPresets.defaults.isNotEmpty
+                ? PostBackgroundPresets.defaults.first.id
+                : ''));
     final _BackgroundPickerResult? result =
         await showModalBottomSheet<_BackgroundPickerResult>(
       context: context,
@@ -414,142 +422,155 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
           child: StatefulBuilder(
             builder: (BuildContext ctx, StateSetter setModalState) {
               final ThemeData theme = Theme.of(ctx);
-              final PostBackgroundPreset preset =
-                  PostBackgroundPresets.findById(selectedId) ??
-                      PostBackgroundPresets.presets.first;
-              final bool canSave = controller.text.trim().isNotEmpty;
-              return SingleChildScrollView(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+              return Consumer<SocialController>(
+                builder: (BuildContext context, SocialController social, _) {
+                  final List<PostBackgroundPreset> presets =
+                      social.postBackgroundPresets.isNotEmpty
+                          ? social.postBackgroundPresets
+                          : PostBackgroundPresets.defaults;
+                  if (presets.isNotEmpty &&
+                      presets.every((PostBackgroundPreset element) =>
+                          element.id != selectedId)) {
+                    selectedId = presets.first.id;
+                  }
+                  final PostBackgroundPreset preset =
+                      PostBackgroundPresets.findById(presets, selectedId) ??
+                          presets.first;
+                  final bool canSave = controller.text.trim().isNotEmpty;
+                  return SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Text(
-                            getTranslated('select_background_color', context) ??
-                                'Select background',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        if (_hasBackground)
-                          TextButton(
-                            onPressed: () => Navigator.of(ctx).pop(
-                              _BackgroundPickerResult(
-                                null,
-                                controller.text.trim(),
-                              ),
-                            ),
-                            child: Text(
-                              getTranslated('remove_background', context) ??
-                                  'Remove',
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 36,
-                      ),
-                      decoration: BoxDecoration(
-                        gradient: preset.gradient,
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: TextField(
-                        controller: controller,
-                        maxLines: 5,
-                        minLines: 3,
-                        textAlign: TextAlign.center,
-                        textCapitalization: TextCapitalization.sentences,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          color: preset.textColor,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        cursorColor: preset.textColor,
-                        decoration: InputDecoration(
-                          hintText: getTranslated(
-                                'post_background_hint',
-                                context,
-                              ) ??
-                              'Share something...',
-                          hintStyle: TextStyle(
-                            color: preset.textColor.withOpacity(.7),
-                          ),
-                          border: InputBorder.none,
-                        ),
-                        onChanged: (_) => setModalState(() {}),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: PostBackgroundPresets.presets
-                          .map(
-                            (PostBackgroundPreset option) => GestureDetector(
-                              onTap: () {
-                                setModalState(() {
-                                  selectedId = option.id;
-                                });
-                              },
-                              child: Container(
-                                width: 58,
-                                height: 58,
-                                decoration: BoxDecoration(
-                                  gradient: option.gradient,
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: selectedId == option.id
-                                      ? Border.all(
-                                          color: theme.colorScheme.primary,
-                                          width: 3,
-                                        )
-                                      : null,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                getTranslated(
+                                        'select_background_color', context) ??
+                                    'Select background',
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
                                 ),
-                                child: selectedId == option.id
-                                    ? Icon(
-                                        Icons.check,
-                                        color: option.textColor,
-                                      )
-                                    : null,
                               ),
                             ),
-                          )
-                          .toList(),
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.of(ctx).pop(),
-                          child: Text(
-                              getTranslated('cancel', context) ?? 'Cancel'),
+                            if (_hasBackground)
+                              TextButton(
+                                onPressed: () => Navigator.of(ctx).pop(
+                                  _BackgroundPickerResult(
+                                    null,
+                                    controller.text.trim(),
+                                  ),
+                                ),
+                                child: Text(
+                                  getTranslated('remove_background', context) ??
+                                      'Remove',
+                                ),
+                              ),
+                          ],
                         ),
-                        const Spacer(),
-                        ElevatedButton(
-                          onPressed: canSave
-                              ? () => Navigator.of(ctx).pop(
-                                    _BackgroundPickerResult(
-                                      selectedId,
-                                      controller.text.trim(),
-                                    ),
-                                  )
-                              : null,
-                          child: Text(
-                            getTranslated('apply_background', context) ??
-                                'Apply',
+                        const SizedBox(height: 18),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 36,
                           ),
+                          decoration: preset.decoration(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                          child: TextField(
+                            controller: controller,
+                            maxLines: 5,
+                            minLines: 3,
+                            textAlign: TextAlign.center,
+                            textCapitalization: TextCapitalization.sentences,
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              color: preset.textColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            cursorColor: preset.textColor,
+                            decoration: InputDecoration(
+                              hintText: getTranslated(
+                                    'post_background_hint',
+                                    context,
+                                  ) ??
+                                  'Share something...',
+                              hintStyle: TextStyle(
+                                color: preset.textColor.withOpacity(.7),
+                              ),
+                              border: InputBorder.none,
+                            ),
+                            onChanged: (_) => setModalState(() {}),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: presets
+                              .map(
+                                (PostBackgroundPreset option) =>
+                                    GestureDetector(
+                                  onTap: () {
+                                    setModalState(() {
+                                      selectedId = option.id;
+                                    });
+                                  },
+                                  child: Container(
+                                    width: 58,
+                                    height: 58,
+                                    decoration: option.decoration(
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: selectedId == option.id
+                                          ? Border.all(
+                                              color: theme.colorScheme.primary,
+                                              width: 3,
+                                            )
+                                          : null,
+                                    ),
+                                    child: selectedId == option.id
+                                        ? Icon(
+                                            Icons.check,
+                                            color: option.textColor,
+                                          )
+                                        : null,
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                        const SizedBox(height: 24),
+                        Row(
+                          children: [
+                            TextButton(
+                              onPressed: () => Navigator.of(ctx).pop(),
+                              child: Text(
+                                  getTranslated('cancel', context) ?? 'Cancel'),
+                            ),
+                            const Spacer(),
+                            ElevatedButton(
+                              onPressed: canSave
+                                  ? () => Navigator.of(ctx).pop(
+                                        _BackgroundPickerResult(
+                                          selectedId,
+                                          controller.text.trim(),
+                                        ),
+                                      )
+                                  : null,
+                              child: Text(
+                                getTranslated('apply_background', context) ??
+                                    'Apply',
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
-                ),
+                  );
+                },
               );
             },
           ),
@@ -589,9 +610,27 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
 
   bool get _hasLocation =>
       _selectedLocation != null && _selectedLocation!.trim().isNotEmpty;
-  bool get _hasBackground => _selectedBackgroundId != null;
-  PostBackgroundPreset? get _backgroundPreset =>
-      PostBackgroundPresets.findById(_selectedBackgroundId);
+  bool get _hasBackground {
+    if (_selectedBackgroundId == null) return false;
+    final SocialController sc = context.read<SocialController>();
+    return sc.findBackgroundPreset(_selectedBackgroundId) != null;
+  }
+
+  PostBackgroundPreset? get _backgroundPreset {
+    final SocialController sc = context.read<SocialController>();
+    return sc.findBackgroundPreset(_selectedBackgroundId);
+  }
+
+  void _ensureBackgroundSelectionValid(SocialController sc) {
+    if (_selectedBackgroundId == null) return;
+    if (sc.findBackgroundPreset(_selectedBackgroundId) != null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _selectedBackgroundId = null;
+      });
+    });
+  }
 
   bool get _shouldShowMentionSuggestions =>
       _mentionStartIndex >= 0 &&
@@ -650,6 +689,7 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
     final ProfileModel? profile =
         context.watch<ProfileController>().userInfoModel;
     final social = context.watch<SocialController>();
+    _ensureBackgroundSelectionValid(social);
     final socialUser = social.currentUser;
     final List<_PrivacyOption> privacyChoices = _buildPrivacyOptions(context);
     final _PrivacyOption selectedPrivacy = privacyChoices.firstWhere(
@@ -934,8 +974,7 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
-            decoration: BoxDecoration(
-              gradient: preset.gradient,
+            decoration: preset.decoration(
               borderRadius: BorderRadius.circular(24),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 36),

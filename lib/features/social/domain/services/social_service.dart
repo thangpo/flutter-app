@@ -18,6 +18,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_photo.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_reel.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post_color.dart';
 
 import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
@@ -143,6 +144,53 @@ class SocialService implements SocialServiceInterface {
     }
     ApiChecker.checkApi(resp);
     return [];
+  }
+
+  @override
+  Future<List<SocialPostColor>> getPostColors() async {
+    final resp = await socialRepository.fetchPostColors();
+    if (resp.isSuccess && resp.response != null) {
+      final dynamic data = resp.response!.data;
+      final int status =
+          int.tryParse('${data is Map ? (data['api_status'] ?? 200) : 200}') ??
+              200;
+      if (status == 200) {
+        return socialRepository.parsePostColors(resp.response!);
+      }
+      if (data is Map) {
+        final dynamic errors = data['errors'];
+        final dynamic errorText = errors is Map ? errors['error_text'] : null;
+        final dynamic message = errorText ?? data['message'];
+        throw Exception((message ?? 'Unable to load post colors').toString());
+      }
+      throw Exception('Unable to load post colors');
+    }
+    ApiChecker.checkApi(resp);
+    return [];
+  }
+
+  @override
+  Future<SocialPostColor?> getPostColorById(String colorId) async {
+    final resp =
+        await socialRepository.fetchPostColorById(colorId: colorId.trim());
+    if (resp.isSuccess && resp.response != null) {
+      final dynamic data = resp.response!.data;
+      final int status =
+          int.tryParse('${data is Map ? (data['api_status'] ?? 200) : 200}') ??
+              200;
+      if (status == 200) {
+        return socialRepository.parsePostColor(resp.response!);
+      }
+      if (data is Map) {
+        final dynamic errors = data['errors'];
+        final dynamic errorText = errors is Map ? errors['error_text'] : null;
+        final dynamic message = errorText ?? data['message'];
+        throw Exception((message ?? 'Unable to load post color').toString());
+      }
+      throw Exception('Unable to load post color');
+    }
+    ApiChecker.checkApi(resp);
+    return null;
   }
 
   @override
