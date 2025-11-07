@@ -1,3 +1,4 @@
+// lib/features/social/screens/member_list_bottom_sheet.dart
 import 'package:flutter/material.dart';
 import 'package:characters/characters.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
@@ -12,12 +13,19 @@ class MemberPage {
   MemberPage({required this.users, this.nextCursor});
 }
 
+/// Màu kẻ “hairline” mặc định (xám rất nhạt giống ảnh minh hoạ)
+const kHairline = Color(0xFFEAEAF0);
+
 class MemberListBottomSheet extends StatefulWidget {
   final String title; // "Followers" | "Following" | "Members"
   final MemberPageLoader pageLoader;
   final OnUserTap? onUserTap;
   final int? totalCount;
   final AdminPredicate? isAdmin;
+
+  /// Cho phép tuỳ chỉnh màu đường kẻ / skeleton / thanh kéo.
+  /// Nếu không truyền, sẽ dùng kHairline ở Light Mode, và White 10% ở Dark Mode.
+  final Color? separatorColor;
 
   const MemberListBottomSheet({
     super.key,
@@ -26,6 +34,7 @@ class MemberListBottomSheet extends StatefulWidget {
     this.onUserTap,
     this.totalCount,
     this.isAdmin,
+    this.separatorColor,
   });
 
   @override
@@ -83,6 +92,10 @@ class _MemberListBottomSheetState extends State<MemberListBottomSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final sep = widget.separatorColor ??
+        (theme.brightness == Brightness.dark
+            ? Colors.white.withOpacity(.10)
+            : kHairline);
 
     return SafeArea(
       top: false,
@@ -97,14 +110,16 @@ class _MemberListBottomSheetState extends State<MemberListBottomSheet> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 8),
+            // Thanh kéo
             Container(
               width: 44, height: 5,
               decoration: BoxDecoration(
-                color: theme.dividerColor.withOpacity(0.6),
+                color: sep,
                 borderRadius: BorderRadius.circular(3),
               ),
             ),
             const SizedBox(height: 12),
+            // Header
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
@@ -113,11 +128,15 @@ class _MemberListBottomSheetState extends State<MemberListBottomSheet> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(widget.title,
-                          style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                        Text(
+                          widget.title,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                         if (widget.totalCount != null)
-                          Text('Member count: ${widget.totalCount}',
+                          Text(
+                            'Member count: ${widget.totalCount}',
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.textTheme.bodySmall?.color?.withOpacity(0.6),
                             ),
@@ -133,23 +152,37 @@ class _MemberListBottomSheetState extends State<MemberListBottomSheet> {
               ),
             ),
             const SizedBox(height: 4),
+            // Danh sách
             Expanded(
               child: !_firstLoaded && _loading
-                  ? const _LoadingList()
+                  ? _LoadingList(sep: sep)
                   : _items.isEmpty
                   ? const _EmptyView()
                   : ListView.separated(
                 controller: _scroll,
                 physics: const AlwaysScrollableScrollPhysics(),
                 itemCount: _items.length + (_hasMore || _loading ? 1 : 0),
-                separatorBuilder: (_, __) => Divider(height: 1, color: theme.dividerColor),
+                separatorBuilder: (_, __) => Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: sep,
+                ),
                 itemBuilder: (context, index) {
                   if (index >= _items.length) {
-                    return const Padding(
-                      padding: EdgeInsets.all(16.0),
-                      child: Center(child: SizedBox(
-                        width: 22, height: 22, child: CircularProgressIndicator(),
-                      )),
+                    return Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Center(
+                        child: SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation(
+                              theme.colorScheme.primary,
+                            ),
+                          ),
+                        ),
+                      ),
                     );
                   }
                   final u = _items[index];
@@ -167,7 +200,7 @@ class _MemberListBottomSheetState extends State<MemberListBottomSheet> {
                     subtitle: (u.userName != null && u.userName!.isNotEmpty)
                         ? Text('@${u.userName}')
                         : null,
-                    trailing: _buildTrailingBadge(u, theme),
+                    trailing: _buildTrailingBadge(u, theme, sep),
                     onTap: widget.onUserTap != null ? () => widget.onUserTap!(u) : null,
                   );
                 },
@@ -186,16 +219,17 @@ class _MemberListBottomSheetState extends State<MemberListBottomSheet> {
       return parts.first.characters.take(1).toString().toUpperCase();
     }
     return (parts.first.characters.take(1).toString() +
-        parts.last.characters.take(1).toString()).toUpperCase();
+        parts.last.characters.take(1).toString())
+        .toUpperCase();
   }
 
-  Widget? _buildTrailingBadge(SocialUser u, ThemeData theme) {
+  Widget? _buildTrailingBadge(SocialUser u, ThemeData theme, Color sep) {
     final bool isAdmin = widget.isAdmin?.call(u) ?? false;
     if (!isAdmin) return null;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        border: Border.all(color: theme.dividerColor),
+        border: Border.all(color: sep),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text('Group Admin', style: theme.textTheme.labelMedium),
@@ -218,21 +252,21 @@ class _EmptyView extends StatelessWidget {
 }
 
 class _LoadingList extends StatelessWidget {
-  const _LoadingList();
+  final Color sep;
+  const _LoadingList({required this.sep});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return ListView.separated(
       itemCount: 8,
-      separatorBuilder: (_, __) => Divider(height: 1, color: theme.dividerColor),
+      separatorBuilder: (_, __) => Divider(height: 1, color: sep),
       itemBuilder: (_, __) {
         return ListTile(
-          leading: CircleAvatar(backgroundColor: theme.dividerColor, radius: 22),
-          title: Container(height: 12, width: 140, color: theme.dividerColor),
+          leading: CircleAvatar(backgroundColor: sep, radius: 22),
+          title: Container(height: 12, width: 140, color: sep),
           subtitle: Padding(
             padding: const EdgeInsets.only(top: 6.0),
-            child: Container(height: 10, width: 100, color: theme.dividerColor),
+            child: Container(height: 10, width: 100, color: sep),
           ),
         );
       },
