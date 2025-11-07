@@ -7,7 +7,6 @@ import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_contr
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user_profile.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-import 'package:html_unescape/html_unescape.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final SocialUserProfile profile;
@@ -60,9 +59,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _firstNameCtrl = TextEditingController(text: p.firstName ?? '');
     _lastNameCtrl = TextEditingController(text: p.lastName ?? '');
 
-    _displayNameCtrl = TextEditingController(text: _fromApi(p.displayName));
-    _aboutCtrl = TextEditingController(text: _fromApi(p.about));
-    _addressCtrl = TextEditingController(text: _fromApi(p.address));
+    _displayNameCtrl = TextEditingController(text: p.displayName ?? '');
+    _aboutCtrl = TextEditingController(text: p.about ?? '');
+    _addressCtrl = TextEditingController(text: p.address ?? '');
     _websiteCtrl = TextEditingController(text: p.website ?? '');
     _birthdayCtrl = TextEditingController(text: _toUiDate(p.birthday));
 
@@ -119,8 +118,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final String? firstName = _nullIfEmpty(_firstNameCtrl.text);
     final String? lastName = _nullIfEmpty(_lastNameCtrl.text);
     final String? displayName = _nullIfEmpty(_displayNameCtrl.text);
-    final String? aboutRaw = _nullIfEmpty(_aboutCtrl.text);
-    final String? addressRaw = _nullIfEmpty(_addressCtrl.text);
+    final String? about = _nullIfEmpty(_aboutCtrl.text);
+    final String? address = _nullIfEmpty(_addressCtrl.text);
     final String? website = _normalizeWebsite(_websiteCtrl.text.trim());
     final String? birthdayIso = _toIsoDate(_birthdayCtrl.text.trim());
 
@@ -157,8 +156,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         firstName: firstName,
         lastName: lastName,
         displayName: displayName,
-        about: _toApi(aboutRaw),      // newline -> <br> (hoặc \n nếu backend muốn)
-        address: _toApi(addressRaw),  // nếu muốn giữ xuống dòng cho địa chỉ
+        about: about,
+        address: address,
         website: website,
         birthday: birthdayIso,
         genderText: genderText,
@@ -227,47 +226,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       return '';
     }
   }
-  final _unescape = HtmlUnescape();
-
-// Compile sẵn, không phân biệt hoa/thường
-  final _reBr   = RegExp(r'<br\s*/?>', caseSensitive: false);
-  final _rePgap = RegExp(r'</p>\s*<p>', caseSensitive: false);
-  final _reTags = RegExp(r'</?[^>]+>', caseSensitive: false);
-
-  String _fromApi(String? s) {
-    if (s == null) return '';
-    var t = s;
-
-    // <br> -> xuống dòng
-    t = t.replaceAll(_reBr, '\n');
-
-    // </p> ... <p> -> 2 dòng
-    t = t.replaceAll(_rePgap, '\n\n');
-
-    // bỏ mọi thẻ HTML còn lại
-    t = t.replaceAll(_reTags, '');
-
-    // decode entity & "\\n" -> xuống dòng
-    t = _unescape.convert(t);
-    t = t.replaceAll(r'\\n', '\n');
-
-    // chuẩn hóa khoảng trắng không ngắt (nbsp) nếu cần
-    t = t.replaceAll('\u00A0', ' ');
-
-    return t.trim();
-  }
-
-  String? _toApi(String? s) {
-    if (s == null) return null;
-    final v = s.trim();
-    if (v.isEmpty) return null;
-
-    // Nếu API muốn HTML: đổi newline -> <br>
-    return v.replaceAll('\r\n', '\n').replaceAll('\n', '<br>');
-
-    // Nếu API muốn \n thuần thì trả: return v;
-  }
-
 
   String? _toIsoDate(String? ui) {
     if (ui == null || ui.isEmpty) return null;
@@ -342,18 +300,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final effectiveGenderValue =
     allowedCodes.contains(_genderCode) ? _genderCode : null;
 
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final accent = isDark ? Colors.white : Colors.black87;
-
     return Scaffold(
       appBar: AppBar(
-        backgroundColor:
-        Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white,
-        foregroundColor:
-        Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
-        scrolledUnderElevation: 0,
         title: Text(
-          getTranslated('edit_profile_title', context) ?? 'Chỉnh sửa trang cá nhân',
+          getTranslated('edit_profile_title', context) ??
+              'Chỉnh sửa trang cá nhân',
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -362,25 +313,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         actions: [
           TextButton(
             onPressed: _saving ? null : _handleSave,
-            style: TextButton.styleFrom(
-              foregroundColor: accent,
-              overlayColor: accent.withOpacity(.08),
-            ),
             child: _saving
-                ? SizedBox(
+                ? const SizedBox(
               width: 16,
               height: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation(accent),
-              ),
+              child: CircularProgressIndicator(strokeWidth: 2),
             )
                 : Text(getTranslated('save', context) ?? 'Lưu'),
           ),
           const SizedBox(width: 8),
         ],
       ),
-
       body: Form(
         key: _formKey,
         child: SingleChildScrollView(
@@ -578,7 +521,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
               // -------- Liên hệ --------
               _SectionHeader(
-                  title: getTranslated('contact', context) ?? 'Liên hệ'),
+                  title:
+                  getTranslated('contact', context) ?? 'Liên hệ'),
               _LabeledField(
                 label: getTranslated('address', context) ?? 'Địa chỉ',
                 controller: _addressCtrl,
@@ -637,30 +581,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       initialDate: init,
       firstDate: DateTime(1900),
       lastDate: now,
-      builder: (context, child) {
-        final base = Theme.of(context);
-        final isDark = base.brightness == Brightness.dark;
-        final accent = isDark ? Colors.white : Colors.black87;
-        return Theme(
-          data: base.copyWith(
-            colorScheme: base.colorScheme.copyWith(
-              primary: accent,
-              onPrimary: isDark ? Colors.black : Colors.white,
-              surface: base.scaffoldBackgroundColor,
-              onSurface: isDark ? Colors.white : Colors.black87,
-            ),
-            textButtonTheme: TextButtonThemeData(
-              style: TextButton.styleFrom(foregroundColor: accent),
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
     if (picked != null) {
       _birthdayCtrl.text =
       '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
-      if (mounted) setState(() {});
+      setState(() {});
     }
   }
 }
@@ -699,7 +624,7 @@ class _CoverPlaceholder extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xFF111111), Color(0xFF262626)],
+          colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -741,14 +666,10 @@ class _SeparatorLine extends StatelessWidget {
   const _SeparatorLine({required this.color});
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color line =
-    isDark ? Colors.white.withOpacity(.10) : Colors.black.withOpacity(.08);
-
     return Container(
-      height: 1,
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-      color: line,
+      height: 8,
+      margin: const EdgeInsets.symmetric(vertical: 12),
+      color: color.withOpacity(.4),
     );
   }
 }
@@ -775,11 +696,6 @@ class _LabeledField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final Color stroke =
-    isDark ? Colors.white.withOpacity(.12) : const Color(0xFFE5E7EB);
-    final Color accent = isDark ? Colors.white : Colors.black87;
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Column(
@@ -794,7 +710,6 @@ class _LabeledField extends StatelessWidget {
             textInputAction: textInputAction,
             keyboardType: keyboardType,
             validator: validator,
-            cursorColor: accent, // để con trỏ cũng theo màu đen/trắng
             decoration: InputDecoration(
               isDense: true,
               hintText: hint,
@@ -804,11 +719,14 @@ class _LabeledField extends StatelessWidget {
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: stroke, width: 1),
+                borderSide: BorderSide(
+                  color: theme.dividerColor.withOpacity(.6),
+                  width: 1.2,
+                ),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: accent, width: 1.4),
+                borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.4),
               ),
             ),
           ),
@@ -834,11 +752,6 @@ class _DropdownField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final Color stroke =
-    isDark ? Colors.white.withOpacity(.12) : const Color(0xFFE5E7EB);
-    final Color accent = isDark ? Colors.white : Colors.black87;
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Column(
@@ -851,8 +764,6 @@ class _DropdownField extends StatelessWidget {
             value: value,
             items: items,
             onChanged: onChanged,
-            iconEnabledColor: accent,
-            iconDisabledColor: accent.withOpacity(.6),
             decoration: InputDecoration(
               isDense: true,
               contentPadding:
@@ -860,11 +771,14 @@ class _DropdownField extends StatelessWidget {
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: stroke, width: 1),
+                borderSide: BorderSide(
+                  color: theme.dividerColor.withOpacity(.6),
+                  width: 1.2,
+                ),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: accent, width: 1.4),
+                borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.4),
               ),
             ),
           ),
@@ -890,11 +804,6 @@ class _DateField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final Color stroke =
-    isDark ? Colors.white.withOpacity(.12) : const Color(0xFFE5E7EB);
-    final Color accent = isDark ? Colors.white : Colors.black87;
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Column(
@@ -908,22 +817,26 @@ class _DateField extends StatelessWidget {
             child: AbsorbPointer(
               child: TextFormField(
                 controller: controller,
-                cursorColor: accent,
                 decoration: InputDecoration(
                   isDense: true,
                   hintText: hint ?? 'dd/MM/yyyy',
                   hintStyle: TextStyle(color: theme.hintColor),
                   contentPadding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  suffixIcon: Icon(Icons.calendar_month, color: accent),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  suffixIcon: const Icon(Icons.calendar_month),
+                  border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: stroke, width: 1),
+                    borderSide: BorderSide(
+                      color: theme.dividerColor.withOpacity(.6),
+                      width: 1.2,
+                    ),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: accent, width: 1.4),
+                    borderSide:
+                    BorderSide(color: theme.colorScheme.primary, width: 1.4),
                   ),
                 ),
               ),
@@ -951,11 +864,6 @@ class _PasswordField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final Color stroke =
-    isDark ? Colors.white.withOpacity(.12) : const Color(0xFFE5E7EB);
-    final Color accent = isDark ? Colors.white : Colors.black87;
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Column(
@@ -969,7 +877,6 @@ class _PasswordField extends StatelessWidget {
             obscureText: obscure,
             enableSuggestions: false,
             autocorrect: false,
-            cursorColor: accent,
             decoration: InputDecoration(
               isDense: true,
               contentPadding:
@@ -977,15 +884,17 @@ class _PasswordField extends StatelessWidget {
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: stroke, width: 1),
+                borderSide: BorderSide(
+                  color: theme.dividerColor.withOpacity(.6),
+                  width: 1.2,
+                ),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: accent, width: 1.4),
+                borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.4),
               ),
               suffixIcon: IconButton(
-                icon: Icon(obscure ? Icons.visibility_off : Icons.visibility,
-                    color: accent),
+                icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
                 onPressed: onToggleObscure,
               ),
             ),

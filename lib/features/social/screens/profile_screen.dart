@@ -23,35 +23,6 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_scree
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/member_list_bottom_sheet.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/wallet_screen.dart';
 import 'package:video_player/video_player.dart';
-import 'package:html_unescape/html_unescape.dart';
-
-
-final _unescape = HtmlUnescape();
-
-// Compile sẵn cho nhanh + không phân biệt hoa/thường
-final _reBr   = RegExp(r'<br\s*/?>', caseSensitive: false);
-final _rePgap = RegExp(r'</p>\s*<p>', caseSensitive: false);
-final _reTags = RegExp(r'</?[^>]+>', caseSensitive: false);
-
-String _fromApi(String? s) {
-  if (s == null) return '';
-  var t = s;
-
-  // <br> -> xuống dòng
-  t = t.replaceAll(_reBr, '\n');
-
-  // </p><p> -> 2 dòng
-  t = t.replaceAll(_rePgap, '\n\n');
-
-  // bỏ tag HTML còn lại
-  t = t.replaceAll(_reTags, '');
-
-  // decode entity & "\\n" -> xuống dòng
-  t = _unescape.convert(t);
-  t = t.replaceAll(r'\\n', '\n');
-
-  return t.trim();
-}
 
 /// Tab hiện tại
 enum _ProfileTab { posts, about, reels, photos }
@@ -154,7 +125,6 @@ class _ProfileBodyState extends State<_ProfileBody> {
 
   @override
   Widget build(BuildContext context) {
-    // super.build(context);
     return Consumer<SocialController>(
       builder: (context, sc, _) {
         final loadingProfile = sc.isLoadingProfile;
@@ -913,11 +883,7 @@ class _ProfileDetailsBlock extends StatelessWidget {
                     children: [
                       TextSpan(text: getTranslated('personal_page', context) ?? 'Trang cá nhân', style: const TextStyle(fontWeight: FontWeight.w700)),
                       const TextSpan(text: ' · '),
-                      TextSpan(
-                        text: (user.about?.trim().isNotEmpty == true)
-                            ? _fromApi(user.about)  // <-- dùng helper decode
-                            : (getTranslated('content_creator', context) ?? 'Người sáng tạo nội dung'),
-                      ),
+                      TextSpan(text: (user.about?.trim().isNotEmpty == true) ? user.about!.trim() : (getTranslated('content_creator', context) ?? 'Người sáng tạo nội dung')),
                     ],
                   ),
                 ),
@@ -1011,32 +977,20 @@ class _ProfileAboutSection extends StatelessWidget {
   const _ProfileAboutSection({required this.user});
 
   @override
-  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    final locationText = [user.city, user.country]
-        .where((s) => s?.trim().isNotEmpty == true)
-        .join(', ');
-
+    final locationText = [user.city, user.country].where((s) => s?.isNotEmpty == true).join(', ');
     final rows = <_AboutRowData>[];
-    if (user.work?.isNotEmpty == true)        rows.add(_AboutRowData(Icons.work_outline,        _fromApi(user.work)));
-    if (user.education?.isNotEmpty == true)   rows.add(_AboutRowData(Icons.school_outlined,     _fromApi(user.education)));
-    if (locationText.isNotEmpty)              rows.add(_AboutRowData(Icons.location_on_outlined,_fromApi(locationText)));
-    if (user.website?.isNotEmpty == true)     rows.add(_AboutRowData(Icons.link,                _fromApi(user.website!), isLink: true));
-    if (user.genderText?.isNotEmpty == true)  rows.add(_AboutRowData(Icons.wc_rounded,          _fromApi(user.genderText!)));
-    if (user.birthday?.isNotEmpty == true)    rows.add(_AboutRowData(Icons.cake_outlined,       _fromApi(user.birthday!)));
-    if (user.relationshipStatus?.isNotEmpty == true)
-      rows.add(_AboutRowData(Icons.favorite_border,     _fromApi(user.relationshipStatus!)));
-    if (user.lastSeenText?.isNotEmpty == true) {
-      rows.add(_AboutRowData(
-        Icons.schedule,
-        '${getTranslated('active', context) ?? 'Hoạt động'} ${_fromApi(user.lastSeenText)} trước',
-      ));
-    }
+    if (user.work?.isNotEmpty == true) rows.add(_AboutRowData(Icons.work_outline, user.work!));
+    if (user.education?.isNotEmpty == true) rows.add(_AboutRowData(Icons.school_outlined, user.education!));
+    if (locationText.isNotEmpty) rows.add(_AboutRowData(Icons.location_on_outlined, locationText));
+    if (user.website?.isNotEmpty == true) rows.add(_AboutRowData(Icons.link, user.website!, isLink: true));
+    if (user.genderText?.isNotEmpty == true) rows.add(_AboutRowData(Icons.wc_rounded, user.genderText!));
+    if (user.birthday?.isNotEmpty == true) rows.add(_AboutRowData(Icons.cake_outlined, user.birthday!));
+    if (user.relationshipStatus?.isNotEmpty == true) rows.add(_AboutRowData(Icons.favorite_border, user.relationshipStatus!));
+    if (user.lastSeenText?.isNotEmpty == true) rows.add(_AboutRowData(Icons.schedule, '${getTranslated('active', context) ?? 'Hoạt động'} ${user.lastSeenText} trước'));
 
-    final aboutClean = _fromApi(user.about);
-    final hasAnyInfo = aboutClean.trim().isNotEmpty || rows.isNotEmpty;
+    final hasAnyInfo = (user.about?.trim().isNotEmpty == true) || rows.isNotEmpty;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeDefault),
@@ -1044,40 +998,20 @@ class _ProfileAboutSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 16),
-          Text(getTranslated('about', context) ?? 'Giới thiệu',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+          Text(getTranslated('about', context) ?? 'Giới thiệu', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
-
-          if (aboutClean.trim().isNotEmpty) ...[
-            Text(
-              aboutClean,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                height: 1.4,
-                color: theme.textTheme.bodyMedium?.color,
-              ),
-            ),
+          if (user.about?.trim().isNotEmpty == true) ...[
+            Text(user.about!.trim(), style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, height: 1.4, color: theme.textTheme.bodyMedium?.color)),
             const SizedBox(height: 16),
           ],
-
           if (!hasAnyInfo)
-            Text(
-              getTranslated('no_about_info', context) ?? 'Chưa có thông tin giới thiệu.',
-              style: TextStyle(fontSize: 14, color: theme.hintColor),
-            ),
-
-          for (final r in rows) ...[
-            _AboutInfoRow(data: r),
-            const SizedBox(height: 12),
-          ],
-
+            Text(getTranslated('no_about_info', context) ?? 'Chưa có thông tin giới thiệu.', style: TextStyle(fontSize: 14, color: theme.hintColor)),
+          for (final r in rows) ...[_AboutInfoRow(data: r), const SizedBox(height: 12)],
           if (hasAnyInfo) const SizedBox(height: 24),
         ],
       ),
     );
   }
-
 }
 
 class _AboutRowData {
