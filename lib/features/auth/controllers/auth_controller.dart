@@ -167,7 +167,6 @@ class AuthController with ChangeNotifier {
                 'en');
         callback(true, token, null, null, message, socialLogin.medium, null,
             socialLogin.email, socialLogin.name);
-
       }
 
       if (temporaryToken != null && temporaryToken.isNotEmpty) {
@@ -308,15 +307,12 @@ class AuthController with ChangeNotifier {
       final String socialUserId = (data['user_id'] ?? '').toString();
       if (socialUserId.isNotEmpty) {
         await authServiceInterface.saveSocialUserId(socialUserId);
-
-
       }
       try {
         await Provider.of<SocialController>(Get.context!, listen: false)
             .loadCurrentUser(force: true);
       } catch (_) {}
       // ========== END EXTERNAL CALL ==========
-
 
       Future<void> saveSocialUserId(String userId) async {
         final prefs = await SharedPreferences.getInstance();
@@ -327,7 +323,6 @@ class AuthController with ChangeNotifier {
         final prefs = await SharedPreferences.getInstance();
         return prefs.getString('social_user_id');
       }
-
 
       message = map["message"];
 
@@ -408,7 +403,8 @@ class AuthController with ChangeNotifier {
       // ========== END EXTERNAL SOCIAL LOGOUT ==========
 
       await authServiceInterface.clearSharedData();
-      Provider.of<SocialNotificationsController>(Get.context!, listen: false).reset();
+      Provider.of<SocialNotificationsController>(Get.context!, listen: false)
+          .reset();
       // Nếu có ProfileController thì clear luôn
       // Get.find<ProfileController>().clearProfileData();
     }
@@ -560,6 +556,9 @@ class AuthController with ChangeNotifier {
       // 4) Lưu access_token Social
       await authServiceInterface.saveSocialAccessToken(socialAccessToken);
       final String socialUserId = (data['user_id'] ?? '').toString();
+      if (socialUserId.isNotEmpty) {
+        await authServiceInterface.saveSocialUserId(socialUserId);
+      }
       try {
         await Provider.of<SocialController>(Get.context!, listen: false)
             .loadCurrentUser(force: true);
@@ -1458,7 +1457,4 @@ class AuthController with ChangeNotifier {
   String? getGuestCartId() {
     return authServiceInterface.getGuestCartId();
   }
-
-
-
 }
