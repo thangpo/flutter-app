@@ -1246,6 +1246,16 @@
   "update_social_only": "Đã cập nhật MXH. Chưa đồng bộ E-com vì bạn chưa đăng nhập E-com.",
   "update_success": "Cập nhật hồ sơ thành công",
   "update_error": "Lỗi cập nhật",
-  "messages": "Nhắn tin"
+  "messages": "Nhắn tin",
+
+  "chat_section": "Đoạn chat",
+  "create_group_chat": "Tạo nhóm chat",
+  "no_friends_yet": "Chưa có bạn bè.",
+  "active_now": "Đang hoạt động",
+  "group_name_msg": "Tên nhóm",
+  "group_name_msg_hint": "Nhóm chat Vnshop247",
+  "stories": "Tin",
+  "group_chat": "Nhóm Chat",
+  "menu": "Menu"
 }
 

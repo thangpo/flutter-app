@@ -13,6 +13,8 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/chat_screen.
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_chat_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_group_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/group_chats_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+
 
 class FriendsListScreen extends StatefulWidget {
   final String accessToken;
@@ -47,11 +49,11 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Đoạn chat'),
+        title: Text(getTranslated('chat_section', context)!),
         elevation: 0,
         actions: [
           IconButton(
-            tooltip: 'Tạo nhóm chat',
+            tooltip: getTranslated('create_group_chat', context)!,
             icon: const Icon(Icons.group_add),
             onPressed: () async {
               final success = await Navigator.push(
@@ -64,8 +66,12 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
               if (success == true) {
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Tạo nhóm thành công')),
+                  SnackBar(
+                    content:
+                        Text(getTranslated('group_created_success', context)!),
+                  ),
                 );
+
               }
             },
           ),
@@ -161,11 +167,14 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                 child: list.isEmpty
                     ? ListView(
                         physics: const AlwaysScrollableScrollPhysics(),
-                        children: const [
-                          SizedBox(height: 36),
-                          Center(child: Text('Chưa có bạn bè.')),
+                        children: [
+                          const SizedBox(height: 36),
+                          Center(
+                              child: Text(
+                                  getTranslated('no_friends_yet', context)!)),
                         ],
                       )
+
                     : ListView.separated(
                         physics: const AlwaysScrollableScrollPhysics(),
                         itemCount: list.length,
@@ -178,7 +187,7 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                         itemBuilder: (_, i) {
                           final u = list[i];
                           final preview = u.isOnline
-                              ? 'Đang hoạt động'
+                              ? getTranslated('active_now', context)!
                               : (u.lastSeen ?? '');
                           return InkWell(
                             onTap: () => _openChat(u),
@@ -271,9 +280,9 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
               children: [
                 TextField(
                   controller: nameCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Tên nhóm',
-                    hintText: 'VD: Team Dev',
+                  decoration: InputDecoration(
+                    labelText: getTranslated('group_name_msg', context),
+                    hintText: getTranslated('group_name_msg_hint', context),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -456,18 +465,29 @@ class _MessengerFooter extends StatelessWidget {
         child: Row(
           children: [
             item(
-                index: 0,
-                icon: Icons.chat_bubble,
-                label: 'Đoạn chat',
-                badge: chatBadgeCount),
-            item(index: 1, icon: Icons.video_collection, label: 'Tin'),
+              index: 0,
+              icon: Icons.chat_bubble,
+              label: getTranslated('chat_section', context)!,
+              badge: chatBadgeCount,
+            ),
             item(
-                index: 2,
-                icon: Icons.groups,
-                label: 'Nhóm Chat',
-                dot: showNotifDot),
-            item(index: 3, icon: Icons.menu, label: 'Menu'),
+              index: 1,
+              icon: Icons.video_collection,
+              label: getTranslated('stories', context)!,
+            ),
+            item(
+              index: 2,
+              icon: Icons.groups,
+              label: getTranslated('group_chat', context)!,
+              dot: showNotifDot,
+            ),
+            item(
+              index: 3,
+              icon: Icons.menu,
+              label: getTranslated('menu', context)!,
+            ),
           ],
+
         ),
       ),
     );
