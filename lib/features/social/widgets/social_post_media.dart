@@ -12,6 +12,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_c
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_live_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/live_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_post_full_with_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/price_converter.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
@@ -36,16 +37,24 @@ Widget? buildSocialPostMedia(
     }
     return _LivePostPlayer(post: post, compact: compact);
   }
-  final images = post.imageUrls;
+  final List<String> images = SocialPostFullViewComposer.normalizeImages(post);
   final bool hasMulti = images.length >= 2;
-  final bool hasSingle = images.length == 1 || (post.imageUrl ?? '').isNotEmpty;
+  final bool hasSingle = images.length == 1;
   final String? fileUrl = post.fileUrl;
 
-  // 0) Video
+// 0) Video
   if (_isVideo(fileUrl)) {
-    return _VideoPlayerTile(
-      url: fileUrl!,
-      maxHeightFactor: compact ? 0.5 : 0.6,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => SocialPostFullWithScreen.open(
+        context,
+        post: post,
+        focus: SocialPostFullItemType.video,
+      ),
+      child: _VideoPlayerTile(
+        url: fileUrl!,
+        maxHeightFactor: compact ? 0.5 : 0.6,
+      ),
     );
   }
 
@@ -56,65 +65,85 @@ Widget? buildSocialPostMedia(
 
   // 1.5) Images + Audio overlay
   if (images.isNotEmpty && _isAudio(fileUrl)) {
-    return _ImagesWithAutoAudio(images: images, audioUrl: fileUrl!);
+    return _ImagesWithAutoAudio(
+      images: images,
+      audioUrl: fileUrl!,
+      post: post,
+    );
   }
 
   // 2) Multi image grid
   if (hasMulti) {
+    Widget _imageTile(
+      String url,
+      int imageIndex, {
+      int? extraCount,
+    }) {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => SocialPostFullWithScreen.open(
+          context,
+          post: post,
+          focus: SocialPostFullItemType.image,
+          imageIndex: imageIndex,
+        ),
+        child: AspectRatio(
+          aspectRatio: 1,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Image.network(url, fit: BoxFit.cover),
+              if (extraCount != null && extraCount > 0)
+                Container(
+                  alignment: Alignment.center,
+                  color: Colors.black45,
+                  child: Text(
+                    '+$extraCount',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (images.length == 3) {
+      return Row(
+        children: [
+          Expanded(child: _imageTile(images[0], 0)),
+          const SizedBox(width: 4),
+          Expanded(child: _imageTile(images[1], 1, extraCount: 1)),
+        ],
+      );
+    }
     return Column(
       children: [
         Row(
           children: [
-            Expanded(
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: Image.network(images[0], fit: BoxFit.cover),
-              ),
-            ),
+            Expanded(child: _imageTile(images[0], 0)),
             const SizedBox(width: 4),
-            Expanded(
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: Image.network(images[1], fit: BoxFit.cover),
-              ),
-            ),
+            Expanded(child: _imageTile(images[1], 1)),
           ],
         ),
         if (images.length > 2) const SizedBox(height: 4),
         if (images.length > 2)
           Row(
             children: [
-              Expanded(
-                child: AspectRatio(
-                  aspectRatio: 1,
-                  child: Image.network(images[2], fit: BoxFit.cover),
-                ),
-              ),
+              Expanded(child: _imageTile(images[2], 2)),
               const SizedBox(width: 4),
               Expanded(
-                child: AspectRatio(
-                  aspectRatio: 1,
-                  child: images.length > 3
-                      ? Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            Image.network(images[3], fit: BoxFit.cover),
-                            Container(
-                              alignment: Alignment.center,
-                              color: Colors.black45,
-                              child: Text(
-                                '+${images.length - 4}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
-                        )
-                      : const SizedBox.shrink(),
-                ),
+                child: images.length > 3
+                    ? _imageTile(
+                        images[3],
+                        3,
+                        extraCount: images.length - 4,
+                      )
+                    : const SizedBox.shrink(),
               ),
             ],
           ),
@@ -124,17 +153,30 @@ Widget? buildSocialPostMedia(
 
   // 3) Single image
   if (hasSingle) {
-    final String src = images.isNotEmpty ? images.first : (post.imageUrl!);
-    return _AutoRatioNetworkImage(
-      src,
-      maxHeightFactor: compact ? 0.5 : 0.8,
+    final String src = images.first;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => SocialPostFullWithScreen.open(
+        context,
+        post: post,
+        focus: SocialPostFullItemType.image,
+        imageIndex: 0,
+      ),
+      child: _AutoRatioNetworkImage(
+        src,
+        maxHeightFactor: compact ? 0.5 : 0.8,
+      ),
     );
   }
 
   // 4) File attachments (audio/pdf/others)
   if (fileUrl != null && fileUrl.isNotEmpty) {
     if (_isAudio(fileUrl) && images.isNotEmpty) {
-      return _ImagesWithAutoAudio(images: images, audioUrl: fileUrl);
+      return _ImagesWithAutoAudio(
+        images: images,
+        audioUrl: fileUrl,
+        post: post,
+      );
     }
     if (_isAudio(fileUrl)) {
       return Container(
@@ -907,9 +949,11 @@ class _AutoRatioNetworkImageState extends State<_AutoRatioNetworkImage> {
 class _ImagesWithAutoAudio extends StatefulWidget {
   final List<String> images;
   final String audioUrl;
+  final SocialPost post;
   const _ImagesWithAutoAudio({
     required this.images,
     required this.audioUrl,
+    required this.post,
   });
 
   @override
@@ -972,8 +1016,16 @@ class _ImagesWithAutoAudioState extends State<_ImagesWithAutoAudio> {
               controller: _pc,
               onPageChanged: (i) => setState(() => _index = i),
               itemCount: widget.images.length,
-              itemBuilder: (_, i) =>
-                  Image.network(widget.images[i], fit: BoxFit.cover),
+              itemBuilder: (_, i) => GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => SocialPostFullWithScreen.open(
+                  context,
+                  post: widget.post,
+                  focus: SocialPostFullItemType.image,
+                  imageIndex: i,
+                ),
+                child: Image.network(widget.images[i], fit: BoxFit.cover),
+              ),
             ),
           ),
           const SizedBox(height: 6),
@@ -1017,35 +1069,43 @@ class _LiveReplayTile extends StatelessWidget {
     final String badge = getTranslated('live_replay', context) ??
         getTranslated('live_has_ended', context) ??
         'Live replay';
-    return Stack(
-      children: [
-        video,
-        Positioned(
-          top: 12,
-          left: 12,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.6),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.history, color: Colors.white, size: 16),
-                const SizedBox(width: 6),
-                Text(
-                  badge,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => SocialPostFullWithScreen.open(
+        context,
+        post: post,
+        focus: SocialPostFullItemType.video,
+      ),
+      child: Stack(
+        children: [
+          video,
+          Positioned(
+            top: 12,
+            left: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.6),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.history, color: Colors.white, size: 16),
+                  const SizedBox(width: 6),
+                  Text(
+                    badge,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
