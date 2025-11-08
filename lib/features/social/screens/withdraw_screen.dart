@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
@@ -14,7 +15,7 @@ class WithdrawScreen extends StatefulWidget {
   State<WithdrawScreen> createState() => _WithdrawScreenState();
 }
 
-class _WithdrawScreenState extends State<WithdrawScreen> {
+class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStateMixin {
   double walletBalance = 0.0;
   List<Map<String, dynamic>> campaigns = [];
   bool isLoading = true;
@@ -22,11 +23,30 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   String? errorMessage;
   final Map<int, bool> _deletingItems = {};
   final Map<int, bool> _loadingItems = {};
+  late AnimationController _floatingController;
+  late AnimationController _shimmerController;
 
   @override
   void initState() {
     super.initState();
+    _floatingController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    )..repeat(reverse: true);
+
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat();
+
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _floatingController.dispose();
+    _shimmerController.dispose();
+    super.dispose();
   }
 
   double _toDouble(dynamic value) {
@@ -87,30 +107,53 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          getTranslated('withdraw', context) ?? 'Quảng cáo',
-          style: const TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.w600,
-            color: Colors.black,
+      extendBodyBehindAppBar: true,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(56),
+        child: ClipRRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: AppBar(
+              title: Text(
+                getTranslated('withdraw', context) ?? 'Quảng cáo',
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              backgroundColor: Colors.white.withOpacity(0.7),
+              elevation: 0,
+              centerTitle: true,
+              iconTheme: const IconThemeData(color: Colors.black),
+            ),
           ),
         ),
-        backgroundColor: Colors.white,
-        elevation: 0.5,
-        centerTitle: true,
-        iconTheme: const IconThemeData(color: Colors.black),
       ),
-      backgroundColor: const Color(0xFFF2F2F7),
-      body: RefreshIndicator(
-        onRefresh: _loadData,
-        color: Colors.blue,
-        backgroundColor: Colors.white,
-        child: isLoading
-            ? _buildLoading()
-            : errorMessage != null
-            ? _buildError()
-            : _buildContent(),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              const Color(0xFFF5F7FA),
+              const Color(0xFFE8EDF5),
+              Colors.blue.shade50.withOpacity(0.3),
+            ],
+          ),
+        ),
+        child: RefreshIndicator(
+          onRefresh: _loadData,
+          color: Colors.blue,
+          backgroundColor: Colors.white,
+          displacement: 60,
+          child: isLoading
+              ? _buildLoading()
+              : errorMessage != null
+              ? _buildError()
+              : _buildContent(),
+        ),
       ),
     );
   }
@@ -123,11 +166,11 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         const begin = Offset(0.0, 1.0);
         const end = Offset.zero;
-        const curve = Curves.easeInOut;
+        const curve = Curves.easeInOutCubicEmphasized;
         var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
         return SlideTransition(
           position: animation.drive(tween),
-          child: child,
+          child: FadeTransition(opacity: animation, child: child),
         );
       },
       fullscreenDialog: true,
@@ -136,181 +179,293 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
 
   Widget _buildLoading() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
+      child: AnimatedBuilder(
+        animation: _floatingController,
+        builder: (context, child) {
+          return Transform.translate(
+            offset: Offset(0, 8 * _floatingController.value),
+            child: child,
+          );
+        },
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.3),
+                  width: 1.5,
                 ),
-              ],
-            ),
-            child: const CircularProgressIndicator(
-              strokeWidth: 3,
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 30,
+                    offset: const Offset(0, 15),
+                  ),
+                ],
+              ),
+              child: const Center(
+                child: SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF007AFF)),
+                  ),
+                ),
+              ),
             ),
           ),
-          const SizedBox(height: 16),
-          const Text(
-            'Đang tải...',
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildError() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: const Icon(Icons.error_outline, size: 40, color: Colors.red),
-          ),
-          const SizedBox(height: 20),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 40),
-            child: Text(
-              errorMessage!,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 16,
-                color: Colors.black87,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          _buildGlassButton(
-            onPressed: _loadData,
-            icon: Icons.refresh,
-            text: 'Thử lại',
-            color: Colors.blue,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildContent() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        _buildWalletCard(),
-        const SizedBox(height: 24),
-        _buildCreateCampaignButton(),
-        const SizedBox(height: 32),
-
-        // Header với style iOS
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Text(
-            'Lịch sử chiến dịch',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              color: Colors.black.withOpacity(0.9),
-              letterSpacing: -0.5,
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        isLoadingCampaigns
-            ? _buildCampaignsSkeleton()
-            : campaigns.isEmpty
-            ? _buildEmptyState()
-            : _buildCampaignsList(),
-      ],
-    );
-  }
-
-  Widget _buildWalletCard() {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF007AFF), Color(0xFF5856D6)],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF007AFF).withOpacity(0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 50,
-              height: 50,
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              padding: const EdgeInsets.all(32),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
+                color: Colors.white.withOpacity(0.6),
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.3),
+                  width: 1.5,
+                ),
               ),
-              child: const Icon(Icons.account_balance_wallet, color: Colors.white, size: 24),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
+                  Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.red.shade400, Colors.red.shade600],
+                      ),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.warning_rounded, size: 40, color: Colors.white),
+                  ),
+                  const SizedBox(height: 24),
                   Text(
-                    'Số dư quảng cáo',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.8),
-                      fontSize: 14,
+                    errorMessage!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: Colors.black87,
                       fontWeight: FontWeight.w500,
+                      height: 1.4,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${_formatMoney(walletBalance)} đ',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.5,
+                  const SizedBox(height: 28),
+                  _buildGlassButton(
+                    onPressed: _loadData,
+                    icon: Icons.refresh_rounded,
+                    text: 'Thử lại',
+                    gradient: LinearGradient(
+                      colors: [Colors.blue.shade400, Colors.blue.shade600],
                     ),
                   ),
                 ],
               ),
             ),
-          ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent() {
+    return CustomScrollView(
+      physics: const BouncingScrollPhysics(),
+      slivers: [
+        SliverToBoxAdapter(child: SizedBox(height: MediaQuery.of(context).padding.top + 60)),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+            child: Column(
+              children: [
+                _buildWalletCard(),
+                const SizedBox(height: 20),
+                _buildCreateCampaignButton(),
+                const SizedBox(height: 36),
+                _buildSectionHeader(),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+          sliver: isLoadingCampaigns
+              ? SliverToBoxAdapter(child: _buildCampaignsSkeleton())
+              : campaigns.isEmpty
+              ? SliverToBoxAdapter(child: _buildEmptyState())
+              : _buildCampaignsSliverList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSectionHeader() {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.blue.shade400, Colors.blue.shade400],
+            ),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(Icons.campaign_rounded, color: Colors.white, size: 20),
+        ),
+        const SizedBox(width: 12),
+        const Text(
+          'Chiến dịch của tôi',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
+            color: Colors.black87,
+            letterSpacing: -0.5,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWalletCard() {
+    return AnimatedBuilder(
+      animation: _floatingController,
+      builder: (context, child) {
+        return Transform.translate(
+          offset: Offset(0, 5 * _floatingController.value),
+          child: child,
+        );
+      },
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.white.withOpacity(0.7),
+                  Colors.white.withOpacity(0.5),
+                ],
+              ),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.3),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.blue.withOpacity(0.1),
+                  blurRadius: 30,
+                  offset: const Offset(0, 15),
+                ),
+              ],
+            ),
+            child: Stack(
+              children: [
+                // Animated gradient overlay
+                Positioned.fill(
+                  child: AnimatedBuilder(
+                    animation: _shimmerController,
+                    builder: (context, child) {
+                      return Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(28),
+                          gradient: LinearGradient(
+                            begin: Alignment(-1.0 + (_shimmerController.value * 3), -1.0),
+                            end: Alignment(1.0 + (_shimmerController.value * 3), 1.0),
+                            colors: [
+                              Colors.transparent,
+                              Colors.white.withOpacity(0.1),
+                              Colors.transparent,
+                            ],
+                            stops: const [0.0, 0.5, 1.0],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.blue.shade400, Colors.blue.shade400],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.blue.withOpacity(0.3),
+                              blurRadius: 15,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.account_balance_wallet_rounded,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(width: 20),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Số dư quảng cáo',
+                              style: TextStyle(
+                                color: Colors.black.withOpacity(0.6),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                letterSpacing: -0.2,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              '${_formatMoney(walletBalance)} đ',
+                              style: const TextStyle(
+                                color: Colors.black87,
+                                fontSize: 30,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -1,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -321,21 +476,15 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
       onPressed: () async {
         final result = await Navigator.of(context).push(_createRoute());
         if (result == true && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Đang tải chiến dịch mới...'),
-              duration: const Duration(seconds: 1),
-              backgroundColor: Colors.green,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          );
+          _showSnackBar('Đang tải chiến dịch mới...', isError: false);
           await _loadData();
         }
       },
-      icon: Icons.add_circle_outline,
+      icon: Icons.add_circle_rounded,
       text: 'Tạo chiến dịch mới',
-      color: Colors.green,
+      gradient: LinearGradient(
+        colors: [Colors.blue.shade400, Colors.purple.shade400],
+      ),
       isLarge: true,
     );
   }
@@ -344,45 +493,73 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     required VoidCallback? onPressed,
     required IconData icon,
     required String text,
-    required Color color,
+    required Gradient gradient,
     bool isLarge = false,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.15),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Material(
-        borderRadius: BorderRadius.circular(14),
-        color: Colors.white,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: onPressed,
-          child: Container(
-            padding: EdgeInsets.symmetric(
-              vertical: isLarge ? 18 : 14,
-              horizontal: 16,
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, color: color, size: isLarge ? 20 : 18),
-                const SizedBox(width: 8),
-                Text(
-                  text,
-                  style: TextStyle(
-                    fontSize: isLarge ? 17 : 15,
-                    fontWeight: FontWeight.w600,
-                    color: color,
-                  ),
-                ),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: LinearGradient(
+              colors: [
+                Colors.white.withOpacity(0.6),
+                Colors.white.withOpacity(0.4),
               ],
+            ),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.3),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: onPressed,
+              splashColor: Colors.white.withOpacity(0.2),
+              highlightColor: Colors.white.withOpacity(0.1),
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  vertical: isLarge ? 18 : 14,
+                  horizontal: 20,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        gradient: gradient,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(icon, color: Colors.white, size: isLarge ? 20 : 18),
+                    ),
+                    const SizedBox(width: 10),
+                    ShaderMask(
+                      shaderCallback: (bounds) => gradient.createShader(bounds),
+                      child: Text(
+                        text,
+                        style: TextStyle(
+                          fontSize: isLarge ? 17 : 15,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -390,186 +567,248 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     );
   }
 
-  Widget _buildCampaignsList() {
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: campaigns.length,
-      itemBuilder: (context, index) {
-        final camp = campaigns[index];
-        final adId = int.tryParse(camp['id']?.toString() ?? '');
-        final isDeleting = adId != null && (_deletingItems[adId] ?? false);
-        final isLoading = adId != null && (_loadingItems[adId] ?? false);
+  Widget _buildCampaignsSliverList() {
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+            (context, index) {
+          final camp = campaigns[index];
+          final adId = int.tryParse(camp['id']?.toString() ?? '');
+          final isDeleting = adId != null && (_deletingItems[adId] ?? false);
+          final isLoading = adId != null && (_loadingItems[adId] ?? false);
 
-        return AnimatedSize(
-          duration: const Duration(milliseconds: 350),
-          curve: Curves.easeInOut,
-          child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 250),
-            opacity: isDeleting ? 0.0 : 1.0,
-            child: AnimatedSlide(
-              duration: const Duration(milliseconds: 300),
-              offset: isDeleting ? const Offset(0.3, 0) : Offset.zero,
-              curve: Curves.easeInOutCubic,
-              child: isDeleting
-                  ? const SizedBox.shrink()
-                  : _buildCampaignCard(camp, adId, isLoading),
+          return AnimatedSize(
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeInOutCubicEmphasized,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 250),
+              opacity: isDeleting ? 0.0 : 1.0,
+              child: AnimatedSlide(
+                duration: const Duration(milliseconds: 300),
+                offset: isDeleting ? const Offset(0.3, 0) : Offset.zero,
+                curve: Curves.easeInOutCubic,
+                child: isDeleting
+                    ? const SizedBox.shrink()
+                    : Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _buildCampaignCard(camp, adId, isLoading),
+                ),
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+        childCount: campaigns.length,
+      ),
     );
   }
 
   Widget _buildCampaignCard(Map<String, dynamic> camp, int? adId, bool isLoading) {
     final isActive = camp["status"] == "1";
     final statusText = isActive ? "Đang chạy" : "Đã dừng";
-    final statusColor = isActive ? Colors.green : Colors.grey;
+    final statusGradient = isActive
+        ? LinearGradient(colors: [Colors.green.shade400, Colors.teal.shade400])
+        : LinearGradient(colors: [Colors.grey.shade400, Colors.grey.shade500]);
     final headline = camp["headline"] ?? 'Không có tiêu đề';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Material(
-        borderRadius: BorderRadius.circular(16),
-        color: Colors.white,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: isLoading ? null : () => _handleCampaignTap(adId, camp),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(22),
+            gradient: LinearGradient(
+              colors: [
+                Colors.white.withOpacity(0.7),
+                Colors.white.withOpacity(0.5),
+              ],
             ),
-            child: Stack(
-              children: [
-                // Loading overlay
-                if (isLoading)
-                  Positioned.fill(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        color: Colors.black.withOpacity(0.1),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.3),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(22),
+              onTap: isLoading ? null : () => _handleCampaignTap(adId, camp),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Stack(
+                  children: [
+                    if (isLoading)
+                      Positioned.fill(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                            child: Container(
+                              color: Colors.black.withOpacity(0.1),
+                              child: Center(
+                                child: Container(
+                                  width: 35,
+                                  height: 35,
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(18),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.1),
+                                        blurRadius: 10,
+                                      ),
+                                    ],
+                                  ),
+                                  child: const CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF007AFF)),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
-                      child: Center(
-                        child: Container(
-                          width: 30,
-                          height: 30,
-                          padding: const EdgeInsets.all(6),
+                    Row(
+                      children: [
+                        Container(
                           decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(15),
+                            borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withOpacity(0.1),
                                 blurRadius: 10,
+                                offset: const Offset(0, 5),
                               ),
                             ],
                           ),
-                          child: const CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                Row(
-                  children: [
-                    // Image
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.network(
-                        camp["ad_media"] ?? '',
-                        width: 60,
-                        height: 60,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          width: 60,
-                          height: 60,
-                          color: const Color(0xFFF2F2F7),
-                          child: const Icon(Icons.image, color: Colors.grey),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-
-                    // Content
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            headline,
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            '${camp["clicks"] ?? 0} clicks • ${camp["views"] ?? 0} views',
-                            style: const TextStyle(
-                              fontSize: 15,
-                              color: Colors.grey,
-                              fontWeight: FontWeight.w500,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Image.network(
+                              camp["ad_media"] ?? '',
+                              width: 70,
+                              height: 70,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                width: 70,
+                                height: 70,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [Colors.grey.shade200, Colors.grey.shade300],
+                                  ),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Icon(Icons.image_rounded, color: Colors.grey.shade400, size: 32),
+                              ),
                             ),
                           ),
-                          if (camp["location"] != null) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              camp["location"],
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey,
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                headline,
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87,
+                                  letterSpacing: -0.3,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Icon(Icons.touch_app_rounded, size: 16, color: Colors.grey.shade600),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${camp["clicks"] ?? 0}',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade700,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Icon(Icons.visibility_rounded, size: 16, color: Colors.grey.shade600),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${camp["views"] ?? 0}',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                gradient: statusGradient,
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: isActive ? Colors.green.withOpacity(0.3) : Colors.grey.withOpacity(0.2),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: Text(
+                                statusText,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.5),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: IconButton(
+                                icon: Icon(
+                                  Icons.delete_rounded,
+                                  color: isActive ? Colors.grey.shade400 : Colors.red.shade400,
+                                  size: 22,
+                                ),
+                                tooltip: isActive ? 'Dừng chiến dịch trước' : 'Xóa',
+                                onPressed: isLoading
+                                    ? null
+                                    : (adId == null)
+                                    ? null
+                                    : () => _handleDeleteRequest(context, adId, headline, isActive),
                               ),
                             ),
                           ],
-                        ],
-                      ),
-                    ),
-
-                    // Status and actions
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: statusColor.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            statusText,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: statusColor,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        IconButton(
-                          icon: Icon(
-                            Icons.delete_outline,
-                            color: isActive ? Colors.grey.shade400 : Colors.red,
-                            size: 20,
-                          ),
-                          tooltip: isActive ? 'Dừng chiến dịch trước khi xóa' : 'Xóa chiến dịch',
-                          onPressed: isLoading
-                              ? null
-                              : (adId == null)
-                              ? null
-                              : () => _handleDeleteRequest(context, adId, headline, isActive),
                         ),
                       ],
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -583,10 +822,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
       return;
     }
 
-    // Set loading state for this specific item
-    setState(() {
-      _loadingItems[adId] = true;
-    });
+    setState(() => _loadingItems[adId] = true);
 
     try {
       final auth = Provider.of<AuthController>(context, listen: false);
@@ -620,9 +856,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
       }
     } finally {
       if (mounted) {
-        setState(() {
-          _loadingItems.remove(adId);
-        });
+        setState(() => _loadingItems.remove(adId));
       }
     }
   }
@@ -638,63 +872,87 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   void _showStopBeforeDeleteDialog(BuildContext context, int adId, String headline) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          backgroundColor: Colors.white.withOpacity(0.95),
+          surfaceTintColor: Colors.transparent,
+          contentPadding: const EdgeInsets.all(24),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.orange.shade400, Colors.deepOrange.shade400],
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(Icons.pause_circle_rounded, color: Colors.white, size: 24),
               ),
-              child: const Icon(Icons.pause_circle_outline, color: Colors.orange, size: 24),
+              const SizedBox(width: 12),
+              const Flexible(
+                child: Text(
+                  'Chiến dịch đang chạy',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'Chiến dịch "$headline" đang hoạt động.\n\nBạn có muốn dừng và xóa chiến dịch này không?',
+            style: const TextStyle(fontSize: 15, height: 1.5, color: Colors.black87),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+              child: const Text(
+                'Hủy',
+                style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600, fontSize: 16),
+              ),
             ),
-            const SizedBox(width: 12),
-            const Flexible(
-              child: Text(
-                'Chiến dịch đang chạy',
-                style: TextStyle(fontWeight: FontWeight.w600),
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                gradient: LinearGradient(
+                  colors: [Colors.orange.shade400, Colors.deepOrange.shade500],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.orange.withOpacity(0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _stopAndDeleteCampaign(adId, headline);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    child: const Text(
+                      'Dừng & Xóa',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ],
         ),
-        content: Text(
-          'Chiến dịch "$headline" đang hoạt động.\n\nBạn có muốn dừng và xóa chiến dịch này không?',
-          style: const TextStyle(fontSize: 16, height: 1.5, color: Colors.black87),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Hủy', style: TextStyle(color: Colors.grey)),
-          ),
-          Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              gradient: const LinearGradient(
-                colors: [Color(0xFFFF9500), Color(0xFFFF5E3A)],
-              ),
-            ),
-            child: ElevatedButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                _stopAndDeleteCampaign(adId, headline);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.transparent,
-                shadowColor: Colors.transparent,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              ),
-              child: const Text(
-                'Dừng & Xóa',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -702,61 +960,85 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   void _showDeleteConfirmation(BuildContext context, int adId, String headline) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          backgroundColor: Colors.white.withOpacity(0.95),
+          surfaceTintColor: Colors.transparent,
+          contentPadding: const EdgeInsets.all(24),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.red.shade400, Colors.red.shade600],
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(Icons.warning_rounded, color: Colors.white, size: 24),
               ),
-              child: const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 24),
+              const SizedBox(width: 12),
+              const Text(
+                'Xóa chiến dịch?',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+              ),
+            ],
+          ),
+          content: Text(
+            'Bạn có chắc muốn xóa chiến dịch:\n\n"$headline"\n\nHành động này không thể hoàn tác.',
+            style: const TextStyle(fontSize: 15, height: 1.5, color: Colors.black87),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+              child: const Text(
+                'Hủy',
+                style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600, fontSize: 16),
+              ),
             ),
-            const SizedBox(width: 12),
-            const Text(
-              'Xóa chiến dịch?',
-              style: TextStyle(fontWeight: FontWeight.w600),
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                gradient: LinearGradient(
+                  colors: [Colors.red.shade400, Colors.red.shade600],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.red.withOpacity(0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _deleteCampaign(adId);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                    child: const Text(
+                      'Xóa',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ],
         ),
-        content: Text(
-          'Bạn có chắc muốn xóa chiến dịch:\n\n"$headline"\n\nHành động này không thể hoàn tác.',
-          style: const TextStyle(fontSize: 16, height: 1.5, color: Colors.black87),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Hủy', style: TextStyle(color: Colors.grey)),
-          ),
-          Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              gradient: const LinearGradient(
-                colors: [Color(0xFFFF3B30), Color(0xFFFF2D55)],
-              ),
-            ),
-            child: ElevatedButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                _deleteCampaign(adId);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.transparent,
-                shadowColor: Colors.transparent,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              ),
-              child: const Text(
-                'Xóa',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -768,7 +1050,6 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
       if (accessToken == null) throw Exception("Chưa đăng nhập");
       _showSnackBar('Đang dừng chiến dịch...', isError: false);
       await Future.delayed(const Duration(milliseconds: 500));
-
       _deleteCampaign(adId);
     } catch (e) {
       if (mounted) {
@@ -778,9 +1059,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   }
 
   Future<void> _deleteCampaign(int adId) async {
-    setState(() {
-      _deletingItems[adId] = true;
-    });
+    setState(() => _deletingItems[adId] = true);
     await Future.delayed(const Duration(milliseconds: 350));
 
     try {
@@ -804,10 +1083,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
 
       _loadData();
     } catch (e) {
-      setState(() {
-        _deletingItems.remove(adId);
-      });
-
+      setState(() => _deletingItems.remove(adId));
       if (mounted) {
         _showSnackBar('Xóa thất bại: ${e.toString().replaceFirst('Exception: ', '')}', isError: true);
       }
@@ -817,12 +1093,38 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   void _showSnackBar(String message, {bool isError = true}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? Colors.red : Colors.green,
+        content: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                isError ? Icons.error_rounded : Icons.check_circle_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: isError ? Colors.red.shade400 : Colors.green.shade400,
         duration: const Duration(seconds: 3),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         margin: const EdgeInsets.all(16),
+        elevation: 8,
       ),
     );
   }
@@ -831,57 +1133,126 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     return Column(
       children: List.generate(
         3,
-            (_) => Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 60,
-                height: 60,
+            (index) => Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(22),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+              child: Container(
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF2F2F7),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(22),
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.white.withOpacity(0.6),
+                      Colors.white.withOpacity(0.4),
+                    ],
+                  ),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.3),
+                    width: 1.5,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   children: [
-                    Container(
-                      height: 16,
-                      width: 120,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF2F2F7),
-                        borderRadius: BorderRadius.circular(4),
+                    AnimatedBuilder(
+                      animation: _shimmerController,
+                      builder: (context, child) {
+                        return Container(
+                          width: 70,
+                          height: 70,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            gradient: LinearGradient(
+                              begin: Alignment(-1.0 + (_shimmerController.value * 3), 0),
+                              end: Alignment(1.0 + (_shimmerController.value * 3), 0),
+                              colors: [
+                                Colors.grey.shade200,
+                                Colors.grey.shade100,
+                                Colors.grey.shade200,
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          AnimatedBuilder(
+                            animation: _shimmerController,
+                            builder: (context, child) {
+                              return Container(
+                                height: 18,
+                                width: 140,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
+                                  gradient: LinearGradient(
+                                    begin: Alignment(-1.0 + (_shimmerController.value * 3), 0),
+                                    end: Alignment(1.0 + (_shimmerController.value * 3), 0),
+                                    colors: [
+                                      Colors.grey.shade200,
+                                      Colors.grey.shade100,
+                                      Colors.grey.shade200,
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 10),
+                          AnimatedBuilder(
+                            animation: _shimmerController,
+                            builder: (context, child) {
+                              return Container(
+                                height: 14,
+                                width: 90,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(6),
+                                  gradient: LinearGradient(
+                                    begin: Alignment(-1.0 + (_shimmerController.value * 3), 0),
+                                    end: Alignment(1.0 + (_shimmerController.value * 3), 0),
+                                    colors: [
+                                      Colors.grey.shade200,
+                                      Colors.grey.shade100,
+                                      Colors.grey.shade200,
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Container(
-                      height: 14,
-                      width: 80,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF2F2F7),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
+                    AnimatedBuilder(
+                      animation: _shimmerController,
+                      builder: (context, child) {
+                        return Container(
+                          width: 70,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            gradient: LinearGradient(
+                              begin: Alignment(-1.0 + (_shimmerController.value * 3), 0),
+                              end: Alignment(1.0 + (_shimmerController.value * 3), 0),
+                              colors: [
+                                Colors.grey.shade200,
+                                Colors.grey.shade100,
+                                Colors.grey.shade200,
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
               ),
-              Container(
-                width: 60,
-                height: 24,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF2F2F7),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -889,45 +1260,71 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   }
 
   Widget _buildEmptyState() {
-    return Container(
+    return Padding(
       padding: const EdgeInsets.all(40),
-      child: Column(
-        children: [
-          Container(
-            width: 80,
-            height: 80,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            padding: const EdgeInsets.all(40),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
+              borderRadius: BorderRadius.circular(28),
+              gradient: LinearGradient(
+                colors: [
+                  Colors.white.withOpacity(0.7),
+                  Colors.white.withOpacity(0.5),
+                ],
+              ),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.3),
+                width: 1.5,
+              ),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  width: 90,
+                  height: 90,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.grey.shade300, Colors.grey.shade400],
+                    ),
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(Icons.campaign_rounded, size: 45, color: Colors.white),
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'Chưa có chiến dịch nào',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black87,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Bấm nút trên để tạo chiến dịch đầu tiên',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: Colors.black.withOpacity(0.6),
+                    height: 1.4,
+                  ),
                 ),
               ],
             ),
-            child: const Icon(Icons.history, size: 40, color: Colors.grey),
           ),
-          const SizedBox(height: 20),
-          const Text(
-            'Chưa có chiến dịch nào',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Bấm nút trên để tạo chiến dịch đầu tiên',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 15,
-              color: Colors.grey,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
