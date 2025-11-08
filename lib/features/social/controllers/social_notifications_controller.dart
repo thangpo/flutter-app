@@ -27,7 +27,6 @@ class SocialNotificationsController extends ChangeNotifier {
       await _ensureAccessToken();
       final data = await repo.getNotifications(_accessToken!);
       _notifications = data;
-
       _error = null;
     } catch (e) {
       _error = e.toString();
