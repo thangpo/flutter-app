@@ -39,6 +39,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
   Widget build(BuildContext context) {
     final socialCtrl = context.watch<SocialNotificationsController>();
 
+
     // ✅ đảm bảo không lỗi build sớm
     _tabController ??= TabController(length: 2, vsync: this);
 
