@@ -19,6 +19,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_photo.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_reel.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post_color.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_search_result.dart';
 
 import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
@@ -312,6 +313,45 @@ class SocialService implements SocialServiceInterface {
     }
     ApiChecker.checkApi(resp);
     return const <SocialUser>[];
+  }
+
+  @override
+  Future<SocialSearchResult> searchEverything({
+    required String keyword,
+    int limit = 35,
+    int userOffset = 0,
+  }) async {
+    final String trimmed = keyword.trim();
+    if (trimmed.isEmpty) return const SocialSearchResult();
+
+    final resp = await socialRepository.searchSocial(
+      searchKey: trimmed,
+      limit: limit,
+      userOffset: userOffset,
+    );
+
+    if (resp.isSuccess && resp.response != null) {
+      final dynamic data = resp.response!.data;
+      final int status =
+          int.tryParse('${data is Map ? (data['api_status'] ?? 200) : 200}') ??
+              200;
+      if (status == 200) {
+        return socialRepository.parseSearchResults(
+          resp.response!,
+          userLimit: limit,
+        );
+      }
+      if (data is Map) {
+        final dynamic errors = data['errors'];
+        final dynamic errorText = errors is Map ? errors['error_text'] : null;
+        final dynamic message = errorText ?? data['message'];
+        throw Exception((message ?? 'Search failed').toString());
+      }
+      throw Exception('Search failed');
+    }
+
+    ApiChecker.checkApi(resp);
+    return const SocialSearchResult();
   }
 
   @override
