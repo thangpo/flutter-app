@@ -1,3 +1,4 @@
+// G:\flutter-app\lib\features\social\screens\call_screen.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
@@ -88,11 +89,24 @@ class _CallScreenState extends State<CallScreen> {
       // 1) TẠO PEER CONNECTION TRƯỚC (tránh NPE getTransceivers)
       final configuration = {
         'iceServers': [
-          {'urls': 'stun:stun.l.google.com:19302'},
-          // Khuyến nghị: thêm TURN của bạn để ổn định NAT sau này
-          // {'urls': 'turn:YOUR_TURN_HOST:3478', 'username': 'xxx', 'credential': 'yyy'},
+          {
+            'urls': [
+              'stun:stun.l.google.com:19302',
+              'stun:stun1.l.google.com:19302',
+            ],
+          },
+          {
+            'urls': [
+              'turn:social.vnshop247.com:3478?transport=udp',
+              'turn:social.vnshop247.com:3478?transport=tcp',
+            ],
+            'username': 'webrtc',
+            'credential': 'supersecret',
+          },
         ],
         'sdpSemantics': 'unified-plan',
+        // Debug NAT: nếu cần ép đi qua TURN, bật dòng sau
+        // 'iceTransportPolicy': 'relay',
       };
       _pc = await createPeerConnection(configuration, {});
 
