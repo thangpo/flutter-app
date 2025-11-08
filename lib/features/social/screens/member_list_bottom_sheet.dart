@@ -2,9 +2,11 @@
 import 'package:flutter/material.dart';
 import 'package:characters/characters.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
 
 typedef MemberPageLoader = Future<MemberPage> Function(String? afterCursor);
 typedef OnUserTap = void Function(SocialUser user);
+typedef OnUserIdTap = void Function(String userId);
 typedef AdminPredicate = bool Function(SocialUser user);
 
 class MemberPage {
@@ -13,18 +15,18 @@ class MemberPage {
   MemberPage({required this.users, this.nextCursor});
 }
 
-/// Màu kẻ “hairline” mặc định (xám rất nhạt giống ảnh minh hoạ)
+/// Màu kẻ “hairline” mặc định (xám rất nhạt)
 const kHairline = Color(0xFFEAEAF0);
 
 class MemberListBottomSheet extends StatefulWidget {
   final String title; // "Followers" | "Following" | "Members"
   final MemberPageLoader pageLoader;
-  final OnUserTap? onUserTap;
+  final OnUserTap? onUserTap;      // callback cũ (nhận cả SocialUser)
+  final OnUserIdTap? onUserIdTap;  // callback mới (nhận userId)
   final int? totalCount;
   final AdminPredicate? isAdmin;
 
-  /// Cho phép tuỳ chỉnh màu đường kẻ / skeleton / thanh kéo.
-  /// Nếu không truyền, sẽ dùng kHairline ở Light Mode, và White 10% ở Dark Mode.
+  /// Tuỳ chỉnh màu đường kẻ / skeleton / thanh kéo.
   final Color? separatorColor;
 
   const MemberListBottomSheet({
@@ -32,6 +34,7 @@ class MemberListBottomSheet extends StatefulWidget {
     required this.title,
     required this.pageLoader,
     this.onUserTap,
+    this.onUserIdTap,
     this.totalCount,
     this.isAdmin,
     this.separatorColor,
@@ -87,6 +90,17 @@ class _MemberListBottomSheetState extends State<MemberListBottomSheet> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  void _defaultOpenProfile(String userId) {
+    // đóng sheet trước (dùng rootNavigator để chắc chắn)
+    Navigator.of(context, rootNavigator: true).pop();
+    // push sau khi pop
+    Future.microtask(() {
+      Navigator.of(context, rootNavigator: true).push(
+        MaterialPageRoute(builder: (_) => ProfileScreen(targetUserId: userId)),
+      );
+    });
   }
 
   @override
@@ -186,22 +200,44 @@ class _MemberListBottomSheetState extends State<MemberListBottomSheet> {
                     );
                   }
                   final u = _items[index];
+
+                  void handleTap() {
+                    final id = u.id;
+                    if (id.isEmpty) return;
+                    if (widget.onUserIdTap != null) {
+                      widget.onUserIdTap!(id);
+                    } else if (widget.onUserTap != null) {
+                      widget.onUserTap!(u);
+                    } else {
+                      _defaultOpenProfile(id);
+                    }
+                  }
+
                   return ListTile(
-                    leading: CircleAvatar(
-                      radius: 22,
-                      backgroundImage: (u.avatarUrl != null && u.avatarUrl!.isNotEmpty)
-                          ? NetworkImage(u.avatarUrl!) as ImageProvider
-                          : null,
-                      child: (u.avatarUrl == null || u.avatarUrl!.isEmpty)
-                          ? Text(_initials(u.displayName ?? u.userName ?? ''))
-                          : null,
+                    leading: InkWell(
+                      onTap: handleTap,
+                      child: CircleAvatar(
+                        radius: 22,
+                        backgroundImage: (u.avatarUrl != null && u.avatarUrl!.isNotEmpty)
+                            ? NetworkImage(u.avatarUrl!) as ImageProvider
+                            : null,
+                        child: (u.avatarUrl == null || u.avatarUrl!.isEmpty)
+                            ? Text(_initials(u.displayName ?? u.userName ?? ''))
+                            : null,
+                      ),
                     ),
-                    title: Text(u.displayName ?? u.userName ?? 'Unknown'),
+                    title: InkWell(
+                      onTap: handleTap,
+                      child: Text(u.displayName ?? u.userName ?? 'Unknown'),
+                    ),
                     subtitle: (u.userName != null && u.userName!.isNotEmpty)
-                        ? Text('@${u.userName}')
+                        ? InkWell(
+                      onTap: handleTap,
+                      child: Text('@${u.userName}'),
+                    )
                         : null,
                     trailing: _buildTrailingBadge(u, theme, sep),
-                    onTap: widget.onUserTap != null ? () => widget.onUserTap!(u) : null,
+                    onTap: handleTap,
                   );
                 },
               ),

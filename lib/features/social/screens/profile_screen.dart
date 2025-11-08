@@ -118,7 +118,6 @@ class _ProfileBodyState extends State<_ProfileBody> {
     );
   }
 
-
   void _switchToAbout() {
     setState(() => _currentTab = _ProfileTab.about);
   }
@@ -708,7 +707,15 @@ class _ProfileHeaderSection extends StatelessWidget {
             final next = (start + pageSize < all.length) ? '${start + pageSize}' : null;
             return MemberPage(users: pageUsers, nextCursor: next);
           },
-          onUserTap: (u) => Navigator.of(context).pop(),
+          // === Điều hướng sang Profile khi chạm 1 user ===
+          onUserTap: (u) {
+            Navigator.of(context).pop();
+            Future.microtask(() {
+              Navigator.of(context, rootNavigator: true).push(
+                MaterialPageRoute(builder: (_) => ProfileScreen(targetUserId: u.id)),
+              );
+            });
+          },
         ),
       ),
     );
@@ -734,7 +741,15 @@ class _ProfileHeaderSection extends StatelessWidget {
             final next = (start + pageSize < all.length) ? '${start + pageSize}' : null;
             return MemberPage(users: pageUsers, nextCursor: next);
           },
-          onUserTap: (u) => Navigator.of(context).pop(),
+          // === Điều hướng sang Profile khi chạm 1 user ===
+          onUserTap: (u) {
+            Navigator.of(context).pop();
+            Future.microtask(() {
+              Navigator.of(context, rootNavigator: true).push(
+                MaterialPageRoute(builder: (_) => ProfileScreen(targetUserId: u.id)),
+              );
+            });
+          },
         ),
       ),
     );
@@ -1333,16 +1348,16 @@ Future<void> _showBlockedUsersSheet(BuildContext context) async {
     builder: (_) => FractionallySizedBox(
       heightFactor: 0.92,
       child: MemberListBottomSheet(
-        title: getTranslated('blocked_list', context) ?? 'Danh sách đã chặn',
-        totalCount: sc.blockedUsers.length,
-        pageLoader: (after) async {
-          const pageSize = 30;
-          final start = int.tryParse(after ?? '0') ?? 0;
-          final List<SocialUser> all = sc.blockedUsers.toList();
-          final pageUsers = all.skip(start).take(pageSize).toList();
-          final next = (start + pageSize < all.length) ? '${start + pageSize}' : null;
-          return MemberPage(users: pageUsers, nextCursor: next);
-        },
+          title: getTranslated('blocked_list', context) ?? 'Danh sách đã chặn',
+          totalCount: sc.blockedUsers.length,
+          pageLoader: (after) async {
+            const pageSize = 30;
+            final start = int.tryParse(after ?? '0') ?? 0;
+            final List<SocialUser> all = sc.blockedUsers.toList();
+            final pageUsers = all.skip(start).take(pageSize).toList();
+            final next = (start + pageSize < all.length) ? '${start + pageSize}' : null;
+            return MemberPage(users: pageUsers, nextCursor: next);
+          },
           onUserTap: (u) async {
             final ok = await _confirmUnblockFromList(context, u);
             if (ok == true) {
@@ -1462,10 +1477,47 @@ class _ProfilePhotosSectionState extends State<_ProfilePhotosSection> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final sc = context.read<SocialController>();
+      _kickoffInitialLoad();
       if (sc.profilePhotos.isEmpty && !sc.isLoadingProfilePhotos) {
         sc.refreshProfilePhotos(targetUserId: widget.targetUserId);
       }
     });
+  }
+  Future<void> _kickoffInitialLoad() async {
+    final sc = context.read<SocialController>();
+    final id = widget.targetUserId;
+
+    // 1) Load hồ sơ theo id (null => hồ sơ của mình)
+    await sc.loadUserProfile(targetUserId: id, force: true);
+
+    // 2) Load ảnh hồ sơ (giữ đoạn bạn đang làm, nhưng gộp về đây cho rõ ràng)
+    if (sc.profilePhotos.isEmpty && !sc.isLoadingProfilePhotos) {
+      await sc.refreshProfilePhotos(targetUserId: id);
+    }
+
+    // (tuỳ bạn) nếu có feed/bài viết/followers… thì gọi tiếp tại đây
+    // await sc.loadProfilePosts(targetUserId: id, force: true);
+    // await sc.refreshFollowers(targetUserId: id);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ProfilePhotosSection oldWidget) { // <= sửa đúng chữ ký widget
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.targetUserId != widget.targetUserId) {
+      _reloadForNewUserId();
+    }
+  }
+
+  Future<void> _reloadForNewUserId() async {
+    final sc = context.read<SocialController>();
+    final id = widget.targetUserId;
+
+    // (tuỳ chọn) nếu controller có hàm dọn state, gọi để tránh nháy dữ liệu cũ
+    // sc.resetProfileState();
+
+    await sc.loadUserProfile(targetUserId: id, force: true);
+    await sc.refreshProfilePhotos(targetUserId: id);
+    if (mounted) setState(() {}); // cập nhật UI nếu cần
   }
 
   @override

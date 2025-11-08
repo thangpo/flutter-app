@@ -8,6 +8,9 @@ import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_c
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user_profile.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 
+/// Hairline color (nhạt đúng như ảnh minh hoạ)
+const Color _kHairline = Color(0xFFE0DFE5);
+
 class EditProfileScreen extends StatefulWidget {
   final SocialUserProfile profile;
   final ValueChanged<SocialUserProfile> onSave;
@@ -283,9 +286,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final dividerColor = theme.dividerColor.withOpacity(.4);
-    final p = widget.profile;
+    // Sử dụng đúng màu hairline theo thiết kế
+    final dividerColor = _kHairline;
 
+    final p = widget.profile;
     final avatarPreview = _avatarLocalPath ?? p.avatarUrl;
     final coverPreview = _coverLocalPath ?? p.coverUrl;
 
@@ -521,8 +525,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
               // -------- Liên hệ --------
               _SectionHeader(
-                  title:
-                  getTranslated('contact', context) ?? 'Liên hệ'),
+                  title: getTranslated('contact', context) ?? 'Liên hệ'),
               _LabeledField(
                 label: getTranslated('address', context) ?? 'Địa chỉ',
                 controller: _addressCtrl,
@@ -669,7 +672,8 @@ class _SeparatorLine extends StatelessWidget {
     return Container(
       height: 8,
       margin: const EdgeInsets.symmetric(vertical: 12),
-      color: color.withOpacity(.4),
+      // dùng đúng màu hairline, KHÔNG hạ opacity như trước
+      color: color,
     );
   }
 }
@@ -719,8 +723,9 @@ class _LabeledField extends StatelessWidget {
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(
-                  color: theme.dividerColor.withOpacity(.6),
+                // đổi sang hairline
+                borderSide: const BorderSide(
+                  color: _kHairline,
                   width: 1.2,
                 ),
               ),
@@ -769,10 +774,11 @@ class _DropdownField extends StatelessWidget {
               contentPadding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+              enabledBorder: const OutlineInputBorder(
+                borderRadius: BorderRadius.all(Radius.circular(12)),
+                // đổi sang hairline
                 borderSide: BorderSide(
-                  color: theme.dividerColor.withOpacity(.6),
+                  color: _kHairline,
                   width: 1.2,
                 ),
               ),
@@ -826,10 +832,11 @@ class _DateField extends StatelessWidget {
                   suffixIcon: const Icon(Icons.calendar_month),
                   border:
                   OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                  enabledBorder: const OutlineInputBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
+                    // đổi sang hairline
                     borderSide: BorderSide(
-                      color: theme.dividerColor.withOpacity(.6),
+                      color: _kHairline,
                       width: 1.2,
                     ),
                   ),
@@ -882,10 +889,11 @@ class _PasswordField extends StatelessWidget {
               contentPadding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+              enabledBorder: const OutlineInputBorder(
+                borderRadius: BorderRadius.all(Radius.circular(12)),
+                // đổi sang hairline
                 borderSide: BorderSide(
-                  color: theme.dividerColor.withOpacity(.6),
+                  color: _kHairline,
                   width: 1.2,
                 ),
               ),
