@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 
 import 'package:flutter/material.dart';
@@ -18,6 +19,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_reel.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post_color.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_search_result.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/post_background_presets.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_live_repository.dart';
 
@@ -65,6 +67,8 @@ class SocialController with ChangeNotifier {
 
   String? _savedAfterId;
   static const int _savedPostsPageSize = 10;
+  static const int _searchPageSize = 20;
+  static const Duration _searchDebounceDuration = Duration(milliseconds: 450);
 
   String? _accessToken;
   String? get accessToken => _accessToken;
@@ -81,6 +85,100 @@ class SocialController with ChangeNotifier {
 
   String? _followersAfter; // cursor/offset trang tiếp theo
   String? _followingAfter;
+  // --- SEARCH STATE ---
+  Timer? _searchDebounce;
+  int _searchRequestId = 0;
+  String _searchKeyword = '';
+  bool _searchLoadingState = false;
+  SocialSearchResult _searchResult = const SocialSearchResult();
+  String? _searchError;
+
+  String get searchKeyword => _searchKeyword;
+  bool get searchLoading => _searchLoadingState;
+  SocialSearchResult get searchResult => _searchResult;
+  String? get searchError => _searchError;
+  bool get hasSearchQuery => _searchKeyword.trim().isNotEmpty;
+
+  void updateSearchKeyword(String value, {bool immediate = false}) {
+    _searchKeyword = value;
+    _searchError = null;
+    _searchDebounce?.cancel();
+
+    if (_searchKeyword.trim().isEmpty) {
+      _searchResult = const SocialSearchResult();
+      _searchLoadingState = false;
+      notifyListeners();
+      return;
+    }
+
+    if (immediate) {
+      _performSearch();
+    } else {
+      _searchDebounce = Timer(
+        _searchDebounceDuration,
+        () => _performSearch(),
+      );
+    }
+    notifyListeners();
+  }
+
+  Future<SocialSearchResult> searchNow(String keyword) {
+    _searchDebounce?.cancel();
+    _searchKeyword = keyword;
+    return _performSearch();
+  }
+
+  Future<SocialSearchResult> refreshSearchResults() {
+    _searchDebounce?.cancel();
+    return _performSearch();
+  }
+
+  void clearSearch() {
+    _searchDebounce?.cancel();
+    _searchKeyword = '';
+    _searchResult = const SocialSearchResult();
+    _searchError = null;
+    _searchLoadingState = false;
+    notifyListeners();
+  }
+
+  Future<SocialSearchResult> _performSearch() async {
+    final String query = _searchKeyword.trim();
+    _searchError = null;
+    if (query.isEmpty) {
+      _searchResult = const SocialSearchResult();
+      _searchLoadingState = false;
+      notifyListeners();
+      return _searchResult;
+    }
+
+    final int requestId = ++_searchRequestId;
+    _searchLoadingState = true;
+    notifyListeners();
+
+    try {
+      final SocialSearchResult result = await service.searchEverything(
+        keyword: query,
+        limit: _searchPageSize,
+      );
+      if (_searchRequestId == requestId) {
+        _searchResult = result;
+        _searchError = null;
+      }
+      return result;
+    } catch (e) {
+      if (_searchRequestId == requestId) {
+        _searchError = e.toString();
+      }
+      return const SocialSearchResult();
+    } finally {
+      if (_searchRequestId == requestId) {
+        _searchLoadingState = false;
+        notifyListeners();
+      }
+    }
+  }
+
 //new 11/04/2025
   final Set<String> _blockBusy = {};
   bool isBlockBusy(String userId) => _blockBusy.contains(userId);
@@ -407,7 +505,7 @@ class SocialController with ChangeNotifier {
 
           // Tuỳ luật: chặn thì coi như không còn follow nhau → có thể trừ số ngay (optimistic)
           final wasFollowingMe = cur.isFollowingMe == true;
-          final wasIFollow     = cur.isFollowing   == true;
+          final wasIFollow = cur.isFollowing == true;
 
           _profileHeaderUser = cur.copyWith(
             isBlocked: true,
@@ -422,7 +520,8 @@ class SocialController with ChangeNotifier {
         } else {
           // Bỏ chặn: khôi phục từ snapshot (nếu hệ thống/luật của bạn giữ follow sau unblock)
           final snap = _preBlock.remove(id);
-          const restoreFollowRelation = true; // đổi false nếu KHÔNG muốn khôi phục follow
+          const restoreFollowRelation =
+              true; // đổi false nếu KHÔNG muốn khôi phục follow
 
           _profileHeaderUser = cur.copyWith(
             isBlocked: false,
@@ -439,13 +538,13 @@ class SocialController with ChangeNotifier {
         }
       }
 
-
       // (Tuỳ chọn) Nếu muốn đồng bộ list followers/following trong trang profile:
       // nếu blocked thì loại user khỏi danh sách… (bạn có thể bỏ nếu backend tự xử)
       if (blocked) {
         _blockedIds.add(id);
         if (!_blockedUsers.any((u) => u.id == id)) {
-          final src = (_profileHeaderUser?.id == id) ? _profileHeaderUser : null;
+          final src =
+              (_profileHeaderUser?.id == id) ? _profileHeaderUser : null;
           // tạo list mới để đổi reference
           _blockedUsers = [
             SocialUser(
@@ -2364,8 +2463,8 @@ class SocialController with ChangeNotifier {
   /// Load profile đầy đủ (user + followers + following + liked_pages + posts)
   Future<void> loadUserProfile({
     String? targetUserId,
-    bool force = false,            // kéo-to-refresh => true
-    bool useCache = true,          // vào lại màn => true
+    bool force = false, // kéo-to-refresh => true
+    bool useCache = true, // vào lại màn => true
     bool backgroundRefresh = true, // có cache cũ thì refresh ngầm
   }) async {
     final String? id = targetUserId ?? _currentUser?.id;
@@ -2382,10 +2481,10 @@ class SocialController with ChangeNotifier {
     if (useCache && hasCache && !force) {
       // render ngay dữ liệu cũ
       _profileHeaderUser = cached!.user;
-      _followers         = List<SocialUser>.from(cached.followers);
-      _following         = List<SocialUser>.from(cached.following);
-      _likedPages        = List<dynamic>.from(cached.likedPages);
-      _profilePosts      = List<SocialPost>.from(cached.posts);
+      _followers = List<SocialUser>.from(cached.followers);
+      _following = List<SocialUser>.from(cached.following);
+      _likedPages = List<dynamic>.from(cached.likedPages);
+      _profilePosts = List<SocialPost>.from(cached.posts);
       _lastProfilePostId = cached.lastPostId;
       notifyListeners();
 
@@ -2409,6 +2508,7 @@ class SocialController with ChangeNotifier {
 
     await _refreshProfileFromNetwork(id: id, showError: true);
   }
+
   Future<void> _refreshProfileFromNetwork({
     required String id,
     bool showError = false,
@@ -2431,9 +2531,9 @@ class SocialController with ChangeNotifier {
       ]);
 
       // 3) Followers/Following/LikedPages từ bundle
-      _followers   = bundle.followers;
-      _following   = bundle.following;
-      _likedPages  = bundle.likedPages;
+      _followers = bundle.followers;
+      _following = bundle.following;
+      _likedPages = bundle.likedPages;
 
       // 4) Posts trang 1
       if (bundle.user != null && bundle.user!.id.isNotEmpty) {
@@ -2450,13 +2550,15 @@ class SocialController with ChangeNotifier {
       }
 
       // 5) (tuỳ chọn) sync _currentUser một phần khi là profile của mình
-      if (id == _currentUser?.id && _currentUser != null && bundle.user != null) {
+      if (id == _currentUser?.id &&
+          _currentUser != null &&
+          bundle.user != null) {
         _currentUser = SocialUser(
           id: _currentUser!.id,
           displayName: bundle.user!.displayName ?? _currentUser!.displayName,
-          userName:    bundle.user!.userName    ?? _currentUser!.userName,
-          avatarUrl:   bundle.user!.avatarUrl   ?? _currentUser!.avatarUrl,
-          coverUrl:    bundle.user!.coverUrl    ?? _currentUser!.coverUrl,
+          userName: bundle.user!.userName ?? _currentUser!.userName,
+          avatarUrl: bundle.user!.avatarUrl ?? _currentUser!.avatarUrl,
+          coverUrl: bundle.user!.coverUrl ?? _currentUser!.coverUrl,
         );
       }
 
@@ -2480,8 +2582,6 @@ class SocialController with ChangeNotifier {
       notifyListeners();
     }
   }
-
-
 
   /// Load more profile posts (pagination)
   Future<void> loadMoreProfilePosts({
@@ -2546,6 +2646,12 @@ class SocialController with ChangeNotifier {
 
     notifyListeners();
   }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    super.dispose();
+  }
 }
 
 // ========== HELPER CLASSES ==========
@@ -2590,19 +2696,22 @@ class _PendingStoryReaction {
 
   const _PendingStoryReaction({required this.reaction});
 }
+
 class _PreBlockSnapshot {
   final bool? isFollowing;
   final int? followersCount;
   final int? followingCount;
-  const _PreBlockSnapshot({this.isFollowing, this.followersCount, this.followingCount});
+  const _PreBlockSnapshot(
+      {this.isFollowing, this.followersCount, this.followingCount});
 }
 
 final Map<String, _PreBlockSnapshot> _preBlock = <String, _PreBlockSnapshot>{};
+
 class _ProfileBundleCache {
   final SocialUserProfile? user;
   final List<SocialUser> followers;
   final List<SocialUser> following;
-  final List<dynamic> likedPages;   // giữ nguyên kiểu bạn đang dùng
+  final List<dynamic> likedPages; // giữ nguyên kiểu bạn đang dùng
   final List<SocialPost> posts;
   final String? lastPostId;
   final DateTime fetchedAt;
@@ -2617,7 +2726,8 @@ class _ProfileBundleCache {
   });
 }
 
-final Map<String, _ProfileBundleCache> _profileCache = <String, _ProfileBundleCache>{};
+final Map<String, _ProfileBundleCache> _profileCache =
+    <String, _ProfileBundleCache>{};
 Duration get _profileTTL => const Duration(minutes: 5);
 
 bool _isProfileStale(String id) {

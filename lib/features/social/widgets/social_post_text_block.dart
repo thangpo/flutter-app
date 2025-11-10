@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/mention_formatter.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/post_background_presets.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_post_full_with_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 
-class SocialPostTextBlock extends StatelessWidget {
+class SocialPostTextBlock extends StatefulWidget {
   final SocialPost post;
   final EdgeInsetsGeometry padding;
   final bool compact;
@@ -19,50 +20,100 @@ class SocialPostTextBlock extends StatelessWidget {
     this.padding = const EdgeInsets.symmetric(horizontal: 12),
     this.compact = false,
   });
+  @override
+  State<SocialPostTextBlock> createState() => _SocialPostTextBlockState();
+}
 
-  bool get _hasText => (post.text ?? '').trim().isNotEmpty;
-
-  bool _canUseBackground(PostBackgroundPreset? preset) {
-    if (preset == null) return false;
-    if ((post.videoUrl ?? '').isNotEmpty) return false;
-    if ((post.fileUrl ?? '').isNotEmpty) return false;
-    if ((post.audioUrl ?? '').isNotEmpty) return false;
-    if ((post.pollOptions?.isNotEmpty ?? false)) return false;
-    if (post.sharedPost != null) return false;
-    if (post.hasProduct) return false;
-    return true;
+class _SocialPostTextBlockState extends State<SocialPostTextBlock> {
+  static const int _seeMoreCharThreshold = 160;
+  static const int _collapsedMaxLines = 6;
+  bool _expanded = false;
+  bool get _hasText => (widget.post.text ?? '').trim().isNotEmpty;
+  int get _imageCount =>
+      SocialPostFullViewComposer.normalizeImages(widget.post).length;
+  bool get _hasMultipleImages => _imageCount >= 2;
+  String get _plainTextContent {
+    final raw = widget.post.text ?? '';
+    if (raw.isEmpty) return raw;
+    final withoutTags =
+        raw.replaceAll(RegExp(r'<[^>]*>', multiLine: true), ' ');
+    return withoutTags.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
+
+  bool get _shouldOfferSeeMore =>
+      _plainTextContent.length > _seeMoreCharThreshold;
 
   @override
   Widget build(BuildContext context) {
     if (!_hasText) return const SizedBox.shrink();
-    final SocialController controller = context.watch<SocialController>();
-    final String formatted = MentionFormatter.decorate(
-      post.text!,
+    final controller = context.watch<SocialController>();
+    final formatted = MentionFormatter.decorate(
+      widget.post.text!,
       controller,
-      mentions: post.mentions,
+      mentions: widget.post.mentions,
     );
-    final Color onSurface = Theme.of(context).colorScheme.onSurface;
-    final PostBackgroundPreset? preset =
-        controller.findBackgroundPreset(post.backgroundColorId);
-    final String? bgId = post.backgroundColorId;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final preset =
+        controller.findBackgroundPreset(widget.post.backgroundColorId);
+    final bgId = widget.post.backgroundColorId;
     if (preset == null && bgId != null && bgId.isNotEmpty) {
       controller.ensureBackgroundPreset(bgId);
     }
-    final bool hasBackground = _canUseBackground(preset);
+    final backgroundAllowed =
+        SocialPostFullViewComposer.allowsBackground(widget.post);
+    final hasBackground = backgroundAllowed && preset != null;
+    final enforceCompactBackground =
+        hasBackground && _hasMultipleImages && !_expanded;
+    final showSeeMoreButton = enforceCompactBackground && _shouldOfferSeeMore;
     final Widget richText = hasBackground
-        ? _buildBackgroundText(context, formatted, preset!)
+        ? _buildBackgroundText(
+            context,
+            formatted,
+            preset!,
+            limitHeight: enforceCompactBackground,
+          )
         : _buildPlainText(context, formatted, onSurface, TextAlign.start);
     if (hasBackground) {
-      return MediaQuery.removePadding(
+      final backgroundBlock = MediaQuery.removePadding(
         context: context,
         removeLeft: true,
         removeRight: true,
         child: richText,
       );
-    } else {
-      return Padding(padding: padding, child: richText);
+      final tappableBackground = GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => SocialPostFullWithScreen.open(
+          context,
+          post: widget.post,
+          focus: SocialPostFullItemType.background,
+        ),
+        child: backgroundBlock,
+      );
+      if (showSeeMoreButton) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            tappableBackground,
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () {
+                  if (_expanded) return;
+                  setState(() => _expanded = true);
+                },
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Text(getTranslated('see_more', context) ?? 'Xem thêm'),
+              ),
+            ),
+          ],
+        );
+      }
+      return tappableBackground;
     }
+    return Padding(padding: widget.padding, child: richText);
   }
 
   Widget _buildPlainText(
@@ -71,7 +122,7 @@ class SocialPostTextBlock extends StatelessWidget {
     Color textColor,
     TextAlign align,
   ) {
-    final double fontSize = compact ? 14 : 15;
+    final double fontSize = widget.compact ? 14 : 15;
     return Html(
       data: data,
       style: {
@@ -107,49 +158,34 @@ class SocialPostTextBlock extends StatelessWidget {
   Widget _buildBackgroundText(
     BuildContext context,
     String data,
-    PostBackgroundPreset preset,
-  ) {
-    final int len = post.text!.trim().length;
-
-    // font + padding như bạn đã đặt
+    PostBackgroundPreset preset, {
+    required bool limitHeight,
+  }) {
+    final int len = widget.post.text!.trim().length;
     final double fontSize;
     final double verticalPadding;
     if (len <= 80) {
-      fontSize = compact ? 20 : 26;
-      verticalPadding = compact ? 48 : 64;
+      fontSize = widget.compact ? 20 : 26;
+      verticalPadding = limitHeight ? 32 : (widget.compact ? 48 : 64);
     } else if (len <= 180) {
-      fontSize = compact ? 18 : 22;
-      verticalPadding = compact ? 40 : 52;
+      fontSize = widget.compact ? 18 : 22;
+      verticalPadding = limitHeight ? 28 : (widget.compact ? 40 : 52);
     } else if (len <= 300) {
-      fontSize = compact ? 16 : 20;
-      verticalPadding = compact ? 28 : 40;
+      fontSize = widget.compact ? 16 : 20;
+      verticalPadding = limitHeight ? 24 : (widget.compact ? 28 : 40);
     } else {
-      fontSize = compact ? 14 : 18;
-      verticalPadding = compact ? 24 : 32;
+      fontSize = widget.compact ? 14 : 18;
+      verticalPadding = limitHeight ? 20 : (widget.compact ? 24 : 32);
     }
-
-    // Tỉ lệ “như ảnh”
-    // - Rất ngắn: vuông 1:1
-    // - Trung bình: 4:5 (0.8)
-    // - Dài: không ép (chỉ còn padding dọc)
-    double aspectFactor = 1.0;
-    // if (len <= 80) {
-    //   aspectFactor = 1.0; // vuông
-    // } else if (len <= 180) {
-    //   aspectFactor = 0.8; // 4:5
-    // } else {
-    //   aspectFactor = 0.0; // không ép minHeight
-    // }
-
+    final double aspectFactor = limitHeight ? 0.5 : 1.0;
     return LayoutBuilder(
       builder: (context, constraints) {
         final double width = constraints.maxWidth;
         final double minH = aspectFactor > 0 ? width * aspectFactor : 0;
-
         return ConstrainedBox(
           constraints: BoxConstraints(
             minWidth: double.infinity,
-            minHeight: minH, // <-- chiều cao mặc định “như ảnh”
+            minHeight: minH,
           ),
           child: Container(
             width: double.infinity,
@@ -158,7 +194,7 @@ class SocialPostTextBlock extends StatelessWidget {
               vertical: verticalPadding,
             ),
             decoration: preset.decoration(),
-            alignment: Alignment.center, // canh giữa theo chiều dọc
+            alignment: Alignment.center,
             child: Html(
               data: data,
               style: {
@@ -170,8 +206,9 @@ class SocialPostTextBlock extends StatelessWidget {
                   padding: HtmlPaddings.symmetric(horizontal: 20),
                   textAlign: TextAlign.center,
                   fontWeight: FontWeight.w600,
-                  // (tuỳ chọn) hạn chế độ rộng nội dung để chữ không quá dài
-                  // maxLines: null,
+                  maxLines: limitHeight ? _collapsedMaxLines : null,
+                  textOverflow:
+                      limitHeight ? TextOverflow.ellipsis : TextOverflow.clip,
                 ),
                 'a.tagged-user': Style(
                   color: preset.textColor,

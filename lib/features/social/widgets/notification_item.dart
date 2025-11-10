@@ -74,7 +74,8 @@ class _NotificationItemState extends State<NotificationItem> {
       behavior: HitTestBehavior.opaque,
       onHorizontalDragUpdate: _onHDragUpdate,
       onHorizontalDragEnd: _onHDragEnd,
-      onTap: _handleTap, // 👈 điều hướng nằm ở đây (trong widget con)
+      onTap: _handleTap,
+      // 👈 điều hướng nằm ở đây (trong widget con)
       child: Stack(
         children: [
           // --- nút XÓA ---
@@ -155,8 +156,10 @@ class _NotificationItemState extends State<NotificationItem> {
                         ),
                         padding: const EdgeInsets.all(0),
                         child: (n.type == 'reaction')
-                            ? igReactionBadge(n.type2, badge: 20) // hoặc 18 nếu thích nhỏ hơn
-                            : Icon(_iconByType(n.type), color: _colorByType(n.type), size: 14),
+                            ? igReactionBadge(n.type2,
+                            badge: 20) // hoặc 18 nếu thích nhỏ hơn
+                            : Icon(_iconByType(n.type),
+                            color: _colorByType(n.type), size: 14),
                       ),
                     ),
                   ],
@@ -229,8 +232,7 @@ class _NotificationItemState extends State<NotificationItem> {
     await context
         .read<SocialNotificationsController>()
         .getNotificationDetail(n.id);
-    debugPrint(
-        '[NOTI] $n');
+    debugPrint('[NOTI] $n');
 
     // 🟣 1️⃣ Story trước
     if (n.type == 'viewed_story' ||
@@ -239,23 +241,24 @@ class _NotificationItemState extends State<NotificationItem> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => SocialStoryViewerScreen(
-            stories: [
-              SocialStory(
-                id: n.storyId ?? '',
-                userId: n.notifierId,
-                userName: n.name ?? '',
-                userAvatar: n.avatar ?? '',
-                items: [
-                  SocialStoryItem(
+          builder: (_) =>
+              SocialStoryViewerScreen(
+                stories: [
+                  SocialStory(
                     id: n.storyId ?? '',
-                    mediaUrl: '',
-                    description: '',
+                    userId: n.recipientId,
+                    userName: n.name ?? '',
+                    userAvatar: n.avatar ?? '',
+                    items: [
+                      SocialStoryItem(
+                        id: n.storyId ?? '',
+                        mediaUrl: '',
+                        description: '',
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
-          ),
         ),
       );
       return;
@@ -271,13 +274,14 @@ class _NotificationItemState extends State<NotificationItem> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => SocialPostDetailScreen(
-              post: SocialPost(
-                id: n.postId.toString(),
-                reactionCount: 0,
-                myReaction: '',
-              ),
-            ),
+            builder: (_) =>
+                SocialPostDetailScreen(
+                  post: SocialPost(
+                    id: n.postId.toString(),
+                    reactionCount: 0,
+                    myReaction: '',
+                  ),
+                ),
           ),
         );
         return;
@@ -311,71 +315,64 @@ class _NotificationItemState extends State<NotificationItem> {
             : "đã thả cảm xúc vào bài viết của bạn.";
       case 'comment':
         return "đã bình luận vào bài viết của bạn.";
+      case 'comment_reply':
+        return "đã trả lời bình luận của bạn.";
       case 'shared_your_post':
         return "đã chia sẻ bài viết của bạn.";
+      case 'post_mention':
+        return "đã nhắc đến bạn trong một bài viết.";
+      case 'visited_profile':
+        return "đã ghé thăm trang cá nhân của bạn.";
+      case 'invited_you_to_the_group':
+        return "đã mời bạn tham gia nhóm.";
       case 'following':
         return "đã bắt đầu theo dõi bạn.";
       case 'viewed_story':
         return "đã xem story của bạn.";
-      case 'comment_reply':
-        return "đã trả lời bình luận của bạn.";
       default:
         return "đã tương tác với bạn.";
     }
   }
+
+  // Badge reaction dùng Material icons, màu giống Facebook, đồng kích thước
   static Widget igReactionBadge(String? type2, {double badge = 20}) {
     final t = (type2 ?? '').trim();
 
-    // map icon + gradient (Instagram vibe)
     final icon = <String, IconData>{
-      '1': Icons.thumb_up_alt_rounded,                 // Like
-      '2': Icons.favorite_rounded,                     // Tym
-      '3': Icons.emoji_emotions_rounded,               // Haha
-      '4': Icons.sentiment_very_satisfied_rounded,     // Wow
-      '5': Icons.sentiment_dissatisfied_rounded,       // Buồn
-      '6': Icons.sentiment_very_dissatisfied_rounded,  // Phẫn nộ
+      '1': Icons.thumb_up_alt_rounded,
+      '2': Icons.favorite_rounded,
+      '3': Icons.emoji_emotions_rounded,
+      '4': Icons.sentiment_very_satisfied_rounded,
+      '5': Icons.sentiment_dissatisfied_rounded,
+      '6': Icons.sentiment_very_dissatisfied_rounded,
     }[t] ?? Icons.favorite_border_rounded;
 
-    final colors = <String, List<Color>>{
-      '1': const [Color(0xFF56CCF2), Color(0xFF2F80ED)], // xanh ngọc → xanh biển
-      '2': const [Color(0xFFFF6CAB), Color(0xFFFF3A5A)], // hồng → đỏ neon
-      '3': const [Color(0xFFFFD200), Color(0xFFFFA751)], // vàng → cam nhạt
-      '4': const [Color(0xFFB24592), Color(0xFFF15F79)], // tím → hồng (story)
-      '5': const [Color(0xFF536976), Color(0xFF292E49)], // xanh lạnh → tím xám
-      '6': const [Color(0xFFFF512F), Color(0xFFF09819)], // đỏ cam → vàng cháy
-    }[t] ?? const [Color(0xFFFF6CAB), Color(0xFFFF3A5A)];
-
-    final iconSize = badge - 10; // ~10px khi badge=20 (đồng kích thước với icon 14px)
+    final color = <String, Color>{
+      '1': const Color(0xFF1877F2),
+      '2': const Color(0xFFF02849),
+      '3': const Color(0xFFF7B928),
+      '4': const Color(0xFFF7B928),
+      '5': const Color(0xFF536976),
+      '6': const Color(0xFFE9710F),
+    }[t] ?? const Color(0xFFF02849);
 
     return Container(
       width: badge,
       height: badge,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: LinearGradient(
-          colors: colors,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: Colors.white,
+        border: Border.all(color: Colors.white, width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: colors.last.withOpacity(0.30),
-            blurRadius: 3,
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 2,
             offset: const Offset(0, 1),
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(2.0), // độ dày vòng gradient
-        child: Container(
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white, // lõi trắng
-          ),
-          child: Center(
-            child: Icon(icon, size: iconSize, color: colors.last),
-          ),
-        ),
+      child: Center(
+        child: Icon(icon, size: badge - 8, color: color),
       ),
     );
   }
@@ -383,60 +380,54 @@ class _NotificationItemState extends State<NotificationItem> {
 
   static IconData _iconByType(String type, [String? type2]) {
     switch (type) {
-      case 'comment': return Icons.mode_comment_rounded;
-      case 'shared_your_post': return Icons.share_rounded;
-      case 'following': return Icons.person_add_rounded;
-      case 'viewed_story': return Icons.visibility_rounded;
-      case 'comment_reply': return Icons.reply_rounded;
-      default: return Icons.notifications_rounded;
+      case 'reaction':
+        return Icons.thumb_up_alt_rounded;
+      case 'comment':
+        return Icons.mode_comment_rounded;
+      case 'comment_reply':
+        return Icons.reply_rounded;
+      case 'shared_your_post':
+        return Icons.share_rounded;
+      case 'post_mention':
+        return Icons.alternate_email_rounded;
+      case 'visited_profile':
+        return Icons.person_pin_rounded;
+      case 'invited_you_to_the_group':
+        return Icons.group_add_rounded;
+      case 'following':
+        return Icons.person_add_rounded;
+      case 'viewed_story':
+        return Icons.visibility_rounded;
+      default:
+        return Icons.notifications_rounded;
     }
   }
 
   static Color _colorByType(String type, [String? type2]) {
     switch (type) {
-      case 'comment': return Colors.blueAccent;
-      case 'shared_your_post': return Colors.green;
-      case 'following': return Colors.orange;
-      case 'viewed_story': return Colors.purple;
-      case 'comment_reply': return Colors.indigo;
-      default: return Colors.grey;
-    }
-  }
-
-  // URL parsers cho WoWonder
-  // ex: https://.../post/325&ref=57 → 325
-  int? _extractPostId(String url) {
-    try {
-      final m = RegExp(r'/post/(\d+)').firstMatch(url);
-      return m != null ? int.tryParse(m.group(1)!) : null;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  // lấy query param từ url (ví dụ story_id)
-  String? _extractQuery(String url, String key) {
-    try {
-      final u = Uri.parse(url);
-      return u.queryParameters[key];
-    } catch (_) {
-      return null;
+      case 'reaction':
+        return const Color(0xFF1877F2); // Xanh FB
+      case 'comment':
+        return Colors.blueAccent;
+      case 'comment_reply':
+        return Colors.indigo;
+      case 'shared_your_post':
+        return Colors.green;
+      case 'post_mention':
+        return Colors.purple;
+      case 'visited_profile':
+        return Colors.teal;
+      case 'invited_you_to_the_group':
+        return Colors.orange;
+      case 'following':
+        return Colors.deepOrange;
+      case 'viewed_story':
+        return Colors.pinkAccent;
+      default:
+        return Colors.grey;
     }
   }
 }
 
-// ===================== PLACEHOLDER Post Detail =====================
-class _PostDetailPlaceholder extends StatelessWidget {
-  final int postId;
-  const _PostDetailPlaceholder({required this.postId});
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('Bài viết #$postId')),
-      body: Center(
-        child: Text('TODO: hiển thị chi tiết bài viết ID = $postId'),
-      ),
-    );
-  }
-}
+

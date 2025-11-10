@@ -8,6 +8,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_photo.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_reel.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post_color.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_search_result.dart';
 
 abstract class SocialServiceInterface {
   Future<List<SocialPost>> getNewsFeed({int limit, String? afterPostId});
@@ -102,6 +103,11 @@ abstract class SocialServiceInterface {
   Future<List<SocialUser>> searchUsers({
     required String keyword,
     int limit,
+  });
+  Future<SocialSearchResult> searchEverything({
+    required String keyword,
+    int limit = 35,
+    int userOffset = 0,
   });
   Future<SocialUser?> getUserById({required String userId});
   Future<SocialUser?> getUserByUsername({required String username});

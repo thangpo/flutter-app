@@ -15,6 +15,9 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_feed_page.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user_profile.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group_join_request.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_page.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_channel.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_search_result.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/social_feeling_constants.dart';
 
 bool _isImageUrl(String url) {
@@ -3107,6 +3110,69 @@ class SocialRepository {
     return users;
   }
 
+  SocialSearchResult parseSearchResults(
+    Response res, {
+    int? userLimit,
+  }) {
+    final List<SocialUser> users = parseUsers(res, max: userLimit);
+    final List<SocialGroup> groups = <SocialGroup>[];
+    final List<SocialPage> pages = <SocialPage>[];
+    final List<SocialChannel> channels = <SocialChannel>[];
+
+    void collectGroups(dynamic source) {
+      if (source is Iterable) {
+        for (final dynamic raw in source) {
+          if (raw is Map) {
+            final SocialGroup? group = _parseGroupMap(raw);
+            if (group != null) {
+              groups.add(group);
+            }
+          }
+        }
+      }
+    }
+
+    void collectPages(dynamic source) {
+      if (source is Iterable) {
+        for (final dynamic raw in source) {
+          if (raw is Map) {
+            final SocialPage? page = _parsePageMap(raw);
+            if (page != null) {
+              pages.add(page);
+            }
+          }
+        }
+      }
+    }
+
+    void collectChannels(dynamic source) {
+      if (source is Iterable) {
+        for (final dynamic raw in source) {
+          if (raw is Map) {
+            final SocialChannel? channel = _parseChannelMap(raw);
+            if (channel != null) {
+              channels.add(channel);
+            }
+          }
+        }
+      }
+    }
+
+    final dynamic data = res.data;
+    if (data is Map) {
+      collectGroups(data['groups']);
+      collectPages(data['pages']);
+      collectChannels(data['channels']);
+    }
+
+    return SocialSearchResult(
+      users: users,
+      pages: pages,
+      groups: groups,
+      channels: channels,
+    );
+  }
+
   Future<ApiResponseModel<Response>> fetchUserByUsername({
     required String username,
   }) async {
@@ -3181,6 +3247,115 @@ class SocialRepository {
       }
     }
     return const <dynamic>[];
+  }
+
+  SocialPage? _parsePageMap(Map raw) {
+    if (raw.isEmpty) return null;
+    final map = Map<String, dynamic>.from(raw);
+
+    final String? id =
+        _normalizeString(map['page_id'] ?? map['id'] ?? map['pageId']);
+    if (id == null || id.isEmpty) return null;
+
+    String? resolvedName = _normalizeString(
+        map['name'] ?? map['page_title'] ?? map['title'] ?? map['page_name']);
+    resolvedName ??= _normalizeString(map['username']);
+    resolvedName ??= id;
+
+    final String? title =
+        _normalizeString(map['page_title'] ?? map['title']) ?? resolvedName;
+    final String? username =
+        _normalizeString(map['page_name'] ?? map['username']);
+    final String? about = _normalizeString(map['about']);
+    final String? description =
+        _normalizeString(map['page_description'] ?? map['description']);
+    final String? category =
+        _normalizeString(map['category'] ?? map['page_category']);
+    final String? subCategory =
+        _normalizeString(map['sub_category'] ?? map['page_sub_category']);
+    final String? avatar =
+        _normalizeMediaUrl(map['avatar_full'] ?? map['avatar']);
+    final String? cover = _normalizeMediaUrl(map['cover_full'] ?? map['cover']);
+    final String? url = _absoluteUrl(
+        _normalizeString(map['url'] ?? map['page_url'] ?? map['link']));
+    final bool isVerified = _isTruthy(map['is_verified'] ?? map['verified']);
+    final bool isOwner = _isTruthy(map['is_page_onwer'] ?? map['is_owner']);
+    final bool isAdmin = _isTruthy(map['is_admin'] ?? map['admin']);
+    final bool isLiked = _isTruthy(map['is_liked'] ?? map['liked']);
+
+    return SocialPage(
+      id: id,
+      name: resolvedName,
+      title: title,
+      username: username,
+      about: about,
+      description: description,
+      category: category,
+      subCategory: subCategory,
+      avatarUrl: avatar,
+      coverUrl: cover,
+      url: url,
+      isVerified: isVerified,
+      isOwner: isOwner,
+      isAdmin: isAdmin,
+      isLiked: isLiked,
+    );
+  }
+
+  SocialChannel? _parseChannelMap(Map raw) {
+    if (raw.isEmpty) return null;
+    final map = Map<String, dynamic>.from(raw);
+
+    final String? id =
+        _normalizeString(map['id'] ?? map['channel_id'] ?? map['channelId']);
+    if (id == null || id.isEmpty) return null;
+
+    String? resolvedName =
+        _normalizeString(map['name'] ?? map['channel_name'] ?? map['title']);
+    resolvedName ??= _normalizeString(map['username']);
+    resolvedName ??= id;
+
+    final String? title =
+        _normalizeString(map['title'] ?? map['channel_title']) ?? resolvedName;
+    final String? username =
+        _normalizeString(map['username'] ?? map['channel_name']);
+    final String? description =
+        _normalizeString(map['description'] ?? map['about'] ?? map['bio']);
+    final String? category =
+        _normalizeString(map['category'] ?? map['genre'] ?? map['type']);
+    final String? avatar = _normalizeMediaUrl(
+        map['avatar_full'] ?? map['avatar'] ?? map['picture']);
+    final String? cover = _normalizeMediaUrl(
+        map['cover_full'] ?? map['cover'] ?? map['background_image']);
+    final String? url = _absoluteUrl(
+        _normalizeString(map['url'] ?? map['channel_url'] ?? map['link']));
+    final bool isVerified = _isTruthy(map['is_verified'] ?? map['verified']);
+    final bool isOwner = _isTruthy(map['is_owner'] ?? map['owner']);
+    final bool isSubscribed = _isTruthy(
+        map['is_subscribed'] ?? map['subscribed'] ?? map['is_following']);
+    final int subscriberCount = _coerceInt(
+          map['subscribers'] ??
+              map['subscribers_count'] ??
+              map['followers'] ??
+              map['views'],
+        ) ??
+        0;
+
+    return SocialChannel(
+      id: id,
+      name: resolvedName,
+      title: title,
+      username: username,
+      description: description,
+      category: category,
+      avatarUrl: avatar,
+      coverUrl: cover,
+      url: url,
+      isVerified: isVerified,
+      isOwner: isOwner,
+      isSubscribed: isSubscribed,
+      subscriberCount: subscriberCount,
+    );
   }
 
   SocialGroup? _parseGroupMap(Map raw) {

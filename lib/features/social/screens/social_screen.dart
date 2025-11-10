@@ -13,6 +13,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/widgets/shared_post_
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_story_viewer_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/social_post_media.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_search_screen.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_sixvalley_ecommerce/features/profile/controllers/profile_contrroller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_list_screen.dart';
@@ -171,7 +172,20 @@ class _FacebookHeader extends StatelessWidget {
                 iconColor: onAppBar,
                 bubbleColor: onAppBar.withOpacity(0.08),
                 onTap: () {
-                  // TODO: n?u mu?n m? màn tìm ki?m
+                  if (token == null || token.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content:
+                            Text('Vui lòng kết nối tài khoản WoWonder trước.'),
+                      ),
+                    );
+                    return;
+                  }
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const SocialSearchScreen(),
+                    ),
+                  );
                 },
               ),
               const SizedBox(width: 12),
