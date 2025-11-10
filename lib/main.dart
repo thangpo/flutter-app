@@ -73,6 +73,16 @@ import 'package:flutter_sixvalley_ecommerce/features/social/controllers/call_con
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/webrtc_signaling_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/notification/screens/notification_screen.dart';
 
+
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_call_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/webrtc_group_signaling_repository.dart';
+import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_call_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/webrtc_group_signaling_repository.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+
+
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -416,6 +426,21 @@ Future<void> main() async {
         create: (_) => SocialNotificationsController(
           repo: SocialNotificationsRepository(),
         ),
+      ),
+      ChangeNotifierProvider(
+        create: (_) {
+          final repo = WebRTCGroupSignalingRepositoryImpl(
+            baseUrl: AppConstants.socialBaseUrl, // https://social.vnshop247.com
+            serverKey: AppConstants.socialServerKey,
+            getAccessToken: () async {
+              final sp = await SharedPreferences.getInstance();
+              return sp.getString(AppConstants.socialAccessToken);
+            },
+            endpointPath: '/api/', // ⬅️ có dấu / cuối
+          );
+
+          return GroupCallController(signaling: repo)..init();
+        },
       ),
     ],
     child: MyApp(body: body),
