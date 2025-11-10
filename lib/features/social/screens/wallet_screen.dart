@@ -141,9 +141,9 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                           child: Icon(Icons.settings, color: Colors.white, size: 24),
                         ),
                         const SizedBox(width: 12),
-                        const Text(
-                          'Cài đặt QR Code',
-                          style: TextStyle(
+                        Text(
+                          getTranslated('qr_settings', context) ?? 'Cài đặt QR Code',
+                          style: const TextStyle(
                             fontWeight: FontWeight.w600,
                             fontSize: 20,
                             color: Colors.black87,
@@ -190,7 +190,7 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Tính năng QR Code',
+                                  getTranslated('qr_feature', context) ?? 'Tính năng QR Code',
                                   style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,
@@ -199,7 +199,9 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  isQREnabled ? 'Đang bật' : 'Đang tắt',
+                                  isQREnabled
+                                      ? getTranslated('qr_enabled', context) ?? 'Đang bật'
+                                      : getTranslated('qr_disabled', context) ?? 'Đang tắt',
                                   style: TextStyle(
                                     fontSize: 14,
                                     color: isQREnabled ? Colors.greenAccent : Colors.redAccent,
@@ -222,8 +224,8 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                                   SnackBar(
                                     content: Text(
                                       value
-                                          ? 'Đã bật tính năng QR Code'
-                                          : 'Đã tắt tính năng QR Code',
+                                          ? getTranslated('qr_enabled_desc', context) ?? 'Khi bật, bạn có thể...'
+                                          : getTranslated('qr_disabled_desc', context) ?? 'Khi tắt, tính năng...',
                                     ),
                                     backgroundColor: value ? Colors.green : Colors.red,
                                     behavior: SnackBarBehavior.floating,
@@ -244,8 +246,8 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                     const SizedBox(height: 16),
                     Text(
                       isQREnabled
-                          ? 'Khi bật, bạn có thể hiển thị và quét mã QR để chia sẻ thông tin.'
-                          : 'Khi tắt, tính năng QR sẽ không khả dụng.',
+                          ? getTranslated('qr_enabled_desc', context) ?? 'Khi bật, bạn có thể...'
+                          : getTranslated('qr_disabled_desc', context) ?? 'Khi tắt, tính năng...',
                       style: TextStyle(
                         fontSize: 13,
                         color: isDark ? Colors.white.withOpacity(0.8) : Colors.black54,
@@ -266,12 +268,9 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                           ),
                           elevation: 0,
                         ),
-                        child: const Text(
-                          'Đóng',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                          ),
+                        child: Text(
+                          getTranslated('close', context) ?? 'Đóng',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
                         ),
                       ),
                     ),
@@ -304,12 +303,12 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
     if (!isQREnabled) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Tính năng QR đang bị tắt. Vui lòng bật trong cài đặt.'),
+          content: Text(getTranslated('qr_disabled_snack', context) ?? 'Tính năng QR đang bị tắt...'),
           backgroundColor: Colors.orange,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           action: SnackBarAction(
-            label: 'Cài đặt',
+            label: getTranslated('settings', context) ?? 'Cài đặt',
             textColor: Colors.white,
             onPressed: _showQRSettingsDialog,
           ),
@@ -324,7 +323,7 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
     if (userIdStr == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Không tìm thấy người dùng'),
+          content: Text(getTranslated('user_not_found', context) ?? 'Không tìm thấy người dùng'),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
@@ -498,7 +497,7 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            'Người khác có thể quét QR để lấy thông tin của bạn',
+                            getTranslated('others_can_scan_the_QR_code_to_get_your_information', context) ?? 'Người khác có thể quét QR để lấy thông tin của bạn',
                             style: TextStyle(
                               fontSize: 13,
                               color: isDark ? Colors.white.withOpacity(0.8) : Colors.black54,
@@ -521,12 +520,9 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                                 ),
                                 elevation: 0,
                               ),
-                              child: const Text(
-                                'Đóng',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 16,
-                                ),
+                              child: Text(
+                                getTranslated('close', context) ?? 'Đóng',
+                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
                               ),
                             ),
                           ),
@@ -588,12 +584,12 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
       final accessToken = await auth.authServiceInterface.getSocialAccessToken();
 
       if (userIdStr == null || accessToken == null) {
-        throw Exception("Chưa đăng nhập vào mạng xã hội");
+        throw Exception(getTranslated('not_logged_in_social', context) ?? "Chưa đăng nhập vào mạng xã hội");
       }
 
       final userId = int.tryParse(userIdStr);
       if (userId == null) {
-        throw Exception("ID người dùng không hợp lệ");
+        throw Exception(getTranslated('invalid_user_id', context) ?? "ID người dùng không hợp lệ");
       }
 
       final userData = await SocialUserService().getWalletBalance(
@@ -670,14 +666,6 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                 ),
               ),
               actions: [
-                IconButton(
-                  icon: Icon(
-                    isQREnabled ? Icons.qr_code_2 : Icons.qr_code_scanner_outlined,
-                    color: isDark ? Colors.white : Colors.black87,
-                  ),
-                  onPressed: _showQRSettingsDialog,
-                  tooltip: "Cài đặt QR",
-                ),
                 IconButton(
                   icon: Icon(
                     Icons.refresh_rounded,
@@ -905,7 +893,7 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
             if (userId == 0 || accessToken == null) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: const Text('Vui lòng đăng nhập'),
+                  content: Text(getTranslated('please_login', context) ?? 'Vui lòng đăng nhập'),
                   behavior: SnackBarBehavior.floating,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
