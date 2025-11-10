@@ -19,7 +19,7 @@ import 'package:flutter_sixvalley_ecommerce/features/splash/controllers/splash_c
 import 'package:flutter_sixvalley_ecommerce/features/splash/domain/models/config_model.dart';
 import 'package:flutter_sixvalley_ecommerce/features/wallet/controllers/wallet_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/wallet/screens/wallet_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/main.dart'; // navigatorKey, flutterLocalNotificationsPlugin, Get
 import 'package:flutter_sixvalley_ecommerce/push_notification/models/notification_body.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/chat/screens/inbox_screen.dart';
@@ -29,15 +29,21 @@ import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/push_navigation_helper.dart';
 
+// 🔔 gọi đến: auto navigate + attach controller
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/call_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/incoming_call_screen.dart';
+
 class NotificationHelper {
-  // {is_read: 0, image: , body: new-messages.demo_data_is_being_reset_to_default., type: demo_reset, title: Demo reset alert, order_id: }
+  // tránh double navigate nếu FCM bắn liên tiếp
+  static bool _callRouting = false;
+
   static Future<void> initialize(
       FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin) async {
-    // 🟢 Tạo Channel mặc định (bắt buộc cho Android 8+)
+    // 🟢 Tạo Channel mặc định (Android 8+)
     const AndroidNotificationChannel defaultChannel =
         AndroidNotificationChannel(
-      'vnshop247_channel', // trùng với Manifest
-      'VNShop247 Notifications', // tên hiển thị trong setting
+      'vnshop247_channel',
+      'VNShop247 Notifications',
       description: 'Kênh mặc định cho thông báo VNShop247',
       importance: Importance.high,
     );
@@ -57,19 +63,69 @@ class NotificationHelper {
             AndroidFlutterLocalNotificationsPlugin>()
         ?.requestNotificationsPermission();
 
+    // ===== Helper: mở màn nghe/từ chối ngay =====
+    Future<void> _openIncomingCallUI(Map<String, dynamic> data) async {
+      final nav = navigatorKey.currentState;
+      final ctx = nav?.overlay?.context ?? navigatorKey.currentContext;
+      if (ctx == null) return;
 
+      final callId = int.tryParse('${data['call_id'] ?? ''}');
+      final media = (data['media']?.toString() == 'video') ? 'video' : 'audio';
+      if (callId == null) return;
+
+      // attach CallController để bắt đầu poll ngay
+      try {
+        final cc = Provider.of<CallController>(ctx, listen: false);
+        cc.attachCall(callId: callId, mediaType: media);
+      } catch (_) {}
+
+      if (_callRouting) return;
+      _callRouting = true;
+      try {
+        await nav!.push(
+          MaterialPageRoute(
+            builder: (_) => IncomingCallScreen(
+              callId: callId,
+              mediaType: media,
+              callerName: (data['caller_name'] ?? 'Cuộc gọi đến').toString(),
+              callerAvatar: data['caller_avatar']?.toString(),
+            ),
+          ),
+        );
+      } finally {
+        _callRouting = false;
+      }
+    }
+
+    // ===== FOREGROUND =====
     FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
       final data = message.data;
       final String t = (data['type'] ?? '').toString();
 
-      // ⛔ Social payload → để main.dart show local notif (payload = data)
+      // ⚠️ Social (WoWonder) → main.dart xử lý hiển thị riêng (payload = data)
       if (data.containsKey('api_status') || data.containsKey('detail')) {
         return;
       }
 
-      // ⛔ Cuộc gọi đến → main.dart sẽ mở IncomingCallScreen + heads-up
-      if (t == 'call_invite') {
-        return;
+      // ✅ CUỘC GỌI TỚI: nhảy ngay vào màn nghe/từ chối
+      if (t == 'call_invite' ||
+          (data.containsKey('call_id') && data.containsKey('media'))) {
+        await _openIncomingCallUI(data);
+        // (tuỳ chọn) có thể vẫn show heads-up để rung/chuông:
+        // await flutterLocalNotificationsPlugin.show(
+        //   DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        //   (data['media']?.toString() == 'video') ? 'Video call đến' : 'Cuộc gọi đến',
+        //   'Từ #${data['caller_id'] ?? ''} (Call ID ${data['call_id'] ?? ''})',
+        //   const NotificationDetails(
+        //     android: AndroidNotificationDetails(
+        //       'call_invite_channel', 'Call Invites',
+        //       category: AndroidNotificationCategory.call,
+        //       importance: Importance.max, priority: Priority.high, fullScreenIntent: true,
+        //     ),
+        //   ),
+        //   payload: jsonEncode(data),
+        // );
+        return; // rất quan trọng: không rơi xuống show notif mặc định
       }
 
       if (kDebugMode) {
@@ -122,7 +178,7 @@ class NotificationHelper {
         }
       }
 
-      // ✅ Chỉ show local notif khi KHÔNG phải 2 loại dưới (và không phải call_invite)
+      // ✅ Chỉ show local notif khi KHÔNG phải maintenance/restock/call_invite
       if (t != 'maintenance_mode' &&
           t != 'product_restock_update' &&
           t != 'call_invite') {
@@ -133,7 +189,7 @@ class NotificationHelper {
         );
       }
 
-      // Xử lý sheet cho restock
+      // Restock bottom sheet
       if (t == 'product_restock_update' &&
           !Provider.of<RestockController>(Get.context!, listen: false)
               .isBottomSheetOpen) {
@@ -155,23 +211,32 @@ class NotificationHelper {
         } else {}
       }
     });
-  
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
-      print('message onMessageOpenedApp: ${message.data}');
 
-      // 🟣 [1] SOCIAL notifications (WoWonder)
-      if ((message.data['api_status'] != null) ||
-          (message.data['detail'] != null)) {
+    // ===== User TAP notification (BACKGROUND → FOREGROUND) =====
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
+      final data = message.data;
+      final type = (data['type'] ?? '').toString();
+
+      // 🟣 SOCIAL notifications (WoWonder)
+      if ((data['api_status'] != null) || (data['detail'] != null)) {
         debugPrint('📬 [SOCIAL] User tapped social notification');
         await handlePushNavigation(message);
-        return; // Dừng ở đây, không xử lý tiếp eCommerce
-      }
-      if (kDebugMode) {
-        print(
-            "onOpenApp: ${message.notification!.title}/${message.data}/${message.notification!.titleLocKey}");
+        return;
       }
 
-      if (message.data['type'] == 'demo_reset') {
+      // ✅ CUỘC GỌI TỚI: user tap → mở màn nghe/từ chối
+      if (type == 'call_invite' ||
+          (data.containsKey('call_id') && data.containsKey('media'))) {
+        await _openIncomingCallUI(data);
+        return;
+      }
+
+      if (kDebugMode) {
+        print(
+            "onOpenApp: ${message.notification?.title}/${data}/${message.notification?.titleLocKey}");
+      }
+
+      if (data['type'] == 'demo_reset') {
         showDialog(
           context: Get.context!,
           builder: (context) => const Dialog(
@@ -182,8 +247,8 @@ class NotificationHelper {
       }
 
       try {
-        if (message.data.isNotEmpty) {
-          NotificationBody notificationBody = convertNotification(message.data);
+        if (data.isNotEmpty) {
+          NotificationBody notificationBody = convertNotification(data);
 
           if (notificationBody.type == 'order') {
             Navigator.of(Get.context!).pushReplacement(
@@ -241,7 +306,7 @@ class NotificationHelper {
         }
       } catch (_) {}
 
-      if (message.data['type'] == 'maintenance_mode') {
+      if (data['type'] == 'maintenance_mode') {
         final SplashController splashProvider =
             Provider.of<SplashController>(Get.context!, listen: false);
         await splashProvider.initConfig(Get.context!, null, null);
@@ -467,12 +532,6 @@ class NotificationHelper {
 Future<dynamic> myBackgroundMessageHandler(RemoteMessage message) async {
   if (kDebugMode) {
     print(
-        "onBackground: ${message.notification!.title}/${message.notification!.body}/${message.notification!.titleLocKey}");
+        "onBackground: ${message.notification?.title}/${message.notification?.body}/${message.notification?.titleLocKey}");
   }
-  // var androidInitialize = new AndroidInitializationSettings('notification_icon');
-  // var iOSInitialize = new IOSInitializationSettings();
-  // var initializationsSettings = new InitializationSettings(android: androidInitialize, iOS: iOSInitialize);
-  // FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-  // flutterLocalNotificationsPlugin.initialize(initializationsSettings);
-  // NotificationHelper.showNotification(message, flutterLocalNotificationsPlugin, true);
 }

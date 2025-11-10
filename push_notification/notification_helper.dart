@@ -83,16 +83,6 @@ class NotificationHelper {
     });
 
     FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-
-      final data = message.data;
-      final type = (data['type'] ?? '').toString();
-
-      // ⬇️ ĐỂ main.dart xử lý cuộc gọi (điều hướng ngay), không show notif ở đây
-      if (type == 'call_invite' ||
-          (data.containsKey('call_id') && data.containsKey('media'))) {
-        return;
-      }
-
       if (kDebugMode) {
         print(
             "onMessage: ${message.notification?.title}/${message.notification?.body}/${message.notification?.titleLocKey}");
