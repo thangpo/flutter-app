@@ -74,7 +74,6 @@ class _ImageTab extends StatelessWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   @override
-  @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1103,11 +1102,22 @@ class _ProfilePostsSection extends StatelessWidget {
           const SizedBox(height: 16),
           _ProfileDetailsBlock(user: user, onShowAbout: onShowAbout, isSelf: isSelf),
           const SizedBox(height: 24),
-          for (int i = 0; i < posts.length; i++) ...[
-            SocialPostCard(post: posts[i]),
-            if (i != posts.length - 1) const SizedBox(height: Dimensions.paddingSizeSmall),
-          ],
-          const SizedBox(height: Dimensions.paddingSizeDefault),
+        for (int i = 0; i < posts.length; i++) ...[
+          // 1 bài viết – vẫn full bề ngang
+          Container(
+            color: Colors.white,              // nền trắng của post
+            child: SocialPostCard(post: posts[i]),
+          ),
+
+          // Dải xám ngăn giữa 2 bài (như hình bạn gửi)
+          if (i != posts.length - 1)
+            Container(
+              height: 8,                      // độ dày dải xám
+              color: const Color(0xFFF0F2F5), // màu nền xám nhạt kiểu Facebook
+            ),
+        ],
+
+        const SizedBox(height: Dimensions.paddingSizeDefault),
           if (isLoadingMore)
             const Center(child: CircularProgressIndicator())
           else
