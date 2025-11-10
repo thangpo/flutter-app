@@ -13,7 +13,8 @@ import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_ch
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/group_chat_message_bubble.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/add_group_members_screen.dart';
-
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_call_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/group_call_screen.dart';
 
 class GroupChatScreen extends StatefulWidget {
   final String groupId;
@@ -54,6 +55,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   // --- override tên & avatar để cập nhật ngay ---
   String? _titleOverride; // tên nhóm sau khi đổi
   String? _avatarOverridePath; // có thể là http(s) hoặc file path/local uri
+
+  // Flag chống bấm gọi liên tiếp
+  bool _launchingCall = false;
 
   @override
   void initState() {
@@ -278,6 +282,57 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     );
   }
 
+  // ====== GỌI NHÓM: xin quyền + điều hướng vào GroupCallRoom ======
+  Future<void> _startGroupCall({required bool isVideo}) async {
+    if (_launchingCall) return;
+    _launchingCall = true;
+    try {
+      // mic
+      final mic = await Permission.microphone.request();
+      if (!mic.isGranted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('Cần quyền Micro để thực hiện cuộc gọi')),
+          );
+        }
+        return;
+      }
+      // camera (nếu video)
+      if (isVideo) {
+        final cam = await Permission.camera.request();
+        if (!cam.isGranted) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Cần quyền Camera để gọi video')),
+            );
+          }
+          return;
+        }
+      }
+
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => GroupCallScreen(
+            groupId: widget.groupId,
+            mediaType: isVideo ? 'video' : 'audio',
+          ),
+        ),
+      );
+
+
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không mở được cuộc gọi: $e')),
+        );
+      }
+    } finally {
+      _launchingCall = false;
+    }
+  }
+
   // ---------------- Edit/Info helpers ----------------
 
   // Lấy meta nhóm từ store nếu widget không có
@@ -418,8 +473,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     );
   }
 
-
-Future<void> _openMembersSheet() async {
+  Future<void> _openMembersSheet() async {
     final ctrl = context.read<GroupChatController>();
     await ctrl.loadGroupMembers(widget.groupId);
     final members = ctrl.membersOf(widget.groupId);
@@ -495,13 +549,11 @@ Future<void> _openMembersSheet() async {
     );
   }
 
-
   Future<void> _openAddMembersPicker() async {
     // bên trong GroupChatScreen, trước khi push màn add:
     final ctrl = context.read<GroupChatController>();
     await ctrl.loadGroupMembers(widget.groupId);
     final existing = ctrl.existingMemberIdsOf(widget.groupId).toSet();
-
 
     final added = await Navigator.push(
       context,
@@ -518,9 +570,7 @@ Future<void> _openMembersSheet() async {
         const SnackBar(content: Text('Đã thêm thành viên')),
       );
     }
-
   }
-
 
   // NEW: Dialog thêm thành viên theo danh sách userId phân tách dấu phẩy
   Future<void> _openAddMembersDialog() async {
@@ -606,7 +656,6 @@ Future<void> _openMembersSheet() async {
                       ),
                     ),
                   ),
-
                   PopupMenuButton<String>(
                     icon: const Icon(Icons.more_vert),
                     onSelected: (v) async {
@@ -705,10 +754,12 @@ Future<void> _openMembersSheet() async {
                   _circleAction(
                     icon: Icons.call,
                     label: getTranslated('voice_call', context)!,
+                    onTap: () => _startGroupCall(isVideo: false), // ⬅️ thêm
                   ),
                   _circleAction(
                     icon: Icons.videocam,
                     label: getTranslated('video_call', context)!,
+                    onTap: () => _startGroupCall(isVideo: true), // ⬅️ thêm
                   ),
                   _circleAction(
                     icon: Icons.group_add,
@@ -757,7 +808,6 @@ Future<void> _openMembersSheet() async {
                     );
                   }
 
-
                   final m = owners.first;
                   final name = '${m['name'] ?? m['username'] ?? 'Người dùng'}';
                   final avatar = '${m['avatar'] ?? ''}';
@@ -777,7 +827,6 @@ Future<void> _openMembersSheet() async {
                   );
                 },
               ),
-
             ],
           ),
         );
@@ -869,16 +918,12 @@ Future<void> _openMembersSheet() async {
           IconButton(
             tooltip: 'Gọi thoại',
             icon: const Icon(Icons.call),
-            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Gọi thoại - sẵn sàng tích hợp')),
-            ),
+            onPressed: () => _startGroupCall(isVideo: false), // ⬅️ gọi ngay
           ),
           IconButton(
             tooltip: 'Gọi video',
             icon: const Icon(Icons.videocam),
-            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Gọi video - sẵn sàng tích hợp')),
-            ),
+            onPressed: () => _startGroupCall(isVideo: true), // ⬅️ gọi ngay
           ),
           IconButton(
             tooltip: 'Thông tin',
@@ -899,89 +944,102 @@ Future<void> _openMembersSheet() async {
                             .read<GroupChatController>()
                             .loadMessages(widget.groupId),
                         child: ListView.builder(
-                          controller: _scroll,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                          itemCount: items.length,
-                          itemBuilder: (ctx, i) {
-  final msg = items[i];
-  final isMe = ctrl.isMyMessage(msg);
-  final isSystem = msg['is_system'] == true;
+                            controller: _scroll,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                            itemCount: items.length,
+                            itemBuilder: (ctx, i) {
+                              final msg = items[i];
+                              final isMe = ctrl.isMyMessage(msg);
+                              final isSystem = msg['is_system'] == true;
 
-  // 🔹 Nếu là tin nhắn hệ thống -> hiển thị đơn giản, không avatar
-  if (isSystem) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Center(
-        child: ChatMessageBubble(
-          key: ValueKey('${msg['id'] ?? msg.hashCode}'),
-          message: msg,
-          isMe: false,
-        ),
-      ),
-    );
-  }
+                              // 🔹 Nếu là tin nhắn hệ thống -> hiển thị đơn giản, không avatar
+                              if (isSystem) {
+                                return Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 6),
+                                  child: Center(
+                                    child: ChatMessageBubble(
+                                      key: ValueKey(
+                                          '${msg['id'] ?? msg.hashCode}'),
+                                      message: msg,
+                                      isMe: false,
+                                    ),
+                                  ),
+                                );
+                              }
 
-  final userData = (msg['user_data'] ?? {}) as Map? ?? {};
-  final avatarUrl = '${userData['avatar'] ?? ''}'.trim();
+                              final userData =
+                                  (msg['user_data'] ?? {}) as Map? ?? {};
+                              final avatarUrl =
+                                  '${userData['avatar'] ?? ''}'.trim();
 
-  if (!isMe) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        mainAxisAlignment: MainAxisAlignment.start,
-        children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundImage:
-                avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
-            child: avatarUrl.isEmpty
-                ? const Icon(Icons.person, size: 18)
-                : null,
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.78,
-              ),
-              child: ChatMessageBubble(
-                key: ValueKey('${msg['id'] ?? msg.hashCode}'),
-                message: msg,
-                isMe: false,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+                              if (!isMe) {
+                                return Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 4.0),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    mainAxisAlignment: MainAxisAlignment.start,
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 16,
+                                        backgroundImage: avatarUrl.isNotEmpty
+                                            ? NetworkImage(avatarUrl)
+                                            : null,
+                                        child: avatarUrl.isEmpty
+                                            ? const Icon(Icons.person, size: 18)
+                                            : null,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Flexible(
+                                        child: ConstrainedBox(
+                                          constraints: BoxConstraints(
+                                            maxWidth: MediaQuery.of(context)
+                                                    .size
+                                                    .width *
+                                                0.78,
+                                          ),
+                                          child: ChatMessageBubble(
+                                            key: ValueKey(
+                                                '${msg['id'] ?? msg.hashCode}'),
+                                            message: msg,
+                                            isMe: false,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
 
-  // tin nhắn của chính mình
-  return Padding(
-    padding: const EdgeInsets.symmetric(vertical: 4.0),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        Flexible(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.78,
-            ),
-            child: ChatMessageBubble(
-              key: ValueKey('${msg['id'] ?? msg.hashCode}'),
-              message: msg,
-              isMe: true,
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-                        )
-                      ),
+                              // tin nhắn của chính mình
+                              return Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 4.0),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    Flexible(
+                                      child: ConstrainedBox(
+                                        constraints: BoxConstraints(
+                                          maxWidth: MediaQuery.of(context)
+                                                  .size
+                                                  .width *
+                                              0.78,
+                                        ),
+                                        child: ChatMessageBubble(
+                                          key: ValueKey(
+                                              '${msg['id'] ?? msg.hashCode}'),
+                                          message: msg,
+                                          isMe: true,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            })),
               ),
 
               // Composer
