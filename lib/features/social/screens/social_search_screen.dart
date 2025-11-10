@@ -1,4 +1,4 @@
-import 'package:cached_network_image/cached_network_image.dart';
+﻿import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -8,8 +8,12 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_page.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
+import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_group_detail_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/chat_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 
 class SocialSearchScreen extends StatefulWidget {
   const SocialSearchScreen({super.key});
@@ -21,6 +25,8 @@ class SocialSearchScreen extends StatefulWidget {
 class _SocialSearchScreenState extends State<SocialSearchScreen> {
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
+  final Set<String> _locallyFollowed = <String>{};
+  final Set<String> _followBusy = <String>{};
 
   @override
   void initState() {
@@ -39,6 +45,55 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
     });
   }
 
+  bool _isFollowingUser(SocialUser user) {
+    return user.isFollowing || _locallyFollowed.contains(user.id);
+  }
+
+  Future<void> _handleFollowTap(SocialUser user) async {
+    if (_followBusy.contains(user.id)) return;
+    final socialController = context.read<SocialController>();
+    setState(() => _followBusy.add(user.id));
+    try {
+      final bool followed =
+          await socialController.toggleFollowUser(targetUserId: user.id);
+      setState(() {
+        if (followed) {
+          _locallyFollowed.add(user.id);
+        } else {
+          _locallyFollowed.remove(user.id);
+        }
+      });
+    } catch (e) {
+      showCustomSnackBar(e.toString(), context, isError: true);
+    } finally {
+      setState(() => _followBusy.remove(user.id));
+    }
+  }
+
+  Future<void> _handleMessageTap(SocialUser user) async {
+    final socialController = context.read<SocialController>();
+    final token = socialController.accessToken;
+    if (token == null || token.isEmpty) {
+      showCustomSnackBar(
+        getTranslated('please_login', context) ??
+            'Vui lòng đăng nhập để sử dụng tính năng nhắn tin.',
+        context,
+        isError: true,
+      );
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          accessToken: token,
+          peerUserId: user.id,
+          peerName: user.displayName ?? user.userName ?? user.id,
+          peerAvatar: user.avatarUrl,
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _controller.dispose();
@@ -49,8 +104,12 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final appBarBackground =
+        theme.appBarTheme.backgroundColor ?? theme.scaffoldBackgroundColor;
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
+        backgroundColor: appBarBackground,
         titleSpacing: 0,
         title: _buildSearchField(theme),
         actions: [
@@ -121,7 +180,7 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
     }
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      padding: const EdgeInsets.fromLTRB(4, 12, 4, 24),
       children: [
         if (result.users.isNotEmpty)
           _SearchSection(
@@ -153,15 +212,75 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
     final subtitle = user.userName != null && user.userName!.isNotEmpty
         ? '@${user.userName}'
         : null;
+    final bool canFollow = !user.isFriend && !_isFollowingUser(user);
+    final bool canMessage = !canFollow;
+    String? statusLabel;
+    VoidCallback? statusAction;
+    bool isBusy = false;
+    if (canMessage) {
+      statusLabel = getTranslated('message', context) ?? 'Nhan tin';
+      statusAction = () {
+        _handleMessageTap(user);
+      };
+    } else if (canFollow) {
+      statusLabel = getTranslated('follow', context) ?? 'Follow';
+      statusAction = () {
+        _handleFollowTap(user);
+      };
+      isBusy = _followBusy.contains(user.id);
+    }
+    final TextStyle statusStyle = theme.textTheme.bodyMedium?.copyWith(
+          color: theme.colorScheme.primary,
+          fontWeight: FontWeight.w600,
+        ) ??
+        TextStyle(
+          color: theme.colorScheme.primary,
+          fontWeight: FontWeight.w600,
+        );
+    final ButtonStyle statusButtonStyle = TextButton.styleFrom(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+    final Widget? statusButton = (statusLabel != null && statusAction != null)
+        ? TextButton(
+            onPressed: isBusy ? null : statusAction,
+            style: statusButtonStyle,
+            child: isBusy
+                ? SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        theme.colorScheme.primary,
+                      ),
+                    ),
+                  )
+                : Text(statusLabel, style: statusStyle),
+          )
+        : null;
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: _Avatar(
         imageUrl: user.avatarUrl,
         fallbackIcon: Icons.person_outline,
       ),
-      title: Text(user.displayName ?? user.userName ?? user.id),
+      title: Wrap(
+        spacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text(
+            user.displayName ?? user.userName ?? user.id,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600, // hoặc FontWeight.bold
+            ),
+          ),
+          if (statusButton != null) statusButton,
+        ],
+      ),
       subtitle: subtitle != null ? Text(subtitle) : null,
-      trailing: const Icon(Icons.chevron_right),
       onTap: () {
         Navigator.of(context).push(
           MaterialPageRoute(
@@ -183,7 +302,7 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
       ),
       title: Text(page.title ?? page.name),
       subtitle: subtitle.isNotEmpty ? Text(subtitle) : null,
-      trailing: const Icon(Icons.open_in_new),
+      // trailing: const Icon(Icons.open_in_new),
       onTap: () => _openExternal(page.url),
     );
   }
@@ -199,7 +318,7 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
       ),
       title: Text(group.title ?? group.name),
       subtitle: subtitle.isNotEmpty ? Text(subtitle) : null,
-      trailing: const Icon(Icons.chevron_right),
+      // trailing: const Icon(Icons.chevron_right),
       onTap: () {
         Navigator.of(context).push(
           MaterialPageRoute(
@@ -226,7 +345,7 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
       ),
       title: Text(channel.title ?? channel.name),
       subtitle: subtitle.isNotEmpty ? Text(subtitle) : null,
-      trailing: const Icon(Icons.open_in_new),
+      // trailing: const Icon(Icons.open_in_new),
       onTap: () => _openExternal(channel.url),
     );
   }
@@ -288,11 +407,10 @@ class _SearchSection extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Card(
+            color: Colors.transparent,
+            elevation: 0,
             child: Column(
-              children: ListTile.divideTiles(
-                context: context,
-                tiles: children,
-              ).toList(),
+              children: children,
             ),
           ),
         ],
@@ -309,7 +427,7 @@ class _Avatar extends StatelessWidget {
   const _Avatar({
     required this.imageUrl,
     required this.fallbackIcon,
-    this.size = 44,
+    this.size = 54,
   });
 
   @override
@@ -364,11 +482,14 @@ class _CenteredMessage extends StatelessWidget {
           children: [
             Icon(icon, size: 40, color: theme.colorScheme.primary),
             const SizedBox(height: 16),
-            Text(
-              title,
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: Text(
+                title,
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
