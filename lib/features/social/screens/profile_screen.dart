@@ -1165,7 +1165,6 @@ void _showOtherProfileMenu(BuildContext context, SocialUserProfile user) {
   final theme = Theme.of(context);
   final sc = context.read<SocialController>();
   final bool isBlocked = sc.profileHeaderUser?.isBlocked ?? user.isBlocked;
-
   showModalBottomSheet(
     context: context,
     useRootNavigator: true,

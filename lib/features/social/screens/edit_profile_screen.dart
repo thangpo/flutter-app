@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user_profile.dart';
@@ -11,6 +12,33 @@ import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dar
 /// Hairline color (nhạt đúng như ảnh minh hoạ)
 const Color _kHairline = Color(0xFFE0DFE5);
 
+class NoEmojiInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue,
+      TextEditingValue newValue,
+      ) {
+    final filtered = String.fromCharCodes(
+      newValue.text.runes.where((int code) {
+        // Các khoảng mã emoji phổ biến
+        if (code >= 0x1F300 && code <= 0x1F5FF) return false; // symbols & pictographs
+        if (code >= 0x1F600 && code <= 0x1F64F) return false; // emoticons
+        if (code >= 0x1F680 && code <= 0x1F6FF) return false; // transport & map
+        if (code >= 0x1F900 && code <= 0x1F9FF) return false; // supplemental symbols
+        if (code >= 0x1FA70 && code <= 0x1FAFF) return false; // extended emoji
+        if (code >= 0x2600 && code <= 0x26FF) return false;   // misc symbols
+        if (code >= 0x2700 && code <= 0x27BF) return false;   // dingbats
+        return true; // còn lại cho phép (kể cả tiếng Việt có dấu)
+      }),
+    );
+
+    return TextEditingValue(
+      text: filtered,
+      selection: TextSelection.collapsed(offset: filtered.length),
+      composing: TextRange.empty,
+    );
+  }
+}
 class EditProfileScreen extends StatefulWidget {
   final SocialUserProfile profile;
   final ValueChanged<SocialUserProfile> onSave;
@@ -714,6 +742,7 @@ class _LabeledField extends StatelessWidget {
             textInputAction: textInputAction,
             keyboardType: keyboardType,
             validator: validator,
+            inputFormatters: [NoEmojiInputFormatter()],
             decoration: InputDecoration(
               isDense: true,
               hintText: hint,
@@ -884,6 +913,7 @@ class _PasswordField extends StatelessWidget {
             obscureText: obscure,
             enableSuggestions: false,
             autocorrect: false,
+            inputFormatters: [NoEmojiInputFormatter()], 
             decoration: InputDecoration(
               isDense: true,
               contentPadding:
