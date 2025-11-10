@@ -182,12 +182,11 @@ Future<void> main() async {
   if (Firebase.apps.isEmpty) {
     if (Platform.isAndroid) {
       await Firebase.initializeApp(
-        options: const FirebaseOptions(
-          apiKey: AppConstants.fcmApiKey,
-          appId: AppConstants.fcmMobilesdkAppId,
-          messagingSenderId: AppConstants.fcmProjectNumber,
-          projectId: AppConstants.fcmProjectId,
-        ),
+          options: const FirebaseOptions(
+              apiKey: AppConstants.fcmApiKey,
+              appId: AppConstants.fcmMobilesdkAppId,
+              messagingSenderId: AppConstants.fcmProjectNumber,
+              projectId: AppConstants.fcmProjectId)
       );
     }
   }

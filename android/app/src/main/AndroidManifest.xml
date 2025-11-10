@@ -64,7 +64,7 @@
     </queries>
 
     <application
-        android:label="vnshop247"
+        android:label="VNShop247"
         android:name="${applicationName}"
         android:requestLegacyExternalStorage="true"
         android:usesCleartextTraffic="true"

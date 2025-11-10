@@ -162,7 +162,7 @@ class _FacebookHeader extends StatelessWidget {
             Theme.of(context).brightness == Brightness.dark
                 ? Images.logoWithNameSocialImageWhite
                 : Images.logoWithNameSocialImage,
-            height: 28,
+            height: 35,
             fit: BoxFit.contain,
           ),
           Row(

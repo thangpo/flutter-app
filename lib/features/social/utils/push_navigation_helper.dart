@@ -5,31 +5,56 @@ import 'package:flutter_sixvalley_ecommerce/main.dart' show navigatorKey;
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_post_detail_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_story_viewer_screen.dart';
 
 /// ========================= CONFIG =========================
 
-/// Những type dẫn tới mở chi tiết bài viết
+// Các loại mở bài viết
 const Set<String> _postTypes = {
   'reaction',
   'comment',
+  'comment_reply',
+  'comment_mention',
+  'post_mention',
   'shared_your_post',
+  'share_post',
 };
-
-/// Những action dạng "open_*" dẫn tới mở chi tiết bài viết
 const Set<String> _postOpenActions = {
   'open_reaction',
   'open_comment',
   'open_post',
   'open_like',
   'open_share',
+  'open_comment_reply',
+  'open_comment_mention',
+  'open_post_mention',
 };
 
-/// Những type/action dẫn tới mở profile người dùng
-const Set<String> _profileTypes = {'following'};
-const Set<String> _profileOpenActions = {'open_following'};
+// Mở profile người dùng
+const Set<String> _profileTypes = {
+  'following',
+  'visited_profile',
+  'accepted_request',
+};
+const Set<String> _profileOpenActions = {
+  'open_following',
+  'open_profile',
+  'open_visited_profile',
+};
+
+// Mở story
+const Set<String> _storyTypes = {
+  'viewed_story',
+};
+const Set<String> _storyOpenActions = {
+  'open_story',
+  'open_viewed_story',
+};
 
 /// Cooldown chống double navigate
 bool _routing = false;
+
 
 /// ========================= PUBLIC APIS =========================
 
@@ -53,13 +78,14 @@ Future<void> handlePushNavigationFromMap(Map<String, dynamic> data) async {
   }
 }
 
+
 /// ========================= CORE ROUTER =========================
 
 Future<void> _routeFromDataMap(Map<String, dynamic> data) async {
-  // 1) Hợp nhất 'detail' (nếu có) vào top-level
+  // 1️⃣ Gộp 'detail' vào top-level
   final merged = _mergeWithDetail(data);
 
-  // 2) Chuẩn hoá field
+  // 2️⃣ Chuẩn hoá field
   final String type = _str(merged['type']);
   final String action = _actionType(merged['action']);
   final String postId = _pickFirstNonEmpty([
@@ -72,10 +98,22 @@ Future<void> _routeFromDataMap(Map<String, dynamic> data) async {
     _str((merged['notifier'] is Map) ? (merged['notifier']['user_id']) : ''),
     _str(merged['user_id']),
   ]);
+  final String storyId = _pickFirstNonEmpty([
+    _str(merged['story_id']),
+    _str(merged['storyId']),
+    _str((merged['story'] is Map) ? (merged['story']['id']) : ''),
+  ]);
 
-  debugPrint('✅ parsed: type=$type | action=$action | postId=$postId | userId=$userId');
+  debugPrint(
+    '✅ parsed: type=$type | action=$action | postId=$postId | userId=$userId | storyId=$storyId',
+  );
 
-  // 3) Quyết định route
+  // 3️⃣ Điều hướng theo loạic
+  if (_shouldOpenStory(type: type, action: action, storyId: storyId)) {
+    await _openStory(storyId, userId);
+    return;
+  }
+
   if (_shouldOpenPost(type: type, action: action, postId: postId)) {
     await _openPostDetail(postId);
     return;
@@ -89,6 +127,7 @@ Future<void> _routeFromDataMap(Map<String, dynamic> data) async {
   debugPrint('ℹ️ Không khớp route nào, bỏ qua.');
 }
 
+
 /// ========================= DECISIONS =========================
 
 bool _shouldOpenPost({
@@ -97,9 +136,7 @@ bool _shouldOpenPost({
   required String postId,
 }) {
   if (postId.isEmpty) return false;
-  if (_postTypes.contains(type)) return true;
-  if (_postOpenActions.contains(action)) return true;
-  return false;
+  return _postTypes.contains(type) || _postOpenActions.contains(action);
 }
 
 bool _shouldOpenProfile({
@@ -109,6 +146,16 @@ bool _shouldOpenProfile({
   return _profileTypes.contains(type) || _profileOpenActions.contains(action);
 }
 
+bool _shouldOpenStory({
+  required String type,
+  required String action,
+  required String storyId,
+}) {
+  if (storyId.isEmpty) return false;
+  return _storyTypes.contains(type) || _storyOpenActions.contains(action);
+}
+
+
 /// ========================= NAV HELPERS =========================
 
 Future<void> _openPostDetail(String postId) async {
@@ -117,7 +164,7 @@ Future<void> _openPostDetail(String postId) async {
     return MaterialPageRoute(
       builder: (_) => SocialPostDetailScreen(
         post: SocialPost(
-          id: postId, // nếu cần int: int.parse(postId)
+          id: postId,
           reactionCount: 0,
           myReaction: '',
         ),
@@ -139,22 +186,45 @@ Future<void> _openProfile({required String userId}) async {
   });
 }
 
-/// Chỉ cho phép push 1 lần trong 600ms, tự đợi navigator sẵn sàng.
+Future<void> _openStory(String storyId, String userId) async {
+  await _pushOnce(() {
+    debugPrint('🧭 NAV → SocialStoryViewerScreen(storyId=$storyId)');
+    return MaterialPageRoute(
+      builder: (_) => SocialStoryViewerScreen(
+        stories: [
+          SocialStory(
+            id: storyId,
+            userId: userId,
+            userName: '',
+            userAvatar: '',
+            items: [
+              SocialStoryItem(
+                id: storyId,
+                mediaUrl: '',
+                description: '',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  });
+}
+
+
+/// ========================= SAFE NAVIGATION =========================
+
 Future<void> _pushOnce(MaterialPageRoute Function() builder) async {
-  if (_routing) {
-    debugPrint('⏸️ Bỏ qua: đang routing');
-    return;
-  }
+  if (_routing) return;
   _routing = true;
 
-  // Đợi navigator sẵn (app có thể vừa từ background/terminated lên)
   for (int i = 0; i < 20 && navigatorKey.currentState == null; i++) {
     await Future.delayed(const Duration(milliseconds: 100));
   }
 
   final nav = navigatorKey.currentState;
   if (nav == null) {
-    debugPrint('❗ navigator chưa sẵn sàng, bỏ qua push');
+    debugPrint('❗ Navigator chưa sẵn sàng, bỏ qua push');
     _cooldown();
     return;
   }
@@ -168,6 +238,7 @@ void _cooldown() {
     _routing = false;
   });
 }
+
 
 /// ========================= MAP / STRING HELPERS =========================
 
@@ -198,8 +269,8 @@ String _actionType(dynamic action) {
 
 String _str(dynamic v) => (v ?? '').toString();
 
-String _pickFirstNonEmpty(List<String> candidates) {
-  for (final s in candidates) {
+String _pickFirstNonEmpty(List<String> list) {
+  for (final s in list) {
     if (s.trim().isNotEmpty) return s.trim();
   }
   return '';
