@@ -55,9 +55,33 @@ class _NotificationsScreenState extends State<NotificationsScreen>
           indicatorColor: Colors.blueAccent,
           labelColor: Colors.blueAccent,
           unselectedLabelColor: Colors.grey,
-          tabs: const [
-            Tab(text: 'Mạng xã hội'),
-            Tab(text: 'TMĐT'),
+          tabs: [
+            Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Mạng xã hội'),
+                  const SizedBox(width: 6),
+                  if (socialCtrl.notifications.any((n) => n.seen == "0"))
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '${socialCtrl.notifications.where((n) => n.seen == "0").length}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const Tab(text: 'TMĐT'),
           ],
         ),
       ),

@@ -3,7 +3,7 @@ import 'package:flutter_sixvalley_ecommerce/localization/models/language_model.d
 import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
 
 class AppConstants {
-  static const String appName = 'vnshop247';
+  static const String appName = 'VNShop247';
   static const String slogan =
       'VNShop247: Tất cả trong tay, thỏa sức chi tiêu, thỏa sức bay xa.';
   static const String appVersion = '15.4';

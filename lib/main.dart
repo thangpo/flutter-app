@@ -163,7 +163,8 @@ Future<void> main() async {
               apiKey: AppConstants.fcmApiKey,
               appId: AppConstants.fcmMobilesdkAppId,
               messagingSenderId: AppConstants.fcmProjectNumber,
-              projectId: AppConstants.fcmProjectId));
+              projectId: AppConstants.fcmProjectId)
+      );
     }
   }
   await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
@@ -301,7 +302,6 @@ Future<void> main() async {
             AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(channel);
   } catch (e, st) {
-    // Đừng nuốt lỗi — in ra để biết nếu listener fail
     debugPrint('❌ FCM wiring error in main(): $e');
     debugPrint('$st');
   }

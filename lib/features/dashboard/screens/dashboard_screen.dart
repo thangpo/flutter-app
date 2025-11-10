@@ -23,6 +23,7 @@ import 'package:flutter_sixvalley_ecommerce/features/more/screens/more_screen_vi
 import 'package:flutter_sixvalley_ecommerce/features/order/screens/order_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/main_home/screens/main_home_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_notifications_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/notifications_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/travel_screen.dart';
@@ -117,7 +118,6 @@ class DashBoardScreenState extends State<DashBoardScreen> {
                 : const FashionThemeHomePage(),
       ),
 
-
       NavigationModel(
           name: 'notifications',
           icon: Images.notification,
@@ -188,14 +188,63 @@ class DashBoardScreenState extends State<DashBoardScreen> {
   List<Widget> _getBottomWidget(bool isSingleVendor) {
     List<Widget> list = [];
     for (int index = 0; index < _screens.length; index++) {
-      list.add(Expanded(
-          child: CustomMenuWidget(
+      final item = _screens[index];
+
+      // 🟢 Nếu là tab Thông báo → hiển thị chấm đỏ khi có thông báo chưa đọc
+      if (item.name == 'notifications') {
+        list.add(
+          Expanded(
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                CustomMenuWidget(
+                  isSelected: _pageIndex == index,
+                  name: item.name,
+                  icon: item.icon,
+                  showCartCount: item.showCartIcon ?? false,
+                  onTap: () => _setPage(index),
+                ),
+                // 🔴 Chấm đỏ (dùng Selector để tránh rebuild toàn bộ)
+                Selector<SocialNotificationsController, bool>(
+                  selector: (_, ctrl) =>
+                      ctrl.notifications.any((n) => n.seen == "0"),
+                  builder: (_, hasUnread, __) {
+                    if (!hasUnread) return const SizedBox.shrink();
+                    return Positioned(
+                      top: 10,
+                      right: MediaQuery.of(context).size.width / 12 - 10,
+                      child: Container(
+                        width: 9,
+                        height: 9,
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 1.5),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      } else {
+        // 🔹 Các tab khác giữ nguyên
+        list.add(
+          Expanded(
+            child: CustomMenuWidget(
               isSelected: _pageIndex == index,
-              name: _screens[index].name,
-              icon: _screens[index].icon,
-              showCartCount: _screens[index].showCartIcon ?? false,
-              onTap: () => _setPage(index))));
+              name: item.name,
+              icon: item.icon,
+              showCartCount: item.showCartIcon ?? false,
+              onTap: () => _setPage(index),
+            ),
+          ),
+        );
+      }
     }
+
     return list;
   }
 }
