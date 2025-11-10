@@ -1007,10 +1007,8 @@ class _ProfileAboutSection extends StatelessWidget {
 
     final hasAnyInfo = (user.about?.trim().isNotEmpty == true) || rows.isNotEmpty;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeDefault),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 16),
           Text(getTranslated('about', context) ?? 'Giới thiệu', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
@@ -1024,7 +1022,6 @@ class _ProfileAboutSection extends StatelessWidget {
           for (final r in rows) ...[_AboutInfoRow(data: r), const SizedBox(height: 12)],
           if (hasAnyInfo) const SizedBox(height: 24),
         ],
-      ),
     );
   }
 }
@@ -1082,9 +1079,7 @@ class _ProfilePostsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (posts.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: Dimensions.paddingSizeDefault),
-        child: Column(
+      return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: 16),
@@ -1099,14 +1094,12 @@ class _ProfilePostsSection extends StatelessWidget {
               ),
             ),
           ],
-        ),
       );
     }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeDefault),
-      child: Column(
-        children: [
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
           const SizedBox(height: 16),
           _ProfileDetailsBlock(user: user, onShowAbout: onShowAbout, isSelf: isSelf),
           const SizedBox(height: 24),
@@ -1128,7 +1121,6 @@ class _ProfilePostsSection extends StatelessWidget {
               ),
             ),
         ],
-      ),
     );
   }
 }
