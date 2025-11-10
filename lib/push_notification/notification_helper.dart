@@ -59,32 +59,41 @@ class NotificationHelper {
 
 
     FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-      // --- SOCIAL payload → để main.dart show local notif (payload = message.data) ---
-      if (message.data.containsKey('api_status') || message.data.containsKey('detail')) {
+      final data = message.data;
+      final String t = (data['type'] ?? '').toString();
+
+      // ⛔ Social payload → để main.dart show local notif (payload = data)
+      if (data.containsKey('api_status') || data.containsKey('detail')) {
         return;
       }
+
+      // ⛔ Cuộc gọi đến → main.dart sẽ mở IncomingCallScreen + heads-up
+      if (t == 'call_invite') {
+        return;
+      }
+
       if (kDebugMode) {
         print(
             "-----------onMessage: ${message.notification?.title}/${message.notification?.body}/${message.notification?.titleLocKey}");
-        print(
-            "---------onMessage type: ${message.data['type']}/${message.data}");
-        if (message.data['type'] == "block") {
+        print("---------onMessage type: $t/$data");
+        if (t == "block") {
           Provider.of<AuthController>(Get.context!, listen: false)
               .clearSharedData();
           Provider.of<AddressController>(Get.context!, listen: false)
               .getAddressList();
           Navigator.of(Get.context!).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (context) => const LoginScreen()),
-              (route) => false);
+            MaterialPageRoute(builder: (context) => const LoginScreen()),
+            (route) => false,
+          );
         }
       }
 
-      if (message.data['type'] == 'referral_code_used') {
+      if (t == 'referral_code_used') {
         await Provider.of<WalletController>(Get.context!, listen: false)
             .getTransactionList(1);
       }
 
-      if (message.data['type'] == 'maintenance_mode') {
+      if (t == 'maintenance_mode') {
         final SplashController splashProvider =
             Provider.of<SplashController>(Get.context!, listen: false);
         await splashProvider.initConfig(Get.context!, null, null);
@@ -108,17 +117,24 @@ class NotificationHelper {
         } else if (config?.maintenanceModeData?.maintenanceStatus == 0 &&
             isMaintenanceRoute) {
           Navigator.of(Get.context!).pushReplacement(
-              MaterialPageRoute(builder: (_) => const DashBoardScreen()));
+            MaterialPageRoute(builder: (_) => const DashBoardScreen()),
+          );
         }
       }
 
-      if (message.data['type'] != 'maintenance_mode' ||
-          message.data['type'] != 'product_restock_update') {
+      // ✅ Chỉ show local notif khi KHÔNG phải 2 loại dưới (và không phải call_invite)
+      if (t != 'maintenance_mode' &&
+          t != 'product_restock_update' &&
+          t != 'call_invite') {
         NotificationHelper.showNotification(
-            message, flutterLocalNotificationsPlugin, false);
+          message,
+          flutterLocalNotificationsPlugin,
+          false,
+        );
       }
 
-      if (message.data['type'] == 'product_restock_update' &&
+      // Xử lý sheet cho restock
+      if (t == 'product_restock_update' &&
           !Provider.of<RestockController>(Get.context!, listen: false)
               .isBottomSheetOpen) {
         NotificationBody notificationBody = convertNotification(message.data);
@@ -139,7 +155,7 @@ class NotificationHelper {
         } else {}
       }
     });
-
+  
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
       print('message onMessageOpenedApp: ${message.data}');
 
