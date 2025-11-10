@@ -474,6 +474,13 @@ class SocialLiveRepository {
           publisher?['avatar'] ??
           publisher?['avatar_full'],
     );
+    final String? userId = _normalizeString(
+      map['user_id'] ??
+          map['uid'] ??
+          map['userId'] ??
+          publisher?['user_id'] ??
+          publisher?['id'],
+    );
 
     final String? timeText = _normalizeString(
       map['time_text'] ??
@@ -525,6 +532,7 @@ class SocialLiveRepository {
 
     return SocialComment(
       id: id,
+      userId: userId,
       text: text,
       userName: userName,
       userAvatar: avatar,

@@ -778,6 +778,7 @@ class _LiveScreenState extends State<LiveScreen> {
 
     return SocialComment(
       id: identifier,
+      userId: user.id,
       text: message,
       userName: displayName,
       userAvatar: candidate(user.avatarUrl),

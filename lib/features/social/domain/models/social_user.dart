@@ -8,6 +8,8 @@ class SocialUser {
   final String? coverUrl;
   final bool isAdmin;
   final bool isOwner;
+  final bool isFriend;
+  final bool isFollowing;
 
   const SocialUser({
     required this.id,
@@ -19,6 +21,8 @@ class SocialUser {
     this.coverUrl,
     this.isAdmin = false,
     this.isOwner = false,
+    this.isFriend = false,
+    this.isFollowing = false,
   });
 
   SocialUser copyWith({
@@ -31,6 +35,8 @@ class SocialUser {
     String? coverUrl,
     bool? isAdmin,
     bool? isOwner,
+    bool? isFriend,
+    bool? isFollowing,
   }) {
     return SocialUser(
       id: id ?? this.id,
@@ -42,6 +48,8 @@ class SocialUser {
       coverUrl: coverUrl ?? this.coverUrl,
       isAdmin: isAdmin ?? this.isAdmin,
       isOwner: isOwner ?? this.isOwner,
+      isFriend: isFriend ?? this.isFriend,
+      isFollowing: isFollowing ?? this.isFollowing,
     );
   }
 }

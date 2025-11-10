@@ -1948,6 +1948,10 @@ class SocialRepository {
           final String userName =
               (pub['name'] ?? pub['username'] ?? '').toString();
           final String userAvatar = (pub['avatar'] ?? '').toString();
+          final String rawUserId =
+              (pub['user_id'] ?? pub['id'] ?? '').toString().trim();
+          final String? userId =
+              rawUserId.isNotEmpty ? rawUserId : null;
 
           final String timeText =
               (m['time_text'] ?? m['time'] ?? '').toString();
@@ -1986,6 +1990,7 @@ class SocialRepository {
           if (id.isEmpty) continue;
           list.add(SocialComment(
             id: id,
+            userId: userId,
             text: text.isNotEmpty ? text : null,
             userName: userName.isNotEmpty ? userName : null,
             userAvatar: userAvatar.isNotEmpty ? userAvatar : null,
@@ -2025,6 +2030,10 @@ class SocialRepository {
           final String userName =
               (pub['name'] ?? pub['username'] ?? '').toString();
           final String userAvatar = (pub['avatar'] ?? '').toString();
+          final String rawUserId =
+              (pub['user_id'] ?? pub['id'] ?? '').toString().trim();
+          final String? userId =
+              rawUserId.isNotEmpty ? rawUserId : null;
           final String timeText =
               (m['time_text'] ?? m['time'] ?? '').toString();
           final String cFile =
@@ -2056,6 +2065,7 @@ class SocialRepository {
           if (id.isEmpty) continue;
           list.add(SocialComment(
             id: id,
+            userId: userId,
             text: text.isNotEmpty ? text : null,
             userName: userName.isNotEmpty ? userName : null,
             userAvatar: userAvatar.isNotEmpty ? userAvatar : null,
@@ -3513,6 +3523,18 @@ class SocialRepository {
         _isTruthy(map['is_admin'] ?? map['admin'] ?? map['is_moderator']);
     final bool isOwner =
         _isTruthy(map['is_owner'] ?? map['owner'] ?? map['is_creator']);
+    final bool isFriend = _isTruthy(
+      map['is_friend'] ??
+          map['is_bestie'] ??
+          map['friendship'] ??
+          map['friend'],
+    );
+    final bool isFollowing = _isTruthy(
+      map['is_following'] ??
+          map['am_i_following'] ??
+          map['i_follow'] ??
+          map['following'],
+    );
 
     return SocialUser(
       id: id,
@@ -3524,6 +3546,8 @@ class SocialRepository {
       coverUrl: cover,
       isAdmin: isAdmin,
       isOwner: isOwner,
+      isFriend: isFriend,
+      isFollowing: isFollowing,
     );
   }
 

@@ -22,6 +22,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/widgets/social_post_
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/live_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/social_post_text_block.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
 
 enum CommentSortOrder { newest, oldest }
 
@@ -363,82 +364,91 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
             final onSurface = Theme.of(ctx).colorScheme.onSurface;
             final String? location = displayPost.postMap?.trim();
             final bool hasLocation = location != null && location.isNotEmpty;
+            final String? profileOwnerId = displayPost.publisherId;
 
             return Row(
               children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundImage: (displayPost.userAvatar != null &&
-                          displayPost.userAvatar!.isNotEmpty)
-                      ? NetworkImage(displayPost.userAvatar!)
-                      : null,
-                  child: (displayPost.userAvatar == null ||
-                          displayPost.userAvatar!.isEmpty)
-                      ? const Icon(Icons.person, size: 18)
-                      : null,
+                InkWell(
+                  borderRadius: BorderRadius.circular(24),
+                  onTap: () => _navigateToProfile(ctx, profileOwnerId),
+                  child: CircleAvatar(
+                    radius: 18,
+                    backgroundImage: (displayPost.userAvatar != null &&
+                            displayPost.userAvatar!.isNotEmpty)
+                        ? NetworkImage(displayPost.userAvatar!)
+                        : null,
+                    child: (displayPost.userAvatar == null ||
+                            displayPost.userAvatar!.isEmpty)
+                        ? const Icon(Icons.person, size: 18)
+                        : null,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        displayPost.userName ??
-                            (getTranslated('user', ctx) ?? 'User'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                      ),
-                      if ((displayPost.timeText ?? '').isNotEmpty)
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(6),
+                    onTap: () => _navigateToProfile(ctx, profileOwnerId),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          displayPost.timeText!,
+                          displayPost.userName ??
+                              (getTranslated('user', ctx) ?? 'User'),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                                color: onSurface.withOpacity(.6),
+                          style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
                               ),
                         ),
-                      if (hasLocation)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.place_outlined,
-                                size: 14,
-                                color: onSurface.withOpacity(.65),
-                              ),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  location!,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(ctx)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(
-                                        color: onSurface.withOpacity(.75),
-                                      ),
+                        if ((displayPost.timeText ?? '').isNotEmpty)
+                          Text(
+                            displayPost.timeText!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                                  color: onSurface.withOpacity(.6),
                                 ),
-                              ),
-                            ],
                           ),
-                        ),
-                      if (displayPost.sharedPost != null)
-                        Text(
-                          _sharedSubtitleText(ctx, displayPost),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                                color: onSurface.withOpacity(.75),
-                                fontStyle: FontStyle.italic,
-                              ),
-                        ),
-                    ],
+                        if (hasLocation)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.place_outlined,
+                                  size: 14,
+                                  color: onSurface.withOpacity(.65),
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    location!,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(ctx)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: onSurface.withOpacity(.75),
+                                        ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (displayPost.sharedPost != null)
+                          Text(
+                            _sharedSubtitleText(ctx, displayPost),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                                  color: onSurface.withOpacity(.75),
+                                  fontStyle: FontStyle.italic,
+                                ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -465,7 +475,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                     setState(() => _showInput = false);
                   },
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(12),
+                    // padding: const EdgeInsets.all(12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -501,6 +511,11 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                     : p.pollOptions;
                             final bool hasPoll =
                                 pollOptions != null && pollOptions.isNotEmpty;
+                            final Widget? detailMedia = buildSocialPostMedia(
+                              context,
+                              displayPost,
+                              compact: false,
+                            );
                             final Widget? mediaContent = sharedPost != null
                                 ? sharedIsLive
                                     ? buildSocialPostMedia(
@@ -526,13 +541,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                       )
                                 : isLiveDetail
                                     ? null
-                                    : ((displayPost.videoUrl ?? '')
-                                                .isNotEmpty ||
-                                            (displayPost.audioUrl ?? '')
-                                                .isNotEmpty ||
-                                            displayPost.imageUrls.isNotEmpty)
-                                        ? _DetailMedia(post: displayPost)
-                                        : null;
+                                    : detailMedia;
                             final myReaction = current.myReaction;
                             final bool isSharing = ctrl.isSharing(current.id);
                             final List<String> topReactions =
@@ -831,380 +840,440 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                             );
                           },
                         ),
-                        const SizedBox(height: 12),
-                        Divider(color: onSurface.withOpacity(.12)),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            PopupMenuButton<CommentSortOrder>(
-                              tooltip: getTranslated('arrange', context) ??
-                                  'Arrange',
-                              onSelected: (value) {
-                                if (_sortOrder != value) {
-                                  setState(() {
-                                    _sortOrder = value;
-                                    _sortComments();
-                                  });
-                                }
-                              },
-                              itemBuilder: (context) => [
-                                PopupMenuItem(
-                                  value: CommentSortOrder.newest,
-                                  child: Text(
-                                      getTranslated('latest', context) ??
-                                          'Latest'),
-                                ),
-                                PopupMenuItem(
-                                  value: CommentSortOrder.oldest,
-                                  child: Text(
-                                      getTranslated('oldest', context) ??
-                                          'Oldest'),
-                                ),
-                              ],
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
+                        Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 12),
+                              Divider(color: onSurface.withOpacity(.12)),
+                              const SizedBox(height: 8),
+                              Row(
                                 children: [
-                                  Text(_sortOrderLabel(context, _sortOrder)),
-                                  const SizedBox(width: 4),
-                                  const Icon(Icons.sort, size: 18),
+                                  PopupMenuButton<CommentSortOrder>(
+                                    tooltip:
+                                        getTranslated('arrange', context) ??
+                                            'Arrange',
+                                    onSelected: (value) {
+                                      if (_sortOrder != value) {
+                                        setState(() {
+                                          _sortOrder = value;
+                                          _sortComments();
+                                        });
+                                      }
+                                    },
+                                    itemBuilder: (context) => [
+                                      PopupMenuItem(
+                                        value: CommentSortOrder.newest,
+                                        child: Text(
+                                            getTranslated('latest', context) ??
+                                                'Latest'),
+                                      ),
+                                      PopupMenuItem(
+                                        value: CommentSortOrder.oldest,
+                                        child: Text(
+                                            getTranslated('oldest', context) ??
+                                                'Oldest'),
+                                      ),
+                                    ],
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(_sortOrderLabel(
+                                            context, _sortOrder)),
+                                        const SizedBox(width: 4),
+                                        const Icon(Icons.sort, size: 18),
+                                      ],
+                                    ),
+                                  ),
                                 ],
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Builder(
-                          builder: (context) {
-                            if (_comments.isEmpty && _loadingComments) {
-                              return const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 12),
-                                child:
-                                    Center(child: CircularProgressIndicator()),
-                              );
-                            }
-                            if (_comments.isEmpty) {
-                              return Text(
-                                getTranslated('no_comments_yet', context) ??
-                                    'No comments yet',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                      color: onSurface.withOpacity(.7),
-                                    ),
-                              );
-                            }
-                            final svc = sl<SocialServiceInterface>();
-                            final replyActionStyle = Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(color: onSurface.withOpacity(.6));
-                            return Column(
-                              children: [
-                                for (final c in _comments)
-                                  Padding(
-                                    padding:
-                                        const EdgeInsets.symmetric(vertical: 8),
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        CircleAvatar(
-                                          radius: 16,
-                                          backgroundImage:
-                                              (c.userAvatar != null &&
-                                                      c.userAvatar!.isNotEmpty)
-                                                  ? NetworkImage(c.userAvatar!)
-                                                  : null,
-                                          child: (c.userAvatar == null ||
-                                                  c.userAvatar!.isEmpty)
-                                              ? const Icon(Icons.person,
-                                                  size: 16)
-                                              : null,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Column(
+                              const SizedBox(height: 8),
+                              Builder(
+                                builder: (context) {
+                                  if (_comments.isEmpty && _loadingComments) {
+                                    return const Padding(
+                                      padding:
+                                          EdgeInsets.symmetric(vertical: 12),
+                                      child: Center(
+                                          child: CircularProgressIndicator()),
+                                    );
+                                  }
+                                  if (_comments.isEmpty) {
+                                    return Text(
+                                      getTranslated(
+                                              'no_comments_yet', context) ??
+                                          'No comments yet',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: onSurface.withOpacity(.7),
+                                          ),
+                                    );
+                                  }
+                                  final svc = sl<SocialServiceInterface>();
+                                  final replyActionStyle = Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                          color: onSurface.withOpacity(.6));
+                                  return Column(
+                                    children: [
+                                      for (final c in _comments)
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 8),
+                                          child: Row(
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.start,
                                             children: [
-                                              Row(
-                                                children: [
-                                                  Expanded(
-                                                    child: Text(
-                                                      c.userName ??
-                                                          (getTranslated('user',
-                                                                  context) ??
-                                                              'User'),
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .bodyMedium
-                                                          ?.copyWith(
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w600),
-                                                    ),
-                                                  ),
-                                                  if ((c.timeText ?? '')
-                                                      .isNotEmpty)
-                                                    Text(
-                                                      _formatTimeText(
-                                                          context, c.timeText),
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .bodySmall
-                                                          ?.copyWith(
-                                                              color: onSurface
-                                                                  .withOpacity(
-                                                                      .6)),
-                                                    ),
-                                                ],
+                                              InkWell(
+                                                borderRadius:
+                                                    BorderRadius.circular(24),
+                                                onTap: () => _navigateToProfile(
+                                                    context, c.userId),
+                                                child: CircleAvatar(
+                                                  radius: 16,
+                                                  backgroundImage:
+                                                      (c.userAvatar != null &&
+                                                              c.userAvatar!
+                                                                  .isNotEmpty)
+                                                          ? NetworkImage(
+                                                              c.userAvatar!)
+                                                          : null,
+                                                  child: (c.userAvatar ==
+                                                              null ||
+                                                          c.userAvatar!
+                                                              .isEmpty)
+                                                      ? const Icon(Icons.person,
+                                                          size: 16)
+                                                      : null,
+                                                ),
                                               ),
-                                              if ((c.text ?? '').isNotEmpty)
-                                                Padding(
-                                                  padding:
-                                                      const EdgeInsets.only(
-                                                          top: 4),
-                                                  child: Text(c.text!),
-                                                ),
-                                              if ((c.imageUrl ?? '').isNotEmpty)
-                                                Padding(
-                                                  padding:
-                                                      const EdgeInsets.only(
-                                                          top: 6),
-                                                  child: _CommentImagePreview(
-                                                      url: c.imageUrl!),
-                                                ),
-                                              if ((c.audioUrl ?? '').isNotEmpty)
-                                                Padding(
-                                                  padding:
-                                                      const EdgeInsets.only(
-                                                          top: 6),
-                                                  child: _AudioPlayerBox(
-                                                    url: c.audioUrl!,
-                                                    autoplay: false,
-                                                  ),
-                                                ),
-                                              Padding(
-                                                padding: const EdgeInsets.only(
-                                                    top: 6),
-                                                child: Row(
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
                                                   children: [
-                                                    // TRÁI: Reply + số lượng reaction
-                                                    Expanded(
-                                                      child: Row(
-                                                        mainAxisSize:
-                                                            MainAxisSize.min,
-                                                        children: [
-                                                          TextButton(
-                                                            onPressed: () {
-                                                              setState(() {
-                                                                _replyingTo = c;
-                                                                _showInput =
-                                                                    true;
-                                                                _commentImagePath =
-                                                                    null;
-                                                                _commentImageUrl =
-                                                                    null;
-                                                                _commentAudioPath =
-                                                                    null;
-                                                              });
-                                                              FocusScope.of(
-                                                                      context)
-                                                                  .requestFocus(
-                                                                      _commentFocus);
-                                                            },
+                                                    Row(
+                                                      children: [
+                                                        Expanded(
+                                                          child:
+                                                              GestureDetector(
+                                                            onTap: () =>
+                                                                _navigateToProfile(
+                                                                    context,
+                                                                    c.userId),
                                                             child: Text(
-                                                              getTranslated(
-                                                                      'reply',
-                                                                      context) ??
-                                                                  'Reply',
-                                                              style:
-                                                                  replyActionStyle,
+                                                              c.userName ??
+                                                                  (getTranslated(
+                                                                          'user',
+                                                                          context) ??
+                                                                      'User'),
+                                                              style: Theme.of(
+                                                                      context)
+                                                                  .textTheme
+                                                                  .bodyMedium
+                                                                  ?.copyWith(
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w600),
                                                             ),
                                                           ),
-                                                          const SizedBox(
-                                                              width: 12),
-
-                                                          // 👉 ICON LIKE CỐ ĐỊNH + SỐ LƯỢNG
-                                                          if (c.reactionCount >
-                                                              0) ...[
-                                                            const SizedBox(
-                                                                width: 12),
-                                                            Row(
+                                                        ),
+                                                        if ((c.timeText ?? '')
+                                                            .isNotEmpty)
+                                                          Text(
+                                                            _formatTimeText(
+                                                                context,
+                                                                c.timeText),
+                                                            style: Theme.of(
+                                                                    context)
+                                                                .textTheme
+                                                                .bodySmall
+                                                                ?.copyWith(
+                                                                    color: onSurface
+                                                                        .withOpacity(
+                                                                            .6)),
+                                                          ),
+                                                      ],
+                                                    ),
+                                                    if ((c.text ?? '')
+                                                        .isNotEmpty)
+                                                      Padding(
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .only(top: 4),
+                                                        child: Text(
+                                                          c.text!,
+                                                          style: Theme.of(
+                                                                    context)
+                                                                .textTheme
+                                                                .bodyMedium
+                                                                ?.copyWith(
+                                                                  color: Colors
+                                                                      .black,
+                                                                ) ??
+                                                              const TextStyle(
+                                                                  color: Colors
+                                                                      .black),
+                                                        ),
+                                                      ),
+                                                    if ((c.imageUrl ?? '')
+                                                        .isNotEmpty)
+                                                      Padding(
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .only(top: 6),
+                                                        child:
+                                                            _CommentImagePreview(
+                                                                url: c
+                                                                    .imageUrl!),
+                                                      ),
+                                                    if ((c.audioUrl ?? '')
+                                                        .isNotEmpty)
+                                                      Padding(
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .only(top: 6),
+                                                        child: _AudioPlayerBox(
+                                                          url: c.audioUrl!,
+                                                          autoplay: false,
+                                                        ),
+                                                      ),
+                                                    Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                              top: 6),
+                                                      child: Row(
+                                                        children: [
+                                                          // TRÁI: Reply + số lượng reaction
+                                                          Expanded(
+                                                            child: Row(
                                                               mainAxisSize:
                                                                   MainAxisSize
                                                                       .min,
                                                               children: [
-                                                                _reactionIcon(
-                                                                    'Like',
-                                                                    size: 18),
+                                                                TextButton(
+                                                                  onPressed:
+                                                                      () {
+                                                                    setState(
+                                                                        () {
+                                                                      _replyingTo =
+                                                                          c;
+                                                                      _showInput =
+                                                                          true;
+                                                                      _commentImagePath =
+                                                                          null;
+                                                                      _commentImageUrl =
+                                                                          null;
+                                                                      _commentAudioPath =
+                                                                          null;
+                                                                    });
+                                                                    FocusScope.of(
+                                                                            context)
+                                                                        .requestFocus(
+                                                                            _commentFocus);
+                                                                  },
+                                                                  child: Text(
+                                                                    getTranslated(
+                                                                            'reply',
+                                                                            context) ??
+                                                                        'Reply',
+                                                                    style:
+                                                                        replyActionStyle,
+                                                                  ),
+                                                                ),
                                                                 const SizedBox(
-                                                                    width: 4),
-                                                                Text(
-                                                                  _formatSocialCount(
-                                                                      c.reactionCount),
-                                                                  style: Theme.of(
+                                                                    width: 12),
+
+                                                                // 👉 ICON LIKE CỐ ĐỊNH + SỐ LƯỢNG
+                                                                if (c.reactionCount >
+                                                                    0) ...[
+                                                                  const SizedBox(
+                                                                      width:
+                                                                          12),
+                                                                  Row(
+                                                                    mainAxisSize:
+                                                                        MainAxisSize
+                                                                            .min,
+                                                                    children: [
+                                                                      _reactionIcon(
+                                                                          'Like',
+                                                                          size:
+                                                                              18),
+                                                                      const SizedBox(
+                                                                          width:
+                                                                              4),
+                                                                      Text(
+                                                                        _formatSocialCount(
+                                                                            c.reactionCount),
+                                                                        style: Theme.of(context)
+                                                                            .textTheme
+                                                                            .bodySmall
+                                                                            ?.copyWith(
+                                                                              color: onSurface.withOpacity(.6),
+                                                                              fontWeight: FontWeight.w600,
+                                                                            ),
+                                                                      ),
+                                                                    ],
+                                                                  ),
+                                                                ],
+                                                              ],
+                                                            ),
+                                                          ),
+                                                          // PHẢI: nút Reaction (icon + nhãn), tap/long-press như cũ
+                                                          Builder(
+                                                            builder:
+                                                                (reactCtx) {
+                                                              final reacted = c
+                                                                  .myReaction
+                                                                  .isNotEmpty;
+                                                              final style =
+                                                                  Theme.of(
                                                                           context)
                                                                       .textTheme
                                                                       .bodySmall
                                                                       ?.copyWith(
-                                                                        color: onSurface
-                                                                            .withOpacity(.6),
-                                                                        fontWeight:
-                                                                            FontWeight.w600,
-                                                                      ),
+                                                                        color: reacted
+                                                                            ? Theme.of(context).colorScheme.primary
+                                                                            : onSurface.withOpacity(.6),
+                                                                        fontWeight: reacted
+                                                                            ? FontWeight.w600
+                                                                            : null,
+                                                                      );
+
+                                                              return GestureDetector(
+                                                                behavior:
+                                                                    HitTestBehavior
+                                                                        .opaque,
+                                                                onTap: () {
+                                                                  final next =
+                                                                      c.myReaction ==
+                                                                              'Like'
+                                                                          ? ''
+                                                                          : 'Like';
+                                                                  _reactOnComment(
+                                                                      c, next);
+                                                                },
+                                                                onLongPress:
+                                                                    () {
+                                                                  final overlay =
+                                                                      Overlay.of(
+                                                                          reactCtx);
+                                                                  if (overlay ==
+                                                                      null)
+                                                                    return;
+                                                                  final overlayBox = overlay
+                                                                          .context
+                                                                          .findRenderObject()
+                                                                      as RenderBox;
+                                                                  final box = reactCtx
+                                                                          .findRenderObject()
+                                                                      as RenderBox?;
+                                                                  final Offset centerGlobal = box !=
+                                                                          null
+                                                                      ? box.localToGlobal(
+                                                                          box.size.center(Offset
+                                                                              .zero),
+                                                                          ancestor:
+                                                                              overlayBox)
+                                                                      : overlayBox
+                                                                          .size
+                                                                          .center(
+                                                                              Offset.zero);
+
+                                                                  _showReactionsOverlay(
+                                                                    reactCtx,
+                                                                    centerGlobal,
+                                                                    onSelect: (val) =>
+                                                                        _reactOnComment(
+                                                                            c,
+                                                                            val),
+                                                                  );
+                                                                },
+                                                                child: Row(
+                                                                  mainAxisSize:
+                                                                      MainAxisSize
+                                                                          .min,
+                                                                  children: [
+                                                                    _reactionIcon(
+                                                                        c.myReaction,
+                                                                        size: 18),
+                                                                    const SizedBox(
+                                                                        width:
+                                                                            6),
+                                                                    // Text(
+                                                                    //   // nhãn của nút reaction (giống postcard)
+                                                                    //   c.myReaction
+                                                                    //           .isNotEmpty
+                                                                    //       ? c
+                                                                    //           .myReaction
+                                                                    //       : (getTranslated(
+                                                                    //               'like',
+                                                                    //               context) ??
+                                                                    //           'Like'),
+                                                                    //   style: style,
+                                                                    // ),
+                                                                  ],
                                                                 ),
-                                                              ],
-                                                            ),
-                                                          ],
+                                                              );
+                                                            },
+                                                          ),
                                                         ],
                                                       ),
                                                     ),
-                                                    // PHẢI: nút Reaction (icon + nhãn), tap/long-press như cũ
-                                                    Builder(
-                                                      builder: (reactCtx) {
-                                                        final reacted = c
-                                                            .myReaction
-                                                            .isNotEmpty;
-                                                        final style =
-                                                            Theme.of(context)
-                                                                .textTheme
-                                                                .bodySmall
-                                                                ?.copyWith(
-                                                                  color: reacted
-                                                                      ? Theme.of(
-                                                                              context)
-                                                                          .colorScheme
-                                                                          .primary
-                                                                      : onSurface
-                                                                          .withOpacity(
-                                                                              .6),
-                                                                  fontWeight: reacted
-                                                                      ? FontWeight
-                                                                          .w600
-                                                                      : null,
-                                                                );
-
-                                                        return GestureDetector(
-                                                          behavior:
-                                                              HitTestBehavior
-                                                                  .opaque,
-                                                          onTap: () {
-                                                            final next =
-                                                                c.myReaction ==
-                                                                        'Like'
-                                                                    ? ''
-                                                                    : 'Like';
-                                                            _reactOnComment(
-                                                                c, next);
-                                                          },
-                                                          onLongPress: () {
-                                                            final overlay =
-                                                                Overlay.of(
-                                                                    reactCtx);
-                                                            if (overlay == null)
-                                                              return;
-                                                            final overlayBox =
-                                                                overlay.context
-                                                                        .findRenderObject()
-                                                                    as RenderBox;
-                                                            final box = reactCtx
-                                                                    .findRenderObject()
-                                                                as RenderBox?;
-                                                            final Offset centerGlobal = box !=
-                                                                    null
-                                                                ? box.localToGlobal(
-                                                                    box.size.center(
-                                                                        Offset
-                                                                            .zero),
-                                                                    ancestor:
-                                                                        overlayBox)
-                                                                : overlayBox
-                                                                    .size
-                                                                    .center(Offset
-                                                                        .zero);
-
-                                                            _showReactionsOverlay(
-                                                              reactCtx,
-                                                              centerGlobal,
-                                                              onSelect: (val) =>
-                                                                  _reactOnComment(
-                                                                      c, val),
-                                                            );
-                                                          },
-                                                          child: Row(
-                                                            mainAxisSize:
-                                                                MainAxisSize
-                                                                    .min,
-                                                            children: [
-                                                              _reactionIcon(
-                                                                  c.myReaction,
-                                                                  size: 18),
-                                                              const SizedBox(
-                                                                  width: 6),
-                                                              // Text(
-                                                              //   // nhãn của nút reaction (giống postcard)
-                                                              //   c.myReaction
-                                                              //           .isNotEmpty
-                                                              //       ? c
-                                                              //           .myReaction
-                                                              //       : (getTranslated(
-                                                              //               'like',
-                                                              //               context) ??
-                                                              //           'Like'),
-                                                              //   style: style,
-                                                              // ),
-                                                            ],
-                                                          ),
-                                                        );
+                                                    _RepliesLazy(
+                                                      comment: c,
+                                                      service: svc,
+                                                      onRequestReply: (target) {
+                                                        setState(() {
+                                                          _replyingTo = target;
+                                                          _showInput = true;
+                                                          _commentImagePath =
+                                                              null;
+                                                          _commentImageUrl =
+                                                              null;
+                                                          _commentAudioPath =
+                                                              null;
+                                                        });
+                                                        FocusScope.of(context)
+                                                            .requestFocus(
+                                                                _commentFocus);
                                                       },
                                                     ),
                                                   ],
                                                 ),
                                               ),
-                                              _RepliesLazy(
-                                                comment: c,
-                                                service: svc,
-                                                onRequestReply: (target) {
-                                                  setState(() {
-                                                    _replyingTo = target;
-                                                    _showInput = true;
-                                                    _commentImagePath = null;
-                                                    _commentImageUrl = null;
-                                                    _commentAudioPath = null;
-                                                  });
-                                                  FocusScope.of(context)
-                                                      .requestFocus(
-                                                          _commentFocus);
-                                                },
-                                              ),
                                             ],
                                           ),
                                         ),
+                                      if (_loadingComments) ...[
+                                        const SizedBox(height: 8),
+                                        const Center(
+                                            child: CircularProgressIndicator()),
+                                      ] else if (_hasMore) ...[
+                                        const SizedBox(height: 8),
+                                        Center(
+                                          child: TextButton(
+                                            onPressed: _loadMoreComments,
+                                            child: Text(
+                                              getTranslated(
+                                                      'load_more_comments',
+                                                      context) ??
+                                                  'Load more comments',
+                                            ),
+                                          ),
+                                        )
                                       ],
-                                    ),
-                                  ),
-                                if (_loadingComments) ...[
-                                  const SizedBox(height: 8),
-                                  const Center(
-                                      child: CircularProgressIndicator()),
-                                ] else if (_hasMore) ...[
-                                  const SizedBox(height: 8),
-                                  Center(
-                                    child: TextButton(
-                                      onPressed: _loadMoreComments,
-                                      child: Text(
-                                        getTranslated('load_more_comments',
-                                                context) ??
-                                            'Load more comments',
-                                      ),
-                                    ),
-                                  )
-                                ],
-                              ],
-                            );
-                          },
+                                    ],
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
                         ),
                         const SizedBox(height: 80),
                       ],
@@ -1501,50 +1570,6 @@ class _PostAction extends StatelessWidget {
   }
 }
 
-class _DetailMedia extends StatelessWidget {
-  final SocialPost post;
-  const _DetailMedia({required this.post});
-  @override
-  Widget build(BuildContext context) {
-    if ((post.videoUrl ?? '').isNotEmpty) {
-      return _VideoPlayerBox(url: post.videoUrl!);
-    }
-    if ((post.audioUrl ?? '').isNotEmpty && post.imageUrls.isNotEmpty) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _ImagesCarousel(urls: post.imageUrls),
-          const SizedBox(height: 8),
-          _AudioPlayerBox(
-            url: post.audioUrl!,
-            autoplay: true,
-            title: post.fileName,
-          ),
-        ],
-      );
-    }
-    if ((post.audioUrl ?? '').isNotEmpty) {
-      return _AudioPlayerBox(
-        url: post.audioUrl!,
-        autoplay: false,
-        title: post.fileName,
-      );
-    }
-    final imgs = post.imageUrls;
-    if (imgs.isEmpty) return const SizedBox.shrink();
-    if (imgs.length == 1) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: CachedNetworkImage(
-          imageUrl: imgs.first,
-          fit: BoxFit.cover,
-        ),
-      );
-    }
-    return _ImagesCarousel(urls: imgs);
-  }
-}
-
 class _ProductBlock extends StatelessWidget {
   final String? title;
   final List<String> images;
@@ -1784,6 +1809,15 @@ class _ReactionIconStack extends StatelessWidget {
   }
 }
 
+void _navigateToProfile(BuildContext context, String? userId) {
+  if (userId == null || userId.isEmpty) return;
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => ProfileScreen(targetUserId: userId),
+    ),
+  );
+}
+
 String _formatSocialCount(int value) {
   if (value <= 0) return '0';
   if (value < 1000) return value.toString();
@@ -1813,104 +1847,6 @@ class _CountUnit {
   final int threshold;
   final String suffix;
   const _CountUnit({required this.threshold, required this.suffix});
-}
-
-class _ImagesCarousel extends StatefulWidget {
-  final List<String> urls;
-  const _ImagesCarousel({required this.urls});
-  @override
-  State<_ImagesCarousel> createState() => _ImagesCarouselState();
-}
-
-class _ImagesCarouselState extends State<_ImagesCarousel> {
-  final PageController _pc = PageController();
-  int _index = 0;
-  double? _aspect;
-  @override
-  void initState() {
-    super.initState();
-    _resolveAspect();
-  }
-
-  void _resolveAspect() {
-    if (widget.urls.isEmpty) return;
-    final provider = CachedNetworkImageProvider(widget.urls.first);
-    final stream = provider.resolve(const ImageConfiguration());
-    stream.addListener(ImageStreamListener((info, _) {
-      final w = info.image.width.toDouble();
-      final h = info.image.height.toDouble();
-      if (w > 0 && h > 0) {
-        setState(() => _aspect = w / h);
-      }
-    }));
-  }
-
-  @override
-  void dispose() {
-    _pc.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final aspect = _aspect ?? 1.0;
-    final maxHeight = MediaQuery.of(context).size.height * 0.6;
-    return LayoutBuilder(
-      builder: (ctx, constraints) {
-        final width = constraints.maxWidth;
-        double targetHeight = width / aspect;
-        double targetWidth = width;
-        if (targetHeight > maxHeight) {
-          targetHeight = maxHeight;
-          targetWidth = targetHeight * aspect;
-        }
-        return Column(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Align(
-                alignment: Alignment.center,
-                child: SizedBox(
-                  width: targetWidth,
-                  height: targetHeight,
-                  child: PageView.builder(
-                    controller: _pc,
-                    onPageChanged: (i) => setState(() => _index = i),
-                    itemCount: widget.urls.length,
-                    itemBuilder: (ctx, i) => CachedNetworkImage(
-                      imageUrl: widget.urls[i],
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            if (widget.urls.length > 1)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    for (int i = 0; i < widget.urls.length; i++)
-                      Container(
-                        width: 6,
-                        height: 6,
-                        margin: const EdgeInsets.symmetric(horizontal: 3),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: i == _index
-                              ? Theme.of(context).colorScheme.primary
-                              : Colors.grey.shade400,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
 }
 
 class _RepliesLazy extends StatefulWidget {
@@ -2058,15 +1994,19 @@ class _RepliesLazyState extends State<_RepliesLazy> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CircleAvatar(
-                  radius: 14,
-                  backgroundImage:
-                      (r.userAvatar != null && r.userAvatar!.isNotEmpty)
-                          ? NetworkImage(r.userAvatar!)
-                          : null,
-                  child: (r.userAvatar == null || r.userAvatar!.isEmpty)
-                      ? const Icon(Icons.person, size: 14)
-                      : null,
+                InkWell(
+                  borderRadius: BorderRadius.circular(24),
+                  onTap: () => _navigateToProfile(context, r.userId),
+                  child: CircleAvatar(
+                    radius: 14,
+                    backgroundImage:
+                        (r.userAvatar != null && r.userAvatar!.isNotEmpty)
+                            ? NetworkImage(r.userAvatar!)
+                            : null,
+                    child: (r.userAvatar == null || r.userAvatar!.isEmpty)
+                        ? const Icon(Icons.person, size: 14)
+                        : null,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -2076,13 +2016,17 @@ class _RepliesLazyState extends State<_RepliesLazy> {
                       Row(
                         children: [
                           Expanded(
-                            child: Text(
-                              r.userName ??
-                                  (getTranslated('user', context) ?? 'User'),
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(fontWeight: FontWeight.w600),
+                            child: GestureDetector(
+                              onTap: () =>
+                                  _navigateToProfile(context, r.userId),
+                              child: Text(
+                                r.userName ??
+                                    (getTranslated('user', context) ?? 'User'),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(fontWeight: FontWeight.w600),
+                              ),
                             ),
                           ),
                           if ((r.timeText ?? '').isNotEmpty)
@@ -2098,7 +2042,14 @@ class _RepliesLazyState extends State<_RepliesLazy> {
                       if ((r.text ?? '').isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 2),
-                          child: Text(r.text!),
+                          child: Text(
+                            r.text!,
+                            style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(color: Colors.black) ??
+                                const TextStyle(color: Colors.black),
+                          ),
                         ),
                       if ((r.imageUrl ?? '').isNotEmpty)
                         Padding(
@@ -2364,110 +2315,6 @@ void _showImageViewer(BuildContext context, String url) {
       );
     },
   );
-}
-
-class _VideoPlayerBox extends StatefulWidget {
-  final String url;
-  const _VideoPlayerBox({required this.url});
-  @override
-  State<_VideoPlayerBox> createState() => _VideoPlayerBoxState();
-}
-
-class _VideoPlayerBoxState extends State<_VideoPlayerBox> {
-  late VideoPlayerController _controller;
-  bool _ready = false;
-  @override
-  void initState() {
-    super.initState();
-    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url))
-      ..initialize().then((_) {
-        setState(() => _ready = true);
-      });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!_ready) {
-      return Container(
-        alignment: Alignment.center,
-        color: Colors.black12,
-        height: 200,
-        child: const CircularProgressIndicator(),
-      );
-    }
-    final ar = _controller.value.aspectRatio == 0
-        ? 16 / 9
-        : _controller.value.aspectRatio;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final maxHeight = MediaQuery.of(context).size.height * 0.6;
-        double targetHeight = width / ar;
-        double targetWidth = width;
-        if (targetHeight > maxHeight) {
-          targetHeight = maxHeight;
-          targetWidth = targetHeight * ar;
-        }
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Align(
-              alignment: Alignment.center,
-              child: SizedBox(
-                width: targetWidth,
-                height: targetHeight,
-                child: VideoPlayer(_controller),
-              ),
-            ),
-            Row(
-              children: [
-                IconButton(
-                  icon: Icon(_controller.value.isPlaying
-                      ? Icons.pause
-                      : Icons.play_arrow),
-                  onPressed: () {
-                    setState(() {
-                      _controller.value.isPlaying
-                          ? _controller.pause()
-                          : _controller.play();
-                    });
-                  },
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Builder(
-                    builder: (context) {
-                      final totalMs = _controller.value.duration.inMilliseconds;
-                      final posMs = _controller.value.position.inMilliseconds;
-                      final maxVal = totalMs <= 0 ? 1.0 : totalMs.toDouble();
-                      final curVal =
-                          (posMs.clamp(0, totalMs <= 0 ? 1 : totalMs))
-                              .toDouble();
-                      return Slider(
-                        min: 0,
-                        max: maxVal,
-                        value: curVal,
-                        onChanged: (v) async {
-                          await _controller
-                              .seekTo(Duration(milliseconds: v.toInt()));
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ],
-        );
-      },
-    );
-  }
 }
 
 typedef _OnReactionSelect = void Function(String);
