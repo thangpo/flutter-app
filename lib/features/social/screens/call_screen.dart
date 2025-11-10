@@ -177,28 +177,27 @@ class _CallScreenState extends State<CallScreen> {
       }
 
       // 3.1) Giảm bitrate video gửi đi (~800 kbps) cho ổn định
-try {
-  final senders = await _pc!.getSenders();
-  for (final s in senders) {
-    if (s.track?.kind == 'video') {
-      // Trên bản webrtc_interface 1.3.0 không có getParameters(),
-      // ta set thẳng RTCRtpParameters với encodings mong muốn.
-      await s.setParameters(RTCRtpParameters(
-        encodings: <RTCRtpEncoding>[
-          RTCRtpEncoding(
-            maxBitrate: 800 * 1000, // ~800 kbps
-            numTemporalLayers: 2,
-            rid: 'f',
-            // scaleResolutionDownBy: 1.0, // bật nếu cần hạ thêm độ phân giải
-          ),
-        ],
-      ));
-    }
-  }
-} catch (_) {
-  // một số platform có thể không hỗ trợ setParameters -> bỏ qua
-}
-
+      try {
+        final senders = await _pc!.getSenders();
+        for (final s in senders) {
+          if (s.track?.kind == 'video') {
+            // Trên bản webrtc_interface 1.3.0 không có getParameters(),
+            // ta set thẳng RTCRtpParameters với encodings mong muốn.
+            await s.setParameters(RTCRtpParameters(
+              encodings: <RTCRtpEncoding>[
+                RTCRtpEncoding(
+                  maxBitrate: 800 * 1000, // ~800 kbps
+                  numTemporalLayers: 2,
+                  rid: 'f',
+                  // scaleResolutionDownBy: 1.0, // bật nếu cần hạ thêm độ phân giải
+                ),
+              ],
+            ));
+          }
+        }
+      } catch (_) {
+        // một số platform có thể không hỗ trợ setParameters -> bỏ qua
+      }
 
       // 4) OFFER / ANSWER
       if (widget.isCaller) {

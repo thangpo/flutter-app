@@ -274,28 +274,36 @@ Future<void> main() async {
     });
 
     // 4) App đang FOREGROUND: nhận FCM
+    // 4) App đang FOREGROUND: nhận FCM
     FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-      debugPrint('🔥 onMessage(foreground) data= ${message.data}');
+      final data = message.data;
+      debugPrint('🔥 onMessage(foreground) data= $data');
 
-      // ⭕ CALL INVITE → mở ngay màn IncomingCall (k cần bấm message)
-      if ((message.data['type'] ?? '') == 'call_invite') {
-        // có thể hiện heads-up để chắc chắn đánh thức UI
-        await _showIncomingCallNotification(message.data);
-        _handleCallInviteOpen(message.data);
+      // ⬇️ ƯU TIÊN CUỘC GỌI: vào màn nghe/từ chối ngay, KHÔNG cần bấm gì
+      final type = (data['type'] ?? '').toString();
+      if (type == 'call_invite' ||
+          (data.containsKey('call_id') && data.containsKey('media'))) {
+        _handleCallInviteOpen(data); // attachCall + push IncomingCallScreen
+        // (tuỳ bạn) có thể vẫn show heads-up để có sound/vibrate
+        // await _showIncomingCallNotification(data);
         return;
       }
 
-      // --- Thông báo thường ---
-      String? title = message.notification?.title ??
-          message.data['title'] ??
-          message.data['notification_title'] ??
-          'VNShop247';
-      String? bodyText = message.notification?.body ??
-          message.data['body'] ??
-          message.data['notification_body'] ??
-          'Bạn có thông báo mới';
+      // --- SOCIAL payload → để main.dart show local notif (payload = message.data) ---
+      // (giữ nguyên logic khác của bạn, ví dụ điều hướng Social…)
+      String? title = message.notification?.title;
+      String? bodyText = message.notification?.body;
 
-      if ((title ?? '').isEmpty && (bodyText ?? '').isEmpty) return;
+      title ??= (data['title'] ?? data['notification_title'] ?? 'VNShop247')
+          .toString();
+      bodyText ??=
+          (data['body'] ?? data['notification_body'] ?? 'Bạn có thông báo mới')
+              .toString();
+
+      if ((title?.isEmpty ?? true) && (bodyText?.isEmpty ?? true)) {
+        debugPrint('ℹ️ No displayable title/body. Skip showing local notif.');
+        return;
+      }
 
       const androidDetails = AndroidNotificationDetails(
         'high_importance_channel',
@@ -312,7 +320,7 @@ Future<void> main() async {
         title,
         bodyText,
         details,
-        payload: jsonEncode(message.data),
+        payload: jsonEncode(data), // để khi tap còn route đúng
       );
     });
 
