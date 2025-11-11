@@ -282,6 +282,49 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     );
   }
 
+  // ====== NEW ======
+  // Thu thập danh sách userId thành viên nhóm (trừ mình) để mời vào cuộc gọi
+  Future<List<int>> _collectInvitees() async {
+    final ids = <int>{};
+    try {
+      final gc = context.read<GroupChatController>();
+
+      // đảm bảo có danh sách thành viên trước khi lấy
+      try {
+        await gc.loadGroupMembers(widget.groupId);
+      } catch (_) {}
+
+      final members = gc.membersOf(widget.groupId);
+      final me = gc.currentUserId;
+
+      for (final m in members) {
+        final v = m['user_id'] ?? m['id'] ?? m['uid'];
+        int? id;
+        if (v is int) id = v;
+        if (v is String) id = int.tryParse(v);
+        if (id != null && id != me) ids.add(id);
+      }
+
+      if (ids.isEmpty) {
+        // fallback nhẹ: thử suy ra từ tin nhắn (ít nhất có 1 người)
+        final msgs = gc.messagesOf(widget.groupId);
+        for (final msg in msgs) {
+          final v = msg['from_id'] ?? msg['user_id'];
+          int? id;
+          if (v is int) id = v;
+          if (v is String) id = int.tryParse(v);
+          if (id != null && id != me) ids.add(id);
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ _collectInvitees error: $e');
+    }
+
+    final list = ids.toList();
+    debugPrint('[GROUP CALL] Invitees => $list');
+    return list;
+  }
+
   // ====== GỌI NHÓM: xin quyền + điều hướng vào GroupCallRoom ======
   Future<void> _startGroupCall({required bool isVideo}) async {
     if (_launchingCall) return;
@@ -311,17 +354,21 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         }
       }
 
+      // ✅ Thu thập invitees và truyền sang GroupCallScreen
+      final invitees = await _collectInvitees();
+
       if (!mounted) return;
       await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => GroupCallScreen(
             groupId: widget.groupId,
             mediaType: isVideo ? 'video' : 'audio',
+            invitees:
+                invitees, // <-- QUAN TRỌNG: để server bắn FCM cho thành viên
+            groupName: _finalTitle(context.read<GroupChatController>()),
           ),
         ),
       );
-
-
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
