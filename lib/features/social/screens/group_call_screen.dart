@@ -1,3 +1,4 @@
+// G:\flutter-app\lib\features\social\screens\group_call_screen.dart
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -163,23 +164,31 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
 
   Future<void> _ensurePeerConnection(int peerId) async {
     if (_pcByUser.containsKey(peerId)) return;
+
     final config = {
       'iceServers': [
         {'urls': 'stun:stun.l.google.com:19302'},
-        // TURN (nếu có): {'urls': 'turn:turn.yourdomain.com:3478', 'username': 'user', 'credential': 'pass'},
+        // TURN (nếu có):
+        // {'urls': 'turn:turn.yourdomain.com:3478', 'username': 'user', 'credential': 'pass'},
       ],
-      'sdpSemantics': 'unified-plan',
+      'sdpSemantics': 'unified-plan', // dùng Unified Plan chuẩn mới
     };
+
     final pc = await createPeerConnection(config);
 
+    // ✅ Unified Plan: dùng addTrack thay cho addStream
     if (_localStream != null) {
-      await pc.addStream(_localStream!);
+      for (final track in _localStream!.getTracks()) {
+        await pc.addTrack(track, _localStream!);
+      }
     }
 
     pc.onIceCandidate = (c) {
       if (c.candidate == null) return;
+      final callId = _gc.currentCallId;
+      if (callId == null) return;
       _gc.sendCandidate(
-        callId: _gc.currentCallId!,
+        callId: callId,
         toUserId: peerId,
         candidate: c.candidate!,
         sdpMid: c.sdpMid,
@@ -187,7 +196,10 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       );
     };
 
-    pc.onAddStream = (MediaStream stream) async {
+    // ✅ Unified Plan: nhận remote qua onTrack
+    pc.onTrack = (RTCTrackEvent event) async {
+      if (event.streams.isEmpty) return;
+      final stream = event.streams[0];
       final r = _remoteRendererByUser[peerId] ?? RTCVideoRenderer();
       if (!_remoteRendererByUser.containsKey(peerId)) {
         await r.initialize();
@@ -197,27 +209,19 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       if (mounted) setState(() {});
     };
 
-    pc.onTrack = (RTCTrackEvent event) async {
-      if (event.streams.isNotEmpty) {
-        final stream = event.streams[0];
-        final r = _remoteRendererByUser[peerId] ?? RTCVideoRenderer();
-        if (!_remoteRendererByUser.containsKey(peerId)) {
-          await r.initialize();
-          _remoteRendererByUser[peerId] = r;
-        }
-        r.srcObject = stream;
-        if (mounted) setState(() {});
-      }
+    // (Không dùng onAddStream khi Unified Plan)
+    pc.onIceConnectionState = (state) {
+      // có thể log / xử lý reconnect nếu muốn
     };
-
-    pc.onIceConnectionState = (state) {};
 
     _pcByUser[peerId] = pc;
 
     final pend = _pendingIceByUser.remove(peerId);
     if (pend != null) {
       for (final cand in pend) {
-        pc.addCandidate(cand);
+        try {
+          await pc.addCandidate(cand);
+        } catch (_) {}
       }
     }
   }
@@ -225,13 +229,18 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   Future<void> _createAndSendOffer(int peerId) async {
     final pc = _pcByUser[peerId];
     if (pc == null) return;
+
     final offer = await pc.createOffer({
-      'offerToReceiveAudio': true,
-      'offerToReceiveVideo': _isVideo,
+      'offerToReceiveAudio': 1,
+      'offerToReceiveVideo': _isVideo ? 1 : 0,
     });
     await pc.setLocalDescription(offer);
+
+    final callId = _gc.currentCallId;
+    if (callId == null) return;
+
     await _gc.sendOffer(
-      callId: _gc.currentCallId!,
+      callId: callId,
       toUserId: peerId,
       sdp: offer.sdp ?? '',
     );
@@ -247,12 +256,16 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     await pc.setRemoteDescription(RTCSessionDescription(sdp, 'offer'));
 
     final answer = await pc.createAnswer({
-      'offerToReceiveAudio': true,
-      'offerToReceiveVideo': _isVideo,
+      'offerToReceiveAudio': 1,
+      'offerToReceiveVideo': _isVideo ? 1 : 0,
     });
     await pc.setLocalDescription(answer);
+
+    final callId = _gc.currentCallId;
+    if (callId == null) return;
+
     await _gc.sendAnswer(
-      callId: _gc.currentCallId!,
+      callId: callId,
       toUserId: fromId,
       sdp: answer.sdp ?? '',
     );
@@ -264,9 +277,8 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     if (fromId == null || sdp.isEmpty) return;
 
     final pc = _pcByUser[fromId];
-    if (pc == null) {
-      return;
-    }
+    if (pc == null) return;
+
     await pc.setRemoteDescription(RTCSessionDescription(sdp, 'answer'));
   }
 
@@ -288,7 +300,9 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       _pendingIceByUser[fromId] = list;
       return;
     }
-    await pc.addCandidate(c);
+    try {
+      await pc.addCandidate(c);
+    } catch (_) {}
   }
 
   Future<void> _leave() async {
@@ -308,7 +322,9 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
 
   Future<void> _disposeMediaAndPCs() async {
     for (final pc in _pcByUser.values) {
-      await pc.close();
+      try {
+        await pc.close();
+      } catch (_) {}
     }
     _pcByUser.clear();
 
