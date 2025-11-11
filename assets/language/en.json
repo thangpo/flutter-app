@@ -1336,11 +1336,26 @@
   "time_remaining": "Time Remaining",
   "scan_qr_hint": "Open your banking app and scan the QR code to pay",
   "waiting_payment": "Waiting for payment...",
-
   "main": "Main",
   "payment_success_message": "You have successfully paid the amount",
   "stripe_development_feature": "Stripe payment feature is under development",
   "qr_generation_failed": "Could not generate payment QR code. Please try again!",
   "minimum_deposit_amount": "Minimum top-up amount is 10,000đ",
-  "enter_topup_amount_prompt": "Please enter the amount to top up"
+  "enter_topup_amount_prompt": "Please enter the amount to top up",
+  "withdraw": "Withdraw",
+  "ad_balance": "Ad Balance",
+  "create_new_campaign": "Create New Campaign",
+  "my_campaigns": "My Campaigns",
+  "running": "Running",
+  "stopped": "Stopped",
+  "no_title": "No title",
+  "stop_before_delete": "Stop campaign first",
+  "campaign_running": "Campaign is running",
+  "stop_and_delete_prompt": "Campaign \"{headline}\" is active.\n\nDo you want to stop and delete it?",
+  "stop_and_delete": "Stop & Delete",
+  "delete_campaign": "Delete Campaign?",
+  "confirm_delete": "Are you sure you want to delete:\n\n\"{headline}\"\n\nThis action cannot be undone.",
+  "no_campaigns_yet": "No campaigns yet",
+  "tap_to_create_first": "Tap the button above to create your first campaign",
+  "loading_new_campaign": "Loading new campaign..."
 }

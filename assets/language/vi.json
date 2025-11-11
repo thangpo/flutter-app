@@ -1331,12 +1331,27 @@
   "time_remaining": "Còn lại",
   "scan_qr_hint": "Mở app ngân hàng và quét mã QR để thanh toán",
   "waiting_payment": "Đang chờ thanh toán...",
-
   "main": "Chính",
   "payment_success_message": "Bạn đã thanh toán thành công số tiền",
   "stripe_development_feature": "Tính năng thanh toán Stripe đang được phát triển",
   "qr_generation_failed": "Không thể tạo mã QR thanh toán. Vui lòng thử lại!",
   "minimum_deposit_amount": "Số tiền nạp tối thiểu là 10.000đ",
-  "enter_topup_amount_prompt": "Vui lòng nhập số tiền cần nạp"
+  "enter_topup_amount_prompt": "Vui lòng nhập số tiền cần nạp",
+  "withdraw": "Rút tiền",
+  "ad_balance": "Số dư quảng cáo",
+  "create_new_campaign": "Tạo chiến dịch mới",
+  "my_campaigns": "Chiến dịch của tôi",
+  "running": "Đang chạy",
+  "stopped": "Đã dừng",
+  "no_title": "Không có tiêu đề",
+  "stop_before_delete": "Dừng chiến dịch trước",
+  "campaign_running": "Chiến dịch đang chạy",
+  "stop_and_delete_prompt": "Chiến dịch \"{headline}\" đang hoạt động.\n\nBạn có muốn dừng và xóa chiến dịch này không?",
+  "stop_and_delete": "Dừng & Xóa",
+  "delete_campaign": "Xóa chiến dịch?",
+  "confirm_delete": "Bạn có chắc muốn xóa chiến dịch:\n\n\"{headline}\"\n\nHành động này không thể hoàn tác.",
+  "no_campaigns_yet": "Chưa có chiến dịch nào",
+  "tap_to_create_first": "Bấm nút trên để tạo chiến dịch đầu tiên",
+  "loading_new_campaign": "Đang tải chiến dịch mới..."
 }
 

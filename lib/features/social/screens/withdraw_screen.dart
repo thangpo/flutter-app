@@ -76,7 +76,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
       final userIdStr = await auth.authServiceInterface.getSocialUserId();
       final userId = int.tryParse(userIdStr ?? '') ?? 0;
 
-      if (accessToken == null) throw Exception("Chưa đăng nhập");
+      if (accessToken == null) throw Exception("not_logged_in");
 
       final walletData = await SocialUserService().getWalletBalance(
         accessToken: accessToken,
@@ -99,7 +99,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
       setState(() {
         isLoading = false;
         isLoadingCampaigns = false;
-        errorMessage = e.toString().replaceFirst('Exception: ', '');
+        errorMessage = getTranslated(e.toString().replaceFirst('Exception: ', ''), context) ?? e.toString();
       });
     }
   }
@@ -273,7 +273,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                   _buildGlassButton(
                     onPressed: _loadData,
                     icon: Icons.refresh_rounded,
-                    text: 'Thử lại',
+                    text: getTranslated('retry', context) ?? 'Thử lại',
                     gradient: LinearGradient(
                       colors: [Colors.blue.shade400, Colors.blue.shade600],
                     ),
@@ -333,9 +333,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
           child: const Icon(Icons.campaign_rounded, color: Colors.white, size: 20),
         ),
         const SizedBox(width: 12),
-        const Text(
-          'Chiến dịch của tôi',
-          style: TextStyle(
+        Text(
+          getTranslated('my_campaigns', context) ?? 'Chiến dịch của tôi',
+          style: const TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.w700,
             color: Colors.black87,
@@ -384,7 +384,6 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
             ),
             child: Stack(
               children: [
-                // Animated gradient overlay
                 Positioned.fill(
                   child: AnimatedBuilder(
                     animation: _shimmerController,
@@ -439,7 +438,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Số dư quảng cáo',
+                              getTranslated('ad_balance', context) ?? 'Số dư quảng cáo',
                               style: TextStyle(
                                 color: Colors.black.withOpacity(0.6),
                                 fontSize: 14,
@@ -476,12 +475,12 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
       onPressed: () async {
         final result = await Navigator.of(context).push(_createRoute());
         if (result == true && mounted) {
-          _showSnackBar('Đang tải chiến dịch mới...', isError: false);
+          _showSnackBar(getTranslated('loading_new_campaign', context) ?? 'Đang tải chiến dịch mới...', isError: false);
           await _loadData();
         }
       },
       icon: Icons.add_circle_rounded,
-      text: 'Tạo chiến dịch mới',
+      text: getTranslated('create_new_campaign', context) ?? 'Tạo chiến dịch mới',
       gradient: LinearGradient(
         colors: [Colors.blue.shade400, Colors.purple.shade400],
       ),
@@ -603,11 +602,13 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
 
   Widget _buildCampaignCard(Map<String, dynamic> camp, int? adId, bool isLoading) {
     final isActive = camp["status"] == "1";
-    final statusText = isActive ? "Đang chạy" : "Đã dừng";
+    final statusText = isActive
+        ? (getTranslated('running', context) ?? "Đang chạy")
+        : (getTranslated('stopped', context) ?? "Đã dừng");
     final statusGradient = isActive
         ? LinearGradient(colors: [Colors.green.shade400, Colors.teal.shade400])
         : LinearGradient(colors: [Colors.grey.shade400, Colors.grey.shade500]);
-    final headline = camp["headline"] ?? 'Không có tiêu đề';
+    final headline = camp["headline"] ?? getTranslated('no_title', context) ?? 'Không có tiêu đề';
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(22),
@@ -794,7 +795,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                                   color: isActive ? Colors.grey.shade400 : Colors.red.shade400,
                                   size: 22,
                                 ),
-                                tooltip: isActive ? 'Dừng chiến dịch trước' : 'Xóa',
+                                tooltip: isActive
+                                    ? (getTranslated('stop_before_delete', context) ?? 'Dừng chiến dịch trước')
+                                    : (getTranslated('delete', context) ?? 'Xóa'),
                                 onPressed: isLoading
                                     ? null
                                     : (adId == null)
@@ -892,27 +895,25 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                 child: const Icon(Icons.pause_circle_rounded, color: Colors.white, size: 24),
               ),
               const SizedBox(width: 12),
-              const Flexible(
+              Flexible(
                 child: Text(
-                  'Chiến dịch đang chạy',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+                  getTranslated('campaign_running', context) ?? 'Chiến dịch đang chạy',
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
                 ),
               ),
             ],
           ),
           content: Text(
-            'Chiến dịch "$headline" đang hoạt động.\n\nBạn có muốn dừng và xóa chiến dịch này không?',
+            getTranslated('stop_and_delete_prompt', context)?.replaceAll('{headline}', headline) ??
+                'Chiến dịch "$headline" đang hoạt động.\n\nBạn có muốn dừng và xóa chiến dịch này không?',
             style: const TextStyle(fontSize: 15, height: 1.5, color: Colors.black87),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              ),
-              child: const Text(
-                'Hủy',
-                style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600, fontSize: 16),
+              child: Text(
+                getTranslated('cancel', context) ?? 'Hủy',
+                style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w600, fontSize: 16),
               ),
             ),
             Container(
@@ -921,13 +922,6 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                 gradient: LinearGradient(
                   colors: [Colors.orange.shade400, Colors.deepOrange.shade500],
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.orange.withOpacity(0.3),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
               ),
               child: Material(
                 color: Colors.transparent,
@@ -939,13 +933,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    child: const Text(
-                      'Dừng & Xóa',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
-                      ),
+                    child: Text(
+                      getTranslated('stop_and_delete', context) ?? 'Dừng & Xóa',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16),
                     ),
                   ),
                 ),
@@ -980,25 +970,23 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                 child: const Icon(Icons.warning_rounded, color: Colors.white, size: 24),
               ),
               const SizedBox(width: 12),
-              const Text(
-                'Xóa chiến dịch?',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+              Text(
+                getTranslated('delete_campaign', context) ?? 'Xóa chiến dịch?',
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
               ),
             ],
           ),
           content: Text(
-            'Bạn có chắc muốn xóa chiến dịch:\n\n"$headline"\n\nHành động này không thể hoàn tác.',
+            getTranslated('confirm_delete', context)?.replaceAll('{headline}', headline) ??
+                'Bạn có chắc muốn xóa chiến dịch:\n\n"$headline"\n\nHành động này không thể hoàn tác.',
             style: const TextStyle(fontSize: 15, height: 1.5, color: Colors.black87),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              ),
-              child: const Text(
-                'Hủy',
-                style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600, fontSize: 16),
+              child: Text(
+                getTranslated('cancel', context) ?? 'Hủy',
+                style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w600, fontSize: 16),
               ),
             ),
             Container(
@@ -1007,13 +995,6 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                 gradient: LinearGradient(
                   colors: [Colors.red.shade400, Colors.red.shade600],
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.red.withOpacity(0.3),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
               ),
               child: Material(
                 color: Colors.transparent,
@@ -1025,13 +1006,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-                    child: const Text(
-                      'Xóa',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
-                      ),
+                    child: Text(
+                      getTranslated('delete', context) ?? 'Xóa',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16),
                     ),
                   ),
                 ),
@@ -1090,7 +1067,8 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
     }
   }
 
-  void _showSnackBar(String message, {bool isError = true}) {
+  void _showSnackBar(String messageKey, {bool isError = true}) {
+    final message = getTranslated(messageKey, context) ?? messageKey;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -1111,10 +1089,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
             Expanded(
               child: Text(
                 message,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 15,
-                ),
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
               ),
             ),
           ],
@@ -1291,20 +1266,13 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                       colors: [Colors.grey.shade300, Colors.grey.shade400],
                     ),
                     borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 20,
-                        offset: const Offset(0, 10),
-                      ),
-                    ],
                   ),
                   child: const Icon(Icons.campaign_rounded, size: 45, color: Colors.white),
                 ),
                 const SizedBox(height: 24),
-                const Text(
-                  'Chưa có chiến dịch nào',
-                  style: TextStyle(
+                Text(
+                  getTranslated('no_campaigns_yet', context) ?? 'Chưa có chiến dịch nào',
+                  style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
                     color: Colors.black87,
@@ -1313,7 +1281,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Bấm nút trên để tạo chiến dịch đầu tiên',
+                  getTranslated('tap_to_create_first', context) ?? 'Bấm nút trên để tạo chiến dịch đầu tiên',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 15,
