@@ -1,21 +1,3 @@
-// lib/features/social/controllers/group_call_controller.dart
-//
-// Controller quản lý vòng đời group call (P2P full-mesh):
-// - Caller: create -> join -> peers -> start polling
-// - Callee: attachAndJoin(callId) -> peers -> start polling
-// - Polling 1s: nhận offer/answer/candidate gửi cho mình và bắc cầu ra callbacks
-// - Theo dõi participants (peers online), trạng thái call
-// - NEW: watchGroupInbox(groupId) -> 3s/poll inbox để auto mời vào phòng call
-//
-// YÊU CẦU:
-// - Repo: GroupWebRTCSignalingRepository có method inbox({groupId})
-// - Có navigatorKey trong main.dart
-// - GroupCallScreen(groupId, mediaType) đã sẵn
-//
-// TÍCH HỢP NHANH TRONG GroupChatScreen:
-//   context.read<GroupCallController>().watchGroupInbox(widget.groupId, autoOpen: true);
-//   @override dispose() { context.read<GroupCallController>().stopWatchingInbox(); super.dispose(); }
-
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -30,47 +12,32 @@ class GroupCallController extends ChangeNotifier {
   final GroupWebRTCSignalingRepository signaling;
   GroupCallController({required this.signaling});
 
-  /// Call hiện tại (nếu có)
   int? currentCallId;
-
-  /// Trạng thái call
   CallStatus status = CallStatus.idle;
-
-  /// Danh sách userId peers đang tham gia (trừ mình)
   final Set<int> participants = <int>{};
 
-  /// Tự động polling?
   bool _pollingEnabled = false;
   Timer? _pollTimer;
   bool _pollInFlight = false;
 
-  /// Đếm nhịp để refresh peers định kỳ (5s/lần)
   int _tick = 0;
 
-  /// Callbacks bắc cầu sang lớp WebRTC/PeerManager
   void Function(Map<String, dynamic> ev)? onOffer;
   void Function(Map<String, dynamic> ev)? onAnswer;
   void Function(Map<String, dynamic> ev)? onCandidate;
 
-  /// Callback khi đổi peers (đã lọc trùng)
   void Function(Set<int> peers)? onPeersChanged;
-
-  /// Callback khi trạng thái thay đổi
   void Function(CallStatus status)? onStatusChanged;
 
-  /// no-op để giữ tương thích nếu nơi khác có gọi
   void init() {}
 
   // ====================== WATCH INBOX (NEW) ======================
   Timer? _inboxTimer;
   String? _watchGroupId;
-  int? _lastNotifiedCallId; // chống notify/mở trùng
-  bool _opening = false; // chống mở màn call trùng
-  void Function(Map<String, dynamic> call)? onIncoming; // nếu muốn tự UI
+  int? _lastNotifiedCallId;
+  bool _opening = false;
+  void Function(Map<String, dynamic> call)? onIncoming;
 
-  /// Bắt đầu theo dõi inbox call của 1 group.
-  /// - [period]: chu kỳ poll, mặc định 3s.
-  /// - [autoOpen]: nếu true và phát hiện cuộc gọi, tự push GroupCallScreen.
   void watchGroupInbox(
     String groupId, {
     Duration period = const Duration(seconds: 3),
@@ -80,17 +47,13 @@ class GroupCallController extends ChangeNotifier {
       stopWatchingInbox();
     }
     _watchGroupId = groupId;
-
-    // Tick ngay 1 lần
     _inboxTick(autoOpen: autoOpen);
-
     _inboxTimer?.cancel();
     _inboxTimer = Timer.periodic(period, (_) => _inboxTick(autoOpen: autoOpen));
     debugPrint(
         '[GROUP-INBOX] Watching group=$groupId every ${period.inSeconds}s');
   }
 
-  /// Dừng watcher (gọi khi rời màn chat)
   void stopWatchingInbox() {
     _inboxTimer?.cancel();
     _inboxTimer = null;
@@ -100,7 +63,6 @@ class GroupCallController extends ChangeNotifier {
     debugPrint('[GROUP-INBOX] Stopped watching.');
   }
 
-  /// Thực hiện 1 lần poll ngay
   Future<void> forceCheckInbox({bool autoOpen = true}) async {
     await _inboxTick(autoOpen: autoOpen);
   }
@@ -114,8 +76,7 @@ class GroupCallController extends ChangeNotifier {
       if (call == null) return;
 
       final callId = _asInt(call['call_id']);
-      final statusStr =
-          '${call['status'] ?? ''}'; // 'ringing' | 'ongoing' | ...
+      final statusStr = '${call['status'] ?? ''}';
       final media = (call['media'] == 'video') ? 'video' : 'audio';
       final joined = call['joined'] == true || '${call['joined']}' == '1';
 
@@ -130,10 +91,8 @@ class GroupCallController extends ChangeNotifier {
           '[GROUP-INBOX] Incoming group-call: call_id=$callId, gid=$gid, media=$media, status=$statusStr');
       _lastNotifiedCallId = callId;
 
-      // Cho phép app tự hiện UI nếu muốn
       if (onIncoming != null) onIncoming!(call);
 
-      // Tự mở phòng gọi nếu bật autoOpen
       if (autoOpen && !_opening) {
         _opening = true;
         final nav = navigatorKey.currentState;
@@ -142,7 +101,7 @@ class GroupCallController extends ChangeNotifier {
             MaterialPageRoute(
               builder: (_) => GroupCallScreen(
                 groupId: gid,
-                mediaType: media, // 'audio' | 'video'
+                mediaType: media,
               ),
             ),
           );
@@ -155,14 +114,11 @@ class GroupCallController extends ChangeNotifier {
   }
 
   // ====================== CALLER FLOW ======================
-  /// Caller: tạo call mới, join vào, tải peers ban đầu, khởi động polling.
-  /// Trả về response từ server (chứa call_id).
   Future<Map<String, dynamic>> joinRoom({
     required String groupId,
-    required String mediaType, // 'audio' | 'video'
-    List<int>? invitees, // optional: mời người khác, server có thể push FCM
+    required String mediaType,
+    List<int>? invitees,
   }) async {
-    // Create
     final resp = await signaling.create(
       groupId: groupId,
       media: (mediaType == 'video') ? 'video' : 'audio',
@@ -177,20 +133,15 @@ class GroupCallController extends ChangeNotifier {
     notifyListeners();
     _emitStatus();
 
-    // Join
     await _joinInternal(callId);
-
-    // Start polling
     _startPolling();
-
     return resp;
   }
 
   // ====================== CALLEE FLOW ======================
-  /// Callee: gắn vào call đã có (callId) và bắt đầu polling.
   Future<void> attachAndJoin({required int callId}) async {
     currentCallId = callId;
-    status = CallStatus.ongoing; // có thể set ringing -> ongoing khi join xong
+    status = CallStatus.ongoing;
     notifyListeners();
     _emitStatus();
 
@@ -199,7 +150,6 @@ class GroupCallController extends ChangeNotifier {
   }
 
   // ====================== LEAVE / END ======================
-  /// Người thường rời call
   Future<void> leaveRoom(int callId) async {
     try {
       await signaling.leave(callId: callId);
@@ -208,7 +158,6 @@ class GroupCallController extends ChangeNotifier {
     }
   }
 
-  /// Creator kết thúc call
   Future<void> endRoom(int callId) async {
     try {
       await signaling.end(callId: callId);
@@ -218,19 +167,13 @@ class GroupCallController extends ChangeNotifier {
   }
 
   // ====================== SEND SIGNALS ======================
-  Future<void> sendOffer({
-    required int callId,
-    required int toUserId,
-    required String sdp,
-  }) async {
+  Future<void> sendOffer(
+      {required int callId, required int toUserId, required String sdp}) async {
     await signaling.offer(callId: callId, toUserId: toUserId, sdp: sdp);
   }
 
-  Future<void> sendAnswer({
-    required int callId,
-    required int toUserId,
-    required String sdp,
-  }) async {
+  Future<void> sendAnswer(
+      {required int callId, required int toUserId, required String sdp}) async {
     await signaling.answer(callId: callId, toUserId: toUserId, sdp: sdp);
   }
 
@@ -271,7 +214,6 @@ class GroupCallController extends ChangeNotifier {
 
     _pollInFlight = true;
     try {
-      // 1) Nhận tín hiệu gửi cho mình
       final events = await signaling.poll(callId: callId);
       if (events.isNotEmpty) {
         for (final ev in events) {
@@ -292,7 +234,6 @@ class GroupCallController extends ChangeNotifier {
         }
       }
 
-      // 2) 5s/lần: refresh danh sách peers (đã join)
       _tick = (_tick + 1) % 5;
       if (_tick == 0) {
         final newPeers = await signaling.peers(callId: callId);
@@ -306,7 +247,6 @@ class GroupCallController extends ChangeNotifier {
         }
       }
     } catch (_) {
-      // có thể log chi tiết nếu cần
     } finally {
       _pollInFlight = false;
     }
@@ -318,7 +258,7 @@ class GroupCallController extends ChangeNotifier {
     participants
       ..clear()
       ..addAll(peers);
-    status = CallStatus.ongoing; // sau join coi như ongoing
+    status = CallStatus.ongoing;
     notifyListeners();
     _emitStatus();
     onPeersChanged?.call(Set<int>.from(participants));
@@ -333,7 +273,6 @@ class GroupCallController extends ChangeNotifier {
     notifyListeners();
     _emitStatus();
     if (kDebugMode) {
-      // ignore: avoid_print
       print('GroupCallController: cleaned up (old call $oldId)');
     }
   }

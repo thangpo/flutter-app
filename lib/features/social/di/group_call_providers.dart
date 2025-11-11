@@ -1,23 +1,4 @@
 // lib/features/social/di/group_call_providers.dart
-//
-// Đăng ký Provider cho Group Call:
-// - WebRTCGroupSignalingRepositoryImpl (map tới /api/v2/endpoints/webrtc_group.php)
-// - GroupCallController (quản lý join/peers/polling)
-// Cách dùng trong main.dart (ví dụ):
-//
-//   import 'package:flutter_sixvalley_ecommerce/features/social/di/group_call_providers.dart';
-//
-//   MultiProvider(
-//     providers: [
-//       ...buildGroupCallProviders(),
-//       // các provider khác...
-//     ],
-//     child: MyApp(),
-//   );
-//
-// YÊU CẦU:
-// - Đã cấu hình AppConstants.socialBaseUrl & AppConstants.socialServerKey
-// - Access token Social lưu trong SharedPreferences key: AppConstants.socialAccessToken
 
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';

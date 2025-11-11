@@ -470,20 +470,23 @@ Future<void> main() async {
       ),
 
       // Group call
+      // main.dart (provider GroupCallController)
       ChangeNotifierProvider(
         create: (_) {
           final repo = WebRTCGroupSignalingRepositoryImpl(
-            baseUrl: AppConstants.socialBaseUrl,
+            baseUrl: AppConstants.socialBaseUrl, // https://social.vnshop247.com
             serverKey: AppConstants.socialServerKey,
             getAccessToken: () async {
               final sp = await SharedPreferences.getInstance();
               return sp.getString(AppConstants.socialAccessToken);
             },
-            endpointPath: '/api/webrtc_group.php', // đi qua router /api (type=webrtc_group)
+            endpointPath: '/api/', // ⬅️ QUAN TRỌNG: thư mục, không .php
           );
           return GroupCallController(signaling: repo)..init();
         },
       ),
+
+
     ],
     child: MyApp(body: body),
   ));
