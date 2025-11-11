@@ -1,10 +1,14 @@
+import 'dart:ui';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'dart:ui';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
+
+
 
 class WalletDetailScreen extends StatefulWidget {
   final double balance;
@@ -61,7 +65,7 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
       final auth = Provider.of<AuthController>(context, listen: false);
       final accessToken = await auth.authServiceInterface.getSocialAccessToken();
 
-      if (accessToken == null) throw Exception("Chưa đăng nhập");
+      if (accessToken == null) throw Exception("not_logged_in");
 
       final url = Uri.parse("https://social.vnshop247.com/api/wallet?access_token=$accessToken");
 
@@ -83,14 +87,14 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
           });
           _animationController.forward(from: 0);
         } else {
-          throw Exception(data['errors']?['error_text'] ?? 'Lỗi không xác định');
+          throw Exception(data['errors']?['error_text'] ?? 'unknown_error');
         }
       } else {
-        throw Exception("Lỗi mạng: ${response.statusCode}");
+        throw Exception("network_error ${response.statusCode}");
       }
     } catch (e) {
       setState(() {
-        error = e.toString().replaceFirst('Exception: ', '');
+        error = getTranslated(e.toString().replaceFirst('Exception: ', ''), context) ?? e.toString();
         isLoading = false;
       });
     }
@@ -125,7 +129,7 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
     return Icons.swap_horiz_rounded;
   }
 
-  Color _getColor(String notes) {
+  Color _getColor(String notes, bool isDark) {
     notes = notes.toLowerCase();
     if (notes.contains('paypal') || notes.contains('momo') || notes.contains('bank')) {
       return const Color(0xFF34C759);
@@ -134,43 +138,50 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
     } else if (notes.contains('receive')) {
       return const Color(0xFF007AFF);
     }
-    return const Color(0xFF8E8E93);
+    return isDark ? Colors.grey.shade400 : const Color(0xFF8E8E93);
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Provider.of<ThemeController>(context);
+    final isDark = theme.darkTheme;
+    final bgColor = isDark ? const Color(0xFF121212) : const Color(0xFFF2F2F7);
+    final textColor = isDark ? Colors.white : const Color(0xFF1C1C1E);
+    final subTextColor = isDark ? Colors.white70 : const Color(0xFF3C3C43).withOpacity(0.6);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F2F7),
+      backgroundColor: bgColor,
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
-          _buildAppBar(),
-          SliverToBoxAdapter(child: SizedBox(height: 8)),
-          _buildBalanceCard(),
-          SliverToBoxAdapter(child: SizedBox(height: 24)),
-          _buildTransactionSection(),
-          SliverToBoxAdapter(child: SizedBox(height: 24)),
+          _buildAppBar(isDark, textColor),
+          const SliverToBoxAdapter(child: SizedBox(height: 8)),
+          _buildBalanceCard(isDark, textColor, subTextColor),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+          _buildTransactionSection(isDark, textColor, subTextColor),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
         ],
       ),
     );
   }
 
-  Widget _buildAppBar() {
+  Widget _buildAppBar(bool isDark, Color textColor) {
     return SliverAppBar(
       expandedHeight: 0,
       floating: true,
       pinned: true,
       elevation: 0,
-      backgroundColor: const Color(0xFFF2F2F7),
-      foregroundColor: const Color(0xFF000000),
+      backgroundColor: Colors.transparent,
+      foregroundColor: textColor,
       leading: Container(
         margin: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.9),
+          color: (isDark ? Colors.white.withOpacity(0.15) : Colors.white.withOpacity(0.9)),
           borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: isDark ? Colors.white24 : Colors.white.withOpacity(0.3), width: 1),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
               blurRadius: 10,
               offset: const Offset(0, 2),
             ),
@@ -182,12 +193,13 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
           padding: EdgeInsets.zero,
         ),
       ),
-      title: const Text(
-        'Ví của tôi',
+      title: Text(
+        getTranslated('my_wallet', context) ?? 'Ví của tôi',
         style: TextStyle(
           fontWeight: FontWeight.w600,
           fontSize: 17,
           letterSpacing: -0.4,
+          color: textColor,
         ),
       ),
       centerTitle: true,
@@ -195,11 +207,12 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
         Container(
           margin: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.9),
+            color: (isDark ? Colors.white.withOpacity(0.15) : Colors.white.withOpacity(0.9)),
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: isDark ? Colors.white24 : Colors.white.withOpacity(0.3), width: 1),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
                 blurRadius: 10,
                 offset: const Offset(0, 2),
               ),
@@ -216,7 +229,7 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
     );
   }
 
-  Widget _buildBalanceCard() {
+  Widget _buildBalanceCard(bool isDark, Color textColor, Color subTextColor) {
     return SliverToBoxAdapter(
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -229,32 +242,31 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [
-                    Colors.white.withOpacity(0.9),
-                    Colors.white.withOpacity(0.7),
-                  ],
+                  colors: isDark
+                      ? [Colors.white.withOpacity(0.1), Colors.white.withOpacity(0.05)]
+                      : [Colors.white.withOpacity(0.9), Colors.white.withOpacity(0.7)],
                 ),
                 borderRadius: BorderRadius.circular(28),
                 border: Border.all(
-                  color: Colors.white.withOpacity(0.5),
+                  color: isDark ? Colors.white24 : Colors.white.withOpacity(0.5),
                   width: 1.5,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
+                    color: Colors.black.withOpacity(isDark ? 0.4 : 0.08),
                     blurRadius: 30,
                     offset: const Offset(0, 10),
                   ),
-                  BoxShadow(
-                    color: Colors.white.withOpacity(0.8),
-                    blurRadius: 10,
-                    offset: const Offset(-5, -5),
-                  ),
+                  if (!isDark)
+                    BoxShadow(
+                      color: Colors.white.withOpacity(0.8),
+                      blurRadius: 10,
+                      offset: const Offset(-5, -5),
+                    ),
                 ],
               ),
               child: Stack(
                 children: [
-                  // Animated gradient orbs
                   Positioned(
                     right: -60,
                     top: -60,
@@ -271,7 +283,7 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
                               shape: BoxShape.circle,
                               gradient: RadialGradient(
                                 colors: [
-                                  const Color(0xFF007AFF).withOpacity(0.15),
+                                  const Color(0xFF007AFF).withOpacity(isDark ? 0.1 : 0.15),
                                   const Color(0xFF007AFF).withOpacity(0.0),
                                 ],
                               ),
@@ -291,7 +303,7 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
                         shape: BoxShape.circle,
                         gradient: RadialGradient(
                           colors: [
-                            const Color(0xFF5856D6).withOpacity(0.12),
+                            const Color(0xFF5856D6).withOpacity(isDark ? 0.08 : 0.12),
                             const Color(0xFF5856D6).withOpacity(0.0),
                           ],
                         ),
@@ -299,7 +311,6 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
                     ),
                   ),
 
-                  // Content
                   Padding(
                     padding: const EdgeInsets.all(24),
                     child: Column(
@@ -310,7 +321,7 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF007AFF).withOpacity(0.15),
+                                color: const Color(0xFF007AFF).withOpacity(isDark ? 0.2 : 0.15),
                                 borderRadius: BorderRadius.circular(14),
                               ),
                               child: const Icon(
@@ -323,13 +334,13 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                               decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.05),
+                                color: (isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05)),
                                 borderRadius: BorderRadius.circular(18),
                               ),
-                              child: const Text(
+                              child: Text(
                                 'VNĐ',
                                 style: TextStyle(
-                                  color: Color(0xFF1C1C1E),
+                                  color: textColor,
                                   fontWeight: FontWeight.w600,
                                   fontSize: 13,
                                   letterSpacing: 0.5,
@@ -340,10 +351,10 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
                         ),
                         const SizedBox(height: 28),
                         Text(
-                          'Số dư khả dụng',
+                          getTranslated('available_balance', context) ?? 'Số dư khả dụng',
                           style: TextStyle(
                             fontSize: 13,
-                            color: const Color(0xFF3C3C43).withOpacity(0.6),
+                            color: subTextColor,
                             fontWeight: FontWeight.w500,
                             letterSpacing: -0.2,
                           ),
@@ -355,10 +366,7 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
                             color: Colors.transparent,
                             child: ShaderMask(
                               shaderCallback: (bounds) => const LinearGradient(
-                                colors: [
-                                  Color(0xFF007AFF),
-                                  Color(0xFF5856D6),
-                                ],
+                                colors: [Color(0xFF007AFF), Color(0xFF5856D6)],
                               ).createShader(bounds),
                               child: Text(
                                 '${_formatMoney(widget.balance.toString())} đ',
@@ -377,7 +385,7 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                           decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.03),
+                            color: (isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.03)),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Row(
@@ -385,7 +393,7 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
                             children: [
                               Icon(
                                 Icons.person_rounded,
-                                color: const Color(0xFF3C3C43).withOpacity(0.6),
+                                color: subTextColor,
                                 size: 16,
                               ),
                               const SizedBox(width: 8),
@@ -393,7 +401,7 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
                                 widget.username,
                                 style: TextStyle(
                                   fontSize: 14,
-                                  color: const Color(0xFF3C3C43).withOpacity(0.8),
+                                  color: textColor.withOpacity(0.8),
                                   fontWeight: FontWeight.w500,
                                   letterSpacing: -0.2,
                                 ),
@@ -413,7 +421,7 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
     );
   }
 
-  Widget _buildTransactionSection() {
+  Widget _buildTransactionSection(bool isDark, Color textColor, Color subTextColor) {
     return SliverToBoxAdapter(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -422,12 +430,12 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
             padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
             child: Row(
               children: [
-                const Text(
-                  'Lịch sử giao dịch',
+                Text(
+                  getTranslated('transaction_history', context) ?? 'Lịch sử giao dịch',
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF1C1C1E),
+                    color: textColor,
                     letterSpacing: -0.5,
                   ),
                 ),
@@ -452,19 +460,19 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
             ),
           ),
           if (isLoading)
-            _buildLoadingWidget()
+            _buildLoadingWidget(isDark)
           else if (error != null)
-            _buildErrorWidget()
+            _buildErrorWidget(isDark, textColor)
           else if (transactions.isEmpty)
-              _buildEmptyWidget()
+              _buildEmptyWidget(isDark, textColor, subTextColor)
             else
-              _buildTransactionList(),
+              _buildTransactionList(isDark, textColor, subTextColor),
         ],
       ),
     );
   }
 
-  Widget _buildLoadingWidget() {
+  Widget _buildLoadingWidget(bool isDark) {
     return Container(
       height: 280,
       alignment: Alignment.center,
@@ -474,11 +482,12 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.9),
+              color: (isDark ? Colors.white.withOpacity(0.15) : Colors.white.withOpacity(0.9)),
               shape: BoxShape.circle,
+              border: Border.all(color: isDark ? Colors.white24 : Colors.white.withOpacity(0.3), width: 1),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
+                  color: Colors.black.withOpacity(isDark ? 0.3 : 0.06),
                   blurRadius: 20,
                   offset: const Offset(0, 4),
                 ),
@@ -494,10 +503,10 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
             ),
           ),
           const SizedBox(height: 20),
-          const Text(
-            'Đang tải giao dịch...',
+          Text(
+            getTranslated('loading_transactions', context) ?? 'Đang tải giao dịch...',
             style: TextStyle(
-              color: Color(0xFF8E8E93),
+              color: isDark ? Colors.white70 : const Color(0xFF8E8E93),
               fontSize: 15,
               fontWeight: FontWeight.w500,
             ),
@@ -507,7 +516,7 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
     );
   }
 
-  Widget _buildErrorWidget() {
+  Widget _buildErrorWidget(bool isDark, Color textColor) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       child: ClipRRect(
@@ -517,15 +526,15 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
           child: Container(
             padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.85),
+              color: (isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.85)),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: Colors.white.withOpacity(0.4),
+                color: isDark ? Colors.white24 : Colors.white.withOpacity(0.4),
                 width: 1,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
+                  color: Colors.black.withOpacity(isDark ? 0.3 : 0.06),
                   blurRadius: 20,
                   offset: const Offset(0, 4),
                 ),
@@ -546,12 +555,12 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
                   ),
                 ),
                 const SizedBox(height: 20),
-                const Text(
-                  'Đã có lỗi xảy ra',
+                Text(
+                  getTranslated('error_occurred', context) ?? 'Đã có lỗi xảy ra',
                   style: TextStyle(
                     fontSize: 19,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF1C1C1E),
+                    color: textColor,
                     letterSpacing: -0.3,
                   ),
                 ),
@@ -559,8 +568,8 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
                 Text(
                   error ?? '',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Color(0xFF8E8E93),
+                  style: TextStyle(
+                    color: isDark ? Colors.white70 : const Color(0xFF8E8E93),
                     fontSize: 15,
                     height: 1.4,
                   ),
@@ -578,11 +587,10 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
                         borderRadius: BorderRadius.circular(14),
                       ),
                       elevation: 0,
-                      shadowColor: Colors.transparent,
                     ),
-                    child: const Text(
-                      'Thử lại',
-                      style: TextStyle(
+                    child: Text(
+                      getTranslated('retry', context) ?? 'Thử lại',
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                         letterSpacing: -0.3,
@@ -598,7 +606,7 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
     );
   }
 
-  Widget _buildEmptyWidget() {
+  Widget _buildEmptyWidget(bool isDark, Color textColor, Color subTextColor) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       child: ClipRRect(
@@ -608,15 +616,15 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
           child: Container(
             padding: const EdgeInsets.all(48),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.85),
+              color: (isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.85)),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: Colors.white.withOpacity(0.4),
+                color: isDark ? Colors.white24 : Colors.white.withOpacity(0.4),
                 width: 1,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
+                  color: Colors.black.withOpacity(isDark ? 0.3 : 0.06),
                   blurRadius: 20,
                   offset: const Offset(0, 4),
                 ),
@@ -627,30 +635,30 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF8E8E93).withOpacity(0.1),
+                    color: (isDark ? Colors.grey.shade700 : const Color(0xFF8E8E93)).withOpacity(0.1),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.receipt_long_rounded,
                     size: 48,
-                    color: Color(0xFF8E8E93),
+                    color: isDark ? Colors.grey.shade400 : const Color(0xFF8E8E93),
                   ),
                 ),
                 const SizedBox(height: 24),
-                const Text(
-                  'Chưa có giao dịch',
+                Text(
+                  getTranslated('no_transactions', context) ?? 'Chưa có giao dịch',
                   style: TextStyle(
                     fontSize: 19,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF1C1C1E),
+                    color: textColor,
                     letterSpacing: -0.3,
                   ),
                 ),
                 const SizedBox(height: 10),
-                const Text(
-                  'Các giao dịch của bạn sẽ xuất hiện ở đây',
+                Text(
+                  getTranslated('transactions_will_appear_here', context) ?? 'Các giao dịch của bạn sẽ xuất hiện ở đây',
                   style: TextStyle(
-                    color: Color(0xFF8E8E93),
+                    color: subTextColor,
                     fontSize: 15,
                     height: 1.4,
                   ),
@@ -664,7 +672,7 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
     );
   }
 
-  Widget _buildTransactionList() {
+  Widget _buildTransactionList(bool isDark, Color textColor, Color subTextColor) {
     return FadeTransition(
       opacity: _fadeAnimation,
       child: ScaleTransition(
@@ -677,9 +685,9 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
           itemBuilder: (context, index) {
             final tx = transactions[index];
             final amount = tx['amount'] ?? '0';
-            final notes = tx['notes'] ?? 'Không có ghi chú';
+            final notes = tx['notes'] ?? 'no_notes';
             final date = tx['transaction_dt'] ?? '';
-            final color = _getColor(notes);
+            final color = _getColor(notes, isDark);
 
             return TweenAnimationBuilder<double>(
               duration: Duration(milliseconds: 500 + (index * 80)),
@@ -702,15 +710,15 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
                     filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.85),
+                        color: (isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.85)),
                         borderRadius: BorderRadius.circular(18),
                         border: Border.all(
-                          color: Colors.white.withOpacity(0.4),
+                          color: isDark ? Colors.white24 : Colors.white.withOpacity(0.4),
                           width: 1,
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.04),
+                            color: Colors.black.withOpacity(isDark ? 0.3 : 0.04),
                             blurRadius: 15,
                             offset: const Offset(0, 4),
                           ),
@@ -745,11 +753,11 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        notes,
-                                        style: const TextStyle(
+                                        getTranslated(notes, context) ?? notes,
+                                        style: TextStyle(
                                           fontWeight: FontWeight.w600,
                                           fontSize: 16,
-                                          color: Color(0xFF1C1C1E),
+                                          color: textColor,
                                           letterSpacing: -0.3,
                                         ),
                                         maxLines: 1,
@@ -761,14 +769,14 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
                                           Icon(
                                             Icons.access_time_rounded,
                                             size: 13,
-                                            color: const Color(0xFF8E8E93).withOpacity(0.8),
+                                            color: subTextColor,
                                           ),
                                           const SizedBox(width: 5),
                                           Text(
                                             _formatDate(date),
                                             style: TextStyle(
                                               fontSize: 13,
-                                              color: const Color(0xFF8E8E93).withOpacity(0.8),
+                                              color: subTextColor,
                                               fontWeight: FontWeight.w500,
                                             ),
                                           ),

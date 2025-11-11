@@ -1,12 +1,15 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../domain/services/social_user_service.dart';
 import 'package:flutter_sixvalley_ecommerce/features/ads/services/ads_service.dart';
-import 'package:flutter_sixvalley_ecommerce/features/ads/presentation/screens/create_ads_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/ads/presentation/screens/ad_detail_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/ads/presentation/screens/create_ads_screen.dart';
+
 
 class WithdrawScreen extends StatefulWidget {
   const WithdrawScreen({super.key});
@@ -64,6 +67,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
   }
 
   Future<void> _loadData() async {
+    HapticFeedback.selectionClick();
     setState(() {
       isLoading = true;
       isLoadingCampaigns = true;
@@ -106,6 +110,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
 
   @override
   Widget build(BuildContext context) {
+    final theme = Provider.of<ThemeController>(context);
+    final isDark = theme.darkTheme;
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: PreferredSize(
@@ -116,17 +123,24 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
             child: AppBar(
               title: Text(
                 getTranslated('withdraw', context) ?? 'Quảng cáo',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w600,
-                  color: Colors.black,
+                  color: isDark ? Colors.white : Colors.black,
                   letterSpacing: -0.3,
                 ),
               ),
-              backgroundColor: Colors.white.withOpacity(0.7),
+              backgroundColor: (isDark ? Colors.black : Colors.white).withOpacity(0.7),
               elevation: 0,
               centerTitle: true,
-              iconTheme: const IconThemeData(color: Colors.black),
+              iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.pop(context);
+                },
+              ),
             ),
           ),
         ),
@@ -136,7 +150,13 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
+            colors: isDark
+                ? [
+              const Color(0xFF121212),
+              const Color(0xFF1E1E1E),
+              Colors.blue.shade900.withOpacity(0.3),
+            ]
+                : [
               const Color(0xFFF5F7FA),
               const Color(0xFFE8EDF5),
               Colors.blue.shade50.withOpacity(0.3),
@@ -146,13 +166,13 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
         child: RefreshIndicator(
           onRefresh: _loadData,
           color: Colors.blue,
-          backgroundColor: Colors.white,
+          backgroundColor: isDark ? Colors.grey.shade800 : Colors.white,
           displacement: 60,
           child: isLoading
-              ? _buildLoading()
+              ? _buildLoading(isDark)
               : errorMessage != null
-              ? _buildError()
-              : _buildContent(),
+              ? _buildError(isDark)
+              : _buildContent(isDark),
         ),
       ),
     );
@@ -177,7 +197,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
     );
   }
 
-  Widget _buildLoading() {
+  Widget _buildLoading(bool isDark) {
     return Center(
       child: AnimatedBuilder(
         animation: _floatingController,
@@ -195,15 +215,15 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.5),
+                color: (isDark ? Colors.grey.shade900 : Colors.white).withOpacity(0.5),
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(
-                  color: Colors.white.withOpacity(0.3),
+                  color: (isDark ? Colors.white24 : Colors.white.withOpacity(0.3)),
                   width: 1.5,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withOpacity(isDark ? 0.3 : 0.1),
                     blurRadius: 30,
                     offset: const Offset(0, 15),
                   ),
@@ -226,7 +246,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
     );
   }
 
-  Widget _buildError() {
+  Widget _buildError(bool isDark) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -237,10 +257,10 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
             child: Container(
               padding: const EdgeInsets.all(32),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.6),
+                color: (isDark ? Colors.grey.shade900 : Colors.white).withOpacity(0.6),
                 borderRadius: BorderRadius.circular(28),
                 border: Border.all(
-                  color: Colors.white.withOpacity(0.3),
+                  color: (isDark ? Colors.white24 : Colors.white.withOpacity(0.3)),
                   width: 1.5,
                 ),
               ),
@@ -262,21 +282,25 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                   Text(
                     errorMessage!,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
-                      color: Colors.black87,
+                      color: isDark ? Colors.white70 : Colors.black87,
                       fontWeight: FontWeight.w500,
                       height: 1.4,
                     ),
                   ),
                   const SizedBox(height: 28),
                   _buildGlassButton(
-                    onPressed: _loadData,
+                    onPressed: () {
+                      HapticFeedback.mediumImpact();
+                      _loadData();
+                    },
                     icon: Icons.refresh_rounded,
                     text: getTranslated('retry', context) ?? 'Thử lại',
                     gradient: LinearGradient(
                       colors: [Colors.blue.shade400, Colors.blue.shade600],
                     ),
+                    isDark: isDark,
                   ),
                 ],
               ),
@@ -287,7 +311,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
     );
   }
 
-  Widget _buildContent() {
+  Widget _buildContent(bool isDark) {
     return CustomScrollView(
       physics: const BouncingScrollPhysics(),
       slivers: [
@@ -297,11 +321,11 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
             child: Column(
               children: [
-                _buildWalletCard(),
+                _buildWalletCard(isDark),
                 const SizedBox(height: 20),
-                _buildCreateCampaignButton(),
+                _buildCreateCampaignButton(isDark),
                 const SizedBox(height: 36),
-                _buildSectionHeader(),
+                _buildSectionHeader(isDark),
                 const SizedBox(height: 16),
               ],
             ),
@@ -310,23 +334,23 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
           sliver: isLoadingCampaigns
-              ? SliverToBoxAdapter(child: _buildCampaignsSkeleton())
+              ? SliverToBoxAdapter(child: _buildCampaignsSkeleton(isDark))
               : campaigns.isEmpty
-              ? SliverToBoxAdapter(child: _buildEmptyState())
-              : _buildCampaignsSliverList(),
+              ? SliverToBoxAdapter(child: _buildEmptyState(isDark))
+              : _buildCampaignsSliverList(isDark),
         ),
       ],
     );
   }
 
-  Widget _buildSectionHeader() {
+  Widget _buildSectionHeader(bool isDark) {
     return Row(
       children: [
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Colors.blue.shade400, Colors.blue.shade400],
+              colors: [Colors.blue.shade400, Colors.blue.shade600],
             ),
             borderRadius: BorderRadius.circular(10),
           ),
@@ -335,10 +359,10 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
         const SizedBox(width: 12),
         Text(
           getTranslated('my_campaigns', context) ?? 'Chiến dịch của tôi',
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.w700,
-            color: Colors.black87,
+            color: isDark ? Colors.white : Colors.black87,
             letterSpacing: -0.5,
           ),
         ),
@@ -346,7 +370,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
     );
   }
 
-  Widget _buildWalletCard() {
+  Widget _buildWalletCard(bool isDark) {
     return AnimatedBuilder(
       animation: _floatingController,
       builder: (context, child) {
@@ -365,18 +389,17 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  Colors.white.withOpacity(0.7),
-                  Colors.white.withOpacity(0.5),
-                ],
+                colors: isDark
+                    ? [Colors.white.withOpacity(0.1), Colors.white.withOpacity(0.05)]
+                    : [Colors.white.withOpacity(0.7), Colors.white.withOpacity(0.5)],
               ),
               border: Border.all(
-                color: Colors.white.withOpacity(0.3),
+                color: isDark ? Colors.white24 : Colors.white.withOpacity(0.3),
                 width: 1.5,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.blue.withOpacity(0.1),
+                  color: Colors.black.withOpacity(isDark ? 0.4 : 0.1),
                   blurRadius: 30,
                   offset: const Offset(0, 15),
                 ),
@@ -396,7 +419,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                             end: Alignment(1.0 + (_shimmerController.value * 3), 1.0),
                             colors: [
                               Colors.transparent,
-                              Colors.white.withOpacity(0.1),
+                              (isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.2)),
                               Colors.transparent,
                             ],
                             stops: const [0.0, 0.5, 1.0],
@@ -415,12 +438,12 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                         height: 60,
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
-                            colors: [Colors.blue.shade400, Colors.blue.shade400],
+                            colors: [Colors.blue.shade400, Colors.blue.shade600],
                           ),
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.blue.withOpacity(0.3),
+                              color: Colors.blue.withOpacity(isDark ? 0.4 : 0.3),
                               blurRadius: 15,
                               offset: const Offset(0, 8),
                             ),
@@ -440,7 +463,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                             Text(
                               getTranslated('ad_balance', context) ?? 'Số dư quảng cáo',
                               style: TextStyle(
-                                color: Colors.black.withOpacity(0.6),
+                                color: isDark ? Colors.white70 : Colors.black.withOpacity(0.6),
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
                                 letterSpacing: -0.2,
@@ -449,8 +472,8 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                             const SizedBox(height: 6),
                             Text(
                               '${_formatMoney(walletBalance)} đ',
-                              style: const TextStyle(
-                                color: Colors.black87,
+                              style: TextStyle(
+                                color: isDark ? Colors.white : Colors.black87,
                                 fontSize: 30,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: -1,
@@ -470,9 +493,10 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
     );
   }
 
-  Widget _buildCreateCampaignButton() {
+  Widget _buildCreateCampaignButton(bool isDark) {
     return _buildGlassButton(
       onPressed: () async {
+        HapticFeedback.mediumImpact();
         final result = await Navigator.of(context).push(_createRoute());
         if (result == true && mounted) {
           _showSnackBar(getTranslated('loading_new_campaign', context) ?? 'Đang tải chiến dịch mới...', isError: false);
@@ -485,6 +509,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
         colors: [Colors.blue.shade400, Colors.purple.shade400],
       ),
       isLarge: true,
+      isDark: isDark,
     );
   }
 
@@ -494,6 +519,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
     required String text,
     required Gradient gradient,
     bool isLarge = false,
+    required bool isDark,
   }) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
@@ -503,18 +529,17 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             gradient: LinearGradient(
-              colors: [
-                Colors.white.withOpacity(0.6),
-                Colors.white.withOpacity(0.4),
-              ],
+              colors: isDark
+                  ? [Colors.white.withOpacity(0.15), Colors.white.withOpacity(0.05)]
+                  : [Colors.white.withOpacity(0.6), Colors.white.withOpacity(0.4)],
             ),
             border: Border.all(
-              color: Colors.white.withOpacity(0.3),
+              color: isDark ? Colors.white24 : Colors.white.withOpacity(0.3),
               width: 1.5,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
                 blurRadius: 20,
                 offset: const Offset(0, 10),
               ),
@@ -566,7 +591,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
     );
   }
 
-  Widget _buildCampaignsSliverList() {
+  Widget _buildCampaignsSliverList(bool isDark) {
     return SliverList(
       delegate: SliverChildBuilderDelegate(
             (context, index) {
@@ -589,7 +614,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                     ? const SizedBox.shrink()
                     : Padding(
                   padding: const EdgeInsets.only(bottom: 12),
-                  child: _buildCampaignCard(camp, adId, isLoading),
+                  child: _buildCampaignCard(camp, adId, isLoading, isDark),
                 ),
               ),
             ),
@@ -600,7 +625,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
     );
   }
 
-  Widget _buildCampaignCard(Map<String, dynamic> camp, int? adId, bool isLoading) {
+  Widget _buildCampaignCard(Map<String, dynamic> camp, int? adId, bool isLoading, bool isDark) {
     final isActive = camp["status"] == "1";
     final statusText = isActive
         ? (getTranslated('running', context) ?? "Đang chạy")
@@ -618,18 +643,17 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(22),
             gradient: LinearGradient(
-              colors: [
-                Colors.white.withOpacity(0.7),
-                Colors.white.withOpacity(0.5),
-              ],
+              colors: isDark
+                  ? [Colors.white.withOpacity(0.1), Colors.white.withOpacity(0.05)]
+                  : [Colors.white.withOpacity(0.7), Colors.white.withOpacity(0.5)],
             ),
             border: Border.all(
-              color: Colors.white.withOpacity(0.3),
+              color: isDark ? Colors.white24 : Colors.white.withOpacity(0.3),
               width: 1.5,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
                 blurRadius: 20,
                 offset: const Offset(0, 10),
               ),
@@ -639,7 +663,10 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
             color: Colors.transparent,
             child: InkWell(
               borderRadius: BorderRadius.circular(22),
-              onTap: isLoading ? null : () => _handleCampaignTap(adId, camp),
+              onTap: isLoading ? null : () {
+                HapticFeedback.selectionClick();
+                _handleCampaignTap(adId, camp);
+              },
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Stack(
@@ -658,7 +685,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                                   height: 35,
                                   padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
-                                    color: Colors.white,
+                                    color: isDark ? Colors.grey.shade800 : Colors.white,
                                     borderRadius: BorderRadius.circular(18),
                                     boxShadow: [
                                       BoxShadow(
@@ -684,7 +711,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
+                                color: Colors.black.withOpacity(isDark ? 0.3 : 0.1),
                                 blurRadius: 10,
                                 offset: const Offset(0, 5),
                               ),
@@ -702,11 +729,13 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                                 height: 70,
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
-                                    colors: [Colors.grey.shade200, Colors.grey.shade300],
+                                    colors: isDark
+                                        ? [Colors.grey.shade800, Colors.grey.shade700]
+                                        : [Colors.grey.shade200, Colors.grey.shade300],
                                   ),
                                   borderRadius: BorderRadius.circular(16),
                                 ),
-                                child: Icon(Icons.image_rounded, color: Colors.grey.shade400, size: 32),
+                                child: Icon(Icons.image_rounded, color: isDark ? Colors.grey.shade500 : Colors.grey.shade400, size: 32),
                               ),
                             ),
                           ),
@@ -718,10 +747,10 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                             children: [
                               Text(
                                 headline,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 17,
                                   fontWeight: FontWeight.w600,
-                                  color: Colors.black87,
+                                  color: isDark ? Colors.white : Colors.black87,
                                   letterSpacing: -0.3,
                                 ),
                                 maxLines: 1,
@@ -730,25 +759,25 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                               const SizedBox(height: 8),
                               Row(
                                 children: [
-                                  Icon(Icons.touch_app_rounded, size: 16, color: Colors.grey.shade600),
+                                  Icon(Icons.touch_app_rounded, size: 16, color: isDark ? Colors.white70 : Colors.grey.shade600),
                                   const SizedBox(width: 4),
                                   Text(
                                     '${camp["clicks"] ?? 0}',
                                     style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
-                                      color: Colors.grey.shade700,
+                                      color: isDark ? Colors.white70 : Colors.grey.shade700,
                                     ),
                                   ),
                                   const SizedBox(width: 12),
-                                  Icon(Icons.visibility_rounded, size: 16, color: Colors.grey.shade600),
+                                  Icon(Icons.visibility_rounded, size: 16, color: isDark ? Colors.white70 : Colors.grey.shade600),
                                   const SizedBox(width: 4),
                                   Text(
                                     '${camp["views"] ?? 0}',
                                     style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
-                                      color: Colors.grey.shade700,
+                                      color: isDark ? Colors.white70 : Colors.grey.shade700,
                                     ),
                                   ),
                                 ],
@@ -767,7 +796,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                                 borderRadius: BorderRadius.circular(12),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: isActive ? Colors.green.withOpacity(0.3) : Colors.grey.withOpacity(0.2),
+                                    color: isActive ? Colors.green.withOpacity(isDark ? 0.4 : 0.3) : Colors.grey.withOpacity(isDark ? 0.3 : 0.2),
                                     blurRadius: 8,
                                     offset: const Offset(0, 4),
                                   ),
@@ -786,13 +815,15 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                             const SizedBox(height: 8),
                             Container(
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.5),
+                                color: isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.5),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: IconButton(
                                 icon: Icon(
                                   Icons.delete_rounded,
-                                  color: isActive ? Colors.grey.shade400 : Colors.red.shade400,
+                                  color: isActive
+                                      ? (isDark ? Colors.grey.shade500 : Colors.grey.shade400)
+                                      : Colors.red.shade400,
                                   size: 22,
                                 ),
                                 tooltip: isActive
@@ -802,7 +833,10 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                                     ? null
                                     : (adId == null)
                                     ? null
-                                    : () => _handleDeleteRequest(context, adId, headline, isActive),
+                                    : () {
+                                  HapticFeedback.heavyImpact();
+                                  _handleDeleteRequest(context, adId, headline, isActive);
+                                },
                               ),
                             ),
                           ],
@@ -819,50 +853,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
     );
   }
 
-  Future<void> _handleCampaignTap(int? adId, Map<String, dynamic> camp) async {
-    if (adId == null) {
-      _showSnackBar('ID quảng cáo không hợp lệ');
-      return;
-    }
-
-    setState(() => _loadingItems[adId] = true);
-
-    try {
-      final auth = Provider.of<AuthController>(context, listen: false);
-      final accessToken = await auth.authServiceInterface.getSocialAccessToken();
-      if (accessToken == null) throw Exception("Chưa đăng nhập");
-
-      final adDetail = await AdsService().fetchAdById(
-        accessToken: accessToken,
-        adId: adId,
-      );
-
-      if (!context.mounted) return;
-
-      final result = await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => AdDetailScreen(
-            adData: adDetail,
-            adId: adId,
-            accessToken: accessToken,
-          ),
-        ),
-      );
-
-      if (result == true && context.mounted) {
-        _loadData();
-      }
-    } catch (e) {
-      if (context.mounted) {
-        _showSnackBar('Lỗi: $e', isError: true);
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _loadingItems.remove(adId));
-      }
-    }
-  }
+  // === DIALOGS & SNACKBAR ===
 
   void _handleDeleteRequest(BuildContext context, int adId, String headline, bool isActive) {
     if (isActive) {
@@ -873,13 +864,14 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
   }
 
   void _showStopBeforeDeleteDialog(BuildContext context, int adId, String headline) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showDialog(
       context: context,
       builder: (ctx) => BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-          backgroundColor: Colors.white.withOpacity(0.95),
+          backgroundColor: (isDark ? Colors.grey.shade900 : Colors.white).withOpacity(0.95),
           surfaceTintColor: Colors.transparent,
           contentPadding: const EdgeInsets.all(24),
           title: Row(
@@ -906,14 +898,14 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
           content: Text(
             getTranslated('stop_and_delete_prompt', context)?.replaceAll('{headline}', headline) ??
                 'Chiến dịch "$headline" đang hoạt động.\n\nBạn có muốn dừng và xóa chiến dịch này không?',
-            style: const TextStyle(fontSize: 15, height: 1.5, color: Colors.black87),
+            style: TextStyle(fontSize: 15, height: 1.5, color: isDark ? Colors.white70 : Colors.black87),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: Text(
                 getTranslated('cancel', context) ?? 'Hủy',
-                style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w600, fontSize: 16),
+                style: TextStyle(color: isDark ? Colors.white60 : Colors.grey, fontWeight: FontWeight.w600, fontSize: 16),
               ),
             ),
             Container(
@@ -948,13 +940,14 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
   }
 
   void _showDeleteConfirmation(BuildContext context, int adId, String headline) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showDialog(
       context: context,
       builder: (ctx) => BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-          backgroundColor: Colors.white.withOpacity(0.95),
+          backgroundColor: (isDark ? Colors.grey.shade900 : Colors.white).withOpacity(0.95),
           surfaceTintColor: Colors.transparent,
           contentPadding: const EdgeInsets.all(24),
           title: Row(
@@ -979,14 +972,14 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
           content: Text(
             getTranslated('confirm_delete', context)?.replaceAll('{headline}', headline) ??
                 'Bạn có chắc muốn xóa chiến dịch:\n\n"$headline"\n\nHành động này không thể hoàn tác.',
-            style: const TextStyle(fontSize: 15, height: 1.5, color: Colors.black87),
+            style: TextStyle(fontSize: 15, height: 1.5, color: isDark ? Colors.white70 : Colors.black87),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: Text(
                 getTranslated('cancel', context) ?? 'Hủy',
-                style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w600, fontSize: 16),
+                style: TextStyle(color: isDark ? Colors.white60 : Colors.grey, fontWeight: FontWeight.w600, fontSize: 16),
               ),
             ),
             Container(
@@ -1068,6 +1061,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
   }
 
   void _showSnackBar(String messageKey, {bool isError = true}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final message = getTranslated(messageKey, context) ?? messageKey;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1094,7 +1088,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
             ),
           ],
         ),
-        backgroundColor: isError ? Colors.red.shade400 : Colors.green.shade400,
+        backgroundColor: isError
+            ? (isDark ? Colors.red.shade700 : Colors.red.shade400)
+            : (isDark ? Colors.green.shade700 : Colors.green.shade400),
         duration: const Duration(seconds: 3),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1104,7 +1100,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
     );
   }
 
-  Widget _buildCampaignsSkeleton() {
+  Widget _buildCampaignsSkeleton(bool isDark) {
     return Column(
       children: List.generate(
         3,
@@ -1119,13 +1115,12 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(22),
                   gradient: LinearGradient(
-                    colors: [
-                      Colors.white.withOpacity(0.6),
-                      Colors.white.withOpacity(0.4),
-                    ],
+                    colors: isDark
+                        ? [Colors.white.withOpacity(0.1), Colors.white.withOpacity(0.05)]
+                        : [Colors.white.withOpacity(0.6), Colors.white.withOpacity(0.4)],
                   ),
                   border: Border.all(
-                    color: Colors.white.withOpacity(0.3),
+                    color: isDark ? Colors.white24 : Colors.white.withOpacity(0.3),
                     width: 1.5,
                   ),
                 ),
@@ -1142,11 +1137,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                             gradient: LinearGradient(
                               begin: Alignment(-1.0 + (_shimmerController.value * 3), 0),
                               end: Alignment(1.0 + (_shimmerController.value * 3), 0),
-                              colors: [
-                                Colors.grey.shade200,
-                                Colors.grey.shade100,
-                                Colors.grey.shade200,
-                              ],
+                              colors: isDark
+                                  ? [Colors.grey.shade800, Colors.grey.shade700, Colors.grey.shade800]
+                                  : [Colors.grey.shade200, Colors.grey.shade100, Colors.grey.shade200],
                             ),
                           ),
                         );
@@ -1168,11 +1161,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                                   gradient: LinearGradient(
                                     begin: Alignment(-1.0 + (_shimmerController.value * 3), 0),
                                     end: Alignment(1.0 + (_shimmerController.value * 3), 0),
-                                    colors: [
-                                      Colors.grey.shade200,
-                                      Colors.grey.shade100,
-                                      Colors.grey.shade200,
-                                    ],
+                                    colors: isDark
+                                        ? [Colors.grey.shade800, Colors.grey.shade700, Colors.grey.shade800]
+                                        : [Colors.grey.shade200, Colors.grey.shade100, Colors.grey.shade200],
                                   ),
                                 ),
                               );
@@ -1190,11 +1181,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                                   gradient: LinearGradient(
                                     begin: Alignment(-1.0 + (_shimmerController.value * 3), 0),
                                     end: Alignment(1.0 + (_shimmerController.value * 3), 0),
-                                    colors: [
-                                      Colors.grey.shade200,
-                                      Colors.grey.shade100,
-                                      Colors.grey.shade200,
-                                    ],
+                                    colors: isDark
+                                        ? [Colors.grey.shade800, Colors.grey.shade700, Colors.grey.shade800]
+                                        : [Colors.grey.shade200, Colors.grey.shade100, Colors.grey.shade200],
                                   ),
                                 ),
                               );
@@ -1214,11 +1203,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                             gradient: LinearGradient(
                               begin: Alignment(-1.0 + (_shimmerController.value * 3), 0),
                               end: Alignment(1.0 + (_shimmerController.value * 3), 0),
-                              colors: [
-                                Colors.grey.shade200,
-                                Colors.grey.shade100,
-                                Colors.grey.shade200,
-                              ],
+                              colors: isDark
+                                  ? [Colors.grey.shade800, Colors.grey.shade700, Colors.grey.shade800]
+                                  : [Colors.grey.shade200, Colors.grey.shade100, Colors.grey.shade200],
                             ),
                           ),
                         );
@@ -1234,7 +1221,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(bool isDark) {
     return Padding(
       padding: const EdgeInsets.all(40),
       child: ClipRRect(
@@ -1246,13 +1233,12 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(28),
               gradient: LinearGradient(
-                colors: [
-                  Colors.white.withOpacity(0.7),
-                  Colors.white.withOpacity(0.5),
-                ],
+                colors: isDark
+                    ? [Colors.white.withOpacity(0.1), Colors.white.withOpacity(0.05)]
+                    : [Colors.white.withOpacity(0.7), Colors.white.withOpacity(0.5)],
               ),
               border: Border.all(
-                color: Colors.white.withOpacity(0.3),
+                color: isDark ? Colors.white24 : Colors.white.withOpacity(0.3),
                 width: 1.5,
               ),
             ),
@@ -1263,7 +1249,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                   height: 90,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [Colors.grey.shade300, Colors.grey.shade400],
+                      colors: isDark
+                          ? [Colors.grey.shade700, Colors.grey.shade600]
+                          : [Colors.grey.shade300, Colors.grey.shade400],
                     ),
                     borderRadius: BorderRadius.circular(24),
                   ),
@@ -1272,10 +1260,10 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                 const SizedBox(height: 24),
                 Text(
                   getTranslated('no_campaigns_yet', context) ?? 'Chưa có chiến dịch nào',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
-                    color: Colors.black87,
+                    color: isDark ? Colors.white : Colors.black87,
                     letterSpacing: -0.3,
                   ),
                 ),
@@ -1285,7 +1273,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 15,
-                    color: Colors.black.withOpacity(0.6),
+                    color: isDark ? Colors.white60 : Colors.black.withOpacity(0.6),
                     height: 1.4,
                   ),
                 ),
@@ -1295,5 +1283,50 @@ class _WithdrawScreenState extends State<WithdrawScreen> with TickerProviderStat
         ),
       ),
     );
+  }
+
+  Future<void> _handleCampaignTap(int? adId, Map<String, dynamic> camp) async {
+    if (adId == null) {
+      _showSnackBar('ID quảng cáo không hợp lệ');
+      return;
+    }
+
+    setState(() => _loadingItems[adId] = true);
+
+    try {
+      final auth = Provider.of<AuthController>(context, listen: false);
+      final accessToken = await auth.authServiceInterface.getSocialAccessToken();
+      if (accessToken == null) throw Exception("Chưa đăng nhập");
+
+      final adDetail = await AdsService().fetchAdById(
+        accessToken: accessToken,
+        adId: adId,
+      );
+
+      if (!context.mounted) return;
+
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AdDetailScreen(
+            adData: adDetail,
+            adId: adId,
+            accessToken: accessToken,
+          ),
+        ),
+      );
+
+      if (result == true && context.mounted) {
+        _loadData();
+      }
+    } catch (e) {
+      if (context.mounted) {
+        _showSnackBar('Lỗi: $e', isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loadingItems.remove(adId));
+      }
+    }
   }
 }
