@@ -479,7 +479,7 @@ Future<void> main() async {
               final sp = await SharedPreferences.getInstance();
               return sp.getString(AppConstants.socialAccessToken);
             },
-            endpointPath: '/api/', // đi qua router /api (type=webrtc_group)
+            endpointPath: '/api/webrtc_group.php', // đi qua router /api (type=webrtc_group)
           );
           return GroupCallController(signaling: repo)..init();
         },

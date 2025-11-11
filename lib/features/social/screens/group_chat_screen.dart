@@ -64,6 +64,12 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // ✅ Auto-watch inbox để thành viên đang ở màn chat tự nhảy vào phòng khi có call
+      context.read<GroupCallController>().watchGroupInbox(
+            widget.groupId,
+            autoOpen: true,
+          );
+
       await _initRecorder();
       final ctrl = context.read<GroupChatController>();
       await ctrl.loadMessages(widget.groupId);
@@ -104,7 +110,22 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   }
 
   @override
+  void didUpdateWidget(covariant GroupChatScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.groupId != widget.groupId) {
+      // ✅ Nếu chuyển sang group khác trong khi vẫn trên màn hình này
+      context.read<GroupCallController>().watchGroupInbox(
+            widget.groupId,
+            autoOpen: true,
+          );
+    }
+  }
+
+  @override
   void dispose() {
+    // ✅ Dừng watcher inbox khi rời màn
+    context.read<GroupCallController>().stopWatchingInbox();
+
     _recorder.closeRecorder();
     _textCtrl.dispose();
     _scroll.dispose();

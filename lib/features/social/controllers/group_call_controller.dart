@@ -5,12 +5,24 @@
 // - Callee: attachAndJoin(callId) -> peers -> start polling
 // - Polling 1s: nhận offer/answer/candidate gửi cho mình và bắc cầu ra callbacks
 // - Theo dõi participants (peers online), trạng thái call
+// - NEW: watchGroupInbox(groupId) -> 3s/poll inbox để auto mời vào phòng call
 //
-// YÊU CẦU: Dùng kèm WebRTCGroupSignalingRepositoryImpl (đã map endpoint webrtc_group.php)
+// YÊU CẦU:
+// - Repo: GroupWebRTCSignalingRepository có method inbox({groupId})
+// - Có navigatorKey trong main.dart
+// - GroupCallScreen(groupId, mediaType) đã sẵn
+//
+// TÍCH HỢP NHANH TRONG GroupChatScreen:
+//   context.read<GroupCallController>().watchGroupInbox(widget.groupId, autoOpen: true);
+//   @override dispose() { context.read<GroupCallController>().stopWatchingInbox(); super.dispose(); }
 
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/webrtc_group_signaling_repository.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/group_call_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/main.dart' show navigatorKey;
 
 enum CallStatus { idle, ringing, ongoing, ended }
 
@@ -49,9 +61,100 @@ class GroupCallController extends ChangeNotifier {
   /// no-op để giữ tương thích nếu nơi khác có gọi
   void init() {}
 
-  // ---------------------------------------------------------------------------
-  // API KHỞI TẠO (CALLER): tạo + join
-  // ---------------------------------------------------------------------------
+  // ====================== WATCH INBOX (NEW) ======================
+  Timer? _inboxTimer;
+  String? _watchGroupId;
+  int? _lastNotifiedCallId; // chống notify/mở trùng
+  bool _opening = false; // chống mở màn call trùng
+  void Function(Map<String, dynamic> call)? onIncoming; // nếu muốn tự UI
+
+  /// Bắt đầu theo dõi inbox call của 1 group.
+  /// - [period]: chu kỳ poll, mặc định 3s.
+  /// - [autoOpen]: nếu true và phát hiện cuộc gọi, tự push GroupCallScreen.
+  void watchGroupInbox(
+    String groupId, {
+    Duration period = const Duration(seconds: 3),
+    bool autoOpen = true,
+  }) {
+    if (_watchGroupId != null && _watchGroupId != groupId) {
+      stopWatchingInbox();
+    }
+    _watchGroupId = groupId;
+
+    // Tick ngay 1 lần
+    _inboxTick(autoOpen: autoOpen);
+
+    _inboxTimer?.cancel();
+    _inboxTimer = Timer.periodic(period, (_) => _inboxTick(autoOpen: autoOpen));
+    debugPrint(
+        '[GROUP-INBOX] Watching group=$groupId every ${period.inSeconds}s');
+  }
+
+  /// Dừng watcher (gọi khi rời màn chat)
+  void stopWatchingInbox() {
+    _inboxTimer?.cancel();
+    _inboxTimer = null;
+    _watchGroupId = null;
+    _lastNotifiedCallId = null;
+    _opening = false;
+    debugPrint('[GROUP-INBOX] Stopped watching.');
+  }
+
+  /// Thực hiện 1 lần poll ngay
+  Future<void> forceCheckInbox({bool autoOpen = true}) async {
+    await _inboxTick(autoOpen: autoOpen);
+  }
+
+  Future<void> _inboxTick({required bool autoOpen}) async {
+    final gid = _watchGroupId;
+    if (gid == null) return;
+
+    try {
+      final call = await signaling.inbox(groupId: gid);
+      if (call == null) return;
+
+      final callId = _asInt(call['call_id']);
+      final statusStr =
+          '${call['status'] ?? ''}'; // 'ringing' | 'ongoing' | ...
+      final media = (call['media'] == 'video') ? 'video' : 'audio';
+      final joined = call['joined'] == true || '${call['joined']}' == '1';
+
+      if (callId != null && _lastNotifiedCallId == callId) return;
+      if (joined) {
+        _lastNotifiedCallId = callId;
+        return;
+      }
+      if (statusStr != 'ringing' && statusStr != 'ongoing') return;
+
+      debugPrint(
+          '[GROUP-INBOX] Incoming group-call: call_id=$callId, gid=$gid, media=$media, status=$statusStr');
+      _lastNotifiedCallId = callId;
+
+      // Cho phép app tự hiện UI nếu muốn
+      if (onIncoming != null) onIncoming!(call);
+
+      // Tự mở phòng gọi nếu bật autoOpen
+      if (autoOpen && !_opening) {
+        _opening = true;
+        final nav = navigatorKey.currentState;
+        if (nav != null) {
+          await nav.push(
+            MaterialPageRoute(
+              builder: (_) => GroupCallScreen(
+                groupId: gid,
+                mediaType: media, // 'audio' | 'video'
+              ),
+            ),
+          );
+        }
+        _opening = false;
+      }
+    } catch (e) {
+      debugPrint('[GROUP-INBOX] inbox error: $e');
+    }
+  }
+
+  // ====================== CALLER FLOW ======================
   /// Caller: tạo call mới, join vào, tải peers ban đầu, khởi động polling.
   /// Trả về response từ server (chứa call_id).
   Future<Map<String, dynamic>> joinRoom({
@@ -83,9 +186,7 @@ class GroupCallController extends ChangeNotifier {
     return resp;
   }
 
-  // ---------------------------------------------------------------------------
-  // API KHỞI TẠO (CALLEE): join vào call có sẵn (ví dụ mở từ FCM có call_id)
-  // ---------------------------------------------------------------------------
+  // ====================== CALLEE FLOW ======================
   /// Callee: gắn vào call đã có (callId) và bắt đầu polling.
   Future<void> attachAndJoin({required int callId}) async {
     currentCallId = callId;
@@ -97,9 +198,7 @@ class GroupCallController extends ChangeNotifier {
     _startPolling();
   }
 
-  // ---------------------------------------------------------------------------
-  // RỜI / KẾT THÚC
-  // ---------------------------------------------------------------------------
+  // ====================== LEAVE / END ======================
   /// Người thường rời call
   Future<void> leaveRoom(int callId) async {
     try {
@@ -118,9 +217,7 @@ class GroupCallController extends ChangeNotifier {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // GỬI TÍN HIỆU (dành cho lớp WebRTC/PeerManager sẽ gọi)
-  // ---------------------------------------------------------------------------
+  // ====================== SEND SIGNALS ======================
   Future<void> sendOffer({
     required int callId,
     required int toUserId,
@@ -153,9 +250,7 @@ class GroupCallController extends ChangeNotifier {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // POLLING
-  // ---------------------------------------------------------------------------
+  // ====================== POLLING SIGNALS ======================
   void _startPolling() {
     if (currentCallId == null) return;
     _pollingEnabled = true;
@@ -192,7 +287,6 @@ class GroupCallController extends ChangeNotifier {
               onCandidate?.call(ev);
               break;
             default:
-              // ignore
               break;
           }
         }
@@ -212,17 +306,14 @@ class GroupCallController extends ChangeNotifier {
         }
       }
     } catch (_) {
-      // Có thể log nếu cần
+      // có thể log chi tiết nếu cần
     } finally {
       _pollInFlight = false;
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // INTERNALS
-  // ---------------------------------------------------------------------------
+  // ====================== INTERNALS ======================
   Future<void> _joinInternal(int callId) async {
-    // join -> peers ban đầu
     final peers = await signaling.join(callId: callId);
     participants
       ..clear()
@@ -269,6 +360,13 @@ class GroupCallController extends ChangeNotifier {
     return true;
   }
 
+  int? _asInt(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v is String) return int.tryParse(v);
+    return null;
+  }
+
   void _emitStatus() {
     onStatusChanged?.call(status);
   }
@@ -276,6 +374,7 @@ class GroupCallController extends ChangeNotifier {
   @override
   void dispose() {
     _stopPolling();
+    stopWatchingInbox();
     super.dispose();
   }
 }
