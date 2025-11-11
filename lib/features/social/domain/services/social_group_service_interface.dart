@@ -42,7 +42,10 @@ abstract class SocialGroupServiceInterface {
     String? coverPath,
   });
 
-  Future<SocialGroup?> joinGroup({required String groupId});
+  Future<SocialGroup?> joinGroup({
+    required String groupId,
+    SocialGroup? fallback,
+  });
 
   Future<List<SocialUser>> getGroupMembers({
     required String groupId,
