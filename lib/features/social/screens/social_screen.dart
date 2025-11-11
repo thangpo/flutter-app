@@ -23,6 +23,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/social_post_text_block.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/social_feeling_helper.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_post_full_with_screen.dart';
 
 class SocialFeedScreen extends StatefulWidget {
   const SocialFeedScreen({super.key});
@@ -162,7 +163,7 @@ class _FacebookHeader extends StatelessWidget {
             Theme.of(context).brightness == Brightness.dark
                 ? Images.logoWithNameSocialImageWhite
                 : Images.logoWithNameSocialImage,
-            height: 28,
+            height: 35,
             fit: BoxFit.contain,
           ),
           Row(
@@ -172,15 +173,6 @@ class _FacebookHeader extends StatelessWidget {
                 iconColor: onAppBar,
                 bubbleColor: onAppBar.withOpacity(0.08),
                 onTap: () {
-                  if (token == null || token.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content:
-                            Text('Vui lòng kết nối tài khoản WoWonder trước.'),
-                      ),
-                    );
-                    return;
-                  }
                   Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => const SocialSearchScreen(),
@@ -825,7 +817,14 @@ class SocialPostCard extends StatelessWidget {
     final bool showShares = shareCount > 0;
     final bool showStats = showReactions || showComments || showShares;
     final String? postLocation = post.postMap?.trim();
-    final bool hasLocation = postLocation != null && postLocation.isNotEmpty;
+    final bool hasLocation =
+        !hasSharedPost && postLocation != null && postLocation.isNotEmpty;
+    final bool hasBackgroundText =
+        SocialPostFullViewComposer.allowsBackground(post);
+    final bool hasInlineImages =
+        SocialPostFullViewComposer.normalizeImages(post).isNotEmpty;
+    final bool backgroundWithMedia = hasBackgroundText && hasInlineImages;
+    final double mediaTopSpacing = backgroundWithMedia ? 4 : 12;
 
     return Container(
       margin: const EdgeInsets.only(top: 8),
@@ -1028,17 +1027,17 @@ class SocialPostCard extends StatelessWidget {
                               ],
                             ),
                           ),
-                        if (hasSharedPost)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: Text(
-                              _sharedSubtitleText(context, post),
-                              style: TextStyle(
-                                color: onSurface.withOpacity(.7),
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
+                        // if (hasSharedPost)
+                        //   Padding(
+                        //     padding: const EdgeInsets.only(top: 2),
+                        //     child: Text(
+                        //       _sharedSubtitleText(context, post),
+                        //       style: TextStyle(
+                        //         color: onSurface.withOpacity(.7),
+                        //         fontSize: 13,
+                        //       ),
+                        //     ),
+                        //   ),
                       ],
                     ),
                   ),
@@ -1098,7 +1097,7 @@ class SocialPostCard extends StatelessWidget {
             ),
 
           if (mediaContent != null) ...[
-            const SizedBox(height: 12),
+            SizedBox(height: mediaTopSpacing),
             mediaContent,
             const SizedBox(height: 8),
           ],

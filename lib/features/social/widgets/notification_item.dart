@@ -157,7 +157,7 @@ class _NotificationItemState extends State<NotificationItem> {
                         padding: const EdgeInsets.all(0),
                         child: (n.type == 'reaction')
                             ? igReactionBadge(n.type2,
-                            badge: 20) // hoặc 18 nếu thích nhỏ hơn
+                            badge: 18) // hoặc 18 nếu thích nhỏ hơn
                             : Icon(_iconByType(n.type),
                             color: _colorByType(n.type), size: 14),
                       ),
@@ -268,7 +268,9 @@ class _NotificationItemState extends State<NotificationItem> {
     if (n.type == 'comment' ||
         n.type == 'comment_reply' ||
         n.type == 'reaction' ||
-        n.type == 'shared_your_post') {
+        n.type == 'shared_your_post' ||
+        n.type == 'comment_mention'
+    ) {
       if (n.postId != '0' && n.postId.isNotEmpty) {
         if (!mounted) return;
         Navigator.push(
@@ -317,6 +319,8 @@ class _NotificationItemState extends State<NotificationItem> {
         return "đã bình luận vào bài viết của bạn.";
       case 'comment_reply':
         return "đã trả lời bình luận của bạn.";
+      case 'comment_mention':
+        return "đã nhắc đến bạn trong một bình luận.";
       case 'shared_your_post':
         return "đã chia sẻ bài viết của bạn.";
       case 'post_mention':
@@ -334,99 +338,77 @@ class _NotificationItemState extends State<NotificationItem> {
     }
   }
 
-  // Badge reaction dùng Material icons, màu giống Facebook, đồng kích thước
-  static Widget igReactionBadge(String? type2, {double badge = 20}) {
+  // Badge reaction đẹp hơn, mềm mại hơn, màu giống Facebook/Instagram
+  static Widget igReactionBadge(String? type2, {double badge = 28}) {
     final t = (type2 ?? '').trim();
 
-    final icon = <String, IconData>{
-      '1': Icons.thumb_up_alt_rounded,
-      '2': Icons.favorite_rounded,
-      '3': Icons.emoji_emotions_rounded,
-      '4': Icons.sentiment_very_satisfied_rounded,
-      '5': Icons.sentiment_dissatisfied_rounded,
-      '6': Icons.sentiment_very_dissatisfied_rounded,
-    }[t] ?? Icons.favorite_border_rounded;
-
-    final color = <String, Color>{
-      '1': const Color(0xFF1877F2),
-      '2': const Color(0xFFF02849),
-      '3': const Color(0xFFF7B928),
-      '4': const Color(0xFFF7B928),
-      '5': const Color(0xFF536976),
-      '6': const Color(0xFFE9710F),
-    }[t] ?? const Color(0xFFF02849);
+    final asset = <String, String>{
+      '1': 'assets/images/reactions/like.png',
+      '2': 'assets/images/reactions/love.png',
+      '3': 'assets/images/reactions/haha.png',
+      '4': 'assets/images/reactions/wow.png',
+      '5': 'assets/images/reactions/sad.png',
+      '6': 'assets/images/reactions/angry.png',
+    }[t] ?? 'assets/images/reactions/like.png';
 
     return Container(
       width: badge,
       height: badge,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: Colors.white,
-        border: Border.all(color: Colors.white, width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 2,
-            offset: const Offset(0, 1),
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: Center(
-        child: Icon(icon, size: badge - 8, color: color),
+      child: ClipOval(
+        child: Image.asset(
+          asset,
+          fit: BoxFit.cover,
+        ),
       ),
     );
   }
 
 
+
+
   static IconData _iconByType(String type, [String? type2]) {
     switch (type) {
-      case 'reaction':
-        return Icons.thumb_up_alt_rounded;
-      case 'comment':
-        return Icons.mode_comment_rounded;
-      case 'comment_reply':
-        return Icons.reply_rounded;
-      case 'shared_your_post':
-        return Icons.share_rounded;
-      case 'post_mention':
-        return Icons.alternate_email_rounded;
-      case 'visited_profile':
-        return Icons.person_pin_rounded;
-      case 'invited_you_to_the_group':
-        return Icons.group_add_rounded;
-      case 'following':
-        return Icons.person_add_rounded;
-      case 'viewed_story':
-        return Icons.visibility_rounded;
-      default:
-        return Icons.notifications_rounded;
+      case 'reaction': return Icons.thumb_up_alt_rounded;
+      case 'comment': return Icons.mode_comment_rounded;
+      case 'comment_reply': return Icons.reply_rounded;
+      case 'comment_mention': return Icons.alternate_email_rounded;
+      case 'shared_your_post': return Icons.share_rounded;
+      case 'post_mention': return Icons.alternate_email_rounded;
+      case 'visited_profile': return Icons.person_pin_circle_rounded;
+      case 'invited_you_to_the_group': return Icons.group_add_rounded;
+      case 'following': return Icons.person_add_alt_1_rounded;
+      case 'viewed_story': return Icons.visibility_rounded;
+      default: return Icons.notifications_rounded;
     }
   }
 
+
   static Color _colorByType(String type, [String? type2]) {
     switch (type) {
-      case 'reaction':
-        return const Color(0xFF1877F2); // Xanh FB
-      case 'comment':
-        return Colors.blueAccent;
-      case 'comment_reply':
-        return Colors.indigo;
-      case 'shared_your_post':
-        return Colors.green;
-      case 'post_mention':
-        return Colors.purple;
-      case 'visited_profile':
-        return Colors.teal;
-      case 'invited_you_to_the_group':
-        return Colors.orange;
-      case 'following':
-        return Colors.deepOrange;
-      case 'viewed_story':
-        return Colors.pinkAccent;
-      default:
-        return Colors.grey;
+      case 'reaction': return const Color(0xFF1877F2); // Blue FB
+      case 'comment': return const Color(0xFF3BAFDA); // Light teal
+      case 'comment_reply': return const Color(0xFF845EC2); // Violet
+      case 'comment_mention': return const Color(0xFF5C33F6); // Deep purple
+      case 'shared_your_post': return const Color(0xFF34B233); // Fresh green
+      case 'post_mention': return const Color(0xFFAD3EF3); // Lilac
+      case 'visited_profile': return const Color(0xFF0DCEDA); // Cyan
+      case 'invited_you_to_the_group': return const Color(0xFFFF7A00); // Orange
+      case 'following': return const Color(0xFFFB6B90); // Pink coral
+      case 'viewed_story': return const Color(0xFFF94892); // Magenta
+      default: return const Color(0xFFAAAAAA);
     }
   }
+
 }
 
 

@@ -43,6 +43,11 @@ class _CallScreenState extends State<CallScreen> {
   bool _viewAlive = false;
   bool _ending = false;
 
+  // ---- ICE restart control
+  bool _iceRestarting = false;
+  int _iceRestartTries = 0;
+  static const int _iceRestartMaxTries = 2;
+
   @override
   void initState() {
     super.initState();
@@ -70,7 +75,6 @@ class _CallScreenState extends State<CallScreen> {
     try {
       r.srcObject = stream;
     } catch (_) {
-      // nếu bị dispose hoặc chưa init: init lại rồi gán
       try {
         await r.initialize();
       } catch (_) {}
@@ -95,17 +99,20 @@ class _CallScreenState extends State<CallScreen> {
               'stun:stun1.l.google.com:19302',
             ],
           },
+          // TURN của bạn — thêm cả hostname và IP
           {
             'urls': [
               'turn:social.vnshop247.com:3478?transport=udp',
               'turn:social.vnshop247.com:3478?transport=tcp',
+              'turn:147.93.98.63:3478?transport=udp',
+              'turn:147.93.98.63:3478?transport=tcp',
             ],
             'username': 'webrtc',
             'credential': 'supersecret',
           },
         ],
         'sdpSemantics': 'unified-plan',
-        // Debug NAT: nếu cần ép đi qua TURN, bật dòng sau
+        // Debug NAT: nếu muốn ép toàn bộ qua TURN, bật dòng dưới
         // 'iceTransportPolicy': 'relay',
       };
       _pc = await createPeerConnection(configuration, {});
@@ -127,24 +134,37 @@ class _CallScreenState extends State<CallScreen> {
         }
       };
 
+      // Quan sát trạng thái ICE để tự ICE-restart khi rớt
+      _pc!.onIceConnectionState = (RTCIceConnectionState state) async {
+        if (state == RTCIceConnectionState.RTCIceConnectionStateDisconnected ||
+            state == RTCIceConnectionState.RTCIceConnectionStateFailed) {
+          await _attemptIceRestart();
+        }
+      };
+
+      // (Giữ onConnectionState để fallback đóng nếu đã closed)
       _pc!.onConnectionState = (RTCPeerConnectionState s) {
-        if (s == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
-            s == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
-            s == RTCPeerConnectionState.RTCPeerConnectionStateClosed) {
+        if (s == RTCPeerConnectionState.RTCPeerConnectionStateClosed) {
           _endAndPop();
         }
       };
 
-      // 2) LẤY MEDIA SAU KHI CÓ PC
+      // 2) LẤY MEDIA SAU KHI CÓ PC — giảm tải encoder (720p/30fps)
       final isVideo = widget.mediaType == 'video';
       final constraints = <String, dynamic>{
         'audio': true,
         'video': isVideo
             ? {
+                'mandatory': {
+                  'minWidth': '640',
+                  'minHeight': '360',
+                  'maxWidth': '1280',
+                  'maxHeight': '720',
+                  'minFrameRate': '15',
+                  'maxFrameRate': '30',
+                },
                 'facingMode': 'user',
-                'width': {'ideal': 1280},
-                'height': {'ideal': 720},
-                'frameRate': {'ideal': 30},
+                'optional': [],
               }
             : false,
       };
@@ -154,6 +174,29 @@ class _CallScreenState extends State<CallScreen> {
       // 3) ADD TRACK VÀO PC
       for (final t in _localStream!.getTracks()) {
         await _pc!.addTrack(t, _localStream!);
+      }
+
+      // 3.1) Giảm bitrate video gửi đi (~800 kbps) cho ổn định
+      try {
+        final senders = await _pc!.getSenders();
+        for (final s in senders) {
+          if (s.track?.kind == 'video') {
+            // Trên bản webrtc_interface 1.3.0 không có getParameters(),
+            // ta set thẳng RTCRtpParameters với encodings mong muốn.
+            await s.setParameters(RTCRtpParameters(
+              encodings: <RTCRtpEncoding>[
+                RTCRtpEncoding(
+                  maxBitrate: 800 * 1000, // ~800 kbps
+                  numTemporalLayers: 2,
+                  rid: 'f',
+                  // scaleResolutionDownBy: 1.0, // bật nếu cần hạ thêm độ phân giải
+                ),
+              ],
+            ));
+          }
+        }
+      } catch (_) {
+        // một số platform có thể không hỗ trợ setParameters -> bỏ qua
       }
 
       // 4) OFFER / ANSWER
@@ -170,6 +213,27 @@ class _CallScreenState extends State<CallScreen> {
     } catch (e) {
       _snack('Lỗi khởi tạo cuộc gọi: $e');
       _endAndPop();
+    }
+  }
+
+  Future<void> _attemptIceRestart() async {
+    // Chỉ thử vài lần để tránh vòng lặp vô hạn
+    if (_pc == null ||
+        _iceRestarting ||
+        _iceRestartTries >= _iceRestartMaxTries) return;
+    _iceRestarting = true;
+    _iceRestartTries += 1;
+    try {
+      final offer = await _pc!.createOffer({'iceRestart': true});
+      await _pc!.setLocalDescription(offer);
+      await _cc.sendOffer(offer.sdp!);
+    } catch (e) {
+      _snack('ICE restart error: $e');
+    } finally {
+      // cho ICE gathering 1 lúc rồi mới cho phép lần kế tiếp
+      Future.delayed(const Duration(seconds: 4), () {
+        _iceRestarting = false;
+      });
     }
   }
 

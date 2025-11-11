@@ -31,7 +31,7 @@ class _SocialPostTextBlockState extends State<SocialPostTextBlock> {
   bool get _hasText => (widget.post.text ?? '').trim().isNotEmpty;
   int get _imageCount =>
       SocialPostFullViewComposer.normalizeImages(widget.post).length;
-  bool get _hasMultipleImages => _imageCount >= 2;
+  bool get _hasAnyImage => _imageCount >= 1;
   String get _plainTextContent {
     final raw = widget.post.text ?? '';
     if (raw.isEmpty) return raw;
@@ -63,7 +63,7 @@ class _SocialPostTextBlockState extends State<SocialPostTextBlock> {
         SocialPostFullViewComposer.allowsBackground(widget.post);
     final hasBackground = backgroundAllowed && preset != null;
     final enforceCompactBackground =
-        hasBackground && _hasMultipleImages && !_expanded;
+        hasBackground && _hasAnyImage && !_expanded;
     final showSeeMoreButton = enforceCompactBackground && _shouldOfferSeeMore;
     final Widget richText = hasBackground
         ? _buildBackgroundText(
@@ -135,7 +135,7 @@ class _SocialPostTextBlockState extends State<SocialPostTextBlock> {
           textAlign: align,
         ),
         'a.tagged-user': Style(
-          color: textColor,
+          color: Theme.of(context).colorScheme.primary,
           fontWeight: FontWeight.w600,
           textDecoration: TextDecoration.none,
         ),
@@ -211,7 +211,7 @@ class _SocialPostTextBlockState extends State<SocialPostTextBlock> {
                       limitHeight ? TextOverflow.ellipsis : TextOverflow.clip,
                 ),
                 'a.tagged-user': Style(
-                  color: preset.textColor,
+                  color: Theme.of(context).colorScheme.primary,
                   fontWeight: FontWeight.w700,
                   textDecoration: TextDecoration.none,
                 ),

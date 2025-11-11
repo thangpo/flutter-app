@@ -1,5 +1,6 @@
 class SocialComment {
   final String id;
+  final String? userId;
   final String? text;
   final String? userName;
   final String? userAvatar;
@@ -13,6 +14,7 @@ class SocialComment {
 
   const SocialComment({
     required this.id,
+    this.userId,
     this.text,
     this.userName,
     this.userAvatar,
@@ -27,6 +29,7 @@ class SocialComment {
 
   SocialComment copyWith({
     String? id,
+    String? userId,
     String? text,
     String? userName,
     String? userAvatar,
@@ -40,6 +43,7 @@ class SocialComment {
   }) {
     return SocialComment(
       id: id ?? this.id,
+      userId: userId ?? this.userId,
       text: text ?? this.text,
       userName: userName ?? this.userName,
       userAvatar: userAvatar ?? this.userAvatar,

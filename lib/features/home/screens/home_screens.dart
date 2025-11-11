@@ -208,7 +208,7 @@ class _HomePageState extends State<HomePage> {
                 title: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Image.asset(Images.logoWithNameImage, height: 50),
+                    Image.asset(Images.logoWithNameImage, height: 35),
                     const MenuWidget(), // Thêm MenuWidget cạnh logo
                   ],
                 ),

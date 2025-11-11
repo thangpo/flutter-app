@@ -154,6 +154,15 @@ Widget? buildSocialPostMedia(
   // 3) Single image
   if (hasSingle) {
     final String src = images.first;
+    final bool hasBackgroundText =
+        SocialPostFullViewComposer.allowsBackground(post);
+    final Widget imageWidget = hasBackgroundText
+        ? _HalfSquareCoverImage(src)
+        : _AutoRatioNetworkImage(
+            src,
+            maxHeightFactor: compact ? 0.5 : 0.8,
+            maxHeightToWidthRatio: 1.5,
+          );
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => SocialPostFullWithScreen.open(
@@ -162,10 +171,7 @@ Widget? buildSocialPostMedia(
         focus: SocialPostFullItemType.image,
         imageIndex: 0,
       ),
-      child: _AutoRatioNetworkImage(
-        src,
-        maxHeightFactor: compact ? 0.5 : 0.8,
-      ),
+      child: imageWidget,
     );
   }
 
@@ -891,9 +897,11 @@ class _LivePostPlayerState extends State<_LivePostPlayer>
 class _AutoRatioNetworkImage extends StatefulWidget {
   final String url;
   final double maxHeightFactor;
+  final double? maxHeightToWidthRatio;
   const _AutoRatioNetworkImage(
     this.url, {
     this.maxHeightFactor = 0.8,
+    this.maxHeightToWidthRatio,
   });
 
   @override
@@ -921,22 +929,68 @@ class _AutoRatioNetworkImageState extends State<_AutoRatioNetworkImage> {
     final ratio = _ratio ?? (16 / 9);
     return LayoutBuilder(
       builder: (ctx, constraints) {
-        final maxHeight =
+        final double screenMaxHeight =
             MediaQuery.of(ctx).size.height * widget.maxHeightFactor;
-        final width = constraints.maxWidth;
-        double height = width / ratio;
-        double finalWidth = width;
-        if (height > maxHeight) {
-          height = maxHeight;
-          finalWidth = height * ratio;
+        final double resolvedWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.of(ctx).size.width;
+        final double naturalHeight = resolvedWidth / ratio;
+        final double ratioMaxHeight = widget.maxHeightToWidthRatio != null
+            ? resolvedWidth * widget.maxHeightToWidthRatio!
+            : double.infinity;
+        final double allowedHeight =
+            min(naturalHeight, min(screenMaxHeight, ratioMaxHeight));
+        final bool shouldClip = allowedHeight < naturalHeight;
+        final Widget image = CachedNetworkImage(
+          imageUrl: widget.url,
+          fit: BoxFit.cover,
+        );
+        if (!shouldClip) {
+          return SizedBox(
+            width: resolvedWidth,
+            height: naturalHeight,
+            child: image,
+          );
         }
+        return SizedBox(
+          width: resolvedWidth,
+          height: allowedHeight,
+          child: ClipRect(
+            child: Align(
+              alignment: Alignment.center,
+              child: SizedBox(
+                width: resolvedWidth,
+                height: naturalHeight,
+                child: image,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _HalfSquareCoverImage extends StatelessWidget {
+  final String url;
+  const _HalfSquareCoverImage(this.url);
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (ctx, constraints) {
+        final double fallbackWidth = MediaQuery.of(ctx).size.width;
+        final double resolvedWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : fallbackWidth;
+        final double height = resolvedWidth * (2 / 3);
         return Align(
           alignment: Alignment.center,
           child: SizedBox(
-            width: finalWidth,
+            width: resolvedWidth,
             height: height,
             child: CachedNetworkImage(
-              imageUrl: widget.url,
+              imageUrl: url,
               fit: BoxFit.cover,
             ),
           ),
@@ -1148,47 +1202,60 @@ class _VideoPlayerTileState extends State<_VideoPlayerTile> {
         child: Center(child: CircularProgressIndicator()),
       );
     }
-    final ratio = _controller!.value.aspectRatio == 0
-        ? (16 / 9)
-        : _controller!.value.aspectRatio;
+    final double rawRatio = _controller!.value.aspectRatio;
+    final double ratio = rawRatio == 0 ? (16 / 9) : rawRatio;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final maxHeight =
+        final double screenLimit =
             MediaQuery.of(context).size.height * widget.maxHeightFactor;
-        final width = constraints.maxWidth;
-        double targetHeight = width / ratio;
-        double targetWidth = width;
-        if (targetHeight > maxHeight) {
-          targetHeight = maxHeight;
-          targetWidth = targetHeight * ratio;
-        }
-        return Align(
-          alignment: Alignment.center,
-          child: SizedBox(
-            width: targetWidth,
-            height: targetHeight,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                VideoPlayer(_controller!),
-                Align(
-                  alignment: Alignment.center,
-                  child: IconButton(
-                    iconSize: 48,
-                    color: Colors.white,
-                    icon: Icon(_controller!.value.isPlaying
-                        ? Icons.pause_circle
-                        : Icons.play_circle),
-                    onPressed: () {
-                      _controller!.value.isPlaying
-                          ? _controller!.pause()
-                          : _controller!.play();
-                      setState(() {});
-                    },
+        final double width = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.of(context).size.width;
+        final double naturalHeight = width / ratio;
+        final double portraitLimit = width * 1.5;
+        final double allowedHeight =
+            min(naturalHeight, min(screenLimit, portraitLimit));
+        final bool shouldClip = allowedHeight < naturalHeight;
+        return SizedBox(
+          width: width,
+          height: allowedHeight,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (shouldClip)
+                ClipRect(
+                  child: Align(
+                    alignment: Alignment.center,
+                    child: SizedBox(
+                      width: width,
+                      height: naturalHeight,
+                      child: VideoPlayer(_controller!),
+                    ),
                   ),
+                )
+              else
+                SizedBox(
+                  width: width,
+                  height: naturalHeight,
+                  child: VideoPlayer(_controller!),
                 ),
-              ],
-            ),
+              Align(
+                alignment: Alignment.center,
+                child: IconButton(
+                  iconSize: 48,
+                  color: Colors.white,
+                  icon: Icon(_controller!.value.isPlaying
+                      ? Icons.pause_circle
+                      : Icons.play_circle),
+                  onPressed: () {
+                    _controller!.value.isPlaying
+                        ? _controller!.pause()
+                        : _controller!.play();
+                    setState(() {});
+                  },
+                ),
+              ),
+            ],
           ),
         );
       },

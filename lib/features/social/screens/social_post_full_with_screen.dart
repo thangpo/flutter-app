@@ -7,6 +7,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_c
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/mention_formatter.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/post_background_presets.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 enum SocialPostFullItemType { background, image, video }
 
@@ -63,8 +64,16 @@ class SocialPostFullViewComposer {
   static bool allowsBackground(SocialPost post) {
     if ((post.backgroundColorId ?? '').isEmpty) return false;
     if ((post.text ?? '').trim().isEmpty) return false;
+    final String? fileUrl = post.fileUrl?.trim();
+    final bool fileLooksLikeImage = fileUrl != null &&
+        fileUrl.isNotEmpty &&
+        (_looksLikeImage(fileUrl) ||
+            post.imageUrl == fileUrl ||
+            post.imageUrls.contains(fileUrl));
+    if (fileUrl != null && fileUrl.isNotEmpty && !fileLooksLikeImage) {
+      return false;
+    }
     if ((post.videoUrl ?? '').isNotEmpty) return false;
-    if ((post.fileUrl ?? '').isNotEmpty) return false;
     if ((post.audioUrl ?? '').isNotEmpty) return false;
     if ((post.pollOptions?.isNotEmpty ?? false)) return false;
     if (post.sharedPost != null) return false;
@@ -333,10 +342,21 @@ class _FullScreenBackground extends StatelessWidget {
                 fontWeight: FontWeight.w600,
               ),
               'a.tagged-user': Style(
-                color: textColor,
+                color: Theme.of(context).colorScheme.primary,
                 fontWeight: FontWeight.w700,
                 textDecoration: TextDecoration.none,
               ),
+            },
+            onLinkTap: (String? url, _, __) async {
+              if (url == null) return;
+              if (MentionFormatter.isMentionLink(url)) {
+                await MentionFormatter.handleMentionTap(context, url);
+                return;
+              }
+              final Uri uri = Uri.parse(url);
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              }
             },
           ),
         ),
@@ -420,4 +440,16 @@ bool _isVideo(String? url) {
   return lower.endsWith('.mp4') ||
       lower.endsWith('.mov') ||
       lower.endsWith('.m4v');
+}
+
+bool _looksLikeImage(String? url) {
+  if (url == null || url.isEmpty) return false;
+  final lower = url.toLowerCase();
+  return lower.endsWith('.jpg') ||
+      lower.endsWith('.jpeg') ||
+      lower.endsWith('.png') ||
+      lower.endsWith('.gif') ||
+      lower.endsWith('.webp') ||
+      lower.endsWith('.bmp') ||
+      lower.endsWith('.heic');
 }

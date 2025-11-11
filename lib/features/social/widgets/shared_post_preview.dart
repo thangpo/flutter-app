@@ -151,7 +151,7 @@ class SharedPostPreviewCard extends StatelessWidget {
                 ),
               ],
               if ((post.text ?? '').isNotEmpty) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 4),
                 SocialPostTextBlock(
                   post: post,
                   padding: EdgeInsets.zero,
@@ -184,7 +184,7 @@ class SharedPostPreviewCard extends StatelessWidget {
                   ),
                 ),
               if (media != null) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 4),
                 media,
               ],
             ],
