@@ -1,4 +1,6 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_sixvalley_ecommerce/features/address/screens/address_list_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/cart/controllers/cart_controller.dart';
@@ -17,6 +19,7 @@ import 'package:flutter_sixvalley_ecommerce/features/wishlist/controllers/wishli
 import 'package:flutter_sixvalley_ecommerce/features/wishlist/screens/wishlist_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/banner/screens/offers_product_list_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
 import 'package:provider/provider.dart';
 
@@ -33,12 +36,13 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
   late AnimationController _animationController;
   late Animation<double> _slideAnimation;
   late Animation<double> _fadeAnimation;
+  late Animation<double> _scaleAnimation;
 
   @override
   void initState() {
     super.initState();
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 450),
       vsync: this,
     );
 
@@ -47,7 +51,7 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
       end: 0.0,
     ).animate(CurvedAnimation(
       parent: _animationController,
-      curve: Curves.easeOutCubic,
+      curve: Curves.easeOutExpo,
     ));
 
     _fadeAnimation = Tween<double>(
@@ -55,11 +59,20 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
       end: 1.0,
     ).animate(CurvedAnimation(
       parent: _animationController,
-      curve: Curves.easeOut,
+      curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
+    ));
+
+    _scaleAnimation = Tween<double>(
+      begin: 0.92,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOutBack,
     ));
   }
 
   void _showMenu() {
+    HapticFeedback.mediumImpact();
     _overlayEntry = _createOverlayEntry();
     Overlay.of(context).insert(_overlayEntry!);
     setState(() {
@@ -69,6 +82,7 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
   }
 
   void _hideMenu() {
+    HapticFeedback.lightImpact();
     _animationController.reverse().then((_) {
       _overlayEntry?.remove();
       _overlayEntry = null;
@@ -81,12 +95,13 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
   OverlayEntry _createOverlayEntry() {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
-    final menuWidth = screenWidth * 0.75;
+    final menuWidth = screenWidth * 0.82;
     final topPadding = MediaQuery.of(context).padding.top;
 
     return OverlayEntry(
-      builder: (context) => Consumer<ProfileController>(
-        builder: (context, profileProvider, _) {
+      builder: (context) => Consumer2<ProfileController, ThemeController>(
+        builder: (context, profileProvider, themeController, _) {
+          final bool isDark = themeController.darkTheme;
           final bool isGuestMode = !Provider.of<AuthController>(context, listen: false).isLoggedIn();
           final ConfigModel? configModel = Provider.of<SplashController>(context, listen: false).configModel;
 
@@ -95,31 +110,31 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
               'title': getTranslated('notifications', context),
               'icon': Images.notification,
               'navigateTo': const InboxScreen(isBackButtonExist: false),
-              'isSquare': false,
+              'iconData': Icons.notifications_rounded,
             },
             {
               'title': getTranslated('profile', context),
               'icon': Images.user,
               'navigateTo': const ProfileScreen1(),
-              'isSquare': false,
+              'iconData': Icons.person_rounded,
             },
             {
               'title': getTranslated('addresses', context),
               'icon': Images.address,
               'navigateTo': const AddressListScreen(),
-              'isSquare': false,
+              'iconData': Icons.location_on_rounded,
             },
             {
               'title': getTranslated('coupons', context),
               'icon': Images.coupon,
               'navigateTo': const CouponList(),
-              'isSquare': false,
+              'iconData': Icons.local_offer_rounded,
             },
             {
               'title': getTranslated('settings', context),
               'icon': Images.settings,
               'navigateTo': const SettingsScreen(),
-              'isSquare': false,
+              'iconData': Icons.settings_rounded,
             },
             {
               'title': getTranslated('offers', context),
@@ -127,7 +142,7 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
               'navigateTo': const OfferProductListScreen(),
               'count': 0,
               'hasCount': false,
-              'isSquare': true,
+              'iconData': Icons.local_fire_department_rounded,
             },
             if (!isGuestMode && configModel?.walletStatus == 1)
               {
@@ -139,7 +154,7 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
                 'isWallet': true,
                 'subTitle': 'amount',
                 'balance': profileProvider.balance ?? 0,
-                'isSquare': true,
+                'iconData': Icons.account_balance_wallet_rounded,
               },
             if (!isGuestMode && configModel?.loyaltyPointStatus == 1)
               {
@@ -152,7 +167,7 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
                 'subTitle': 'point',
                 'balance': profileProvider.loyaltyPoint ?? 0,
                 'isLoyalty': true,
-                'isSquare': true,
+                'iconData': Icons.stars_rounded,
               },
             if (!isGuestMode)
               {
@@ -161,7 +176,7 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
                 'navigateTo': const OrderScreen(),
                 'count': profileProvider.userInfoModel?.totalOrder ?? 0,
                 'hasCount': (profileProvider.userInfoModel?.totalOrder ?? 0) > 0,
-                'isSquare': true,
+                'iconData': Icons.shopping_bag_rounded,
               },
             {
               'title': getTranslated('cart', context),
@@ -169,7 +184,7 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
               'navigateTo': const CartScreen(),
               'count': Provider.of<CartController>(context, listen: false).cartList.length,
               'hasCount': true,
-              'isSquare': true,
+              'iconData': Icons.shopping_cart_rounded,
             },
             {
               'title': getTranslated('wishlist', context),
@@ -177,7 +192,7 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
               'navigateTo': const WishListScreen(),
               'count': Provider.of<WishListController>(context, listen: false).wishList?.length ?? 0,
               'hasCount': !isGuestMode && (Provider.of<WishListController>(context, listen: false).wishList?.length ?? 0) > 0,
-              'isSquare': true,
+              'iconData': Icons.favorite_rounded,
             },
           ];
 
@@ -186,215 +201,302 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
             builder: (context, child) {
               return Stack(
                 children: [
+                  // Backdrop with blur
                   Positioned.fill(
                     child: GestureDetector(
                       onTap: _hideMenu,
-                      child: Container(
-                        color: Colors.black.withOpacity(0.3 * _fadeAnimation.value),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(
+                          sigmaX: 12.0 * _fadeAnimation.value,
+                          sigmaY: 12.0 * _fadeAnimation.value,
+                        ),
+                        child: Container(
+                          color: (isDark ? Colors.black : Colors.black)
+                              .withOpacity(0.4 * _fadeAnimation.value),
+                        ),
                       ),
                     ),
                   ),
+                  // Menu Panel
                   Positioned(
-                    left: screenWidth - menuWidth + (menuWidth * _slideAnimation.value),
-                    top: topPadding,
+                    right: -(menuWidth * _slideAnimation.value),
+                    top: 0,
                     width: menuWidth,
-                    height: screenHeight - topPadding,
-                    child: Material(
-                      elevation: 8,
-                      shadowColor: Colors.blue.withOpacity(0.3),
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(20),
-                        bottomLeft: Radius.circular(20),
-                      ),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(20),
-                            bottomLeft: Radius.circular(20),
-                          ),
+                    height: screenHeight,
+                    child: Transform.scale(
+                      scale: _scaleAnimation.value,
+                      alignment: Alignment.centerRight,
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(32),
+                          bottomLeft: Radius.circular(32),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const SizedBox(height: 20),
-                            Container(
-                              padding: const EdgeInsets.all(20),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Colors.blue.shade600,
-                                    Colors.blue.shade400,
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                borderRadius: const BorderRadius.only(
-                                  bottomLeft: Radius.circular(20),
-                                  bottomRight: Radius.circular(20),
-                                ),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: isDark
+                                    ? [
+                                  Colors.grey[900]!.withOpacity(0.85),
+                                  Colors.grey[850]!.withOpacity(0.85),
+                                ]
+                                    : [
+                                  Colors.white.withOpacity(0.85),
+                                  Colors.grey[50]!.withOpacity(0.85),
+                                ],
                               ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(32),
+                                bottomLeft: Radius.circular(32),
+                              ),
+                              border: Border.all(
+                                color: isDark
+                                    ? Colors.white.withOpacity(0.1)
+                                    : Colors.white.withOpacity(0.5),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: SafeArea(
+                              child: Column(
                                 children: [
-                                  const Text(
-                                    'Menu',
-                                    style: TextStyle(
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                      letterSpacing: 1.2,
+                                  // Header
+                                  Padding(
+                                    padding: const EdgeInsets.all(24),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          'Menu',
+                                          style: TextStyle(
+                                            fontSize: 32,
+                                            fontWeight: FontWeight.w700,
+                                            color: isDark ? Colors.white : Colors.black87,
+                                            letterSpacing: -0.5,
+                                          ),
+                                        ),
+                                        GestureDetector(
+                                          onTap: _hideMenu,
+                                          child: Container(
+                                            width: 40,
+                                            height: 40,
+                                            decoration: BoxDecoration(
+                                              color: (isDark ? Colors.white : Colors.black)
+                                                  .withOpacity(0.08),
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                            child: Icon(
+                                              Icons.close_rounded,
+                                              size: 22,
+                                              color: isDark ? Colors.white : Colors.black87,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  InkWell(
-                                    onTap: _hideMenu,
-                                    borderRadius: BorderRadius.circular(20),
-                                    child: Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                      child: const Icon(
-                                        Icons.close,
-                                        size: 24,
-                                        color: Colors.white,
-                                      ),
+                                  // Menu Items
+                                  Expanded(
+                                    child: ListView.builder(
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                      itemCount: menuItems.length,
+                                      physics: const BouncingScrollPhysics(),
+                                      itemBuilder: (context, index) {
+                                        final item = menuItems[index];
+                                        return TweenAnimationBuilder<double>(
+                                          duration: Duration(milliseconds: 400 + (index * 40)),
+                                          tween: Tween(begin: 0.0, end: 1.0),
+                                          curve: Curves.easeOutCubic,
+                                          builder: (context, value, child) {
+                                            return Transform.translate(
+                                              offset: Offset(30 * (1 - value), 0),
+                                              child: Opacity(
+                                                opacity: value,
+                                                child: child,
+                                              ),
+                                            );
+                                          },
+                                          child: Padding(
+                                            padding: const EdgeInsets.only(bottom: 8),
+                                            child: ClipRRect(
+                                              borderRadius: BorderRadius.circular(16),
+                                              child: BackdropFilter(
+                                                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                                                child: Container(
+                                                  decoration: BoxDecoration(
+                                                    gradient: LinearGradient(
+                                                      begin: Alignment.topLeft,
+                                                      end: Alignment.bottomRight,
+                                                      colors: isDark
+                                                          ? [
+                                                        Colors.white.withOpacity(0.08),
+                                                        Colors.white.withOpacity(0.05),
+                                                      ]
+                                                          : [
+                                                        Colors.white.withOpacity(0.7),
+                                                        Colors.white.withOpacity(0.5),
+                                                      ],
+                                                    ),
+                                                    borderRadius: BorderRadius.circular(16),
+                                                    border: Border.all(
+                                                      color: isDark
+                                                          ? Colors.white.withOpacity(0.1)
+                                                          : Colors.white.withOpacity(0.5),
+                                                      width: 1,
+                                                    ),
+                                                  ),
+                                                  child: Material(
+                                                    color: Colors.transparent,
+                                                    child: InkWell(
+                                                      borderRadius: BorderRadius.circular(16),
+                                                      onTap: () {
+                                                        HapticFeedback.selectionClick();
+                                                        _hideMenu();
+                                                        Future.delayed(const Duration(milliseconds: 200), () {
+                                                          Navigator.push(
+                                                            context,
+                                                            PageRouteBuilder(
+                                                              pageBuilder: (context, animation, secondaryAnimation) =>
+                                                              item['navigateTo'],
+                                                              transitionsBuilder:
+                                                                  (context, animation, secondaryAnimation, child) {
+                                                                return FadeTransition(
+                                                                  opacity: animation,
+                                                                  child: SlideTransition(
+                                                                    position: Tween<Offset>(
+                                                                      begin: const Offset(0.05, 0),
+                                                                      end: Offset.zero,
+                                                                    ).animate(CurvedAnimation(
+                                                                      parent: animation,
+                                                                      curve: Curves.easeOutCubic,
+                                                                    )),
+                                                                    child: child,
+                                                                  ),
+                                                                );
+                                                              },
+                                                              transitionDuration: const Duration(milliseconds: 300),
+                                                            ),
+                                                          );
+                                                        });
+                                                      },
+                                                      child: Padding(
+                                                        padding: const EdgeInsets.all(16),
+                                                        child: Row(
+                                                          children: [
+                                                            // Icon Container
+                                                            Container(
+                                                              width: 48,
+                                                              height: 48,
+                                                              decoration: BoxDecoration(
+                                                                gradient: LinearGradient(
+                                                                  begin: Alignment.topLeft,
+                                                                  end: Alignment.bottomRight,
+                                                                  colors: isDark
+                                                                      ? [
+                                                                    Colors.blue[400]!.withOpacity(0.3),
+                                                                    Colors.blue[600]!.withOpacity(0.2),
+                                                                  ]
+                                                                      : [
+                                                                    Colors.blue[50]!,
+                                                                    Colors.blue[100]!,
+                                                                  ],
+                                                                ),
+                                                                borderRadius: BorderRadius.circular(14),
+                                                              ),
+                                                              child: Icon(
+                                                                item['iconData'],
+                                                                size: 24,
+                                                                color: isDark
+                                                                    ? Colors.blue[300]
+                                                                    : Colors.blue[700],
+                                                              ),
+                                                            ),
+                                                            const SizedBox(width: 16),
+                                                            // Title and Subtitle
+                                                            Expanded(
+                                                              child: Column(
+                                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                                children: [
+                                                                  Text(
+                                                                    item['title'],
+                                                                    style: TextStyle(
+                                                                      fontSize: 16,
+                                                                      fontWeight: FontWeight.w600,
+                                                                      color: isDark
+                                                                          ? Colors.white
+                                                                          : Colors.black87,
+                                                                      letterSpacing: -0.2,
+                                                                    ),
+                                                                  ),
+                                                                  if (item['subTitle'] != null)
+                                                                    Padding(
+                                                                      padding: const EdgeInsets.only(top: 4),
+                                                                      child: Text(
+                                                                        '${item['subTitle']}: ${item['balance']}',
+                                                                        style: TextStyle(
+                                                                          fontSize: 13,
+                                                                          fontWeight: FontWeight.w500,
+                                                                          color: isDark
+                                                                              ? Colors.grey[400]
+                                                                              : Colors.grey[600],
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                            // Count Badge
+                                                            if (item['hasCount'] == true && item['count'] > 0)
+                                                              Container(
+                                                                constraints: const BoxConstraints(minWidth: 28),
+                                                                padding: const EdgeInsets.symmetric(
+                                                                    horizontal: 10, vertical: 6),
+                                                                decoration: BoxDecoration(
+                                                                  gradient: LinearGradient(
+                                                                    colors: [
+                                                                      Colors.blue[600]!,
+                                                                      Colors.blue[400]!,
+                                                                    ],
+                                                                  ),
+                                                                  borderRadius: BorderRadius.circular(14),
+                                                                  boxShadow: [
+                                                                    BoxShadow(
+                                                                      color: Colors.blue.withOpacity(0.3),
+                                                                      blurRadius: 8,
+                                                                      offset: const Offset(0, 2),
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                                child: Text(
+                                                                  item['count'].toString(),
+                                                                  textAlign: TextAlign.center,
+                                                                  style: const TextStyle(
+                                                                    color: Colors.white,
+                                                                    fontSize: 13,
+                                                                    fontWeight: FontWeight.w700,
+                                                                    letterSpacing: -0.2,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 10),
-                            Expanded(
-                              child: ListView.builder(
-                                padding: const EdgeInsets.symmetric(vertical: 8),
-                                itemCount: menuItems.length,
-                                itemBuilder: (context, index) {
-                                  final item = menuItems[index];
-                                  return TweenAnimationBuilder<double>(
-                                    duration: Duration(milliseconds: 300 + (index * 50)),
-                                    tween: Tween(begin: 0.0, end: 1.0),
-                                    curve: Curves.easeOutBack,
-                                    builder: (context, value, child) {
-                                      final opacity = value.clamp(0.0, 1.0);
-                                      return Transform.translate(
-                                        offset: Offset(50 * (1 - value), 0),
-                                        child: Opacity(
-                                          opacity: opacity,
-                                          child: child,
-                                        ),
-                                      );
-                                    },
-                                    child: Container(
-                                      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(12),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.grey.withOpacity(0.1),
-                                            blurRadius: 4,
-                                            offset: const Offset(0, 2),
-                                          ),
-                                        ],
-                                      ),
-                                      child: Material(
-                                        color: Colors.transparent,
-                                        child: InkWell(
-                                          borderRadius: BorderRadius.circular(12),
-                                          onTap: () {
-                                            _hideMenu();
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (context) => item['navigateTo'],
-                                              ),
-                                            );
-                                          },
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                            child: Row(
-                                              children: [
-                                                Container(
-                                                  padding: const EdgeInsets.all(10),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.blue.shade50,
-                                                    borderRadius: BorderRadius.circular(10),
-                                                  ),
-                                                  child: Image.asset(
-                                                    item['icon'],
-                                                    width: 24,
-                                                    height: 24,
-                                                    color: Colors.blue.shade600,
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 16),
-                                                Expanded(
-                                                  child: Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                    children: [
-                                                      Text(
-                                                        item['title'],
-                                                        style: TextStyle(
-                                                          fontSize: 16,
-                                                          fontWeight: FontWeight.w600,
-                                                          color: Colors.grey.shade800,
-                                                        ),
-                                                      ),
-                                                      if (item['subTitle'] != null)
-                                                        Padding(
-                                                          padding: const EdgeInsets.only(top: 4),
-                                                          child: Text(
-                                                            '${item['subTitle']}: ${item['balance']}',
-                                                            style: TextStyle(
-                                                              fontSize: 12,
-                                                              color: Colors.grey.shade600,
-                                                            ),
-                                                          ),
-                                                        ),
-                                                    ],
-                                                  ),
-                                                ),
-                                                if (item['hasCount'] == true && item['count'] > 0)
-                                                  Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                                    decoration: BoxDecoration(
-                                                      gradient: LinearGradient(
-                                                        colors: [
-                                                          Colors.blue.shade600,
-                                                          Colors.blue.shade400,
-                                                        ],
-                                                      ),
-                                                      borderRadius: BorderRadius.circular(20),
-                                                      boxShadow: [
-                                                        BoxShadow(
-                                                          color: Colors.blue.withOpacity(0.3),
-                                                          blurRadius: 4,
-                                                          offset: const Offset(0, 2),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                    child: Text(
-                                                      item['count'].toString(),
-                                                      style: const TextStyle(
-                                                        color: Colors.white,
-                                                        fontSize: 12,
-                                                        fontWeight: FontWeight.bold,
-                                                      ),
-                                                    ),
-                                                  ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
@@ -420,21 +522,29 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        InkWell(
-          onTap: _isMenuOpen ? _hideMenu : _showMenu,
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            child: Icon(
-              _isMenuOpen ? Icons.close : Icons.menu,
-              size: 30,
-              color: Theme.of(context).textTheme.bodyLarge?.color,
-            ),
-          ),
+    final theme = Provider.of<ThemeController>(context);
+    final isDark = theme.darkTheme;
+
+    return GestureDetector(
+      onTap: () {
+        if (_isMenuOpen) {
+          _hideMenu();
+        } else {
+          _showMenu();
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: (isDark ? Colors.white : Colors.black).withOpacity(0.05),
+          borderRadius: BorderRadius.circular(12),
         ),
-      ],
+        child: Icon(
+          _isMenuOpen ? Icons.close_rounded : Icons.menu_rounded,
+          size: 24,
+          color: isDark ? Colors.white : Colors.black87,
+        ),
+      ),
     );
   }
 }
