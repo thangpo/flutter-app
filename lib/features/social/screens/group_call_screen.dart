@@ -40,24 +40,29 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   final Map<int, RTCVideoRenderer> _remoteRendererByUser = {};
   final Map<int, List<RTCIceCandidate>> _pendingIceByUser = {};
 
+  // De-duplicate ICE per peer
+  final Map<int, Set<String>> _addedCandKeysByUser = {};
+
+  // ICE restart guards per peer
+  final Map<int, bool> _iceRestartingByUser = {};
+  final Map<int, int> _iceRestartTriesByUser = {};
+  static const int _iceRestartMaxTries = 2;
+
   bool _starting = true;
   bool _leaving = false;
   String? _error;
 
   bool get _isVideo => widget.mediaType == 'video';
+  bool get _isCreator => _gc.isCreator;
 
-  // ✅ Luôn trả về int an toàn, không dựa vào _asInt để tránh suy luận Never?
+  // ✅ Luôn trả về int an toàn
   int get _myId {
     try {
       final ctrl = context.read<GroupChatController>();
-      final val = ctrl.currentUserId; // String?
+      final val = ctrl.currentUserId;
       if (val == null) return 0;
       final parsed = int.tryParse(val);
       if (parsed != null) return parsed;
-      // Phòng khi có implementation khác trả int
-      if (val is Object) {
-        // no-op: giữ để future-proof nếu kiểu thay đổi
-      }
       return 0;
     } catch (_) {
       return 0;
@@ -65,11 +70,9 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   }
 
   bool _shouldOfferTo(int peerId) {
-    // Quy tắc chống glare theo cặp: id nhỏ sẽ tạo offer trước
-    if (_myId != 0 && peerId != 0) {
-      return _myId < peerId;
-    }
-    // Fallback: nếu không biết id của mình, chỉ offer nếu mình là người tạo cuộc gọi (không có callId truyền vào)
+    // Chống glare: id nhỏ tạo offer trước
+    if (_myId != 0 && peerId != 0) return _myId < peerId;
+    // Fallback: nếu mình là người tạo cuộc gọi (không có callId truyền vào)
     return widget.callId == null;
   }
 
@@ -126,6 +129,8 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
 
   Future<void> _prepareLocalMedia() async {
     await _localRenderer.initialize();
+
+    // Có thể nâng constraints theo nhu cầu; giữ đơn giản + ổn định
     final Map<String, dynamic> constraints = {
       'audio': true,
       'video': _isVideo
@@ -171,16 +176,21 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       } catch (_) {}
     }
     _pendingIceByUser.remove(peerId);
+    _addedCandKeysByUser.remove(peerId);
+    _iceRestartingByUser.remove(peerId);
+    _iceRestartTriesByUser.remove(peerId);
     if (mounted) setState(() {});
   }
 
   Future<void> _reconcilePeers(Set<int> newPeers) async {
+    // Close peers that left
     final toRemove =
         _pcByUser.keys.where((id) => !newPeers.contains(id)).toList();
     for (final id in toRemove) {
       await _closePeer(id);
     }
 
+    // Ensure PCs for new peers
     for (final id in newPeers) {
       if (id == _myId) continue; // không tạo PC với chính mình
       if (!_pcByUser.containsKey(id)) {
@@ -198,10 +208,27 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
 
     final config = {
       'iceServers': [
-        {'urls': 'stun:stun.l.google.com:19302'},
-        // {'urls': 'turn:turn.yourdomain.com:3478', 'username': 'user', 'credential': 'pass'},
+        {
+          'urls': [
+            'stun:stun.l.google.com:19302',
+            'stun:stun1.l.google.com:19302',
+          ],
+        },
+        // ✅ TURN fallback (tham khảo cấu hình 1-1)
+        {
+          'urls': [
+            'turn:social.vnshop247.com:3478?transport=udp',
+            'turn:social.vnshop247.com:3478?transport=tcp',
+            'turn:147.93.98.63:3478?transport=udp',
+            'turn:147.93.98.63:3478?transport=tcp',
+          ],
+          'username': 'webrtc',
+          'credential': 'supersecret',
+        },
       ],
       'sdpSemantics': 'unified-plan',
+      // Debug NAT: ép toàn bộ qua TURN khi cần
+      // 'iceTransportPolicy': 'relay',
     };
 
     final pc = await createPeerConnection(config);
@@ -217,7 +244,27 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       }
     }
 
-    // ICE
+    // ✅ Giới hạn bitrate video gửi đi để ổn định (~800 kbps)
+    try {
+      final senders = await pc.getSenders();
+      for (final sn in senders) {
+        if (sn.track?.kind == 'video') {
+          await sn.setParameters(RTCRtpParameters(
+            encodings: <RTCRtpEncoding>[
+              RTCRtpEncoding(
+                maxBitrate: 800 * 1000,
+                numTemporalLayers: 2,
+                rid: 'f',
+              ),
+            ],
+          ));
+        }
+      }
+    } catch (_) {
+      // Có thể không hỗ trợ ở một số nền tảng — bỏ qua
+    }
+
+    // ICE: gửi candidate lên server
     pc.onIceCandidate = (c) {
       if (c.candidate == null) return;
       final callId = _gc.currentCallId;
@@ -245,8 +292,12 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       }
     };
 
-    pc.onIceConnectionState = (state) {
-      // optional logs
+    // ✅ ICE restart khi rớt
+    pc.onIceConnectionState = (state) async {
+      if (state == RTCIceConnectionState.RTCIceConnectionStateDisconnected ||
+          state == RTCIceConnectionState.RTCIceConnectionStateFailed) {
+        await _attemptIceRestart(peerId, pc);
+      }
     };
 
     _pcByUser[peerId] = pc;
@@ -257,6 +308,35 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       for (final cand in pend) {
         await pc.addCandidate(cand);
       }
+    }
+  }
+
+  Future<void> _attemptIceRestart(int peerId, RTCPeerConnection pc) async {
+    final tries = _iceRestartTriesByUser[peerId] ?? 0;
+    final restarting = _iceRestartingByUser[peerId] ?? false;
+
+    if (restarting || tries >= _iceRestartMaxTries) return;
+    _iceRestartingByUser[peerId] = true;
+    _iceRestartTriesByUser[peerId] = tries + 1;
+
+    try {
+      final offer = await pc.createOffer({'iceRestart': true});
+      await pc.setLocalDescription(offer);
+      final callId = _gc.currentCallId;
+      if (callId != null) {
+        await _gc.sendOffer(
+          callId: callId,
+          toUserId: peerId,
+          sdp: offer.sdp ?? '',
+        );
+      }
+    } catch (_) {
+      // ignore
+    } finally {
+      // cho ICE gathering một chút rồi mới cho phép lần kế tiếp
+      Future.delayed(const Duration(seconds: 4), () {
+        _iceRestartingByUser[peerId] = false;
+      });
     }
   }
 
@@ -322,12 +402,17 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     } else if (rawIdx is String) {
       mline = int.tryParse(rawIdx);
     }
+    final mid = (ev['sdpMid'] ?? '').toString().isEmpty
+        ? null
+        : ev['sdpMid'] as String?;
 
-    final c = RTCIceCandidate(
-      cand,
-      (ev['sdpMid'] ?? '').toString().isEmpty ? null : ev['sdpMid'] as String?,
-      mline,
-    );
+    // ✅ de-dupe ICE per peer
+    final key = '$cand|${mid ?? ""}|${mline ?? -1}';
+    final seen = _addedCandKeysByUser.putIfAbsent(fromId, () => <String>{});
+    if (seen.contains(key)) return;
+    seen.add(key);
+
+    final c = RTCIceCandidate(cand, mid, mline);
 
     final pc = _pcByUser[fromId];
     if (pc == null) {
@@ -339,13 +424,17 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     await pc.addCandidate(c);
   }
 
-  Future<void> _leave() async {
+  Future<void> _endOrLeave() async {
     if (_leaving) return;
     _leaving = true;
     try {
       final callId = _gc.currentCallId;
       if (callId != null) {
-        await _gc.leaveRoom(callId);
+        if (_isCreator) {
+          await _gc.endRoom(callId); // ✅ creator đóng phòng
+        } else {
+          await _gc.leaveRoom(callId);
+        }
       }
     } catch (_) {
     } finally {
@@ -375,6 +464,11 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       await _localRenderer.dispose();
     } catch (_) {}
     try {
+      _localStream?.getTracks().forEach((t) {
+        try {
+          t.stop();
+        } catch (_) {}
+      });
       await _localStream?.dispose();
     } catch (_) {}
     _localStream = null;
@@ -388,6 +482,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     _gc.onPeersChanged = null;
     _gc.onStatusChanged = null;
 
+    // Khi dispose không auto "end" để tránh đóng phòng ngoài ý muốn
     final callId = _gc.currentCallId;
     if (callId != null) {
       _gc.leaveRoom(callId).catchError((_) {});
@@ -406,7 +501,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
 
     return WillPopScope(
       onWillPop: () async {
-        await _leave();
+        await _endOrLeave();
         return false;
       },
       child: Scaffold(
@@ -417,9 +512,12 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
           title: Text(title),
           actions: [
             IconButton(
-              tooltip: 'Kết thúc',
-              icon: const Icon(Icons.call_end, color: Colors.red),
-              onPressed: _leave,
+              tooltip: _isCreator ? 'Kết thúc phòng' : 'Rời cuộc gọi',
+              icon: Icon(
+                _isCreator ? Icons.call_end : Icons.exit_to_app,
+                color: Colors.red,
+              ),
+              onPressed: _endOrLeave,
             ),
           ],
         ),
@@ -552,9 +650,9 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
         const SizedBox(width: 16),
         _roundBtn(
           bg: Colors.red,
-          icon: Icons.call_end,
+          icon: _isCreator ? Icons.call_end : Icons.exit_to_app,
           iconColor: Colors.white,
-          onTap: _leave,
+          onTap: _endOrLeave,
           big: true,
         ),
         if (_isVideo) const SizedBox(width: 16),

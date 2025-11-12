@@ -105,11 +105,12 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   // Gắn watcher inbox cho group này & thiết lập onIncoming
   void _bindIncomingWatcher() {
     final gcc = context.read<GroupCallController>();
+    final gchat = context.read<GroupChatController>();
 
     // Ngắt watcher cũ (nếu có) trước khi gắn mới
     gcc.stopWatchingInbox();
 
-    // Không auto mở phòng; chỉ gọi onIncoming để hỏi người dùng
+    // Không auto mở phòng; chỉ callback cho UI
     gcc.watchGroupInbox(widget.groupId, autoOpen: false);
 
     // Khi có cuộc gọi đến -> hiện dialog Chấp nhận / Từ chối
@@ -117,10 +118,28 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       if (!mounted) return;
       if (_ringingDialogOpen) return; // tránh trùng lặp
 
-      _ringingDialogOpen = true;
-      final callId = (call['call_id'] ?? call['id']) as int;
+      // Dữ liệu call từ API inbox
+      final callId = (call['call_id'] ?? call['id']) is int
+          ? (call['call_id'] ?? call['id']) as int
+          : int.tryParse('${call['call_id'] ?? call['id'] ?? 0}') ?? 0;
       final media = (call['media'] ?? 'audio').toString();
+      final joined = call['joined'] == true;
 
+      // user hiện tại & creator
+      final meId = int.tryParse('${gchat.currentUserId}') ?? 0;
+      final creatorId = int.tryParse('${call['creator_id'] ?? 0}') ?? 0;
+
+      // ⛔️ Không hiển thị dialog nếu:
+      // - đã join rồi (bao gồm creator vì create() đã mark joined_at)
+      // - mình chính là creator (caller)
+      // - controller đang ở đúng call này (đang trên màn call)
+      if (joined ||
+          creatorId == meId ||
+          (gcc.currentCallId != null && gcc.currentCallId == callId)) {
+        return;
+      }
+
+      _ringingDialogOpen = true;
       await showDialog(
         context: context,
         barrierDismissible: false,
@@ -388,7 +407,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         }
       }
 
-      // 2) UNION với người từng nhắn trong nhóm (không còn fallback)
+      // 2) UNION với người từng nhắn trong nhóm
       final msgs = gc.messagesOf(widget.groupId);
       for (final msg in msgs) {
         final v = msg['from_id'] ?? msg['user_id'];
@@ -444,6 +463,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       // ✅ Thu thập invitees và truyền sang GroupCallScreen
       final invitees = await _collectInvitees();
 
+      // 🔇 Tắt watcher để caller KHÔNG thấy dialog "tham gia"
+      final gcc = context.read<GroupCallController>();
+      gcc.stopWatchingInbox();
+
       if (!mounted) return;
       await Navigator.of(context).push(
         MaterialPageRoute(
@@ -462,6 +485,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         );
       }
     } finally {
+      // 🔔 Bật lại watcher khi quay về màn chat
+      if (mounted) _bindIncomingWatcher();
       _launchingCall = false;
     }
   }

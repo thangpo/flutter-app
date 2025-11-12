@@ -469,8 +469,6 @@ Future<void> main() async {
         )..init(),
       ),
 
-      // Group call
-      // main.dart (provider GroupCallController)
       ChangeNotifierProvider(
         create: (_) {
           final repo = WebRTCGroupSignalingRepositoryImpl(
@@ -480,8 +478,9 @@ Future<void> main() async {
               final sp = await SharedPreferences.getInstance();
               return sp.getString(AppConstants.socialAccessToken);
             },
-            endpointPath: '/api/', // ⬅️ QUAN TRỌNG: thư mục, không .php
           );
+
+
           return GroupCallController(signaling: repo)..init();
         },
       ),

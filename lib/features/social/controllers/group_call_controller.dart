@@ -1,4 +1,4 @@
-//G:\flutter-app\lib\features\social\controllers\group_call_controller.dart
+// lib/features/social/controllers/group_call_controller.dart
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -29,6 +29,10 @@ class GroupCallController extends ChangeNotifier {
 
   void Function(Set<int> peers)? onPeersChanged;
   void Function(CallStatus status)? onStatusChanged;
+
+  // ✅ mới: đánh dấu mình có phải là creator của phòng hiện tại không
+  bool _isCreator = false;
+  bool get isCreator => _isCreator;
 
   void init() {}
 
@@ -80,7 +84,7 @@ class GroupCallController extends ChangeNotifier {
       final statusStr = '${call['status'] ?? ''}';
       final media = (call['media'] == 'video') ? 'video' : 'audio';
 
-      // ✅ DEDUPE theo call_id, KHÔNG dựa vào 'joined' (server có thể trả sai)
+      // ✅ DEDUPE theo call_id, KHÔNG dựa vào 'joined'
       if (callId == null || _lastNotifiedCallId == callId) return;
       if (statusStr != 'ringing' && statusStr != 'ongoing') return;
 
@@ -129,10 +133,16 @@ class GroupCallController extends ChangeNotifier {
       media: (mediaType == 'video') ? 'video' : 'audio',
       participants: invitees,
     );
+
     final callId = _extractCallId(resp);
     if (callId == null) {
+      debugPrint('[GROUP-CALL] ❌ no_call_id from response: $resp');
       throw Exception('no_call_id');
     }
+
+    // ✅ mình là creator của phòng này
+    _isCreator = true;
+
     currentCallId = callId;
     status = CallStatus.ringing;
     notifyListeners();
@@ -145,6 +155,9 @@ class GroupCallController extends ChangeNotifier {
 
   // ====================== CALLEE FLOW ======================
   Future<void> attachAndJoin({required int callId}) async {
+    // ✅ callee không phải creator
+    _isCreator = false;
+
     currentCallId = callId;
     status = CallStatus.ongoing;
     notifyListeners();
@@ -194,7 +207,7 @@ class GroupCallController extends ChangeNotifier {
       toUserId: toUserId,
       candidate: candidate,
       sdpMid: sdpMid,
-      sdpMLineIndex: sdpMLineIndex,
+      sdpMLineIndex: sdpMLineIndex?.toString(),
     );
   }
 
@@ -252,7 +265,10 @@ class GroupCallController extends ChangeNotifier {
           notifyListeners();
         }
       }
-    } catch (_) {
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[GROUP-POLL] error: $e');
+      }
     } finally {
       _pollInFlight = false;
     }
@@ -276,6 +292,7 @@ class GroupCallController extends ChangeNotifier {
     status = CallStatus.idle;
     final oldId = currentCallId;
     currentCallId = null;
+    _isCreator = false;
     notifyListeners();
     _emitStatus();
     if (kDebugMode) {
@@ -283,17 +300,23 @@ class GroupCallController extends ChangeNotifier {
     }
   }
 
+  // ✅ FIXED: extract call_id an toàn từ mọi dạng JSON
   int? _extractCallId(dynamic resp) {
+    if (resp == null) return null;
+
     if (resp is Map) {
       dynamic v = resp['call_id'] ??
           resp['id'] ??
-          (resp['data'] is Map ? (resp['data'] as Map)['call_id'] : null) ??
-          (resp['call'] is Map ? (resp['call'] as Map)['id'] : null) ??
-          (resp['call'] is Map ? (resp['call'] as Map)['call_id'] : null);
+          resp['data']?['call_id'] ??
+          resp['call']?['id'] ??
+          resp['call']?['call_id'];
+
       if (v is int) return v;
       if (v is num) return v.toInt();
       if (v is String) return int.tryParse(v);
     }
+
+    debugPrint('[GROUP-CALL] ⚠️ _extractCallId failed: $resp');
     return null;
   }
 

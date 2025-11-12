@@ -11,7 +11,6 @@ Future<GroupWebRTCSignalingRepository> buildGroupSignalingRepo() async {
     baseUrl: AppConstants.socialBaseUrl,
     serverKey: AppConstants.socialServerKey,
     getAccessToken: () async => token,
-    endpointPath: '/api/webrtc_group.php', // Dùng file trực tiếp
   );
 }
 
