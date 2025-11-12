@@ -972,6 +972,9 @@
   "privacy_only_me": "Only me",
   "story_content_required": "Please add content before posting a story.",
   "story_cannot_generate_image": "Unable to create an image from text.",
+  "story_remove_video_first": "Remove the current video before adding other media.",
+  "story_only_one_video_allowed": "Only one video can be added at a time.",
+  "story_video_render_failed": "Unable to render the video story. Please try again.",
   "choose_photo": "Choose photo",
   "choose_video": "Choose video",
   "device_not_support_video_picker": "This device does not support picking video.",
@@ -1342,5 +1345,19 @@
   "stripe_development_feature": "Stripe payment feature is under development",
   "qr_generation_failed": "Could not generate payment QR code. Please try again!",
   "minimum_deposit_amount": "Minimum top-up amount is 10,000đ",
-  "enter_topup_amount_prompt": "Please enter the amount to top up"
+  "enter_topup_amount_prompt": "Please enter the amount to top up",
+
+  "search_placeholder": "Search friends, groups, pages...",
+  "start_search": "Start searching",
+  "enter_keyword_to_search": "Enter keyword to search for users, pages, groups or channels.",
+  "search_failed": "Unable to search",
+  "no_result": "No results found",
+  "try_another_keyword": "Try another keyword",
+  "users": "Users",
+  "pages": "Pages",
+  "channels": "Channels",
+  "invalid_link": "Invalid link",
+  "open_link_failed": "Cannot open link",
+  "story_add_text": "Add text",
+  "story_add_media": "Add media"
 }

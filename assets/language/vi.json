@@ -971,6 +971,9 @@
   "privacy_only_me": "Chỉ mình tôi",
   "story_content_required": "Vui lòng thêm nội dung trước khi đăng story.",
   "story_cannot_generate_image": "Không thể tạo ảnh từ văn bản.",
+  "story_remove_video_first": "Vui lòng xóa video hiện tại trước khi thêm nội dung khác.",
+  "story_only_one_video_allowed": "Chỉ có thể thêm một video tại một thời điểm.",
+  "story_video_render_failed": "Không thể xuất video cho tin. Vui lòng thử lại.",
   "choose_photo": "Chọn ảnh",
   "choose_video": "Chọn video",
   "device_not_support_video_picker": "Thiết bị này không hỗ trợ chọn video.",
@@ -1337,6 +1340,20 @@
   "stripe_development_feature": "Tính năng thanh toán Stripe đang được phát triển",
   "qr_generation_failed": "Không thể tạo mã QR thanh toán. Vui lòng thử lại!",
   "minimum_deposit_amount": "Số tiền nạp tối thiểu là 10.000đ",
-  "enter_topup_amount_prompt": "Vui lòng nhập số tiền cần nạp"
+  "enter_topup_amount_prompt": "Vui lòng nhập số tiền cần nạp",
+
+  "search_placeholder": "Tìm kiếm bạn bè, nhóm, trang...",
+  "start_search": "Bắt đầu tìm kiếm",
+  "enter_keyword_to_search": "Nhập từ khóa để tìm người dùng, trang, nhóm hoặc kênh.",
+  "search_failed": "Không thể tìm kiếm",
+  "no_result": "Không tìm thấy kết quả",
+  "try_another_keyword": "Hãy thử từ khóa khác",
+  "users": "Người dùng",
+  "pages": "Trang",
+  "channels": "Kênh",
+  "invalid_link": "Liên kết không hợp lệ",
+  "open_link_failed": "Không thể mở liên kết",
+  "story_add_text": "Thêm văn bản",
+  "story_add_media": "Thêm ảnh/video"
 }
 
