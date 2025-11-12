@@ -38,8 +38,6 @@ class _NotificationsScreenState extends State<NotificationsScreen>
   @override
   Widget build(BuildContext context) {
     final socialCtrl = context.watch<SocialNotificationsController>();
-
-
     // ✅ đảm bảo không lỗi build sớm
     _tabController ??= TabController(length: 2, vsync: this);
 
@@ -81,7 +79,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                 ],
               ),
             ),
-            const Tab(text: 'TMĐT'),
+            const Tab(text: 'Shop'),
           ],
         ),
       ),
@@ -107,10 +105,10 @@ class _NotificationsScreenState extends State<NotificationsScreen>
             )),
           ),
 
-          // 🛒 Tab 2: TMĐT — chỉ hiển thị text tĩnh
+          // 🛒 Tab 2: Shop — chỉ hiển thị text tĩnh
           const Center(
             child: Text(
-              'Không có thông báo TMĐT',
+              'Không có thông báo Shop',
               style: TextStyle(fontSize: 16, color: Colors.grey),
             ),
           ),
