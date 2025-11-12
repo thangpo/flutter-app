@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_call_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_chat_controller.dart';
 
 class GroupCallScreen extends StatefulWidget {
   final String groupId;
@@ -44,6 +45,25 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   String? _error;
 
   bool get _isVideo => widget.mediaType == 'video';
+
+  // ✅ Sửa lỗi kiểu trả về: ép sang int bằng helper _asInt(...)
+  int get _myId {
+    try {
+      final v = context.read<GroupChatController>().currentUserId;
+      return _asInt(v) ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  bool _shouldOfferTo(int peerId) {
+    // Quy tắc chống glare theo cặp: id nhỏ sẽ tạo offer trước
+    if (_myId != 0 && peerId != 0) {
+      return _myId < peerId;
+    }
+    // Fallback: nếu không biết id của mình, chỉ offer nếu mình là người tạo cuộc gọi (không có callId truyền vào)
+    return widget.callId == null;
+  }
 
   @override
   void initState() {
@@ -154,9 +174,12 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     }
 
     for (final id in newPeers) {
+      if (id == _myId) continue; // không tạo PC với chính mình
       if (!_pcByUser.containsKey(id)) {
         await _ensurePeerConnection(id);
-        await _createAndSendOffer(id);
+        if (_shouldOfferTo(id)) {
+          await _createAndSendOffer(id);
+        }
       }
     }
     if (mounted) setState(() {});
@@ -168,21 +191,25 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     final config = {
       'iceServers': [
         {'urls': 'stun:stun.l.google.com:19302'},
-        // TURN (nếu có):
         // {'urls': 'turn:turn.yourdomain.com:3478', 'username': 'user', 'credential': 'pass'},
       ],
-      'sdpSemantics': 'unified-plan', // dùng Unified Plan chuẩn mới
+      'sdpSemantics': 'unified-plan',
     };
 
     final pc = await createPeerConnection(config);
 
-    // ✅ Unified Plan: dùng addTrack thay cho addStream
-    if (_localStream != null) {
-      for (final track in _localStream!.getTracks()) {
-        await pc.addTrack(track, _localStream!);
+    // Unified-Plan: addTrack các track local
+    final s = _localStream;
+    if (s != null) {
+      for (final t in s.getAudioTracks()) {
+        await pc.addTrack(t, s);
+      }
+      for (final t in s.getVideoTracks()) {
+        await pc.addTrack(t, s);
       }
     }
 
+    // ICE
     pc.onIceCandidate = (c) {
       if (c.candidate == null) return;
       final callId = _gc.currentCallId;
@@ -196,32 +223,31 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       );
     };
 
-    // ✅ Unified Plan: nhận remote qua onTrack
+    // Nhận remote stream
     pc.onTrack = (RTCTrackEvent event) async {
-      if (event.streams.isEmpty) return;
-      final stream = event.streams[0];
-      final r = _remoteRendererByUser[peerId] ?? RTCVideoRenderer();
-      if (!_remoteRendererByUser.containsKey(peerId)) {
-        await r.initialize();
-        _remoteRendererByUser[peerId] = r;
+      if (event.streams.isNotEmpty) {
+        final stream = event.streams[0];
+        final r = _remoteRendererByUser[peerId] ?? RTCVideoRenderer();
+        if (!_remoteRendererByUser.containsKey(peerId)) {
+          await r.initialize();
+          _remoteRendererByUser[peerId] = r;
+        }
+        r.srcObject = stream;
+        if (mounted) setState(() {});
       }
-      r.srcObject = stream;
-      if (mounted) setState(() {});
     };
 
-    // (Không dùng onAddStream khi Unified Plan)
     pc.onIceConnectionState = (state) {
-      // có thể log / xử lý reconnect nếu muốn
+      // optional logs
     };
 
     _pcByUser[peerId] = pc;
 
+    // apply pending ICE (nếu có)
     final pend = _pendingIceByUser.remove(peerId);
     if (pend != null) {
       for (final cand in pend) {
-        try {
-          await pc.addCandidate(cand);
-        } catch (_) {}
+        await pc.addCandidate(cand);
       }
     }
   }
@@ -230,10 +256,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     final pc = _pcByUser[peerId];
     if (pc == null) return;
 
-    final offer = await pc.createOffer({
-      'offerToReceiveAudio': 1,
-      'offerToReceiveVideo': _isVideo ? 1 : 0,
-    });
+    final offer = await pc.createOffer({});
     await pc.setLocalDescription(offer);
 
     final callId = _gc.currentCallId;
@@ -255,10 +278,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     final pc = _pcByUser[fromId]!;
     await pc.setRemoteDescription(RTCSessionDescription(sdp, 'offer'));
 
-    final answer = await pc.createAnswer({
-      'offerToReceiveAudio': 1,
-      'offerToReceiveVideo': _isVideo ? 1 : 0,
-    });
+    final answer = await pc.createAnswer({});
     await pc.setLocalDescription(answer);
 
     final callId = _gc.currentCallId;
@@ -287,10 +307,18 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     final cand = (ev['candidate'] ?? '').toString();
     if (fromId == null || cand.isEmpty) return;
 
+    int? mline;
+    final rawIdx = ev['sdpMLineIndex'];
+    if (rawIdx is int) {
+      mline = rawIdx;
+    } else if (rawIdx is String) {
+      mline = int.tryParse(rawIdx);
+    }
+
     final c = RTCIceCandidate(
       cand,
       (ev['sdpMid'] ?? '').toString().isEmpty ? null : ev['sdpMid'] as String?,
-      ev['sdpMLineIndex'] is int ? ev['sdpMLineIndex'] as int? : null,
+      mline,
     );
 
     final pc = _pcByUser[fromId];
@@ -300,9 +328,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       _pendingIceByUser[fromId] = list;
       return;
     }
-    try {
-      await pc.addCandidate(c);
-    } catch (_) {}
+    await pc.addCandidate(c);
   }
 
   Future<void> _leave() async {
