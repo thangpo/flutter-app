@@ -46,11 +46,19 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
 
   bool get _isVideo => widget.mediaType == 'video';
 
-  // ✅ Sửa lỗi kiểu trả về: ép sang int bằng helper _asInt(...)
+  // ✅ Luôn trả về int an toàn, không dựa vào _asInt để tránh suy luận Never?
   int get _myId {
     try {
-      final v = context.read<GroupChatController>().currentUserId;
-      return _asInt(v) ?? 0;
+      final ctrl = context.read<GroupChatController>();
+      final val = ctrl.currentUserId; // String?
+      if (val == null) return 0;
+      final parsed = int.tryParse(val);
+      if (parsed != null) return parsed;
+      // Phòng khi có implementation khác trả int
+      if (val is Object) {
+        // no-op: giữ để future-proof nếu kiểu thay đổi
+      }
+      return 0;
     } catch (_) {
       return 0;
     }

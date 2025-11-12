@@ -1,3 +1,4 @@
+//G:\flutter-app\lib\features\social\controllers\group_call_controller.dart
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -31,10 +32,10 @@ class GroupCallController extends ChangeNotifier {
 
   void init() {}
 
-  // ====================== WATCH INBOX (NEW) ======================
+  // ====================== WATCH INBOX ======================
   Timer? _inboxTimer;
   String? _watchGroupId;
-  int? _lastNotifiedCallId;
+  int? _lastNotifiedCallId; // dedupe theo call_id
   bool _opening = false;
   void Function(Map<String, dynamic> call)? onIncoming;
 
@@ -75,24 +76,26 @@ class GroupCallController extends ChangeNotifier {
       final call = await signaling.inbox(groupId: gid);
       if (call == null) return;
 
-      final callId = _asInt(call['call_id']);
+      final callId = _asInt(call['call_id']) ?? _asInt(call['id']);
       final statusStr = '${call['status'] ?? ''}';
       final media = (call['media'] == 'video') ? 'video' : 'audio';
-      final joined = call['joined'] == true || '${call['joined']}' == '1';
 
-      if (callId != null && _lastNotifiedCallId == callId) return;
-      if (joined) {
-        _lastNotifiedCallId = callId;
-        return;
-      }
+      // ✅ DEDUPE theo call_id, KHÔNG dựa vào 'joined' (server có thể trả sai)
+      if (callId == null || _lastNotifiedCallId == callId) return;
       if (statusStr != 'ringing' && statusStr != 'ongoing') return;
 
       debugPrint(
           '[GROUP-INBOX] Incoming group-call: call_id=$callId, gid=$gid, media=$media, status=$statusStr');
       _lastNotifiedCallId = callId;
 
-      if (onIncoming != null) onIncoming!(call);
+      onIncoming?.call({
+        'call_id': callId,
+        'group_id': gid,
+        'media': media,
+        'status': statusStr,
+      });
 
+      // Chỉ autoOpen khi được yêu cầu và chưa mở
       if (autoOpen && !_opening) {
         _opening = true;
         final nav = navigatorKey.currentState;
@@ -102,6 +105,8 @@ class GroupCallController extends ChangeNotifier {
               builder: (_) => GroupCallScreen(
                 groupId: gid,
                 mediaType: media,
+                callId: callId, // attach & join
+                groupName: 'Cuộc gọi nhóm',
               ),
             ),
           );
@@ -234,6 +239,7 @@ class GroupCallController extends ChangeNotifier {
         }
       }
 
+      // refresh peers mỗi 5s
       _tick = (_tick + 1) % 5;
       if (_tick == 0) {
         final newPeers = await signaling.peers(callId: callId);
@@ -282,7 +288,8 @@ class GroupCallController extends ChangeNotifier {
       dynamic v = resp['call_id'] ??
           resp['id'] ??
           (resp['data'] is Map ? (resp['data'] as Map)['call_id'] : null) ??
-          (resp['call'] is Map ? (resp['call'] as Map)['id'] : null);
+          (resp['call'] is Map ? (resp['call'] as Map)['id'] : null) ??
+          (resp['call'] is Map ? (resp['call'] as Map)['call_id'] : null);
       if (v is int) return v;
       if (v is num) return v.toInt();
       if (v is String) return int.tryParse(v);

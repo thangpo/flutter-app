@@ -369,36 +369,46 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       // đảm bảo có danh sách thành viên trước khi lấy
       try {
         await gc.loadGroupMembers(widget.groupId);
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('⚠️ loadGroupMembers error: $e');
+      }
 
       final members = gc.membersOf(widget.groupId);
-      final me = gc.currentUserId;
+      final meStr = gc.currentUserId?.toString();
+      final meId = meStr != null ? int.tryParse(meStr) : null;
 
+      // 1) Lấy từ danh sách thành viên
       for (final m in members) {
         final v = m['user_id'] ?? m['id'] ?? m['uid'];
         int? id;
         if (v is int) id = v;
         if (v is String) id = int.tryParse(v);
-        if (id != null && id != me) ids.add(id);
+        if (id != null && (meId == null || id != meId)) {
+          ids.add(id);
+        }
+      }
+
+      // 2) UNION với người từng nhắn trong nhóm (không còn fallback)
+      final msgs = gc.messagesOf(widget.groupId);
+      for (final msg in msgs) {
+        final v = msg['from_id'] ?? msg['user_id'];
+        int? id;
+        if (v is int) id = v;
+        if (v is String) id = int.tryParse(v);
+        if (id != null && (meId == null || id != meId)) {
+          ids.add(id);
+        }
       }
 
       if (ids.isEmpty) {
-        // fallback: suy từ tin nhắn
-        final msgs = gc.messagesOf(widget.groupId);
-        for (final msg in msgs) {
-          final v = msg['from_id'] ?? msg['user_id'];
-          int? id;
-          if (v is int) id = v;
-          if (v is String) id = int.tryParse(v);
-          if (id != null && id != me) ids.add(id);
-        }
+        debugPrint('⚠️ _collectInvitees: không tìm thấy ai để mời.');
       }
     } catch (e) {
       debugPrint('⚠️ _collectInvitees error: $e');
     }
 
-    final list = ids.toList();
-    debugPrint('[GROUP CALL] Invitees => $list');
+    final list = ids.toList()..sort();
+    debugPrint('[GROUP CALL] Invitees (final) => $list');
     return list;
   }
 
