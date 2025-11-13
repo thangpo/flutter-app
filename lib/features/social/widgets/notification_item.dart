@@ -1,6 +1,7 @@
 // lib/features/social/widgets/notification_item.dart
 import 'dart:convert';
-
+import 'package:flutter_sixvalley_ecommerce/utill/custom_themes.dart';
+import 'package:flutter_sixvalley_ecommerce/utill/dimensions.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../domain/models/social_notification.dart';
@@ -11,6 +12,8 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_story_viewer_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_post_detail_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_group_detail_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_groups_screen.dart';
 
 class NotificationItem extends StatefulWidget {
   final SocialNotification n;
@@ -67,7 +70,15 @@ class _NotificationItemState extends State<NotificationItem> {
   @override
   Widget build(BuildContext context) {
     final n = widget.n;
-    final bgColor = n.seen == "0" ? const Color(0xFFE8F0FE) : Colors.white;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final bgColor = n.seen == "0"
+        ? theme.primaryColor.withOpacity(0.08)
+        : theme.cardColor;
+    final textColor = theme.textTheme.bodyLarge?.color ?? Colors.black87;
+    final secondary = theme.hintColor;
+
+
     final t = (_drag / _revealMax).clamp(0.0, 1.0);
 
     return GestureDetector(
@@ -106,7 +117,7 @@ class _NotificationItemState extends State<NotificationItem> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(msg ?? 'Đã xoá thông báo'),
-                            backgroundColor: Colors.redAccent,
+                            backgroundColor: theme.colorScheme.error,
                             duration: const Duration(seconds: 1),
                           ),
                         );
@@ -144,20 +155,21 @@ class _NotificationItemState extends State<NotificationItem> {
                     CircleAvatar(
                       radius: 26,
                       backgroundImage: NetworkImage(n.avatar),
+                      backgroundColor: theme.colorScheme.error,
                     ),
                     Positioned(
                       bottom: 0,
                       right: 0,
                       child: Container(
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: theme.cardColor,
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 1.5),
+                          border: Border.all(color: theme.cardColor, width: 1.5),
                         ),
                         padding: const EdgeInsets.all(0),
                         child: (n.type == 'reaction')
                             ? igReactionBadge(n.type2,
-                            badge: 18) // hoặc 18 nếu thích nhỏ hơn
+                            badge: 18)
                             : Icon(_iconByType(n.type),
                             color: _colorByType(n.type), size: 14),
                       ),
@@ -173,9 +185,9 @@ class _NotificationItemState extends State<NotificationItem> {
                     children: [
                       Text.rich(
                         TextSpan(
-                          style: const TextStyle(
-                            color: Colors.black87,
-                            fontSize: 15,
+                          style: textRegular.copyWith(
+                            color: textColor,
+                            fontSize: Dimensions.fontSizeDefault,
                             height: 1.3,
                           ),
                           children: [
@@ -208,8 +220,8 @@ class _NotificationItemState extends State<NotificationItem> {
                   Container(
                     width: 10,
                     height: 10,
-                    decoration: const BoxDecoration(
-                      color: Colors.blue,
+                    decoration: BoxDecoration(
+                      color: theme.primaryColor,
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -289,6 +301,39 @@ class _NotificationItemState extends State<NotificationItem> {
         return;
       }
     }
+    // 🟠 3️⃣ Group invitation → mở chi tiết nhóm
+
+    if (n.type == 'invited_you_to_the_group'
+        || n.type=='joined_group'
+        || n.type=='requested_to_join_group'
+        || n.type=='accepted_join_request'
+        || n.type=='group_admin'
+    ) {
+      final groupId = n.groupId;
+      // 🧩 chỉ hợp lệ nếu khác rỗng & khác '0'
+      if (groupId.isNotEmpty && groupId != '0') {
+        if (!mounted) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => SocialGroupDetailScreen(
+              groupId: groupId,
+            ),
+          ),
+        );
+        return;
+      } else if (n.type == 'group_admin') {
+        if (!mounted) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const SocialGroupsScreen(),
+          ),
+        );
+        return;
+      }
+    }
+
 
     // 🟢 3️⃣ Mặc định: mở profile
     final String notifierId = n.notifierId ?? '';
@@ -329,6 +374,14 @@ class _NotificationItemState extends State<NotificationItem> {
         return "đã ghé thăm trang cá nhân của bạn.";
       case 'invited_you_to_the_group':
         return "đã mời bạn tham gia nhóm.";
+      case 'joined_group':
+        return "đã tham gia nhóm của bạn.";
+      case 'requested_to_join_group':
+        return "đã gửi yêu cầu tham gia nhóm.";
+      case 'accepted_join_request':
+        return "đã chấp nhận yêu cầu tham gia nhóm của bạn.";
+      case 'group_admin':
+        return "đã đặt bạn làm quản trị viên nhóm.";
       case 'following':
         return "đã bắt đầu theo dõi bạn.";
       case 'viewed_story':

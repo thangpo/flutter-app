@@ -29,41 +29,41 @@ import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/push_navigation_helper.dart';
 
-// 🔔 gọi đến: auto navigate + attach controller
+// ðŸ”” gá»i Ä‘áº¿n: auto navigate + attach controller
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/call_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/incoming_call_screen.dart';
 
 class NotificationHelper {
-  // tránh double navigate nếu FCM bắn liên tiếp
+  // trÃ¡nh double navigate náº¿u FCM báº¯n liÃªn tiáº¿p
   static bool _callRouting = false;
 
   static Future<void> initialize(
       FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin) async {
-    // 🟢 Tạo Channel mặc định (Android 8+)
+    // ðŸŸ¢ Táº¡o Channel máº·c Ä‘á»‹nh (Android 8+)
     const AndroidNotificationChannel defaultChannel =
-        AndroidNotificationChannel(
+    AndroidNotificationChannel(
       'vnshop247_channel',
       'VNShop247 Notifications',
-      description: 'Kênh mặc định cho thông báo VNShop247',
+      description: 'KÃªnh máº·c Ä‘á»‹nh cho thÃ´ng bÃ¡o VNShop247',
       importance: Importance.high,
     );
 
     await flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+        AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(defaultChannel);
 
     var androidInitialize =
-        const AndroidInitializationSettings('notification_icon');
+    const AndroidInitializationSettings('notification_icon');
     var iOSInitialize = const DarwinInitializationSettings();
     var initializationsSettings =
-        InitializationSettings(android: androidInitialize, iOS: iOSInitialize);
+    InitializationSettings(android: androidInitialize, iOS: iOSInitialize);
     flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+        AndroidFlutterLocalNotificationsPlugin>()
         ?.requestNotificationsPermission();
 
-    // ===== Helper: mở màn nghe/từ chối ngay =====
+    // ===== Helper: má»Ÿ mÃ n nghe/tá»« chá»‘i ngay =====
     Future<void> _openIncomingCallUI(Map<String, dynamic> data) async {
       final nav = navigatorKey.currentState;
       final ctx = nav?.overlay?.context ?? navigatorKey.currentContext;
@@ -73,7 +73,7 @@ class NotificationHelper {
       final media = (data['media']?.toString() == 'video') ? 'video' : 'audio';
       if (callId == null) return;
 
-      // attach CallController để bắt đầu poll ngay
+      // attach CallController Ä‘á»ƒ báº¯t Ä‘áº§u poll ngay
       try {
         final cc = Provider.of<CallController>(ctx, listen: false);
         cc.attachCall(callId: callId, mediaType: media);
@@ -87,7 +87,7 @@ class NotificationHelper {
             builder: (_) => IncomingCallScreen(
               callId: callId,
               mediaType: media,
-              callerName: (data['caller_name'] ?? 'Cuộc gọi đến').toString(),
+              callerName: (data['caller_name'] ?? 'Cuá»™c gá»i Ä‘áº¿n').toString(),
               callerAvatar: data['caller_avatar']?.toString(),
             ),
           ),
@@ -102,20 +102,20 @@ class NotificationHelper {
       final data = message.data;
       final String t = (data['type'] ?? '').toString();
 
-      // ⚠️ Social (WoWonder) → main.dart xử lý hiển thị riêng (payload = data)
+      // âš ï¸ Social (WoWonder) â†’ main.dart xá»­ lÃ½ hiá»ƒn thá»‹ riÃªng (payload = data)
       if (data.containsKey('api_status') || data.containsKey('detail')) {
         return;
       }
 
-      // ✅ CUỘC GỌI TỚI: nhảy ngay vào màn nghe/từ chối
+      // âœ… CUá»˜C Gá»ŒI Tá»šI: nháº£y ngay vÃ o mÃ n nghe/tá»« chá»‘i
       if (t == 'call_invite' ||
           (data.containsKey('call_id') && data.containsKey('media'))) {
         await _openIncomingCallUI(data);
-        // (tuỳ chọn) có thể vẫn show heads-up để rung/chuông:
+        // (tuá»³ chá»n) cÃ³ thá»ƒ váº«n show heads-up Ä‘á»ƒ rung/chuÃ´ng:
         // await flutterLocalNotificationsPlugin.show(
         //   DateTime.now().millisecondsSinceEpoch ~/ 1000,
-        //   (data['media']?.toString() == 'video') ? 'Video call đến' : 'Cuộc gọi đến',
-        //   'Từ #${data['caller_id'] ?? ''} (Call ID ${data['call_id'] ?? ''})',
+        //   (data['media']?.toString() == 'video') ? 'Video call Ä‘áº¿n' : 'Cuá»™c gá»i Ä‘áº¿n',
+        //   'Tá»« #${data['caller_id'] ?? ''} (Call ID ${data['call_id'] ?? ''})',
         //   const NotificationDetails(
         //     android: AndroidNotificationDetails(
         //       'call_invite_channel', 'Call Invites',
@@ -125,7 +125,7 @@ class NotificationHelper {
         //   ),
         //   payload: jsonEncode(data),
         // );
-        return; // rất quan trọng: không rơi xuống show notif mặc định
+        return; // ráº¥t quan trá»ng: khÃ´ng rÆ¡i xuá»‘ng show notif máº·c Ä‘á»‹nh
       }
 
       if (kDebugMode) {
@@ -139,7 +139,7 @@ class NotificationHelper {
               .getAddressList();
           Navigator.of(Get.context!).pushAndRemoveUntil(
             MaterialPageRoute(builder: (context) => const LoginScreen()),
-            (route) => false,
+                (route) => false,
           );
         }
       }
@@ -151,7 +151,7 @@ class NotificationHelper {
 
       if (t == 'maintenance_mode') {
         final SplashController splashProvider =
-            Provider.of<SplashController>(Get.context!, listen: false);
+        Provider.of<SplashController>(Get.context!, listen: false);
         await splashProvider.initConfig(Get.context!, null, null);
 
         ConfigModel? config =
@@ -159,12 +159,12 @@ class NotificationHelper {
                 .configModel;
 
         bool isMaintenanceRoute =
-            Provider.of<SplashController>(Get.context!, listen: false)
-                .isMaintenanceModeScreen();
+        Provider.of<SplashController>(Get.context!, listen: false)
+            .isMaintenanceModeScreen();
 
         if (config?.maintenanceModeData?.maintenanceStatus == 1 &&
             (config?.maintenanceModeData?.selectedMaintenanceSystem
-                    ?.customerApp ==
+                ?.customerApp ==
                 1)) {
           Navigator.of(Get.context!).pushReplacement(MaterialPageRoute(
             builder: (_) => const MaintenanceScreen(),
@@ -178,7 +178,7 @@ class NotificationHelper {
         }
       }
 
-      // ✅ Chỉ show local notif khi KHÔNG phải maintenance/restock/call_invite
+      // âœ… Chá»‰ show local notif khi KHÃ”NG pháº£i maintenance/restock/call_invite
       if (t != 'maintenance_mode' &&
           t != 'product_restock_update' &&
           t != 'call_invite') {
@@ -200,7 +200,7 @@ class NotificationHelper {
           context: Get.context!,
           isScrollControlled: true,
           backgroundColor:
-              Theme.of(Get.context!).primaryColor.withValues(alpha: 0),
+          Theme.of(Get.context!).primaryColor.withValues(alpha: 0),
           builder: (con) =>
               RestockSheetWidget(notificationBody: notificationBody),
         );
@@ -212,19 +212,19 @@ class NotificationHelper {
       }
     });
 
-    // ===== User TAP notification (BACKGROUND → FOREGROUND) =====
+    // ===== User TAP notification (BACKGROUND â†’ FOREGROUND) =====
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
       final data = message.data;
       final type = (data['type'] ?? '').toString();
 
-      // 🟣 SOCIAL notifications (WoWonder)
+      // ðŸŸ£ SOCIAL notifications (WoWonder)
       if ((data['api_status'] != null) || (data['detail'] != null)) {
-        debugPrint('📬 [SOCIAL] User tapped social notification');
+        debugPrint('ðŸ“¬ [SOCIAL] User tapped social notification');
         await handlePushNavigation(message);
         return;
       }
 
-      // ✅ CUỘC GỌI TỚI: user tap → mở màn nghe/từ chối
+      // âœ… CUá»˜C Gá»ŒI Tá»šI: user tap â†’ má»Ÿ mÃ n nghe/tá»« chá»‘i
       if (type == 'call_invite' ||
           (data.containsKey('call_id') && data.containsKey('media'))) {
         await _openIncomingCallUI(data);
@@ -269,7 +269,7 @@ class NotificationHelper {
             Navigator.of(Get.context!).pushReplacement(
               MaterialPageRoute(
                 builder: (BuildContext context) =>
-                    const NotificationScreen(fromNotification: true),
+                const NotificationScreen(fromNotification: true),
               ),
             );
           } else if (notificationBody.type == 'chatting') {
@@ -279,9 +279,9 @@ class NotificationHelper {
                   isBackButtonExist: true,
                   fromNotification: true,
                   initIndex:
-                      notificationBody.messageKey == 'message_from_delivery_man'
-                          ? 0
-                          : 1,
+                  notificationBody.messageKey == 'message_from_delivery_man'
+                      ? 0
+                      : 1,
                 ),
               ),
             );
@@ -299,7 +299,7 @@ class NotificationHelper {
             Navigator.of(Get.context!).pushReplacement(
               MaterialPageRoute(
                 builder: (BuildContext context) =>
-                    const NotificationScreen(fromNotification: true),
+                const NotificationScreen(fromNotification: true),
               ),
             );
           }
@@ -308,7 +308,7 @@ class NotificationHelper {
 
       if (data['type'] == 'maintenance_mode') {
         final SplashController splashProvider =
-            Provider.of<SplashController>(Get.context!, listen: false);
+        Provider.of<SplashController>(Get.context!, listen: false);
         await splashProvider.initConfig(Get.context!, null, null);
 
         ConfigModel? config =
@@ -316,12 +316,12 @@ class NotificationHelper {
                 .configModel;
 
         bool isMaintenanceRoute =
-            Provider.of<SplashController>(Get.context!, listen: false)
-                .isMaintenanceModeScreen();
+        Provider.of<SplashController>(Get.context!, listen: false)
+            .isMaintenanceModeScreen();
 
         if (config?.maintenanceModeData?.maintenanceStatus == 1 &&
             (config?.maintenanceModeData?.selectedMaintenanceSystem
-                    ?.customerApp ==
+                ?.customerApp ==
                 1)) {
           Navigator.of(Get.context!).pushReplacement(
             MaterialPageRoute(
@@ -352,10 +352,10 @@ class NotificationHelper {
         body = message.data['body'];
         orderID = message.data['order_id'];
         image = (message.data['image'] != null &&
-                message.data['image'].isNotEmpty)
+            message.data['image'].isNotEmpty)
             ? message.data['image'].startsWith('http')
-                ? message.data['image']
-                : '${AppConstants.baseUrl}/storage/app/public/notification/${message.data['image']}'
+            ? message.data['image']
+            : '${AppConstants.baseUrl}/storage/app/public/notification/${message.data['image']}'
             : null;
       } else {
         title = message.notification?.title;
@@ -363,17 +363,17 @@ class NotificationHelper {
         orderID = message.notification?.titleLocKey;
         if (Platform.isAndroid) {
           image = (message.notification?.android?.imageUrl != null &&
-                  message.notification!.android!.imageUrl!.isNotEmpty)
+              message.notification!.android!.imageUrl!.isNotEmpty)
               ? message.notification!.android!.imageUrl!.startsWith('http')
-                  ? message.notification!.android!.imageUrl
-                  : '${AppConstants.baseUrl}/storage/app/public/notification/${message.notification?.android?.imageUrl}'
+              ? message.notification!.android!.imageUrl
+              : '${AppConstants.baseUrl}/storage/app/public/notification/${message.notification?.android?.imageUrl}'
               : null;
         } else if (Platform.isIOS) {
           image = (message.notification?.apple?.imageUrl != null &&
-                  message.notification!.apple!.imageUrl!.isNotEmpty)
+              message.notification!.apple!.imageUrl!.isNotEmpty)
               ? message.notification!.apple!.imageUrl!.startsWith('http')
-                  ? message.notification?.apple?.imageUrl
-                  : '${AppConstants.baseUrl}/storage/app/public/notification/${message.notification!.apple!.imageUrl}'
+              ? message.notification?.apple?.imageUrl
+              : '${AppConstants.baseUrl}/storage/app/public/notification/${message.notification!.apple!.imageUrl}'
               : null;
         }
       }
@@ -400,7 +400,7 @@ class NotificationHelper {
       NotificationBody? notificationBody,
       FlutterLocalNotificationsPlugin fln) async {
     const AndroidNotificationDetails androidPlatformChannelSpecifics =
-        AndroidNotificationDetails(
+    AndroidNotificationDetails(
       '6vallvnshop247_channel',
       'vnshop247_channel',
       playSound: true,
@@ -409,7 +409,7 @@ class NotificationHelper {
       sound: RawResourceAndroidNotificationSound('notification'),
     );
     const NotificationDetails platformChannelSpecifics =
-        NotificationDetails(android: androidPlatformChannelSpecifics);
+    NotificationDetails(android: androidPlatformChannelSpecifics);
     await fln.show(0, title, body, platformChannelSpecifics,
         payload: notificationBody != null
             ? jsonEncode(notificationBody.toJson())
@@ -429,7 +429,7 @@ class NotificationHelper {
       htmlFormatContentTitle: true,
     );
     AndroidNotificationDetails androidPlatformChannelSpecifics =
-        AndroidNotificationDetails(
+    AndroidNotificationDetails(
       'vnshop247_channel',
       'vnshop247_channel',
       importance: Importance.max,
@@ -439,7 +439,7 @@ class NotificationHelper {
       sound: const RawResourceAndroidNotificationSound('notification'),
     );
     NotificationDetails platformChannelSpecifics =
-        NotificationDetails(android: androidPlatformChannelSpecifics);
+    NotificationDetails(android: androidPlatformChannelSpecifics);
     await fln.show(0, title, body, platformChannelSpecifics,
         payload: notificationBody != null
             ? jsonEncode(notificationBody.toJson())
@@ -455,9 +455,9 @@ class NotificationHelper {
       FlutterLocalNotificationsPlugin fln) async {
     final String largeIconPath = await _downloadAndSaveFile(image, 'largeIcon');
     final String bigPicturePath =
-        await _downloadAndSaveFile(image, 'bigPicture');
+    await _downloadAndSaveFile(image, 'bigPicture');
     final BigPictureStyleInformation bigPictureStyleInformation =
-        BigPictureStyleInformation(
+    BigPictureStyleInformation(
       FilePathAndroidBitmap(bigPicturePath),
       hideExpandedLargeIcon: true,
       contentTitle: title,
@@ -466,7 +466,7 @@ class NotificationHelper {
       htmlFormatSummaryText: true,
     );
     final AndroidNotificationDetails androidPlatformChannelSpecifics =
-        AndroidNotificationDetails(
+    AndroidNotificationDetails(
       'vnshop247_channel',
       'vnshop247_channel',
       largeIcon: FilePathAndroidBitmap(largeIconPath),
@@ -477,7 +477,7 @@ class NotificationHelper {
       sound: const RawResourceAndroidNotificationSound('notification'),
     );
     final NotificationDetails platformChannelSpecifics =
-        NotificationDetails(android: androidPlatformChannelSpecifics);
+    NotificationDetails(android: androidPlatformChannelSpecifics);
     await fln.show(0, title, body, platformChannelSpecifics,
         payload: notificationBody != null
             ? jsonEncode(notificationBody.toJson())
