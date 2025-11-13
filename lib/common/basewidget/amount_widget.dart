@@ -5,8 +5,10 @@ import 'package:flutter_sixvalley_ecommerce/utill/dimensions.dart';
 class AmountWidget extends StatelessWidget {
   final String? title;
   final String amount;
-
-  const AmountWidget({super.key, required this.title, required this.amount});
+  //
+  final TextStyle? amountStyle;
+  //
+  const AmountWidget({super.key, required this.title, required this.amount, this.amountStyle,});
 
   @override
   Widget build(BuildContext context) {

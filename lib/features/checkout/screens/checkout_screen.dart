@@ -1,5 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter_sixvalley_ecommerce/main.dart';
 import 'package:flutter_sixvalley_ecommerce/features/address/controllers/address_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/address/screens/saved_address_list_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/cart/domain/models/cart_model.dart';
@@ -12,7 +15,6 @@ import 'package:flutter_sixvalley_ecommerce/features/shipping/controllers/shippi
 import 'package:flutter_sixvalley_ecommerce/helper/debounce_helper.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/price_converter.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/cart/controllers/cart_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/coupon/controllers/coupon_controller.dart';
@@ -31,8 +33,7 @@ import 'package:flutter_sixvalley_ecommerce/features/checkout/widgets/shipping_d
 import 'package:flutter_sixvalley_ecommerce/features/checkout/widgets/wallet_payment_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/features/dashboard/screens/dashboard_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/checkout/widgets/order_place_dialog_widget.dart';
-import 'package:provider/provider.dart';
-import 'package:http/http.dart' as http;
+
 
 class CheckoutScreen extends StatefulWidget {
   final List<CartModel> cartList;
@@ -75,17 +76,16 @@ class CheckoutScreenState extends State<CheckoutScreen> {
   final TextEditingController _controller = TextEditingController();
   final GlobalKey<FormState> passwordFormKey = GlobalKey<FormState>();
   final FocusNode _orderNoteNode = FocusNode();
-
   double _order = 0;
   double? _couponDiscount;
   double? _referralDiscount;
   double _calculatedShippingFee = 0;
   bool _isCalculatingShipping = false;
   String? _shippingError;
-
   final Map<String, double> _shopShippingFeesVND = {};
+  final Map<String, double> _originalShopFeesVND = {};
   final Map<String, String> _shopNames = {};
-
+  final Map<String, double> _shopFreeDeliverySavings = {};
   Map<String, dynamic> _buildCheckedIds() {
     final Map<String, dynamic> checkedIds = {};
     _shopShippingFeesVND.forEach((shopId, feeVND) {
@@ -96,9 +96,7 @@ class CheckoutScreenState extends State<CheckoutScreen> {
     });
     return checkedIds;
   }
-
   static const double USD_TO_VND_RATE = 26000.0;
-
   DebounceHelper debounceHelper = DebounceHelper(milliseconds: 500);
 
   @override
@@ -126,13 +124,30 @@ class CheckoutScreenState extends State<CheckoutScreen> {
     Provider.of<CheckoutController>(context, listen: false).clearData();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final couponProvider = Provider.of<CouponController>(context);
+    final checkoutProvider = Provider.of<CheckoutController>(context);
+
+    if (couponProvider.discount != null &&
+        checkoutProvider.addressIndex != null &&
+        widget.hasPhysical &&
+        !_isCalculatingShipping) {
+      debounceHelper.run(() {
+        if (mounted) {
+          _calculateShippingFee();
+        }
+      });
+    }
+  }
+
   double _convertVNDtoUSD(double vndAmount) {
     return vndAmount / USD_TO_VND_RATE;
   }
 
   Map<String, List<int>> _getCartIdsByGroupId() {
     Map<String, List<int>> result = {};
-
     for (final cart in widget.cartList) {
       if (cart.isChecked == true && cart.cartGroupId != null) {
         final groupList = result.putIfAbsent(cart.cartGroupId!, () => []);
@@ -141,7 +156,6 @@ class CheckoutScreenState extends State<CheckoutScreen> {
         }
       }
     }
-
     debugPrint("Cart IDs by Group: $result");
     return result;
   }
@@ -149,34 +163,59 @@ class CheckoutScreenState extends State<CheckoutScreen> {
   Map<String, (int, String, String, int?)> _getShopInfoByGroupId() {
     Map<String, (int, String, String, int?)> shopInfo = {};
     Map<String, int> groupIndexMap = {};
-
     int locationIndex = 0;
     for (final cart in widget.cartList) {
       if (!cart.isChecked! || cart.cartGroupId == null) continue;
       if (groupIndexMap.containsKey(cart.cartGroupId)) continue;
       groupIndexMap[cart.cartGroupId!] = locationIndex++;
     }
-
     for (final cart in widget.cartList) {
       if (!cart.isChecked! || cart.cartGroupId == null) continue;
       if (shopInfo.containsKey(cart.cartGroupId)) continue;
-
       final idx = groupIndexMap[cart.cartGroupId!];
       if (idx == null || idx >= widget.fromDistrictIds.length) continue;
-
       final districtId = widget.fromDistrictIds[idx];
       final wardId = widget.fromWardIds[idx];
-      final shopId = cart.sellerIs == 'admin' ? 0 : cart.sellerId; // Lấy id shop ở đây
+      final shopId = cart.sellerIs == 'admin' ? 0 : cart.sellerId;
       if (districtId == null || wardId == null) continue;
-
       final shopName = cart.shopInfo ?? 'Shop #${cart.cartGroupId}';
       shopInfo[cart.cartGroupId!] = (districtId, wardId, shopName, shopId);
     }
-
     debugPrint("Shop Info by Group: $shopInfo");
     return shopInfo;
   }
 
+  Future<bool> _checkFreeDeliveryForShop({
+    required double feeVND,
+    required int cartId,
+    required int sellerId,
+  }) async {
+    try {
+      debugPrint("🚀 _checkFreeDeliveryForShop CALLED for sellerId=$sellerId, cartId=$cartId");
+      final response = await http.post(
+        Uri.parse('https://vnshop247.com/api/v1/free/free-delivery'),
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          "fee": feeVND,
+          "cart_id": cartId,
+          "seller_id": sellerId,
+        }),
+      );
+      debugPrint("📭 Free delivery API response: ${response.statusCode} - ${response.body}");
+      debugPrint("Free Delivery API (cart_id: $cartId, seller_id: $sellerId): ${response.statusCode} - ${response.body}");
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['ok'] == 1;
+      }
+      return false;
+    } catch (e) {
+      debugPrint("Error checking free delivery for seller $sellerId: $e");
+      return false;
+    }
+  }
 
   Future<void> _calculateShippingFee() async {
     if (!widget.hasPhysical || widget.onlyDigital) {
@@ -185,6 +224,8 @@ class CheckoutScreenState extends State<CheckoutScreen> {
         _shippingError = null;
         _shopShippingFeesVND.clear();
         _shopNames.clear();
+        _originalShopFeesVND.clear();
+        _shopFreeDeliverySavings.clear();
       });
       return;
     }
@@ -200,6 +241,8 @@ class CheckoutScreenState extends State<CheckoutScreen> {
         _calculatedShippingFee = 0;
         _shopShippingFeesVND.clear();
         _shopNames.clear();
+        _originalShopFeesVND.clear();
+        _shopFreeDeliverySavings.clear();
       });
       return;
     }
@@ -214,6 +257,8 @@ class CheckoutScreenState extends State<CheckoutScreen> {
         _calculatedShippingFee = 0;
         _shopShippingFeesVND.clear();
         _shopNames.clear();
+        _originalShopFeesVND.clear();
+        _shopFreeDeliverySavings.clear();
       });
       return;
     }
@@ -223,12 +268,23 @@ class CheckoutScreenState extends State<CheckoutScreen> {
       _shippingError = null;
       _shopShippingFeesVND.clear();
       _shopNames.clear();
+      _originalShopFeesVND.clear();
+      _shopFreeDeliverySavings.clear();
     });
 
     try {
       double totalShippingCostVND = 0;
       final cartIdsByGroup = _getCartIdsByGroupId();
       final shopInfoByGroup = _getShopInfoByGroupId();
+
+      final couponProvider = Provider.of<CouponController>(context, listen: false);
+      final hasCoupon = couponProvider.isApplied;
+
+      debugPrint("🎟️ Coupon status:");
+      debugPrint("hasCoupon (applied): $hasCoupon");
+      debugPrint("   → hasCoupon: $hasCoupon");
+      debugPrint("   → couponCode: '${couponProvider.couponCode}'");
+      debugPrint("   → discount: ${couponProvider.discount}");
 
       for (final entry in cartIdsByGroup.entries) {
         final groupId = entry.key;
@@ -250,7 +306,7 @@ class CheckoutScreenState extends State<CheckoutScreen> {
           "to_ward_code": toWardCode,
         };
 
-        debugPrint("GHN API Request (Group: $groupId - $shopName - $shopId): ${jsonEncode(requestBody)}");
+        debugPrint("📦 Calculating shipping for shop $shopId ($shopName)...");
 
         final response = await http.post(
           Uri.parse('https://vnshop247.com/api/v1/shippingAPI/ghn/calculate-fee'),
@@ -261,15 +317,56 @@ class CheckoutScreenState extends State<CheckoutScreen> {
           body: jsonEncode(requestBody),
         );
 
-        debugPrint("GHN Response (Group: $groupId): ${response.statusCode} - ${response.body}");
-
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
           if (data['ok'] == true) {
             final feeVND = (data['totalShippingCost'] ?? 0).toDouble();
-            _shopShippingFeesVND[shopId.toString()] = feeVND;
-            _shopNames[shopId.toString()] = shopName;
-            totalShippingCostVND += feeVND;
+            final shopIdStr = shopId.toString();
+
+            _originalShopFeesVND[shopIdStr] = feeVND;
+            _shopShippingFeesVND[shopIdStr] = feeVND;
+            _shopNames[shopIdStr] = shopName;
+
+            debugPrint("💰 Shop $shopId: Original shipping fee = $feeVND VND");
+            debugPrint("🎟️ hasCoupon = $hasCoupon (discount: ${couponProvider.discount}, code: ${couponProvider.couponCode})");
+
+            if (hasCoupon) {
+              debugPrint("🔍 BẮT ĐẦU kiểm tra free delivery cho shop $shopId ($shopName)...");
+
+              final cartIdForCheck = cartIds.first;
+              final sellerIdForCheck = shopId ?? 0;
+
+              debugPrint("   → cart_id: $cartIdForCheck");
+              debugPrint("   → seller_id: $sellerIdForCheck");
+              debugPrint("   → fee: $feeVND VND");
+
+              try {
+                debugPrint("   → Đang gọi API _checkFreeDeliveryForShop...");
+                final isFree = await _checkFreeDeliveryForShop(
+                  feeVND: feeVND,
+                  cartId: cartIdForCheck,
+                  sellerId: sellerIdForCheck,
+                );
+
+                debugPrint("   → Kết quả trả về: isFree = $isFree");
+
+                if (isFree) {
+                  _shopFreeDeliverySavings[shopIdStr] = feeVND;
+                  _shopShippingFeesVND[shopIdStr] = 0;
+                  debugPrint("✅ Shop $shopId được MIỄN PHÍ vận chuyển! Tiết kiệm $feeVND VND");
+                } else {
+                  debugPrint("❌ Shop $shopId KHÔNG được miễn phí vận chuyển");
+                }
+              } catch (e) {
+                debugPrint("⚠️ Lỗi khi kiểm tra free delivery cho shop $shopId: $e");
+              }
+            } else {
+              debugPrint("⚠️ KHÔNG CÓ COUPON - Bỏ qua kiểm tra free delivery");
+              debugPrint("   → discount: ${couponProvider.discount}");
+              debugPrint("   → couponCode: ${couponProvider.couponCode}");
+            }
+
+            totalShippingCostVND += _shopShippingFeesVND[shopIdStr]!;
           } else {
             setState(() {
               _shippingError = data['message'] ?? 'Shipping calculation failed';
@@ -288,23 +385,26 @@ class CheckoutScreenState extends State<CheckoutScreen> {
 
       final totalShippingCostUSD = _convertVNDtoUSD(totalShippingCostVND);
 
+      debugPrint("📊 Final shipping summary:");
+      debugPrint("   Total VND: $totalShippingCostVND");
+      debugPrint("   Total USD: $totalShippingCostUSD");
+      debugPrint("   Free delivery savings: ${_shopFreeDeliverySavings.length} shops");
+
       setState(() {
         _calculatedShippingFee = totalShippingCostUSD;
         _isCalculatingShipping = false;
         _shippingError = null;
       });
-
-      debugPrint("Tổng phí vận chuyển: $totalShippingCostVND VND → $totalShippingCostUSD USD");
-
     } catch (e, stack) {
-      debugPrint("Exception in shipping calculation: $e");
-      debugPrint(stack.toString());
+      debugPrint("❌ Exception in shipping calculation: $e\n$stack");
       setState(() {
         _shippingError = 'Network error: $e';
         _isCalculatingShipping = false;
         _calculatedShippingFee = 0;
         _shopShippingFeesVND.clear();
         _shopNames.clear();
+        _originalShopFeesVND.clear();
+        _shopFreeDeliverySavings.clear();
       });
     }
   }
@@ -312,7 +412,6 @@ class CheckoutScreenState extends State<CheckoutScreen> {
   @override
   Widget build(BuildContext context) {
     _order = widget.totalOrderAmount + widget.discount;
-
     return Scaffold(
       resizeToAvoidBottomInset: true,
       key: _scaffoldKey,
@@ -504,8 +603,14 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                                 _shippingError = null;
                                 _shopShippingFeesVND.clear();
                                 _shopNames.clear();
+                                _originalShopFeesVND.clear();
+                                _shopFreeDeliverySavings.clear();
                               });
-                              _calculateShippingFee();
+                              debounceHelper.run(() {
+                                if (mounted) {
+                                  _calculateShippingFee();
+                                }
+                              });
                             },
                           ),
                         ),
@@ -551,6 +656,22 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                                     amount: PriceConverter.convertPrice(context, _order),
                                   ),
 
+                                  if (_shopFreeDeliverySavings.isNotEmpty)
+                                    Column(
+                                      children: _shopFreeDeliverySavings.entries.map((entry) {
+                                        final shopId = entry.key;
+                                        final savedVND = entry.value;
+                                        final savedUSD = _convertVNDtoUSD(savedVND);
+                                        final shopName = _shopNames[shopId] ?? "Shop $shopId";
+
+                                        return AmountWidget(
+                                          title: 'Miễn phí vận chuyển ($shopName)',
+                                          amount: '-${PriceConverter.convertPrice(context, savedUSD)}',
+                                          amountStyle: TextStyle(color: Colors.green),
+                                        );
+                                      }).toList(),
+                                    ),
+
                                   if (widget.hasPhysical)
                                     Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -577,22 +698,31 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                                             padding: const EdgeInsets.only(left: 16, top: 4),
                                             child: Column(
                                               children: _shopNames.entries.map((entry) {
-                                                final groupId = entry.key;
+                                                final shopId = entry.key;
                                                 final shopName = entry.value;
-                                                final feeVND = _shopShippingFeesVND[groupId] ?? 0;
+                                                final feeVND = _shopShippingFeesVND[shopId] ?? 0;
+                                                final originalFeeVND = _originalShopFeesVND[shopId] ?? 0;
                                                 final feeUSD = _convertVNDtoUSD(feeVND);
+                                                final isFree = feeVND == 0 && originalFeeVND > 0;
+
                                                 return Padding(
                                                   padding: const EdgeInsets.symmetric(vertical: 1),
                                                   child: Row(
                                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                                     children: [
                                                       Text(
-                                                        "• $shopName",
-                                                        style: textRegular.copyWith(fontSize: Dimensions.fontSizeSmall, color: Theme.of(context).hintColor),
+                                                        "• $shopName${isFree ? ' (Miễn phí)' : ''}",
+                                                        style: textRegular.copyWith(
+                                                          fontSize: Dimensions.fontSizeSmall,
+                                                          color: isFree ? Colors.green : Theme.of(context).hintColor,
+                                                        ),
                                                       ),
                                                       Text(
-                                                        PriceConverter.convertPrice(context, feeUSD),
-                                                        style: textRegular.copyWith(fontSize: Dimensions.fontSizeSmall),
+                                                        isFree ? 'Miễn phí' : PriceConverter.convertPrice(context, feeUSD),
+                                                        style: textRegular.copyWith(
+                                                          fontSize: Dimensions.fontSizeSmall,
+                                                          color: isFree ? Colors.green : null,
+                                                        ),
                                                       ),
                                                     ],
                                                   ),
@@ -647,7 +777,7 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                                 inputAction: TextInputAction.done,
                                 maxLines: 3,
                                 focusNode: _orderNoteNode,
-                                controller: orderProvider.orderNoteController,
+                                controller: Provider.of<CheckoutController>(context).orderNoteController,
                               ),
                             ],
                           ),
