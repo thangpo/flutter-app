@@ -14,6 +14,7 @@ class SocialUser {
   final bool isOwner;
   final bool isFriend;
   final bool isFollowing;
+  final bool isFollowingMe;
 
   const SocialUser({
     required this.id,
@@ -31,6 +32,7 @@ class SocialUser {
     this.isOwner = false,
     this.isFriend = false,
     this.isFollowing = false,
+    this.isFollowingMe = false,
   });
 
   SocialUser copyWith({
@@ -49,6 +51,7 @@ class SocialUser {
     bool? isOwner,
     bool? isFriend,
     bool? isFollowing,
+    bool? isFollowingMe,
   }) {
     return SocialUser(
       id: id ?? this.id,
@@ -66,6 +69,7 @@ class SocialUser {
       isOwner: isOwner ?? this.isOwner,
       isFriend: isFriend ?? this.isFriend,
       isFollowing: isFollowing ?? this.isFollowing,
+      isFollowingMe: isFollowingMe ?? this.isFollowingMe,
     );
   }
 }

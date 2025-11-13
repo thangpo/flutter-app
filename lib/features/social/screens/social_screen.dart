@@ -29,11 +29,15 @@ class SocialFeedScreen extends StatefulWidget {
   const SocialFeedScreen({super.key});
 
   @override
-  State<SocialFeedScreen> createState() => _SocialFeedScreenState();
+  SocialFeedScreenState createState() => SocialFeedScreenState();
 }
 
-class _SocialFeedScreenState extends State<SocialFeedScreen>
+class SocialFeedScreenState extends State<SocialFeedScreen>
     with AutomaticKeepAliveClientMixin {
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey<RefreshIndicatorState> _refreshKey =
+      GlobalKey<RefreshIndicatorState>();
+
   @override
   bool get wantKeepAlive => true;
 
@@ -48,6 +52,41 @@ class _SocialFeedScreenState extends State<SocialFeedScreen>
         sc.refresh();
       }
     });
+  }
+
+  bool get isAtTop {
+    if (!_scrollController.hasClients) return true;
+    return _scrollController.position.pixels <= 8;
+  }
+
+  Future<void> scrollToTop() async {
+    if (!_scrollController.hasClients) return;
+    await _scrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOut,
+    );
+  }
+
+  Future<void> refreshFeed() async {
+    if (!mounted) return;
+    _refreshKey.currentState?.show();
+    await context.read<SocialController>().refresh();
+  }
+
+  Future<void> handleTabReselect() async {
+    if (!mounted) return;
+    if (!isAtTop) {
+      await scrollToTop();
+    } else {
+      await refreshFeed();
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -68,6 +107,7 @@ class _SocialFeedScreenState extends State<SocialFeedScreen>
                     return const Center(child: CircularProgressIndicator());
                   }
                   return RefreshIndicator(
+                    key: _refreshKey,
                     onRefresh: () => sc.refresh(),
                     child: NotificationListener<ScrollNotification>(
                       // onNotification: (n) {
@@ -78,6 +118,7 @@ class _SocialFeedScreenState extends State<SocialFeedScreen>
                       //   return false;
                       // },
                       child: ListView.builder(
+                        controller: _scrollController,
                         padding: EdgeInsets.zero,
                         itemCount: sc.posts.length +
                             2, // +1: What'sOnYourMind, +1: Stories

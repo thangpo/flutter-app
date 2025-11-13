@@ -20,6 +20,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_reel.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post_color.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_search_result.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post_reaction.dart';
 
 import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
@@ -120,6 +121,16 @@ class SocialService implements SocialServiceInterface {
       return null;
     })();
 
+    bool parseFlag(dynamic value) {
+      if (value is bool) return value;
+      if (value is num) return value != 0;
+      if (value is String) {
+        final lower = value.trim().toLowerCase();
+        return lower == '1' || lower == 'true' || lower == 'yes';
+      }
+      return false;
+    }
+
     return SocialUser(
       id: data['user_id']?.toString() ?? data['id']?.toString() ?? '',
       displayName: displayName,
@@ -128,7 +139,123 @@ class SocialService implements SocialServiceInterface {
       userName: data['username']?.toString(),
       avatarUrl: (data['avatar'] ?? data['profile_picture'])?.toString(),
       coverUrl: (data['cover'] ?? data['cover_picture'])?.toString(),
+      isFriend: parseFlag(data['is_friend'] ?? data['isFriend']),
+      isFollowing: parseFlag(data['is_following'] ?? data['isFollowing']),
+      isFollowingMe:
+          parseFlag(data['is_following_me'] ?? data['isFollowingMe']),
     );
+  }
+
+  int? _tryParseInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+
+  List<SocialPostReaction> _parsePostReactions(Response response) {
+    final dynamic root = response.data;
+    dynamic dataField = root;
+    if (root is Map<String, dynamic>) {
+      dataField =
+          root['data'] ?? root['users'] ?? root['result'] ?? root['reactions'];
+    }
+
+    final Iterable<Map<String, dynamic>> rows =
+        _expandReactionRows(dataField);
+    if (rows.isEmpty) return const <SocialPostReaction>[];
+
+    final List<SocialPostReaction> parsed = <SocialPostReaction>[];
+    for (final Map<String, dynamic> map in rows) {
+      final Map<String, dynamic> normalized = _normalizeUserMap(map);
+      final SocialUser user = _mapToSocialUser(normalized);
+      final String reactionLabel = normalizeSocialReaction(
+        map['reaction'] ?? map['reaction_type'] ?? map['type'],
+      );
+      final String? rowId = map['row_id']?.toString();
+      DateTime? reactedAt;
+      final int? timestamp =
+          _tryParseInt(map['reaction_time'] ?? map['time'] ?? map['lastseen']);
+      if (timestamp != null && timestamp > 0) {
+        reactedAt = DateTime.fromMillisecondsSinceEpoch(
+          timestamp * 1000,
+          isUtc: true,
+        ).toLocal();
+      }
+
+      int? mutualFriends;
+      final dynamic details = map['details'];
+      if (details is Map<String, dynamic>) {
+        mutualFriends = _tryParseInt(details['mutual_friends_count']);
+      }
+      mutualFriends ??= _tryParseInt(map['mutual_friends_count']);
+
+      parsed.add(
+        SocialPostReaction(
+          id: rowId ?? user.id,
+          user: user,
+          reaction: reactionLabel.isEmpty ? 'Like' : reactionLabel,
+          rowId: rowId,
+          reactedAt: reactedAt,
+          mutualFriendsCount: mutualFriends,
+        ),
+      );
+    }
+    return parsed;
+  }
+
+  Iterable<Map<String, dynamic>> _expandReactionRows(dynamic dataField) {
+    final List<Map<String, dynamic>> aggregated =
+        <Map<String, dynamic>>[];
+
+    void addEntry(dynamic entry, {String? fallbackReaction}) {
+      if (entry is Map) {
+        final Map<String, dynamic> map =
+            Map<String, dynamic>.from(entry as Map<dynamic, dynamic>);
+        if ((map['reaction'] == null || map['reaction'].toString().isEmpty) &&
+            fallbackReaction != null &&
+            fallbackReaction.isNotEmpty) {
+          map['reaction'] = fallbackReaction;
+        }
+        final dynamic nested = map['data'] ?? map['users'];
+        if (nested is List && nested.isNotEmpty) {
+          for (final dynamic inner in nested) {
+            addEntry(inner, fallbackReaction: fallbackReaction);
+          }
+          return;
+        }
+        aggregated.add(map);
+      }
+    }
+
+    if (dataField is List) {
+      for (final dynamic entry in dataField) {
+        addEntry(entry);
+      }
+    } else if (dataField is Map) {
+      dataField.forEach((key, value) {
+        final String? reactionTag =
+            key != null ? key.toString().trim() : null;
+        if (value is List) {
+          for (final dynamic entry in value) {
+            addEntry(entry, fallbackReaction: reactionTag);
+          }
+        } else if (value is Map) {
+          final dynamic nested = value['data'] ?? value['users'];
+          if (nested is List) {
+            for (final dynamic entry in nested) {
+              addEntry(entry, fallbackReaction: reactionTag);
+            }
+          } else {
+            addEntry(value, fallbackReaction: reactionTag);
+          }
+        }
+      });
+    }
+
+    return aggregated;
   }
 
   // ========== FEEDS ==========
@@ -1365,6 +1492,38 @@ class SocialService implements SocialServiceInterface {
     }
     ApiChecker.checkApi(resp);
     return null;
+  }
+
+  @override
+  Future<List<SocialPostReaction>> getPostReactions({
+    required String postId,
+    String? reactionFilter,
+    int limit = 25,
+    String? offset,
+  }) async {
+    final resp = await socialRepository.fetchPostReactions(
+      postId: postId,
+      reactionFilter: reactionFilter,
+      limit: limit,
+      offset: offset,
+    );
+    if (resp.isSuccess && resp.response != null) {
+      final dynamic data = resp.response!.data;
+      final int status =
+          int.tryParse('${data is Map ? (data['api_status'] ?? 200) : 200}') ??
+              200;
+      if (status == 200) {
+        return _parsePostReactions(resp.response!);
+      }
+      final dynamic errors = data is Map ? data['errors'] : null;
+      final dynamic errorText = errors is Map ? errors['error_text'] : null;
+      final dynamic message =
+          errorText ?? (data is Map ? data['message'] : null);
+      throw Exception(
+          (message ?? 'Unable to load post reactions').toString());
+    }
+    ApiChecker.checkApi(resp);
+    return const <SocialPostReaction>[];
   }
 
   @override
