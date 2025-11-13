@@ -215,10 +215,40 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
       builder: (ctx) => FractionallySizedBox(
         heightFactor: 0.9,
         child: _PostReactionsSheet(
-          postId: post.id,
+          targetId: post.id,
+          targetType: 'post',
           totalCount: post.reactionCount,
           breakdown: post.reactionBreakdown,
           initialReaction: focusReaction,
+          sheetTitle: getTranslated('reactions', context),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openCommentReactionsSheet(
+    SocialComment comment, {
+    bool isReply = false,
+  }) async {
+    if (comment.reactionCount <= 0) return;
+    if (!mounted) return;
+    final String title = getTranslated(
+          isReply ? 'reply_reactions' : 'comment_reactions',
+          context,
+        ) ??
+        (isReply ? 'Reply reactions' : 'Comment reactions');
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => FractionallySizedBox(
+        heightFactor: 0.9,
+        child: _PostReactionsSheet(
+          targetId: comment.id,
+          targetType: isReply ? 'reply' : 'comment',
+          totalCount: comment.reactionCount,
+          breakdown: const <String, int>{},
+          sheetTitle: title,
         ),
       ),
     );
@@ -1139,30 +1169,35 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                                   const SizedBox(
                                                                       width:
                                                                           12),
-                                                                  Row(
-                                                                    mainAxisSize:
-                                                                        MainAxisSize
-                                                                            .min,
-                                                                    children: [
-                                                                      _reactionIcon(
-                                                                          'Like',
-                                                                          size:
-                                                                              18),
-                                                                      const SizedBox(
-                                                                          width:
-                                                                              4),
-                                                                      Text(
-                                                                        _formatSocialCount(
-                                                                            c.reactionCount),
-                                                                        style: Theme.of(context)
-                                                                            .textTheme
-                                                                            .bodySmall
-                                                                            ?.copyWith(
-                                                                              color: onSurface.withOpacity(.6),
-                                                                              fontWeight: FontWeight.w600,
-                                                                            ),
-                                                                      ),
-                                                                    ],
+                                                                  GestureDetector(
+                                                                    onTap: () =>
+                                                                        _openCommentReactionsSheet(
+                                                                            c),
+                                                                    child: Row(
+                                                                      mainAxisSize:
+                                                                          MainAxisSize
+                                                                              .min,
+                                                                      children: [
+                                                                        _reactionIcon(
+                                                                            'Like',
+                                                                            size:
+                                                                                18),
+                                                                        const SizedBox(
+                                                                            width:
+                                                                                4),
+                                                                        Text(
+                                                                          _formatSocialCount(
+                                                                              c.reactionCount),
+                                                                          style: Theme.of(context)
+                                                                              .textTheme
+                                                                              .bodySmall
+                                                                              ?.copyWith(
+                                                                                color: onSurface.withOpacity(.6),
+                                                                                fontWeight: FontWeight.w600,
+                                                                              ),
+                                                                        ),
+                                                                      ],
+                                                                    ),
                                                                   ),
                                                                 ],
                                                               ],
@@ -1287,6 +1322,17 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                             .requestFocus(
                                                                 _commentFocus);
                                                       },
+                                                      onShowReactions:
+                                                          (target,
+                                                                  {bool
+                                                                      isReply =
+                                                                          false,
+                                                                  BuildContext?
+                                                                      context}) =>
+                                                              _openCommentReactionsSheet(
+                                                        target,
+                                                        isReply: isReply,
+                                                      ),
                                                     ),
                                                   ],
                                                 ),
@@ -1814,15 +1860,19 @@ String _reactionActionLabel(BuildContext context, String reaction) {
 }
 
 class _PostReactionsSheet extends StatefulWidget {
-  final String postId;
+  final String targetId;
+  final String targetType;
   final int totalCount;
   final Map<String, int> breakdown;
   final String? initialReaction;
+  final String? sheetTitle;
   _PostReactionsSheet({
-    required this.postId,
+    required this.targetId,
+    required this.targetType,
     required this.totalCount,
     required Map<String, int> breakdown,
     this.initialReaction,
+    this.sheetTitle,
     Key? key,
   })  : breakdown = Map<String, int>.unmodifiable(breakdown),
         super(key: key);
@@ -1904,8 +1954,9 @@ class _PostReactionsSheetState extends State<_PostReactionsSheet> {
     setState(() {});
     final svc = sl<SocialServiceInterface>();
     try {
-      final reactions = await svc.getPostReactions(
-        postId: widget.postId,
+      final reactions = await svc.getReactions(
+        targetId: widget.targetId,
+        type: widget.targetType,
         reactionFilter: _kAllReactionCodes,
         limit: _pageSize,
         offset: null,
@@ -1959,8 +2010,9 @@ class _PostReactionsSheetState extends State<_PostReactionsSheet> {
     setState(() {});
     final svc = sl<SocialServiceInterface>();
     try {
-      final reactions = await svc.getPostReactions(
-        postId: widget.postId,
+      final reactions = await svc.getReactions(
+        targetId: widget.targetId,
+        type: widget.targetType,
         reactionFilter: _reactionCodeForLabel(reaction) ?? '1',
         limit: _pageSize,
         offset: _reactionOffsets[reaction],
@@ -2192,7 +2244,8 @@ class _PostReactionsSheetState extends State<_PostReactionsSheet> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  getTranslated('reactions', context) ?? 'Reactions',
+                  widget.sheetTitle ??
+                      (getTranslated('reactions', context) ?? 'Reactions'),
                   style: theme.textTheme.titleMedium
                       ?.copyWith(fontWeight: FontWeight.w700),
                 ),
@@ -2639,10 +2692,13 @@ class _RepliesLazy extends StatefulWidget {
   final SocialComment comment;
   final SocialServiceInterface service;
   final void Function(SocialComment) onRequestReply;
+  final void Function(SocialComment comment, {bool isReply, BuildContext? context})?
+      onShowReactions;
   const _RepliesLazy(
       {required this.comment,
       required this.service,
-      required this.onRequestReply});
+      required this.onRequestReply,
+      this.onShowReactions});
   @override
   State<_RepliesLazy> createState() => _RepliesLazyState();
 }
@@ -2872,23 +2928,29 @@ class _RepliesLazyState extends State<_RepliesLazy> {
                                   // Chỉ chèn khoảng cách & cụm (👍 + count) khi count > 0
                                   if (r.reactionCount > 0) ...[
                                     const SizedBox(width: 12),
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        _reactionIcon('Like', size: 18),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          _formatSocialCount(r.reactionCount),
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall
-                                              ?.copyWith(
-                                                color:
-                                                    onSurface.withOpacity(.6),
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                        ),
-                                      ],
+                                    GestureDetector(
+                                      onTap: () => widget.onShowReactions
+                                          ?.call(r, isReply: true),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          _reactionIcon('Like', size: 18),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            _formatSocialCount(
+                                                r.reactionCount),
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.copyWith(
+                                                  color: onSurface
+                                                      .withOpacity(.6),
+                                                  fontWeight:
+                                                      FontWeight.w600,
+                                                ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ],
                                 ],

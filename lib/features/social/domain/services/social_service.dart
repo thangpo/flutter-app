@@ -1501,8 +1501,26 @@ class SocialService implements SocialServiceInterface {
     int limit = 25,
     String? offset,
   }) async {
-    final resp = await socialRepository.fetchPostReactions(
-      postId: postId,
+    return getReactions(
+      targetId: postId,
+      type: 'post',
+      reactionFilter: reactionFilter,
+      limit: limit,
+      offset: offset,
+    );
+  }
+
+  @override
+  Future<List<SocialPostReaction>> getReactions({
+    required String targetId,
+    required String type,
+    String? reactionFilter,
+    int limit = 25,
+    String? offset,
+  }) async {
+    final resp = await socialRepository.fetchReactions(
+      targetId: targetId,
+      type: type,
       reactionFilter: reactionFilter,
       limit: limit,
       offset: offset,
@@ -1520,7 +1538,7 @@ class SocialService implements SocialServiceInterface {
       final dynamic message =
           errorText ?? (data is Map ? data['message'] : null);
       throw Exception(
-          (message ?? 'Unable to load post reactions').toString());
+          (message ?? 'Unable to load reactions').toString());
     }
     ApiChecker.checkApi(resp);
     return const <SocialPostReaction>[];

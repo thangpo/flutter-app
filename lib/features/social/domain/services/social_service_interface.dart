@@ -62,6 +62,13 @@ abstract class SocialServiceInterface {
     int limit = 25,
     String? offset,
   });
+  Future<List<SocialPostReaction>> getReactions({
+    required String targetId,
+    required String type,
+    String? reactionFilter,
+    int limit = 25,
+    String? offset,
+  });
   Future<List<SocialComment>> getPostComments(
       {required String postId, int? limit, int? offset});
   Future<List<SocialComment>> getCommentReplies({required String commentId});
