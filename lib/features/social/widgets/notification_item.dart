@@ -281,7 +281,8 @@ class _NotificationItemState extends State<NotificationItem> {
         n.type == 'comment_reply' ||
         n.type == 'reaction' ||
         n.type == 'shared_your_post' ||
-        n.type == 'comment_mention'
+        n.type == 'comment_mention' ||
+        n.type == 'post_mention'
     ) {
       if (n.postId != '0' && n.postId.isNotEmpty) {
         if (!mounted) return;
@@ -431,20 +432,38 @@ class _NotificationItemState extends State<NotificationItem> {
 
   static IconData _iconByType(String type, [String? type2]) {
     switch (type) {
-      case 'reaction': return Icons.thumb_up_alt_rounded;
-      case 'comment': return Icons.mode_comment_rounded;
-      case 'comment_reply': return Icons.reply_rounded;
-      case 'comment_mention': return Icons.alternate_email_rounded;
-      case 'shared_your_post': return Icons.share_rounded;
-      case 'post_mention': return Icons.alternate_email_rounded;
-      case 'visited_profile': return Icons.person_pin_circle_rounded;
-      case 'invited_you_to_the_group': return Icons.group_add_rounded;
-      case 'following': return Icons.person_add_alt_1_rounded;
-      case 'viewed_story': return Icons.visibility_rounded;
-      default: return Icons.notifications_rounded;
+      case 'reaction':
+        return Icons.favorite_rounded; // ❤️ nhẹ nhàng hơn thumb_up
+      case 'comment':
+        return Icons.chat_bubble_rounded;
+      case 'comment_reply':
+        return Icons.reply_rounded;
+      case 'comment_mention':
+        return Icons.alternate_email_rounded;
+      case 'shared_your_post':
+        return Icons.share_rounded;
+      case 'post_mention':
+        return Icons.alternate_email_rounded;
+      case 'visited_profile':
+        return Icons.person_search_rounded;
+      case 'invited_you_to_the_group':
+        return Icons.group_add_rounded;
+      case 'joined_group':
+        return Icons.groups_rounded;
+      case 'requested_to_join_group':
+        return Icons.group_rounded;
+      case 'accepted_join_request':
+        return Icons.check_circle_rounded;
+      case 'group_admin':
+        return Icons.verified_rounded;
+      case 'following':
+        return Icons.person_add_alt_1_rounded;
+      case 'viewed_story':
+        return Icons.visibility_rounded;
+      default:
+        return Icons.notifications_rounded;
     }
   }
-
 
   static Color _colorByType(String type, [String? type2]) {
     switch (type) {
@@ -452,15 +471,20 @@ class _NotificationItemState extends State<NotificationItem> {
       case 'comment': return const Color(0xFF3BAFDA); // Light teal
       case 'comment_reply': return const Color(0xFF845EC2); // Violet
       case 'comment_mention': return const Color(0xFF5C33F6); // Deep purple
-      case 'shared_your_post': return const Color(0xFF34B233); // Fresh green
+      case 'shared_your_post': return const Color(0xFF34B233); // Green
       case 'post_mention': return const Color(0xFFAD3EF3); // Lilac
       case 'visited_profile': return const Color(0xFF0DCEDA); // Cyan
       case 'invited_you_to_the_group': return const Color(0xFFFF7A00); // Orange
+      case 'joined_group': return const Color(0xFFFFA200); // Yellow-orange
+      case 'requested_to_join_group': return const Color(0xFF5BC0EB); // Sky blue
+      case 'accepted_join_request': return const Color(0xFF34B233); // Green
+      case 'group_admin': return const Color(0xFF1877F2); // Blue check
       case 'following': return const Color(0xFFFB6B90); // Pink coral
       case 'viewed_story': return const Color(0xFFF94892); // Magenta
       default: return const Color(0xFFAAAAAA);
     }
   }
+
 
 }
 
