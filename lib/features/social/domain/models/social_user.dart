@@ -6,6 +6,10 @@ class SocialUser {
   final String? userName;
   final String? avatarUrl;
   final String? coverUrl;
+  final String? genderText;
+  final String? birthday;
+  final int? followersCount;
+  final String? about;
   final bool isAdmin;
   final bool isOwner;
   final bool isFriend;
@@ -19,6 +23,10 @@ class SocialUser {
     this.userName,
     this.avatarUrl,
     this.coverUrl,
+    this.genderText,
+    this.birthday,
+    this.followersCount,
+    this.about,
     this.isAdmin = false,
     this.isOwner = false,
     this.isFriend = false,
@@ -33,6 +41,10 @@ class SocialUser {
     String? userName,
     String? avatarUrl,
     String? coverUrl,
+    String? genderText,
+    String? birthday,
+    int? followersCount,
+    String? about,
     bool? isAdmin,
     bool? isOwner,
     bool? isFriend,
@@ -46,6 +58,10 @@ class SocialUser {
       userName: userName ?? this.userName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       coverUrl: coverUrl ?? this.coverUrl,
+      genderText: genderText ?? this.genderText,
+      birthday: birthday ?? this.birthday,
+      followersCount: followersCount ?? this.followersCount,
+      about: about ?? this.about,
       isAdmin: isAdmin ?? this.isAdmin,
       isOwner: isOwner ?? this.isOwner,
       isFriend: isFriend ?? this.isFriend,

@@ -907,11 +907,13 @@ class _SocialGroupDetailScreenState extends State<SocialGroupDetailScreen>
 
     if (!mounted || updated == null) return;
 
+    final SocialGroup merged = _mergeUpdatedGroup(current, updated);
     setState(() {
-      _group = updated;
-      _memberCount = updated.memberCount;
+      _group = merged;
+      _memberCount = merged.memberCount;
       _applyGroupInfoToPosts();
     });
+    _loadGroup();
   }
 
   List<_GroupMenuAction> _resolveMenuActions({
@@ -1282,6 +1284,30 @@ class _SocialGroupDetailScreenState extends State<SocialGroupDetailScreen>
         ),
       );
     }
+  }
+
+  SocialGroup _mergeUpdatedGroup(SocialGroup base, SocialGroup fresh) {
+    String? _prefer(String? value, String? fallback) {
+      if (value == null) return fallback;
+      final trimmed = value.trim();
+      return trimmed.isEmpty ? fallback : trimmed;
+    }
+
+    return base.copyWith(
+      name: _prefer(fresh.name, base.name),
+      title: _prefer(fresh.title, base.title),
+      about: _prefer(fresh.about, base.about),
+      description: _prefer(fresh.description, base.description),
+      category: _prefer(fresh.category, base.category),
+      subCategory: _prefer(fresh.subCategory, base.subCategory),
+      privacy: _prefer(fresh.privacy, base.privacy),
+      joinPrivacy: _prefer(fresh.joinPrivacy, base.joinPrivacy),
+      avatarUrl: _prefer(fresh.avatarUrl, base.avatarUrl),
+      coverUrl: _prefer(fresh.coverUrl, base.coverUrl),
+      customFields: fresh.customFields.isNotEmpty
+          ? fresh.customFields
+          : base.customFields,
+    );
   }
 
   SocialGroup _mergeJoinResult({

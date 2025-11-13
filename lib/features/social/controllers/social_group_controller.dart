@@ -282,24 +282,43 @@ class SocialGroupController with ChangeNotifier {
     }
   }
 
-  Future<SocialGroup?> joinGroup(String groupId) async {
+  Future<SocialGroup?> joinGroup(
+    String groupId, {
+    SocialGroup? fallback,
+  }) async {
     if (_joiningGroups.contains(groupId)) {
       throw Exception('Join request already in progress.');
     }
     _joiningGroups.add(groupId);
     notifyListeners();
 
-    SocialGroup? baseGroup = _findGroupById(groupId);
+    SocialGroup? baseGroup = fallback ?? _findGroupById(groupId);
 
     try {
-      final SocialGroup? response = await service.joinGroup(groupId: groupId);
-      if (response != null) {
-        baseGroup = response;
-      }
+      baseGroup ??= await service.getGroupById(groupId: groupId);
+      final SocialGroup? response = await service.joinGroup(
+        groupId: groupId,
+        fallback: baseGroup ?? fallback,
+      );
+      baseGroup = response ?? baseGroup ?? fallback;
       if (baseGroup == null) {
         throw Exception('Unable to find group data to update.');
       }
-      SocialGroup updated = baseGroup.copyWith(isJoined: true);
+      final bool joinPending = !baseGroup.isJoined &&
+          (baseGroup.joinRequestStatus == 2 || baseGroup.requiresApproval);
+      final int nextJoinStatus = joinPending
+          ? 2
+          : (baseGroup.joinRequestStatus == 0
+              ? 1
+              : baseGroup.joinRequestStatus);
+      final int projectedMembers = joinPending
+          ? baseGroup.memberCount
+          : baseGroup.memberCount + (baseGroup.isJoined ? 0 : 1);
+      final SocialGroup updated = baseGroup.copyWith(
+        isJoined: joinPending ? false : true,
+        joinRequestStatus: nextJoinStatus,
+        memberCount: projectedMembers,
+      );
 
       _upsertGroup(updated, SocialGroupQueryType.joinedGroups,
           insertFirst: true);
