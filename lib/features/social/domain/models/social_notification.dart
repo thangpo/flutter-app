@@ -15,6 +15,9 @@ class SocialNotification {
   final String threadId;
   final String blogId;
   final String? storyId;
+  final String seenPop;
+  final int? sentPush;
+  final int? admin;
 
   final String type;
   final String type2;
@@ -25,11 +28,11 @@ class SocialNotification {
   final String time;
   final String timeText;
 
-  // thông tin notifier (gộp sẵn để tiện dùng)
+  // notifier info
   final String name;
   final String avatar;
 
-   SocialNotification({
+  SocialNotification({
     required this.id,
     required this.notifierId,
     required this.recipientId,
@@ -42,7 +45,10 @@ class SocialNotification {
     required this.eventId,
     required this.threadId,
     required this.blogId,
-    required this.storyId, // nullable nhưng required trong ctor để từ factory truyền vào
+    required this.storyId,
+    required this.seenPop,
+    required this.sentPush,
+    required this.admin,
     required this.type,
     required this.type2,
     required this.text,
@@ -57,8 +63,18 @@ class SocialNotification {
 
   factory SocialNotification.fromJson(Map<String, dynamic> json) {
     final notifier = (json['notifier'] as Map?) ?? const {};
-    String _s(dynamic v) => v?.toString() ?? '';
-
+    String _s(dynamic v) {
+      if (v == null) return '';
+      if (v is String) return v;
+      if (v is int) return v.toString();
+      return '';
+    }
+    int _i(dynamic v) {
+      if (v == null) return 0;
+      if (v is int) return v;
+      if (v is String && v.isNotEmpty) return int.tryParse(v) ?? 0;
+      return 0;
+    }
     return SocialNotification(
       id: _s(json['id']),
       notifierId: _s(json['notifier_id']),
@@ -72,12 +88,12 @@ class SocialNotification {
       eventId: _s(json['event_id']),
       threadId: _s(json['thread_id']),
       blogId: _s(json['blog_id']),
-
-      /// ✅ lấy đúng "story_id" từ API (có thể rỗng)
       storyId: json['story_id']?.toString().isNotEmpty == true
           ? json['story_id'].toString()
           : null,
-
+      seenPop: _s(json['seen_pop']),
+      sentPush: _i(json['sent_push']),
+      admin: _i(json['admin']),
       type: _s(json['type']),
       type2: _s(json['type2']),
       text: _s(json['text']),
@@ -86,7 +102,6 @@ class SocialNotification {
       seen: _s(json['seen']),
       time: _s(json['time']),
       timeText: _s(json['time_text']),
-
       name: _s(notifier['name']),
       avatar: _s(notifier['avatar']),
     );
@@ -105,8 +120,10 @@ class SocialNotification {
     'event_id': eventId,
     'thread_id': threadId,
     'blog_id': blogId,
-    'story_id': storyId, // có thể null
-
+    'story_id': storyId,
+    'seen_pop': seenPop,
+    'sent_push': sentPush,
+    'admin': admin,
     'type': type,
     'type2': type2,
     'text': text,
@@ -134,7 +151,10 @@ class SocialNotification {
     String? eventId,
     String? threadId,
     String? blogId,
-    String? storyId, // nullable
+    String? storyId,
+    String? seenPop,
+    int? sentPush,
+    int? admin,
     String? type,
     String? type2,
     String? text,
@@ -160,6 +180,9 @@ class SocialNotification {
       threadId: threadId ?? this.threadId,
       blogId: blogId ?? this.blogId,
       storyId: storyId ?? this.storyId,
+      seenPop: seenPop ?? this.seenPop,
+      sentPush: sentPush ?? this.sentPush,
+      admin: admin ?? this.admin,
       type: type ?? this.type,
       type2: type2 ?? this.type2,
       text: text ?? this.text,
@@ -172,19 +195,9 @@ class SocialNotification {
       avatar: avatar ?? this.avatar,
     );
   }
-  @override
-  String toString() => jsonEncode({
-    'id': id,
-    'type': type,
-    'type2': type2,
-    'url': url,
-    'notifierId': notifierId,
-    'storyId': storyId,
-    'name': name,
-    'avatar': avatar,
-    'timeText': timeText,
-    'seen': seen,
-    'post_id': postId
-  });
 
+  /// 🧩 Gọn mà đầy đủ cho debug
+  @override
+  String toString() =>
+      'SocialNotification(id=$id, type=$type, groupId=$groupId, postId=$postId, storyId=$storyId, seen=$seen, sentPush=${sentPush ?? 0})';
 }
