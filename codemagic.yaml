@@ -1,6 +1,6 @@
 workflows:
   ios-unsigned:
-    name: iOS Unsigned Build
+    name: iOS Unsigned Build (Optimized for M2)
     instance_type: mac_mini_m2
     max_build_duration: 120
     environment:
@@ -17,12 +17,14 @@ workflows:
         - $HOME/.gem
     scripts:
       # 1. CÀI COCOAPODS TỪ HOMEBREW (AN TOÀN NHẤT)
+      # Đây là phương pháp ổn định trên M-series.
       - name: Install CocoaPods (Homebrew)
         script: |
           brew install cocoapods
           echo "CocoaPods: $(pod --version)"
 
-      # 2. CÀI FFI PURE RUBY (KHÔNG COMPILE)
+      # 2. CÀI FFI PURE RUBY (GIẢI PHÁP CHO M2)
+      # Giúp tránh lỗi biên dịch các Native Extension của Ruby Gem.
       - name: Install ffi (pure Ruby)
         script: |
           gem uninstall ffi -a -x || true
@@ -34,6 +36,7 @@ workflows:
         script: |
           flutter clean
           flutter pub get
+          # Xóa Pods/DerivedData để đảm bảo không còn tệp cache cũ gây lỗi
           rm -rf ios/Pods ios/Podfile.lock
           rm -rf ~/Library/Developer/Xcode/DerivedData/*
 
@@ -41,27 +44,23 @@ workflows:
       - name: Install Pods
         script: |
           cd ios
-          pod repo update
+          # pod repo update chỉ cần thiết nếu bạn gặp lỗi không tìm thấy spec.
+          # pod repo update 
           pod install --verbose
           cd ..
 
-      # 5. BUILD IOS
-      - name: Build iOS
+      # 5. BUILD IPA (SỬ DỤNG LỆNH CHÍNH THỨC VÀ KIẾN TRÚC RÕ RÀNG)
+      - name: Build IPA
         script: |
-          flutter build ios --release --no-codesign --verbose
-
-      # 6. PACKAGE IPA
-      - name: Package IPA
-        script: |
-          mkdir -p Payload
-          cp -R build/ios/Release-iphoneos/Runner.app Payload/
-          zip -r Runner.ipa Payload
-          rm -rf Payload
-          mv Runner.ipa build/
+          # Dùng flutter build ipa thay vì build ios + manual zip.
+          # Thêm --target-platform=ios-arm64 để cố định kiến trúc build cho M2.
+          flutter build ipa --release --no-codesign --target-platform=ios-arm64 --verbose
 
     artifacts:
-      - build/Runner.ipa
+      # Thay đổi path vì giờ chúng ta dùng flutter build ipa
+      - build/ios/ipa/*.ipa
       - ios/Podfile.lock
+      - build/ios/archive/Runner.xcarchive
 
     publishing:
       email:
