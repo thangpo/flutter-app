@@ -1,6 +1,7 @@
 # Podfile for Flutter iOS unsigned build on M1/M2
 
-source 'https://cdn.jsdelivr.net/cocoa/Specs/'
+source 'https://cdn.cocoapods.org/'
+# source 'https://cdn.jsdelivr.net/cocoa/Specs/'
 platform :ios, '14.0'
 
 # Disable CocoaPods analytics to speed up CI/CD
