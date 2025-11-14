@@ -211,7 +211,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
                   builder: (_, hasUnread, __) {
                     if (!hasUnread) return const SizedBox.shrink();
                     return Positioned(
-                      top: 10,
+                      top: 6,
                       right: MediaQuery.of(context).size.width / 12 - 10,
                       child: Container(
                         width: 9,
