@@ -13,8 +13,9 @@ workflows:
       cache_paths:
         - $HOME/.pub-cache
         - $HOME/Library/Caches/Homebrew
-        - ios/Pods
-        - ios/Podfile.lock
+        # Tạm thời bỏ cache Pods để tránh kéo lỗi cũ:
+        # - ios/Pods
+        # - ios/Podfile.lock
     scripts:
       # 1. CÀI COCOAPODS
       - name: Install CocoaPods
@@ -31,45 +32,33 @@ workflows:
           echo "=== CocoaPods repos BEFORE ==="
           pod repo list || true
 
-          echo "=== Remove jsDelivr Specs repo if exists ==="
+          echo "=== Remove old Specs repos (jsDelivr or trunk) ==="
           rm -rf ~/.cocoapods/repos/jsdelivr-cocoa || true
           rm -rf ~/.cocoapods/repos/cdn.jsdelivr.net-* || true
+          rm -rf ~/.cocoapods/repos/trunk || true
 
-          echo "=== Ensure official CocoaPods CDN (trunk) is added ==="
-          pod repo add trunk https://cdn.cocoapods.org/ || true
+          echo "=== Add official CocoaPods CDN (trunk) ==="
+          pod repo add trunk https://cdn.cocoapods.org/
           pod repo update
 
           echo "=== CocoaPods repos AFTER ==="
           pod repo list || true
 
-      # 2. CLEAN (NHƯNG GIỮ LẠI PODS & PODFILE.LOCK)
-      - name: Clean (Keep Pods)
+      # 2. CLEAN + PUB GET
+      - name: Clean & pub get
         script: |
           export PATH="/opt/homebrew/bin:$PATH"
           flutter clean
           flutter pub get
           rm -rf ~/Library/Developer/Xcode/DerivedData/*
 
-      # 3. CÀI PODS (CHỈ CHẠY NẾU CHƯA CÓ)
-      - name: Install Pods (If Needed)
-        script: |
-          export PATH="/opt/homebrew/bin:$PATH"
-          cd ios
-          if [ ! -f "Podfile.lock" ]; then
-            echo "Podfile.lock not found → Running pod install"
-            pod install --verbose
-          else
-            echo "Podfile.lock exists → Skipping pod install"
-          fi
-          cd ..
-
-      # 4. BUILD IOS (BỎ QUA POD INSTALL)
-      - name: Build iOS (Skip Pod Install)
+      # 3. BUILD IOS (ĐỂ FLUTTER TỰ POD INSTALL)
+      - name: Build iOS
         script: |
           export PATH="/opt/homebrew/bin:$PATH"
           flutter build ios --release --no-codesign --verbose
 
-      # 5. PACKAGE IPA
+      # 4. PACKAGE IPA
       - name: Package IPA
         script: |
           mkdir -p Payload
