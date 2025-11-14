@@ -2,40 +2,70 @@ workflows:
   ios-unsigned:
     name: iOS Unsigned Build
     instance_type: mac_mini_m2
-    max_build_duration: 60
+    max_build_duration: 120
     environment:
       flutter: stable
       xcode: latest
-
+      vars:
+        FLUTTER_ROOT: "$HOME/.flutter"
+    triggering:
+      events:
+        - push
+        - tag
+      branch_patterns:
+        - pattern: '**'
+          include: true
+    cache:
+      cache_paths:
+        - $FLUTTER_ROOT/.pub-cache
+        - $HOME/.gem
     scripts:
-      - name: Get Flutter packages
-        script: flutter pub get
+      # 1. Fix Ruby + ffi cho Apple Silicon
+      - name: Setup Ruby & ffi (Apple Silicon)
+        script: |
+          # Cài ffi đúng architecture
+          arch -x86_64 gem install ffi -- --enable-system-libffi
+          # Cài CocoaPods
+          arch -x86_64 gem install cocoapods -v 1.15.2
+          # Kiểm tra
+          arch -x86_64 pod --version
 
-      - name: Clean Flutter & Cocoapods
+      # 2. Clear cache & clean
+      - name: Clean Project
         script: |
           flutter clean
-          rm -rf ios/Pods
-          rm -f ios/Podfile.lock
-          export COCOAPODS_DISABLE_STATS=true
+          flutter pub get
+          rm -rf ios/Pods ios/Podfile.lock
+          rm -rf ~/Library/Developer/Xcode/DerivedData/*
 
-      - name: Install Pods (Apple Silicon safe)
+      # 3. Install Pods (an toàn)
+      - name: Install CocoaPods
         script: |
           cd ios
-          sudo arch -x86_64 gem install ffi
-          arch -x86_64 pod install --repo-update
+          arch -x86_64 pod repo update
+          arch -x86_64 pod install --verbose
           cd ..
 
-      - name: Build iOS (no code sign)
-        script: flutter build ios --release --no-codesign --verbose
+      # 4. Build iOS (no codesign)
+      - name: Build iOS
+        script: |
+          flutter build ios --release --no-codesign --verbose
 
+      # 5. Package IPA
       - name: Package IPA
         script: |
           mkdir -p build/ios/ipa/Payload
           cp -R build/ios/Release-iphoneos/Runner.app build/ios/ipa/Payload/
           cd build/ios/ipa
-          zip -r Runner.ipa Payload
-          mv Runner.ipa ../../Runner.ipa
+          zip -r ../Runner.ipa Payload
           cd ../../..
+          mv build/ios/Runner.ipa .
 
     artifacts:
-      - build/Runner.ipa
+      - Runner.ipa
+      - $FLUTTER_ROOT/.pub-cache
+      - ios/Podfile.lock
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com
