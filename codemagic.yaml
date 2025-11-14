@@ -18,7 +18,7 @@ workflows:
           rm -f ios/Podfile.lock
           export COCOAPODS_DISABLE_STATS=true
 
-      - name: Install Pods using CDN (Apple Silicon safe)
+      - name: Install Pods (Apple Silicon safe)
         script: |
           cd ios
           sudo arch -x86_64 gem install ffi
