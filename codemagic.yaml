@@ -9,41 +9,50 @@ workflows:
       vars:
         HOMEBREW_NO_AUTO_UPDATE: 1
         HOMEBREW_NO_ANALYTICS: 1
+        # Bắt buộc: tắt ffi
+        COCOAPODS_DISABLE_DETERMINISTIC_UUIDS: 1
     cache:
       cache_paths:
         - $HOME/.pub-cache
         - $HOME/Library/Caches/Homebrew
-        - $HOME/.gem
     scripts:
-      # 1. Cài Homebrew packages (an toàn cho M2)
-      - name: Install Homebrew deps
+      # 1. Cài CocoaPods từ Homebrew (KHÔNG dùng gem)
+      - name: Install CocoaPods (Homebrew)
         script: |
-          brew install cocoapods ffi
-          echo "CocoaPods version: $(pod --version)"
-          echo "FFI version: $(gem list ffi | grep ffi)"
+          brew install cocoapods
+          pod --version
 
-      # 2. Clean project
-      - name: Clean Flutter & iOS
+      # 2. Patch ffi (bắt buộc để tránh crash)
+      - name: Patch ffi gem
+        script: |
+          # Xóa ffi cũ
+          gem uninstall ffi -a -x || true
+          # Cài ffi không native (pure Ruby)
+          gem install ffi --platform=ruby -- --disable-system-libffi
+          echo "FFI installed (pure Ruby)"
+
+      # 3. Clean project
+      - name: Clean Project
         script: |
           flutter clean
           flutter pub get
           rm -rf ios/Pods ios/Podfile.lock
           rm -rf ~/Library/Developer/Xcode/DerivedData/*
 
-      # 3. Install Pods
-      - name: Install CocoaPods
+      # 4. Install Pods
+      - name: Install Pods
         script: |
           cd ios
           pod repo update
           pod install --verbose
           cd ..
 
-      # 4. Build iOS
-      - name: Build iOS (no codesign)
+      # 5. Build iOS (no codesign)
+      - name: Build iOS
         script: |
           flutter build ios --release --no-codesign --verbose
 
-      # 5. Package IPA
+      # 6. Package IPA
       - name: Package IPA
         script: |
           mkdir -p Payload
@@ -55,11 +64,7 @@ workflows:
     artifacts:
       - build/Runner.ipa
       - ios/Podfile.lock
-      - flutter.log
     publishing:
       email:
         recipients:
           - your-email@example.com
-        notify:
-          success: true
-          failure: true
