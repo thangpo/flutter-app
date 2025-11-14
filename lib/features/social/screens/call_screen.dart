@@ -48,6 +48,11 @@ class _CallScreenState extends State<CallScreen> {
   int _iceRestartTries = 0;
   static const int _iceRestartMaxTries = 2;
 
+  // ---- Trạng thái UI: mic/cam/loa
+  bool _micOn = true;
+  bool _camOn = true;
+  bool _speakerOn = true;
+
   @override
   void initState() {
     super.initState();
@@ -87,10 +92,22 @@ class _CallScreenState extends State<CallScreen> {
 
   Future<void> _start() async {
     try {
+      final isVideo = widget.mediaType == 'video';
+
+      // trạng thái UI ban đầu
+      _micOn = true;
+      _camOn = isVideo;
+      _speakerOn = true;
+
+      // bật loa ngoài (đặc biệt hữu ích cho video call)
+      try {
+        await Helper.setSpeakerphoneOn(true);
+      } catch (_) {}
+
       // DỌN STATE CŨ (close pc/stream, clear srcObject; KHÔNG dispose renderer)
       await _disposeRtc();
 
-      // 1) TẠO PEER CONNECTION TRƯỚC (tránh NPE getTransceivers)
+      // 1) TẠO PEER CONNECTION TRƯỚC
       final configuration = {
         'iceServers': [
           {
@@ -112,8 +129,7 @@ class _CallScreenState extends State<CallScreen> {
           },
         ],
         'sdpSemantics': 'unified-plan',
-        // Debug NAT: nếu muốn ép toàn bộ qua TURN, bật dòng dưới
-        // 'iceTransportPolicy': 'relay',
+        // 'iceTransportPolicy': 'relay', // bật nếu muốn ép đi TURN
       };
       _pc = await createPeerConnection(configuration, {});
 
@@ -142,15 +158,14 @@ class _CallScreenState extends State<CallScreen> {
         }
       };
 
-      // (Giữ onConnectionState để fallback đóng nếu đã closed)
+      // fallback: nếu PC closed thì đóng màn luôn
       _pc!.onConnectionState = (RTCPeerConnectionState s) {
         if (s == RTCPeerConnectionState.RTCPeerConnectionStateClosed) {
           _endAndPop();
         }
       };
 
-      // 2) LẤY MEDIA SAU KHI CÓ PC — giảm tải encoder (720p/30fps)
-      final isVideo = widget.mediaType == 'video';
+      // 2) LẤY MEDIA SAU KHI CÓ PC
       final constraints = <String, dynamic>{
         'audio': true,
         'video': isVideo
@@ -181,15 +196,12 @@ class _CallScreenState extends State<CallScreen> {
         final senders = await _pc!.getSenders();
         for (final s in senders) {
           if (s.track?.kind == 'video') {
-            // Trên bản webrtc_interface 1.3.0 không có getParameters(),
-            // ta set thẳng RTCRtpParameters với encodings mong muốn.
             await s.setParameters(RTCRtpParameters(
               encodings: <RTCRtpEncoding>[
                 RTCRtpEncoding(
                   maxBitrate: 800 * 1000, // ~800 kbps
                   numTemporalLayers: 2,
                   rid: 'f',
-                  // scaleResolutionDownBy: 1.0, // bật nếu cần hạ thêm độ phân giải
                 ),
               ],
             ));
@@ -208,7 +220,6 @@ class _CallScreenState extends State<CallScreen> {
         // Controller sẽ poll & mang ANSWER/ICE về qua listener
       } else {
         // Callee: Controller đã poll sẵn OFFER; listener sẽ xử lý khi nhận được
-        // (sau khi setLocal(answer) sẽ gửi answer + action('answer'))
       }
     } catch (e) {
       _snack('Lỗi khởi tạo cuộc gọi: $e');
@@ -350,6 +361,47 @@ class _CallScreenState extends State<CallScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  // ===================== TOGGLE CONTROLS =====================
+
+  void _toggleMic() {
+    _micOn = !_micOn;
+    try {
+      _localStream?.getAudioTracks().forEach((t) {
+        t.enabled = _micOn;
+      });
+    } catch (_) {}
+    setState(() {});
+  }
+
+  void _toggleCameraEnabled() {
+    if (widget.mediaType != 'video') return;
+    _camOn = !_camOn;
+    try {
+      _localStream?.getVideoTracks().forEach((t) {
+        t.enabled = _camOn;
+      });
+    } catch (_) {}
+    setState(() {});
+  }
+
+  Future<void> _toggleSpeaker() async {
+    _speakerOn = !_speakerOn;
+    try {
+      await Helper.setSpeakerphoneOn(_speakerOn);
+    } catch (_) {}
+    setState(() {});
+  }
+
+  Future<void> _switchCamera() async {
+    if (widget.mediaType != 'video') return;
+    try {
+      final tracks = _localStream?.getVideoTracks();
+      if (tracks != null && tracks.isNotEmpty) {
+        await Helper.switchCamera(tracks.first);
+      }
+    } catch (_) {}
+  }
+
   @override
   void dispose() {
     _viewAlive = false;
@@ -380,6 +432,10 @@ class _CallScreenState extends State<CallScreen> {
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
         title: Text(isVideo ? 'Video call' : 'Audio call'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: _hangup, // back = kết thúc cuộc gọi
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.call_end, color: Colors.red),
@@ -391,18 +447,24 @@ class _CallScreenState extends State<CallScreen> {
     );
   }
 
+  // ===================== UI VIDEO =====================
+
   Widget _buildVideoUI(String name) {
     return Stack(
       children: [
+        // Remote video full màn
         Positioned.fill(
           child: Container(
             color: Colors.black,
             child: RTCVideoView(
               _remoteRenderer,
-              objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitContain,
+              // cho giống app ngoài: fill màn hình, chấp nhận crop
+              objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
             ),
           ),
         ),
+
+        // Preview local góc trên/phải
         Positioned(
           right: 16,
           top: 16,
@@ -420,38 +482,105 @@ class _CallScreenState extends State<CallScreen> {
             ),
           ),
         ),
+
+        // Tên người kia / trạng thái, góc dưới/trái
         Positioned(
           left: 16,
-          bottom: 24,
+          bottom: 110,
           child: Text(
             name,
             style: const TextStyle(color: Colors.white, fontSize: 16),
           ),
         ),
+
+        // Thanh control đáy màn (mic, loa, end, cam, switch)
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 24,
+          child: _buildBottomControls(isVideo: true),
+        ),
       ],
     );
   }
 
+  // ===================== UI AUDIO =====================
+
   Widget _buildAudioUI(String name) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const CircleAvatar(
-            radius: 48,
-            child: Icon(Icons.person, size: 48),
+    return Column(
+      children: [
+        const Spacer(),
+        const CircleAvatar(
+          radius: 48,
+          child: Icon(Icons.person, size: 48),
+        ),
+        const SizedBox(height: 12),
+        Text(name, style: const TextStyle(color: Colors.white, fontSize: 20)),
+        const SizedBox(height: 6),
+        const Text('Đang kết nối…', style: TextStyle(color: Colors.white70)),
+        const Spacer(),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 32),
+          child: _buildBottomControls(isVideo: false),
+        ),
+      ],
+    );
+  }
+
+  // ===================== COMMON BOTTOM BAR =====================
+
+  Widget _buildBottomControls({required bool isVideo}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        _roundButton(
+          icon: _micOn ? Icons.mic : Icons.mic_off,
+          onTap: _toggleMic,
+        ),
+        _roundButton(
+          icon: _speakerOn ? Icons.volume_up : Icons.volume_off,
+          onTap: _toggleSpeaker,
+        ),
+        _roundButton(
+          icon: Icons.call_end,
+          onTap: _hangup,
+          isDanger: true,
+          size: 68,
+        ),
+        if (isVideo)
+          _roundButton(
+            icon: _camOn ? Icons.videocam : Icons.videocam_off,
+            onTap: _toggleCameraEnabled,
           ),
-          const SizedBox(height: 12),
-          Text(name, style: const TextStyle(color: Colors.white, fontSize: 18)),
-          const SizedBox(height: 6),
-          const Text('Đang kết nối…', style: TextStyle(color: Colors.white70)),
-          const SizedBox(height: 24),
-          IconButton(
-            iconSize: 56,
-            onPressed: _hangup,
-            icon: const Icon(Icons.call_end, color: Colors.red),
+        if (isVideo)
+          _roundButton(
+            icon: Icons.cameraswitch,
+            onTap: _switchCamera,
           ),
-        ],
+      ],
+    );
+  }
+
+  Widget _roundButton({
+    required IconData icon,
+    required VoidCallback? onTap,
+    bool isDanger = false,
+    double size = 56,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(size / 2),
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: isDanger ? Colors.red : Colors.white10,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          icon,
+          color: Colors.white,
+        ),
       ),
     );
   }
