@@ -234,15 +234,16 @@ Future<void> main() async {
       try {
         final Map<String, dynamic> map = (jsonDecode(payload) as Map)
             .map((k, v) => MapEntry(k.toString(), v));
-
         // Nếu là lời mời gọi => mở màn nhận/từ chối
         if ((map['type'] ?? '') == 'call_invite') {
           _handleCallInviteOpen(map);
           return;
         }
-
-        // Còn lại: điều hướng social
-        await handlePushNavigationFromMap(map);
+        //  điều hướng social
+        if ((map['type'] ?? '') == 'interact') {
+          await handlePushNavigationFromMap(map);
+          return;
+        }
       } catch (e) {
         debugPrint('parse payload error: $e');
       }
@@ -258,11 +259,10 @@ Future<void> main() async {
         await FirebaseMessaging.instance.getInitialMessage();
 
     if (initialMessage != null) {
-      print('🔥 getInitialMessage: ${initialMessage.data}');
       if ((initialMessage.data['type'] ?? '') == 'call_invite') {
         _handleCallInviteOpen(initialMessage.data);
       } else if (initialMessage.data['api_status'] != null ||
-          initialMessage.data['detail'] != null) {
+          initialMessage.data['type'] != null) {
         await handlePushNavigation(initialMessage);
       } else {
         await handlePushNavigation(initialMessage);
@@ -274,15 +274,16 @@ Future<void> main() async {
 
     // 3) User CLICK notification khi app BACKGROUND
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
-      print('🔥 onMessageOpenedApp (main): ${message.data}');
       if ((message.data['type'] ?? '') == 'call_invite') {
         _handleCallInviteOpen(message.data);
         return;
       }
-      await handlePushNavigation(message);
+      if ((message.data['type'] ?? '') == 'interact') {
+        await handlePushNavigation(message);
+        return;
+      }
     });
 
-    // 4) App đang FOREGROUND: nhận FCM
     // 4) App đang FOREGROUND: nhận FCM
     FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
       final data = message.data;

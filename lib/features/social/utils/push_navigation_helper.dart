@@ -97,8 +97,8 @@ Future<void> handlePushNavigationFromMap(Map<String, dynamic> data) async {
 /// ========================= CORE ROUTER =========================
 
 Future<void> _routeFromDataMap(Map<String, dynamic> data) async {
-  // 1️⃣ Gộp 'detail' vào top-level
-  final merged = _mergeWithDetail(data);
+  // 1️⃣ Gộp 'payload' vào top-level
+  final merged = _mergeWithPayload(data);
 
   // 2️⃣ Chuẩn hoá field
   final String type = _str(merged['type']);
@@ -135,7 +135,7 @@ Future<void> _routeFromDataMap(Map<String, dynamic> data) async {
   }
 
   if (_shouldOpenPost(type: type, action: action, postId: postId)) {
-    await _openPostDetail(postId);
+    await _openPostPayload(postId);
     return;
   }
 
@@ -144,7 +144,7 @@ Future<void> _routeFromDataMap(Map<String, dynamic> data) async {
     return;
   }
   if (_shouldOpenGroup(type: type, action: action, groupId: groupId)) {
-    await _openGroupDetail(groupId);
+    await _openGroupPayload(groupId);
     return;
   }
 // 🟡 fallback riêng cho thông báo group_admin không có group_id
@@ -195,7 +195,7 @@ bool _shouldOpenGroup({
 
 /// ========================= NAV HELPERS =========================
 
-Future<void> _openPostDetail(String postId) async {
+Future<void> _openPostPayload(String postId) async {
   await _pushOnce(() {
     return MaterialPageRoute(
       builder: (_) => SocialPostDetailScreen(
@@ -245,7 +245,7 @@ Future<void> _openStory(String storyId, String userId) async {
   });
 }
 
-Future<void> _openGroupDetail(String groupId) async {
+Future<void> _openGroupPayload(String groupId) async {
   await _pushOnce(() {
     return MaterialPageRoute(
       builder: (_) => SocialGroupDetailScreen(groupId: groupId),
@@ -290,15 +290,15 @@ void _cooldown() {
 
 /// ========================= MAP / STRING HELPERS =========================
 
-Map<String, dynamic> _mergeWithDetail(Map<String, dynamic> data) {
+Map<String, dynamic> _mergeWithPayload(Map<String, dynamic> data) {
   final base = data.map((k, v) => MapEntry(k.toString(), v));
-  final detail = _parseDetail(base['detail']);
+  final payload = _parsePayload(base['payload']);
   return <String, dynamic>{}
     ..addAll(base)
-    ..addAll(detail);
+    ..addAll(payload);
 }
 
-Map<String, dynamic> _parseDetail(dynamic raw) {
+Map<String, dynamic> _parsePayload(dynamic raw) {
   try {
     if (raw == null) return const {};
     if (raw is Map<String, dynamic>) return raw;

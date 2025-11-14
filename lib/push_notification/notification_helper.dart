@@ -101,12 +101,9 @@ class NotificationHelper {
     FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
       final data = message.data;
       final String t = (data['type'] ?? '').toString();
-
-      // âš ï¸ Social (WoWonder) â†’ main.dart xá»­ lÃ½ hiá»ƒn thá»‹ riÃªng (payload = data)
-      if (data.containsKey('api_status') || data.containsKey('detail')) {
+      if (data.containsKey('api_status') || data['type'] == 'interact') {
         return;
       }
-
       // âœ… CUá»˜C Gá»ŒI Tá»šI: nháº£y ngay vÃ o mÃ n nghe/tá»« chá»‘i
       if (t == 'call_invite' ||
           (data.containsKey('call_id') && data.containsKey('media'))) {
@@ -129,9 +126,6 @@ class NotificationHelper {
       }
 
       if (kDebugMode) {
-        print(
-            "-----------onMessage: ${message.notification?.title}/${message.notification?.body}/${message.notification?.titleLocKey}");
-        print("---------onMessage type: $t/$data");
         if (t == "block") {
           Provider.of<AuthController>(Get.context!, listen: false)
               .clearSharedData();
@@ -217,11 +211,24 @@ class NotificationHelper {
       final data = message.data;
       final type = (data['type'] ?? '').toString();
 
-      // ðŸŸ£ SOCIAL notifications (WoWonder)
-      if ((data['api_status'] != null) || (data['detail'] != null)) {
-        debugPrint('ðŸ“¬ [SOCIAL] User tapped social notification');
-        await handlePushNavigation(message);
-        return;
+      // SOCIAL notifications (WoWonder)
+      if (data['api_status'] != null) {
+        //thông báo đẩy cho tương tác user
+        if(data['type'] == 'interact') {
+          debugPrint('interact');
+          await handlePushNavigation(message);
+          return;
+        }
+        //thông báo đẩy chat 1-1
+        if(data['type'] == 'chat_message') {
+          debugPrint('Xử lý chat 1-1');
+          return;
+        }
+        //thông báo đẩy chat nhóm
+        if(data['type'] == 'group_message') {
+          debugPrint('Xử lý chat nhóm');
+          return;
+        }
       }
 
       // âœ… CUá»˜C Gá»ŒI Tá»šI: user tap â†’ má»Ÿ mÃ n nghe/tá»« chá»‘i
