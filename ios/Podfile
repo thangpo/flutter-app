@@ -1,4 +1,4 @@
-# Podfile for Flutter iOS unsigned build on M1/M2
+platform :ios, '15.0'  # Tăng từ 14.0 → 15.0
 
 source 'https://cdn.cocoapods.org/'
 # source 'https://cdn.jsdelivr.net/cocoa/Specs/'
@@ -16,14 +16,14 @@ project 'Runner', {
 def flutter_root
   generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
   unless File.exist?(generated_xcode_build_settings_path)
-    raise "#{generated_xcode_build_settings_path} must exist. Run flutter pub get first."
+    raise "#{generated_xcode_build_settings_path} must exist. If you're running pod install manually, make sure flutter pub get is executed first"
   end
 
   File.foreach(generated_xcode_build_settings_path) do |line|
     matches = line.match(/FLUTTER_ROOT\=(.*)/)
     return matches[1].strip if matches
   end
-  raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}"
+  raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}. Try deleting Generated.xcconfig, then run flutter pub get"
 end
 
 require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
@@ -37,6 +37,7 @@ target 'Runner' do
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
 end
 
+# Fix lỗi DOS_OBJECT_USE_OBJC
 post_integrate do |installer|
   compiler_flags_key = 'COMPILER_FLAGS'
   project_path = 'Pods/Pods.xcodeproj'
@@ -57,19 +58,25 @@ post_integrate do |installer|
   project.save()
 end
 
+# Cấu hình bắt buộc cho Xcode mới + no-codesign
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
 
     target.build_configurations.each do |config|
-      # Exclude arm64 for simulator builds on Apple Silicon
-      config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64'
+      # Đặt deployment target cho tất cả pod
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
 
-      # Keep AUDIO_SESSION_MICROPHONE setting
+      # Thêm macro nếu cần
       config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [
         '$(inherited)',
         'AUDIO_SESSION_MICROPHONE=0'
       ]
+
+      # Tắt code signing (dùng với --no-codesign)
+      config.build_settings['EXPANDED_CODE_SIGN_IDENTITY'] = ""
+      config.build_settings['CODE_SIGNING_REQUIRED'] = "NO"
+      config.build_settings['CODE_SIGNING_ALLOWED'] = "NO"
     end
   end
 end

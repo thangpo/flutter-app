@@ -1,6 +1,6 @@
 workflows:
   ios-unsigned:
-    name: iOS Unsigned Build (Optimized for M2)
+    name: iOS Unsigned Build
     instance_type: mac_mini_m2
     max_build_duration: 120
     environment:
@@ -16,51 +16,63 @@ workflows:
         - $HOME/Library/Caches/Homebrew
         - $HOME/.gem
     scripts:
-      # 1. CÀI COCOAPODS TỪ HOMEBREW (AN TOÀN NHẤT)
-      # Đây là phương pháp ổn định trên M-series.
-      - name: Install CocoaPods (Homebrew)
+      # 1. CÀI COCOAPODS + FORCE LINK + FIX PATH
+      - name: Install CocoaPods (FORCE LINK)
         script: |
           brew install cocoapods
-          echo "CocoaPods: $(pod --version)"
+          brew link --force cocoapods
+          
+          # Fix PATH ngay lập tức
+          export PATH="/opt/homebrew/bin:$PATH"
+          echo $PATH | tr ':' '\n' | grep pod
+          
+          # Kiểm tra
+          which pod || echo "POD NOT FOUND"
+          pod --version
 
-      # 2. CÀI FFI PURE RUBY (GIẢI PHÁP CHO M2)
-      # Giúp tránh lỗi biên dịch các Native Extension của Ruby Gem.
+      # 2. CÀI FFI PURE RUBY
       - name: Install ffi (pure Ruby)
         script: |
+          export PATH="/opt/homebrew/bin:$PATH"
           gem uninstall ffi -a -x || true
           gem install ffi --platform=ruby -- --disable-system-libffi
-          echo "FFI installed (pure Ruby)"
 
       # 3. CLEAN PROJECT
       - name: Clean Project
         script: |
+          export PATH="/opt/homebrew/bin:$PATH"
           flutter clean
           flutter pub get
-          # Xóa Pods/DerivedData để đảm bảo không còn tệp cache cũ gây lỗi
           rm -rf ios/Pods ios/Podfile.lock
           rm -rf ~/Library/Developer/Xcode/DerivedData/*
 
-      # 4. INSTALL PODS
+      # 4. CÀI PODS (DÙNG ĐƯỜNG DẪN TUYỆT ĐỐI)
       - name: Install Pods
         script: |
+          export PATH="/opt/homebrew/bin:$PATH"
           cd ios
-          # pod repo update chỉ cần thiết nếu bạn gặp lỗi không tìm thấy spec.
-          # pod repo update 
-          pod install --verbose
+          /opt/homebrew/bin/pod repo update
+          /opt/homebrew/bin/pod install --verbose
           cd ..
 
-      # 5. BUILD IPA (SỬ DỤNG LỆNH CHÍNH THỨC VÀ KIẾN TRÚC RÕ RÀNG)
-      - name: Build IPA
+      # 5. BUILD IOS
+      - name: Build iOS
         script: |
-          # Dùng flutter build ipa thay vì build ios + manual zip.
-          # Thêm --target-platform=ios-arm64 để cố định kiến trúc build cho M2.
-          flutter build ipa --release --no-codesign --target-platform=ios-arm64 --verbose
+          export PATH="/opt/homebrew/bin:$PATH"
+          flutter build ios --release --no-codesign --verbose
+
+      # 6. PACKAGE IPA
+      - name: Package IPA
+        script: |
+          mkdir -p Payload
+          cp -R build/ios/Release-iphoneos/Runner.app Payload/
+          zip -r Runner.ipa Payload
+          rm -rf Payload
+          mv Runner.ipa build/
 
     artifacts:
-      # Thay đổi path vì giờ chúng ta dùng flutter build ipa
-      - build/ios/ipa/*.ipa
+      - build/Runner.ipa
       - ios/Podfile.lock
-      - build/ios/archive/Runner.xcarchive
 
     publishing:
       email:
