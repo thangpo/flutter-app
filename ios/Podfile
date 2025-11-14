@@ -1,6 +1,7 @@
-# Uncomment this line to define a global platform for your project
-platform :ios, '14.0'
+# Use CocoaPods CDN instead of old Git repo (fix outdated specs issue)
+source 'https://cdn.jsdelivr.net/cocoa/Specs/'
 
+platform :ios, '14.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -27,8 +28,6 @@ end
 require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
 
 flutter_ios_podfile_setup
-
-
 
 target 'Runner' do
   use_frameworks!
@@ -68,6 +67,5 @@ post_install do |installer|
         'AUDIO_SESSION_MICROPHONE=0'
       ]
     end
-
   end
 end
