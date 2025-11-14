@@ -102,7 +102,7 @@ dependencies:
   audio_session: ^0.1.21
   change_app_package_name: ^1.5.0
 
-  agora_rtc_engine: ^6.3.2
+  agora_rtc_engine: ^6.5.3
 
   # Thu âm thay cho 'record'
   flutter_sound: ^9.2.13
