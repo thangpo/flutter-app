@@ -1,6 +1,8 @@
-// G:\flutter-app\lib\features\social\screens\chat_screen.dart
+// lib/features/social/screens/chat_screen.dart
+import 'dart:async'; 
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_sound/flutter_sound.dart';
@@ -18,10 +20,8 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/call_i
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/incoming_call_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/call_screen.dart';
 
-import 'dart:convert';
 import 'dart:typed_data';
 import 'package:encrypt/encrypt.dart' as enc;
-
 
 class ChatScreen extends StatefulWidget {
   final String accessToken;
@@ -64,6 +64,12 @@ class _ChatScreenState extends State<ChatScreen> {
 
   late final String _peerId;
 
+  // 🔔 Tránh mở IncomingCallScreen nhiều lần cho cùng 1 call_id
+  final Set<int> _handledIncomingCallIds = {};
+
+  // Poll messages
+  Timer? _pollTimer;
+
   @override
   void initState() {
     super.initState();
@@ -71,6 +77,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _initRecorder();
     _loadInit();
 
+    // Scroll listener
     _scroll.addListener(() {
       // Hiện nút mũi tên khi cách đáy > 300px
       final dist = _scroll.position.hasContentDimensions
@@ -86,12 +93,18 @@ class _ChatScreenState extends State<ChatScreen> {
         _fetchOlder();
       }
     });
+
+    // 🔁 Poll tin mới 2s/lần (gần real-time)
+    _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      _pollNewMessages();
+    });
   }
 
   @override
   void dispose() {
     _inputCtrl.dispose();
     _scroll.dispose();
+    _pollTimer?.cancel();
     if (_recOn) _recorder.stopRecorder();
     _recorder.closeRecorder();
     super.dispose();
@@ -220,6 +233,25 @@ class _ChatScreenState extends State<ChatScreen> {
       debugPrint('load messages error: $e');
     } finally {
       setState(() => _loading = false);
+    }
+  }
+
+  /// 🔁 Poll new: lấy 30 tin mới nhất, merge vào list hiện tại
+  Future<void> _pollNewMessages() async {
+    if (!mounted) return;
+    if (_loading) return; // tránh đụng _fetchNew / _fetchOlder
+
+    try {
+      final list = await repo.getUserMessages(
+        token: widget.accessToken,
+        peerUserId: _peerId,
+        limit: 30,
+      );
+      _sortAscById(list);
+      _mergeIncoming(list, toTail: true);
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint('poll new messages error: $e');
     }
   }
 
@@ -381,7 +413,7 @@ class _ChatScreenState extends State<ChatScreen> {
     await repo.readChats(token: widget.accessToken, peerUserId: _peerId);
   }
 
-  // ====== NEW: Bắt đầu cuộc gọi, gửi invite và hiển thị "Đang gọi..." ======
+  // ====== Bắt đầu cuộc gọi, giống Messenger ======
   Future<void> _startCall(String mediaType) async {
     final call = context.read<CallController>();
     try {
@@ -398,92 +430,40 @@ class _ChatScreenState extends State<ChatScreen> {
         mediaType: mediaType, // 'audio' | 'video'
       );
 
-      // 2) Gửi message mời gọi (để bên kia thấy “Cuộc gọi thoại/video”)
+      // 2) Gửi message mời gọi (để bên kia thấy “Cuộc gọi thoại/video” trong chat)
       final payload = {
         'type': 'call_invite',
-        'call_id': callId, // <- giờ là int hợp lệ
-        'media': mediaType, // 'audio' | 'video'
+        'call_id': callId,
+        'media': mediaType,
         'ts': DateTime.now().millisecondsSinceEpoch ~/ 1000,
       };
 
-
-
-      final sent = await repo.sendMessage(
+      await repo.sendMessage(
         token: widget.accessToken,
         peerUserId: _peerId,
-        text: jsonEncode(payload),  
+        text: jsonEncode(payload),
       );
-      if (sent != null) {
-        _mergeIncoming([sent], toTail: true);
-        setState(() {});
-        _scrollToBottom();
-      }
 
-      // 3) Mở dialog chờ trả lời
-      if (mounted) _showCallingDialog(mediaType: mediaType);
+      // 3) Caller vào luôn màn CallScreen (đang gọi)
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CallScreen(
+            isCaller: true,
+            callId: callId,
+            mediaType: mediaType,
+            peerName: widget.peerName,
+            peerAvatar: widget.peerAvatar,
+          ),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Không thể bắt đầu cuộc gọi: $e')),
       );
     }
-  }
-
-
-  // ====== Calling dialog (vào CallScreen sau khi answer) ======
-  void _showCallingDialog({required String mediaType}) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        return Consumer<CallController>(
-          builder: (ctx, call, _) {
-            if (call.callStatus == 'answered') {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
-                if (call.activeCallId != null && mounted) {
-                  Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => CallScreen(
-                      isCaller: true,
-                      callId: call.activeCallId!,
-                      mediaType: call.activeMediaType, // 'audio' | 'video'
-                      peerName: widget.peerName,
-                      peerAvatar: widget.peerAvatar,
-                    ),
-                  ));
-                }
-              });
-            } else if (call.callStatus == 'declined' ||
-                call.callStatus == 'ended') {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Cuộc gọi đã ${call.callStatus}')),
-                );
-              });
-            }
-
-            return AlertDialog(
-              title: Text(mediaType == 'audio'
-                  ? 'Đang gọi thoại...'
-                  : 'Đang gọi video...'),
-              content: const Text('Chờ đối phương trả lời...'),
-              actions: [
-                TextButton(
-                  onPressed: () async {
-                    try {
-                      await context.read<CallController>().endCall();
-                    } catch (_) {}
-                    if (context.mounted) Navigator.of(context).pop();
-                  },
-                  child: const Text('Hủy'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
   }
 
   // ===== UI =====
@@ -561,12 +541,36 @@ class _ChatScreenState extends State<ChatScreen> {
                       final m = _messages[i];
                       final isMe = (m['position'] == 'right');
 
-                      // 🔍 NEW: Bắt CallInvite trong text/display_text
-                      final dText =
-                          (m['display_text'] ?? m['text'] ?? '').toString();
-                          debugPrint('[INV-DEBUG] plain=${_plainTextOf(m)}');
-                      final inv = CallInvite.tryParse(dText);
+                      // 🔍 Bắt CallInvite trong nội dung đã giải mã
+                      final plain = _plainTextOf(m);
+                      debugPrint('[INV-DEBUG] plain=$plain');
+                      final inv = CallInvite.tryParse(plain);
+
                       if (inv != null && !inv.isExpired()) {
+                        final callId = inv.callId;
+
+                        // 🔔 Nếu là lời mời từ phía kia & chưa xử lý, tự mở IncomingCallScreen
+                        if (!isMe &&
+                            !_handledIncomingCallIds.contains(callId)) {
+                          _handledIncomingCallIds.add(callId);
+
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (!mounted) return;
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => IncomingCallScreen(
+                                  callId: inv.callId,
+                                  mediaType: inv.mediaType,
+                                  peerName: widget.peerName,
+                                  peerAvatar: widget.peerAvatar,
+                                ),
+                              ),
+                            );
+                          });
+                        }
+
+                        // Vẫn hiển thị bubble lịch sử cuộc gọi
                         if (!isMe) {
                           final msgAvatar =
                               (m['user_data']?['avatar'] ?? '').toString();
@@ -595,13 +599,16 @@ class _ChatScreenState extends State<ChatScreen> {
                             ),
                           );
                         }
+
+                        // tin do mình gửi (caller)
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 4.0),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
                               Flexible(
-                                  child: _buildCallInviteTile(inv, isMe: true)),
+                                child: _buildCallInviteTile(inv, isMe: true),
+                              ),
                             ],
                           ),
                         );
@@ -748,7 +755,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  // ===== NEW: tile hiển thị lời mời gọi + mở IncomingCallScreen =====
+  // ===== tile hiển thị lời mời gọi =====
   Widget _buildCallInviteTile(CallInvite inv, {required bool isMe}) {
     final isVideo = inv.mediaType == 'video';
     final bg = isMe ? const Color(0xFF2F80ED) : const Color(0xFFEFEFEF);
@@ -763,8 +770,8 @@ class _ChatScreenState extends State<ChatScreen> {
             builder: (_) => IncomingCallScreen(
               callId: inv.callId,
               mediaType: inv.mediaType,
-              peerName: widget.peerName, // đổi về peerName
-              peerAvatar: widget.peerAvatar, 
+              peerName: widget.peerName,
+              peerAvatar: widget.peerAvatar,
             ),
           ),
         );
@@ -779,8 +786,10 @@ class _ChatScreenState extends State<ChatScreen> {
           children: [
             Icon(isVideo ? Icons.videocam : Icons.call, color: fg, size: 16),
             const SizedBox(width: 8),
-            Text(isVideo ? 'Cuộc gọi video' : 'Cuộc gọi thoại',
-                style: TextStyle(color: fg)),
+            Text(
+              isVideo ? 'Cuộc gọi video' : 'Cuộc gọi thoại',
+              style: TextStyle(color: fg),
+            ),
           ],
         ),
       ),

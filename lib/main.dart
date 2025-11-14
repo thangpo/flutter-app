@@ -127,32 +127,29 @@ void _handleCallInviteOpen(Map<String, dynamic> data) {
   }
 
   final callIdStr = data['call_id']?.toString();
-  final media = (data['media']?.toString() == 'video') ? 'video' : 'audio';
   final callId = int.tryParse(callIdStr ?? '');
+  final media = (data['media']?.toString() == 'video') ? 'video' : 'audio';
+
   if (callId == null) {
     _incomingCallRouting = false;
     return;
   }
 
-  final ctx = nav.overlay?.context;
-  if (ctx != null) {
-    final cc = Provider.of<CallController>(ctx, listen: false);
-    cc.attachCall(callId: callId, mediaType: media);
+  final callerName = data['caller_name']?.toString();
+  final callerAvatar = data['caller_avatar']?.toString();
 
-    nav
-        .push(
-          MaterialPageRoute(
-            builder: (_) => IncomingCallScreen(
-              callId: callId,
-              mediaType: media,
-              callerName: 'Cuộc gọi đến',
-            ),
+  nav
+      .push(
+        MaterialPageRoute(
+          builder: (_) => IncomingCallScreen(
+            callId: callId,
+            mediaType: media,
+            callerName: callerName ?? 'Cuộc gọi đến',
+            callerAvatar: callerAvatar,
           ),
-        )
-        .whenComplete(() => _incomingCallRouting = false);
-  } else {
-    _incomingCallRouting = false;
-  }
+        ),
+      )
+      .whenComplete(() => _incomingCallRouting = false);
 }
 
 // ===== GROUP: open UI khi có lời mời nhóm =====
