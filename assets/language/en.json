@@ -1434,5 +1434,9 @@
   "website_url": "WEBSITE URL",
   "select_date": "Select date",
   "select_countries": "Select countries",
-  "enter_city_or_province": "Enter city or province"
+  "enter_city_or_province": "Enter city or province",
+
+  "reactions": "Reactions",
+  "comment_reactions": "Comment reactions",
+  "mutual_friends": "Mutual frends"
 }

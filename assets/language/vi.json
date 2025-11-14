@@ -1429,6 +1429,11 @@
   "website_url": "WEBSITE URL",
   "select_date": "Chọn ngày",
   "select_countries": "Chọn quốc gia",
-  "enter_city_or_province": "KHU VỰC HIỂN THỊ"
+  "enter_city_or_province": "KHU VỰC HIỂN THỊ",
+
+  "reactions": "Cảm xúc",
+  "comment_reactions": "Cảm xúc trong bình luận",
+  "mutual_friends": "Bạn chung"
+
 }
 
