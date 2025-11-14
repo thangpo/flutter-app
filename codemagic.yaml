@@ -8,28 +8,37 @@ workflows:
       xcode: latest
       vars:
         HOMEBREW_NO_AUTO_UPDATE: 1
-        HOMEBREW_NO_ANALYTICS: 1
+        HOMEBREW_NO_ANALYTIcs: 1
         COCOAPODS_DISABLE_DETERMINISTIC_UUIDS: 1
+        # BẮT BUỘC: Ưu tiên Homebrew
+        PATH: /opt/homebrew/bin:$PATH
     cache:
       cache_paths:
         - $HOME/.pub-cache
         - $HOME/Library/Caches/Homebrew
         - $HOME/.gem
     scripts:
-      # 1. Cài CocoaPods từ Homebrew (AN TOÀN NHẤT)
-      - name: Install CocoaPods (Homebrew)
+      # 1. CÀI COCOAPODS TỪ HOMEBREW + FIX PATH
+      - name: Install CocoaPods (Homebrew + PATH fix)
         script: |
+          # Cài CocoaPods
           brew install cocoapods
-          echo "CocoaPods version: $(pod --version)"
+          
+          # Fix PATH (bắt buộc trên M2)
+          echo 'export PATH="/opt/homebrew/bin:$PATH"' >> ~/.zshrc
+          source ~/.zshrc
+          
+          # Kiểm tra pod
+          which pod
+          pod --version
 
-      # 2. Cài ffi pure Ruby (tránh lỗi native compile)
+      # 2. CÀI FFI PURE RUBY (VẪN CẦN)
       - name: Install ffi (pure Ruby)
         script: |
           gem uninstall ffi -a -x || true
           gem install ffi --platform=ruby -- --disable-system-libffi
-          echo "FFI installed (pure Ruby)"
 
-      # 3. Clean project & cache
+      # 3. CLEAN PROJECT
       - name: Clean Project
         script: |
           flutter clean
@@ -37,20 +46,20 @@ workflows:
           rm -rf ios/Pods ios/Podfile.lock
           rm -rf ~/Library/Developer/Xcode/DerivedData/*
 
-      # 4. Cài Pods
+      # 4. CÀI PODS (DÙNG ĐƯỜNG DẪN TUYỆT ĐỐI)
       - name: Install Pods
         script: |
           cd ios
-          pod repo update
-          pod install --verbose
+          /opt/homebrew/bin/pod repo update
+          /opt/homebrew/bin/pod install --verbose
           cd ..
 
-      # 5. Build iOS (no codesign)
+      # 5. BUILD IOS
       - name: Build iOS
         script: |
           flutter build ios --release --no-codesign --verbose
 
-      # 6. Đóng gói IPA
+      # 6. PACKAGE IPA
       - name: Package IPA
         script: |
           mkdir -p Payload
