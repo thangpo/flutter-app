@@ -39,8 +39,6 @@ class CouponController extends ChangeNotifier {
     debugPrint("🎫 Applying coupon: code=$coupon, order=$order");
 
     _isLoading = true;
-    // ❌ KHÔNG set _discount = 0 ở đây nữa
-    // ❌ KHÔNG set _couponCode ở đây nữa
     notifyListeners();
 
     ApiResponseModel apiResponse = await couponRepo!.get(coupon);
@@ -50,39 +48,59 @@ class CouponController extends ChangeNotifier {
 
       debugPrint("📋 Coupon API response: $map");
 
-      // ✅ CHỈ set couponCode và discount KHI API thành công
+      // Xử lý discount value TRƯỚC
+      if (map['coupon_discount'] != null) {
+        try {
+          String dis = map['coupon_discount'].toString();
+          _discount = double.parse(dis);
+        } catch (e) {
+          debugPrint("⚠️ Error parsing discount: $e, setting discount to 0");
+          _discount = 0.0;
+        }
+      } else {
+        _discount = 0.0;
+      }
+
+      // SAU ĐÓ mới set coupon code và isApplied
+      // QUAN TRỌNG: Luôn set isApplied = true và lưu couponCode, bất kể discount là bao nhiêu
       _couponCode = coupon;
       _isApplied = true;
 
-      String dis = map['coupon_discount'].toString();
-      if (map['coupon_discount'] != null) {
-        _discount = double.parse(dis);
-        debugPrint("✅ Coupon applied successfully: code=$_couponCode, discount=$_discount");
-      } else {
-        _discount = 0;
-        debugPrint("⚠️ Coupon applied but no discount: code=$_couponCode");
-      }
+      debugPrint("✅ Coupon applied: code=$_couponCode, discount=$_discount, isApplied=$_isApplied");
 
       _isLoading = false;
-      notifyListeners(); // ← Notify TRƯỚC khi show snackbar
+      notifyListeners();
 
-      showCustomSnackBar(
-          '${getTranslated('you_got', Get.context!)} '
-              '${PriceConverter.convertPrice(Get.context!, _discount)} '
-              '${getTranslated('discount', Get.context!)}',
-          Get.context!,
-          isError: false,
-          isToaster: true
-      );
+      // Hiển thị thông báo cho user
+      if (_discount! > 0) {
+        showCustomSnackBar(
+            '${getTranslated('you_got', Get.context!)} '
+                '${PriceConverter.convertPrice(Get.context!, _discount)} '
+                '${getTranslated('discount', Get.context!)}',
+            Get.context!,
+            isError: false,
+            isToaster: true
+        );
+      } else {
+        // Thông báo khi discount = 0 - có thể nhận ưu đãi khác
+        showCustomSnackBar(
+            'Mã "$coupon" đã được áp dụng thành công!',
+            Get.context!,
+            isError: false,
+            isToaster: true
+        );
+      }
 
+      // Cập nhật checkout controller với giá trị discount (kể cả khi = 0)
       Provider.of<CheckoutController>(Get.context!, listen: false)
           .getReferralAmount(PriceConverter.convertPriceWithoutSymbol(Get.context!, _discount));
 
     } else {
-      // ❌ Khi apply thất bại, KHÔNG set couponCode và discount
       debugPrint("❌ Coupon apply failed: ${apiResponse.response?.data}");
       _isLoading = false;
       _isApplied = false;
+      _couponCode = '';
+      _discount = null;
       notifyListeners();
 
       showCustomSnackBar(apiResponse.response?.data, Get.context!, isToaster: true);
