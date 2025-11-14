@@ -13,36 +13,42 @@ workflows:
       cache_paths:
         - $HOME/.pub-cache
         - $HOME/Library/Caches/Homebrew
+        - ios/Pods
+        - ios/Podfile.lock
     scripts:
-      # 1. CÀI COCOAPODS TỪ HOMEBREW
+      # 1. CÀI COCOAPODS
       - name: Install CocoaPods
         script: |
           brew install cocoapods
           export PATH="/opt/homebrew/bin:$PATH"
           pod --version
 
-      # 2. CLEAN PROJECT
-      - name: Clean Project
+      # 2. CLEAN (NHƯNG GIỮ LẠI PODS & PODFILE.LOCK)
+      - name: Clean (Keep Pods)
         script: |
           export PATH="/opt/homebrew/bin:$PATH"
           flutter clean
           flutter pub get
-          rm -rf ios/Pods ios/Podfile.lock
           rm -rf ~/Library/Developer/Xcode/DerivedData/*
 
-      # 3. CÀI PODS RIÊNG (DÙNG ĐƯỜNG DẪN TUYỆT ĐỐI)
-      - name: Install Pods Manually
+      # 3. CÀI PODS (CHỈ CHẠY NẾU CHƯA CÓ)
+      - name: Install Pods (If Needed)
         script: |
           export PATH="/opt/homebrew/bin:$PATH"
           cd ios
-          /opt/homebrew/bin/pod install --verbose
+          if [ ! -f "Podfile.lock" ]; then
+            echo "Podfile.lock not found → Running pod install"
+            /opt/homebrew/bin/pod install --verbose
+          else
+            echo "Podfile.lock exists → Skipping pod install"
+          fi
           cd ..
 
-      # 4. BUILD IOS (BỎ QUA COCOAPODS CỦA FLUTTER)
-      - name: Build iOS (Skip CocoaPods)
+      # 4. BUILD IOS (BỎ QUA POD INSTALL)
+      - name: Build iOS (Skip Pod Install)
         script: |
           export PATH="/opt/homebrew/bin:$PATH"
-          flutter build ios --release --no-codesign --no-cocoapods --verbose
+          flutter build ios --release --no-codesign --verbose
 
       # 5. PACKAGE IPA
       - name: Package IPA
