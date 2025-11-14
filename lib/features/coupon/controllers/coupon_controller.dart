@@ -21,50 +21,81 @@ class CouponController extends ChangeNotifier {
   double? get discount => _discount;
   bool get isLoading => _isLoading;
   String _couponCode = '';
+  bool _isApplied = false;
   String get couponCode => _couponCode;
+  bool get isApplied => _isApplied;
 
   void removeCoupon(){
+    debugPrint("🗑️ Removing coupon: code=$_couponCode, discount=$_discount");
     _discount = null;
     _couponCode = '';
+    _isApplied = false;
     Provider.of<CheckoutController>(Get.context!, listen: false).getReferralAmount('0');
     notifyListeners();
+    debugPrint("✅ Coupon removed");
   }
 
+  Future<void> applyCoupon(BuildContext context, String coupon, double order) async {
+    debugPrint("🎫 Applying coupon: code=$coupon, order=$order");
 
-
-  Future<void> applyCoupon(BuildContext context,String coupon, double order) async {
     _isLoading = true;
-    _discount = 0;
+    // ❌ KHÔNG set _discount = 0 ở đây nữa
+    // ❌ KHÔNG set _couponCode ở đây nữa
     notifyListeners();
+
     ApiResponseModel apiResponse = await couponRepo!.get(coupon);
-    if (apiResponse.response != null  && apiResponse.response!.statusCode == 200) {
-      _isLoading = false;
-      _couponCode = coupon;
+
+    if (apiResponse.response != null && apiResponse.response!.statusCode == 200) {
       Map map = apiResponse.response!.data;
+
+      debugPrint("📋 Coupon API response: $map");
+
+      // ✅ CHỈ set couponCode và discount KHI API thành công
+      _couponCode = coupon;
+      _isApplied = true;
+
       String dis = map['coupon_discount'].toString();
-      if(map['coupon_discount'] !=null){
+      if (map['coupon_discount'] != null) {
         _discount = double.parse(dis);
+        debugPrint("✅ Coupon applied successfully: code=$_couponCode, discount=$_discount");
+      } else {
+        _discount = 0;
+        debugPrint("⚠️ Coupon applied but no discount: code=$_couponCode");
       }
 
-      showCustomSnackBar('${getTranslated('you_got', Get.context!)} '
-        '${PriceConverter.convertPrice(Get.context!, _discount)} '
-        '${getTranslated('discount', Get.context!)}', Get.context!, isError: false, isToaster: true);
-      Provider.of<CheckoutController>(Get.context!, listen: false).getReferralAmount(PriceConverter.convertPriceWithoutSymbol(Get.context!, _discount));
+      _isLoading = false;
+      notifyListeners(); // ← Notify TRƯỚC khi show snackbar
+
+      showCustomSnackBar(
+          '${getTranslated('you_got', Get.context!)} '
+              '${PriceConverter.convertPrice(Get.context!, _discount)} '
+              '${getTranslated('discount', Get.context!)}',
+          Get.context!,
+          isError: false,
+          isToaster: true
+      );
+
+      Provider.of<CheckoutController>(Get.context!, listen: false)
+          .getReferralAmount(PriceConverter.convertPriceWithoutSymbol(Get.context!, _discount));
+
     } else {
+      // ❌ Khi apply thất bại, KHÔNG set couponCode và discount
+      debugPrint("❌ Coupon apply failed: ${apiResponse.response?.data}");
+      _isLoading = false;
+      _isApplied = false;
+      notifyListeners();
+
       showCustomSnackBar(apiResponse.response?.data, Get.context!, isToaster: true);
     }
-    _isLoading = false;
-    notifyListeners();
   }
-
-
 
   List<Coupons>? couponList;
   CouponItemModel? couponItemModel;
-  Future<void> getCouponList(BuildContext context,int offset) async {
+
+  Future<void> getCouponList(BuildContext context, int offset) async {
     _isLoading = true;
-    ApiResponseModel apiResponse = await couponRepo!.getList(offset : offset);
-    if (apiResponse.response != null  && apiResponse.response!.statusCode == 200) {
+    ApiResponseModel apiResponse = await couponRepo!.getList(offset: offset);
+    if (apiResponse.response != null && apiResponse.response!.statusCode == 200) {
       couponList = [];
       _isLoading = false;
       couponList!.addAll(CouponItemModel.fromJson(apiResponse.response!.data).coupons!);
@@ -74,29 +105,28 @@ class CouponController extends ChangeNotifier {
     notifyListeners();
   }
 
-
   List<Coupons>? availableCouponList;
+
   Future<void> getAvailableCouponList() async {
     availableCouponList = [];
     ApiResponseModel apiResponse = await couponRepo!.getAvailableCouponList();
-    if (apiResponse.response != null  && apiResponse.response!.statusCode == 200) {
-      apiResponse.response?.data.forEach((coupon)=> availableCouponList?.add(Coupons.fromJson(coupon)));
+    if (apiResponse.response != null && apiResponse.response!.statusCode == 200) {
+      apiResponse.response?.data.forEach((coupon) => availableCouponList?.add(Coupons.fromJson(coupon)));
     }
     notifyListeners();
   }
 
-
   int couponCurrentIndex = 0;
+
   void setCurrentIndex(int index) {
     couponCurrentIndex = index;
     notifyListeners();
   }
 
-
   Future<void> getSellerWiseCouponList(int sellerId, int offset) async {
     _isLoading = true;
     ApiResponseModel apiResponse = await couponRepo!.getSellerCouponList(sellerId, offset);
-    if (apiResponse.response != null  && apiResponse.response!.statusCode == 200) {
+    if (apiResponse.response != null && apiResponse.response!.statusCode == 200) {
       _isLoading = false;
       couponItemModel = CouponItemModel.fromJson(apiResponse.response!.data);
     } else {
@@ -106,11 +136,13 @@ class CouponController extends ChangeNotifier {
     notifyListeners();
   }
 
-
   void removePrevCouponData() {
+    debugPrint("🧹 Removing previous coupon data");
     _coupon = null;
     _isLoading = false;
     _discount = null;
-    _coupon = null;
+    _couponCode = '';
+    _isApplied = false;
+    debugPrint("✅ Previous coupon data cleared");
   }
 }

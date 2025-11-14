@@ -172,7 +172,10 @@ class SocialGroupService implements SocialGroupServiceInterface {
   }
 
   @override
-  Future<SocialGroup?> joinGroup({required String groupId}) async {
+  Future<SocialGroup?> joinGroup({
+    required String groupId,
+    SocialGroup? fallback,
+  }) async {
     final resp = await socialRepository.joinGroup(groupId: groupId);
     if (resp.isSuccess && resp.response != null) {
       final dynamic data = resp.response!.data;
@@ -185,6 +188,50 @@ class SocialGroupService implements SocialGroupServiceInterface {
         final List<SocialGroup> groups =
             socialRepository.parseGroups(resp.response!);
         if (groups.isNotEmpty) return groups.first;
+        final String? joinStatus = _extractJoinStatus(data);
+        if (joinStatus != null) {
+          final String normalized = joinStatus.toLowerCase();
+          final bool requested = normalized == 'requested';
+          final bool joined = normalized == 'joined';
+          final SocialGroup base = fallback ??
+              SocialGroup(
+                id: groupId,
+                name: fallback?.name ?? groupId,
+                title: fallback?.title ?? groupId,
+                about: fallback?.about,
+                description: fallback?.description,
+                category: fallback?.category,
+                subCategory: fallback?.subCategory,
+                privacy: fallback?.privacy,
+                joinPrivacy: fallback?.joinPrivacy,
+                avatarUrl: fallback?.avatarUrl,
+                coverUrl: fallback?.coverUrl,
+                memberCount: fallback?.memberCount ?? 0,
+                pendingCount: fallback?.pendingCount ?? 0,
+                isJoined: fallback?.isJoined ?? false,
+                isAdmin: fallback?.isAdmin ?? false,
+                isOwner: fallback?.isOwner ?? false,
+                requiresApproval: fallback?.requiresApproval ?? false,
+                joinRequestStatus: fallback?.joinRequestStatus ?? 0,
+                owner: fallback?.owner,
+                customFields: fallback?.customFields ?? const <String, dynamic>{},
+                createdAt: fallback?.createdAt,
+                updatedAt: fallback?.updatedAt,
+                status: fallback?.status,
+                url: fallback?.url,
+              );
+          return base.copyWith(
+            isJoined: joined,
+            requiresApproval: requested,
+            joinRequestStatus: requested
+                ? 2
+                : (joined
+                    ? (base.joinRequestStatus == 0
+                        ? 1
+                        : base.joinRequestStatus)
+                    : base.joinRequestStatus),
+          );
+        }
         return null;
       }
       final String message = (data?['errors']?['error_text'] ??
@@ -195,6 +242,23 @@ class SocialGroupService implements SocialGroupServiceInterface {
     }
     ApiChecker.checkApi(resp);
     throw Exception('Join group failed');
+  }
+
+  String? _extractJoinStatus(dynamic data) {
+    if (data is Map) {
+      final dynamic status = data['join_status'];
+      if (status != null) {
+        final String value = status.toString().trim();
+        if (value.isNotEmpty) {
+          return value;
+        }
+      }
+      if (data['data'] is Map) {
+        final String? nested = _extractJoinStatus(data['data']);
+        if (nested != null) return nested;
+      }
+    }
+    return null;
   }
 
   @override

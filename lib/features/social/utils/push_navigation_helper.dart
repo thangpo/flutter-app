@@ -7,6 +7,8 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_post_
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_story_viewer_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_group_detail_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_groups_screen.dart';
 
 /// ========================= CONFIG =========================
 
@@ -50,6 +52,19 @@ const Set<String> _storyTypes = {
 const Set<String> _storyOpenActions = {
   'open_story',
   'open_viewed_story',
+};
+// Mở group
+const Set<String> _groupTypes = {
+  'invited_you_to_the_group',
+  'joined_group',
+  'requested_to_join_group',
+  'accepted_join_request',
+  'group_admin',
+};
+const Set<String> _groupOpenActions = {
+  'open_group',
+  'open_group_invite',
+  'open_group_request',
 };
 
 /// Cooldown chống double navigate
@@ -103,6 +118,11 @@ Future<void> _routeFromDataMap(Map<String, dynamic> data) async {
     _str(merged['storyId']),
     _str((merged['story'] is Map) ? (merged['story']['id']) : ''),
   ]);
+  final String groupId = _pickFirstNonEmpty([
+    _str(merged['group_id']),
+    _str(merged['groupId']),
+    _str((merged['group'] is Map) ? (merged['group']['id']) : ''),
+  ]);
 
   debugPrint(
     '✅ parsed: type=$type | action=$action | postId=$postId | userId=$userId | storyId=$storyId',
@@ -123,7 +143,15 @@ Future<void> _routeFromDataMap(Map<String, dynamic> data) async {
     await _openProfile(userId: userId);
     return;
   }
-
+  if (_shouldOpenGroup(type: type, action: action, groupId: groupId)) {
+    await _openGroupDetail(groupId);
+    return;
+  }
+// 🟡 fallback riêng cho thông báo group_admin không có group_id
+  if (type == 'group_admin' && (groupId.isEmpty || groupId == '0')) {
+    await _openGroupList();
+    return;
+  }
   debugPrint('ℹ️ Không khớp route nào, bỏ qua.');
 }
 
@@ -155,12 +183,20 @@ bool _shouldOpenStory({
   return _storyTypes.contains(type) || _storyOpenActions.contains(action);
 }
 
+bool _shouldOpenGroup({
+  required String type,
+  required String action,
+  required String groupId,
+}) {
+  if (groupId.isEmpty || groupId == '0' || groupId == 'null') return false;
+  return _groupTypes.contains(type) || _groupOpenActions.contains(action);
+}
+
 
 /// ========================= NAV HELPERS =========================
 
 Future<void> _openPostDetail(String postId) async {
   await _pushOnce(() {
-    debugPrint('🧭 NAV → SocialPostDetailScreen(postId=$postId)');
     return MaterialPageRoute(
       builder: (_) => SocialPostDetailScreen(
         post: SocialPost(
@@ -175,11 +211,9 @@ Future<void> _openPostDetail(String postId) async {
 
 Future<void> _openProfile({required String userId}) async {
   if (userId.trim().isEmpty) {
-    debugPrint('❗ Không có userId để mở ProfileScreen');
     return;
   }
   await _pushOnce(() {
-    debugPrint('🧭 NAV → ProfileScreen(targetUserId=$userId)');
     return MaterialPageRoute(
       builder: (_) => ProfileScreen(targetUserId: userId),
     );
@@ -211,6 +245,21 @@ Future<void> _openStory(String storyId, String userId) async {
   });
 }
 
+Future<void> _openGroupDetail(String groupId) async {
+  await _pushOnce(() {
+    return MaterialPageRoute(
+      builder: (_) => SocialGroupDetailScreen(groupId: groupId),
+    );
+  });
+}
+
+Future<void> _openGroupList() async {
+  await _pushOnce(() {
+    return MaterialPageRoute(
+      builder: (_) => const SocialGroupsScreen(),
+    );
+  });
+}
 
 /// ========================= SAFE NAVIGATION =========================
 
@@ -224,7 +273,6 @@ Future<void> _pushOnce(MaterialPageRoute Function() builder) async {
 
   final nav = navigatorKey.currentState;
   if (nav == null) {
-    debugPrint('❗ Navigator chưa sẵn sàng, bỏ qua push');
     _cooldown();
     return;
   }

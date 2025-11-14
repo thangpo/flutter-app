@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_group_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_channel.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_page.dart';
@@ -12,7 +13,6 @@ import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakba
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_group_detail_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/chat_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 
 class SocialSearchScreen extends StatefulWidget {
@@ -27,6 +27,8 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
   late final FocusNode _focusNode;
   final Set<String> _locallyFollowed = <String>{};
   final Set<String> _followBusy = <String>{};
+  final Set<String> _groupJoinBusy = <String>{};
+  final Map<String, SocialGroup> _localGroupOverrides = <String, SocialGroup>{};
 
   @override
   void initState() {
@@ -76,7 +78,7 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
     if (token == null || token.isEmpty) {
       showCustomSnackBar(
         getTranslated('please_login', context) ??
-            'Vui lòng đăng nhập để sử dụng tính năng nhắn tin.',
+            "Vui lòng đăng nhập để sử dụng tính năng nhắn tin",
         context,
         isError: true,
       );
@@ -94,11 +96,103 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
     );
   }
 
+  Future<void> _handleGroupJoinTap(SocialGroup group) async {
+    if (_groupJoinBusy.contains(group.id)) return;
+    final SocialGroup resolved = _resolveGroup(group);
+    final SocialGroupController groupController =
+        context.read<SocialGroupController>();
+    setState(() => _groupJoinBusy.add(group.id));
+    try {
+      final SocialGroup? response =
+          await groupController.joinGroup(group.id, fallback: resolved);
+      SocialGroup updated = response ?? resolved;
+      final bool joinPending = _isGroupJoinPending(updated);
+      if (!mounted) return;
+      setState(() {
+        _localGroupOverrides[group.id] = updated;
+      });
+
+      final String message = joinPending
+          ? getTranslated('join_group_pending', context) ??
+              "Đã gửi yêu cầu tham gia"
+          : getTranslated('join_group_success', context) ?? "Đã tham gia nhóm";
+      showCustomSnackBar(message, context, isError: false);
+    } catch (e) {
+      if (mounted) {
+        showCustomSnackBar(e.toString(), context, isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _groupJoinBusy.remove(group.id));
+      } else {
+        _groupJoinBusy.remove(group.id);
+      }
+    }
+  }
+
   @override
   void dispose() {
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  IconData? _genderIconOf(String? genderText) {
+    final value = genderText?.trim().toLowerCase();
+    if (value == null || value.isEmpty) return null;
+    if (value.startsWith("male") || value == "nam" || value == "m") {
+      return Icons.male;
+    }
+    if (value.startsWith("female") ||
+        value == "nu" ||
+        value == "nữ" ||
+        value == "f") {
+      return Icons.female;
+    }
+    return Icons.transgender;
+  }
+
+  String? _normalizedBirthday(String? birthday) {
+    final value = birthday?.trim();
+    if (value == null || value.isEmpty || value == "0000-00-00") return null;
+    return value;
+  }
+
+  String? _normalizedAbout(String? about) {
+    final value = about?.trim();
+    if (value == null || value.isEmpty) return null;
+    return value;
+  }
+
+  String _formatCount(int count) {
+    if (count >= 1000000) {
+      final double millions = count / 1000000;
+      return "${millions >= 10 ? millions.toStringAsFixed(0) : millions.toStringAsFixed(1)}M";
+    }
+    if (count >= 1000) {
+      final double thousands = count / 1000;
+      return "${thousands >= 10 ? thousands.toStringAsFixed(0) : thousands.toStringAsFixed(1)}K";
+    }
+    return count.toString();
+  }
+
+  SocialGroup _resolveGroup(SocialGroup group) {
+    return _localGroupOverrides[group.id] ?? group;
+  }
+
+  bool _isGroupJoinPending(SocialGroup group) {
+    return group.joinRequestStatus == 2;
+  }
+
+  String _groupPrivacyLabel(SocialGroup group) {
+    final String privacy = (group.privacy ?? "").trim().toLowerCase();
+    final bool isPrivate = privacy == "2" ||
+        privacy.contains("private") ||
+        privacy.contains("closed");
+
+    return isPrivate
+        ? (getTranslated("private_group", context) ?? "Nhóm kín")
+        : (getTranslated("public_group", context) ?? "Nhóm công khai");
   }
 
   @override
@@ -115,7 +209,7 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.clear),
-            tooltip: 'Clear',
+            tooltip: getTranslated("clear", context) ?? "Xoá",
             onPressed: _handleClear,
           ),
         ],
@@ -132,7 +226,8 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
       focusNode: _focusNode,
       textInputAction: TextInputAction.search,
       decoration: InputDecoration(
-        hintText: 'Tìm kiếm bạn bè, nhóm, trang...',
+        hintText: getTranslated("search_placeholder", context) ??
+            "Tìm kiếm bạn bè, nhóm, trang...",
         border: InputBorder.none,
         hintStyle: theme.textTheme.bodyMedium
             ?.copyWith(color: theme.hintColor, fontWeight: FontWeight.w400),
@@ -149,8 +244,9 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
     if (!sc.hasSearchQuery) {
       return _CenteredMessage(
         icon: Icons.search,
-        title: 'Bắt đầu tìm kiếm',
-        message: 'Nhập từ khóa để tìm user, page, group hoặc channel.',
+        title: getTranslated("start_search", context) ?? "Bắt đầu tìm kiếm",
+        message: getTranslated("enter_keyword_to_search", context) ??
+            "Nhập từ khóa để tìm user, page, group hoặc channel.",
       );
     }
 
@@ -161,11 +257,13 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
     if (sc.searchError != null && sc.searchResult.isEmpty) {
       return _CenteredMessage(
         icon: Icons.error_outline,
-        title: 'Không thể tìm kiếm',
-        message: sc.searchError ?? 'Đã có lỗi xảy ra, hãy thử lại.',
+        title: getTranslated("search_failed", context) ?? "Không thể tìm kiếm",
+        message: sc.searchError ??
+            getTranslated("something_wrong", context) ??
+            "Đã có lỗi xảy ra, hãy thử lại.",
         trailing: TextButton(
           onPressed: () => sc.refreshSearchResults(),
-          child: const Text('Thử lại'),
+          child: Text(getTranslated("retry", context) ?? "Thử lại"),
         ),
       );
     }
@@ -174,8 +272,9 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
     if (result.isEmpty) {
       return _CenteredMessage(
         icon: Icons.search_off_outlined,
-        title: 'Không tìm thấy kết quả',
-        message: 'Hãy thử với từ khóa khác.',
+        title: getTranslated("no_result", context) ?? "Không tìm thấy kết quả",
+        message: getTranslated("try_another_keyword", context) ??
+            "Hãy thử với từ khóa khác.",
       );
     }
 
@@ -184,22 +283,22 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
       children: [
         if (result.users.isNotEmpty)
           _SearchSection(
-            title: 'Người dùng',
+            title: getTranslated("users", context) ?? "Người dùng",
             children: result.users.map(_buildUserTile).toList(),
           ),
         if (result.pages.isNotEmpty)
           _SearchSection(
-            title: 'Trang',
+            title: getTranslated("pages", context) ?? "Trang",
             children: result.pages.map(_buildPageTile).toList(),
           ),
         if (result.groups.isNotEmpty)
           _SearchSection(
-            title: 'Nhóm',
+            title: getTranslated("groups", context) ?? "Nhóm",
             children: result.groups.map(_buildGroupTile).toList(),
           ),
         if (result.channels.isNotEmpty)
           _SearchSection(
-            title: 'Kênh',
+            title: getTranslated("channels", context) ?? "Kênh",
             children: result.channels.map(_buildChannelTile).toList(),
           ),
       ],
@@ -209,26 +308,45 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
   Widget _buildUserTile(SocialUser user) {
     final context = this.context;
     final theme = Theme.of(context);
-    final subtitle = user.userName != null && user.userName!.isNotEmpty
-        ? '@${user.userName}'
+
+    final String followersLabel =
+        getTranslated("followers", context) ?? "người theo dõi";
+
+    String? subtitle = user.userName != null && user.userName!.isNotEmpty
+        ? "@${user.userName}"
         : null;
+
+    if (user.followersCount != null) {
+      final int safeCount = user.followersCount! < 0 ? 0 : user.followersCount!;
+      final String followerText = "${_formatCount(safeCount)} $followersLabel";
+      subtitle = (subtitle != null && subtitle.isNotEmpty)
+          ? "$subtitle · $followerText"
+          : followerText;
+    }
+
+    final IconData? genderIcon = _genderIconOf(user.genderText);
+    final String? birthdayText = _normalizedBirthday(user.birthday);
+    final String? aboutText = _normalizedAbout(user.about);
     final bool canFollow = !user.isFriend && !_isFollowingUser(user);
     final bool canMessage = !canFollow;
+
     String? statusLabel;
     VoidCallback? statusAction;
     bool isBusy = false;
+
     if (canMessage) {
-      statusLabel = getTranslated('message', context) ?? 'Nhan tin';
+      statusLabel = getTranslated("message", context) ?? "Nhắn tin";
       statusAction = () {
         _handleMessageTap(user);
       };
     } else if (canFollow) {
-      statusLabel = getTranslated('follow', context) ?? 'Follow';
+      statusLabel = getTranslated("follow", context) ?? "Theo dõi";
       statusAction = () {
         _handleFollowTap(user);
       };
       isBusy = _followBusy.contains(user.id);
     }
+
     final TextStyle statusStyle = theme.textTheme.bodyMedium?.copyWith(
           color: theme.colorScheme.primary,
           fontWeight: FontWeight.w600,
@@ -242,6 +360,7 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
       minimumSize: Size.zero,
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
+
     final Widget? statusButton = (statusLabel != null && statusAction != null)
         ? TextButton(
             onPressed: isBusy ? null : statusAction,
@@ -257,9 +376,61 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
                       ),
                     ),
                   )
-                : Text(statusLabel, style: statusStyle),
+                : Text(statusLabel!, style: statusStyle),
           )
         : null;
+
+    final List<Widget> subtitleWidgets = [];
+    if (subtitle != null) {
+      subtitleWidgets.add(
+        Text(
+          subtitle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodySmall,
+        ),
+      );
+    }
+
+    if ((genderIcon != null) || (birthdayText != null)) {
+      if (subtitleWidgets.isNotEmpty) {
+        subtitleWidgets.add(const SizedBox(height: 2));
+      }
+      subtitleWidgets.add(
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (genderIcon != null)
+              Icon(genderIcon, size: 16, color: theme.hintColor),
+            if (genderIcon != null && birthdayText != null)
+              const SizedBox(width: 6),
+            if (birthdayText != null)
+              Text(
+                "· $birthdayText",
+                style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.hintColor) ??
+                    TextStyle(color: theme.hintColor),
+              ),
+          ],
+        ),
+      );
+    }
+
+    if (aboutText != null) {
+      if (subtitleWidgets.isNotEmpty) {
+        subtitleWidgets.add(const SizedBox(height: 2));
+      }
+      subtitleWidgets.add(
+        Text(
+          aboutText,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor) ??
+              TextStyle(color: theme.hintColor),
+        ),
+      );
+    }
+
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: _Avatar(
@@ -274,13 +445,19 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
             user.displayName ?? user.userName ?? user.id,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              fontWeight: FontWeight.w600, // hoặc FontWeight.bold
+              fontWeight: FontWeight.w600,
             ),
           ),
           if (statusButton != null) statusButton,
         ],
       ),
-      subtitle: subtitle != null ? Text(subtitle) : null,
+      subtitle: subtitleWidgets.isNotEmpty
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: subtitleWidgets,
+            )
+          : null,
       onTap: () {
         Navigator.of(context).push(
           MaterialPageRoute(
@@ -293,7 +470,8 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
 
   Widget _buildPageTile(SocialPage page) {
     final context = this.context;
-    final subtitle = page.category ?? page.username ?? page.url ?? '';
+    final subtitle = page.category ?? page.username ?? page.url ?? "";
+
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: _Avatar(
@@ -302,29 +480,137 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
       ),
       title: Text(page.title ?? page.name),
       subtitle: subtitle.isNotEmpty ? Text(subtitle) : null,
-      // trailing: const Icon(Icons.open_in_new),
       onTap: () => _openExternal(page.url),
     );
   }
 
   Widget _buildGroupTile(SocialGroup group) {
     final context = this.context;
-    final subtitle = group.category ?? group.description ?? '';
+    final theme = Theme.of(context);
+    final SocialGroup resolved = _resolveGroup(group);
+    final String privacyLabel = _groupPrivacyLabel(resolved);
+
+    final String membersLabel =
+        getTranslated("members", context) ?? "thành viên";
+
+    final String? aboutText =
+        (resolved.about != null && resolved.about!.trim().isNotEmpty)
+            ? resolved.about!.trim()
+            : null;
+
+    final String? membersText = resolved.memberCount > 0
+        ? "${_formatCount(resolved.memberCount)} $membersLabel"
+        : null;
+
+    final List<Widget> subtitleWidgets = [];
+    final List<String> firstLine = [];
+
+    if (privacyLabel.isNotEmpty) firstLine.add(privacyLabel);
+    if (membersText != null) firstLine.add(membersText);
+
+    if (firstLine.isNotEmpty) {
+      subtitleWidgets.add(
+        Text(
+          firstLine.join(" · "),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      );
+    }
+
+    if (aboutText != null) {
+      if (subtitleWidgets.isNotEmpty)
+        subtitleWidgets.add(const SizedBox(height: 2));
+      subtitleWidgets.add(
+        Text(
+          aboutText,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor) ??
+              TextStyle(color: theme.hintColor),
+        ),
+      );
+    }
+
+    final bool joinPending = _isGroupJoinPending(resolved);
+    final bool showJoinButton = !resolved.isJoined;
+    final bool isBusy = _groupJoinBusy.contains(resolved.id);
+
+    final TextStyle statusStyle = theme.textTheme.bodyMedium?.copyWith(
+          color: theme.colorScheme.primary,
+          fontWeight: FontWeight.w600,
+        ) ??
+        TextStyle(
+          color: theme.colorScheme.primary,
+          fontWeight: FontWeight.w600,
+        );
+
+    final ButtonStyle actionStyle = TextButton.styleFrom(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+
+    final Widget? joinButton = showJoinButton
+        ? TextButton(
+            onPressed: (joinPending || isBusy)
+                ? null
+                : () => _handleGroupJoinTap(resolved),
+            style: actionStyle,
+            child: isBusy
+                ? SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        theme.colorScheme.primary,
+                      ),
+                    ),
+                  )
+                : Text(
+                    joinPending
+                        ? (getTranslated("join_group_pending_short", context) ??
+                            "Chờ phê duyệt")
+                        : (getTranslated("join_group", context) ?? "Tham gia"),
+                    style: statusStyle,
+                  ),
+          )
+        : null;
+
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: _Avatar(
-        imageUrl: group.avatarUrl,
+        imageUrl: resolved.avatarUrl,
         fallbackIcon: Icons.group_outlined,
       ),
-      title: Text(group.title ?? group.name),
-      subtitle: subtitle.isNotEmpty ? Text(subtitle) : null,
-      // trailing: const Icon(Icons.chevron_right),
+      title: Wrap(
+        spacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text(
+            resolved.title ?? resolved.name,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (joinButton != null) joinButton,
+        ],
+      ),
+      subtitle: subtitleWidgets.isNotEmpty
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: subtitleWidgets,
+            )
+          : null,
       onTap: () {
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => SocialGroupDetailScreen(
-              groupId: group.id,
-              initialGroup: group,
+              groupId: resolved.id,
+              initialGroup: resolved,
             ),
           ),
         );
@@ -335,8 +621,9 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
   Widget _buildChannelTile(SocialChannel channel) {
     final subtitle = channel.category ??
         (channel.subscriberCount > 0
-            ? '${channel.subscriberCount} người theo dõi'
-            : '');
+            ? "${channel.subscriberCount} ${getTranslated("followers", context) ?? "người theo dõi"}"
+            : "");
+
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: _Avatar(
@@ -345,23 +632,25 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
       ),
       title: Text(channel.title ?? channel.name),
       subtitle: subtitle.isNotEmpty ? Text(subtitle) : null,
-      // trailing: const Icon(Icons.open_in_new),
       onTap: () => _openExternal(channel.url),
     );
   }
 
   Future<void> _openExternal(String? url) async {
     if (url == null || url.isEmpty) {
-      _showSnackBar('Liên kết không khả dụng');
+      _showSnackBar(
+          getTranslated("invalid_link", context) ?? "Liên kết không khả dụng");
       return;
     }
     final uri = Uri.tryParse(url);
     if (uri == null) {
-      _showSnackBar('Liên kết không hợp lệ');
+      _showSnackBar(
+          getTranslated("invalid_link", context) ?? "Liên kết không hợp lệ");
       return;
     }
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      _showSnackBar('Không mở được liên kết');
+      _showSnackBar(getTranslated("open_link_failed", context) ??
+          "Không mở được liên kết");
     }
   }
 
