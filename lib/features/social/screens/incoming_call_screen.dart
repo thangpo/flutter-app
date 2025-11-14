@@ -1,3 +1,4 @@
+// G:\flutter-app\lib\features\social\screens\incoming_call_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -47,13 +48,19 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     _ensureAttach();
   }
 
-  void _onControllerChanged() {
+  void _onControllerChanged() async {
     if (!_viewAlive) return;
 
     final st = _cc.callStatus;
     if (st == 'declined' || st == 'ended') {
       // Peer đã kết thúc / từ chối trong khi đang hiện màn "Cuộc gọi đến"
-      if (mounted) Navigator.of(context).maybePop();
+      try {
+        await _cc.detachCall(); // 🔴 dọn state call trong controller
+      } catch (_) {}
+
+      if (mounted) {
+        Navigator.of(context).maybePop();
+      }
     }
   }
 
@@ -109,8 +116,13 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
       await _cc.action('decline');
     } catch (_) {}
 
+    // 🔴 Dọn state cuộc gọi trong controller (dừng poll, reset)
+    try {
+      await _cc.detachCall();
+    } catch (_) {}
+
     if (!mounted) return;
-    Navigator.of(context).maybePop();
+    Navigator.of(context).maybePop(); // quay về màn trước (thường là chat)
   }
 
   @override
