@@ -15,7 +15,6 @@ workflows:
         - $HOME/Library/Caches/Homebrew
         - ios/Pods
         - ios/Podfile.lock
-        - ios/Flutter/Generated.xcconfig
     scripts:
       # 1. CÀI COCOAPODS
       - name: Install CocoaPods
@@ -24,46 +23,64 @@ workflows:
           export PATH="/opt/homebrew/bin:$PATH"
           pod --version
 
-      # 2. CLEAN & PUB GET
-      - name: Flutter Pub Get
+      # 1.1 FIX REPO COCOAPODS (XOÁ JSDELIVR, DÙNG CDN CHÍNH THỨC)
+      - name: Fix CocoaPods Specs repo
         script: |
           export PATH="/opt/homebrew/bin:$PATH"
+
+          echo "=== CocoaPods repos BEFORE ==="
+          pod repo list || true
+
+          echo "=== Remove jsDelivr Specs repo if exists ==="
+          rm -rf ~/.cocoapods/repos/jsdelivr-cocoa || true
+          rm -rf ~/.cocoapods/repos/cdn.jsdelivr.net-* || true
+
+          echo "=== Ensure official CocoaPods CDN (trunk) is added ==="
+          pod repo add trunk https://cdn.cocoapods.org/ || true
+          pod repo update
+
+          echo "=== CocoaPods repos AFTER ==="
+          pod repo list || true
+
+      # 2. CLEAN (NHƯNG GIỮ LẠI PODS & PODFILE.LOCK)
+      - name: Clean (Keep Pods)
+        script: |
+          export PATH="/opt/homebrew/bin:$PATH"
+          flutter clean
           flutter pub get
+          rm -rf ~/Library/Developer/Xcode/DerivedData/*
 
-      # 3. CÀI PODS (LUÔN CHẠY 1 LẦN)
-      - name: Install Pods
+      # 3. CÀI PODS (CHỈ CHẠY NẾU CHƯA CÓ)
+      - name: Install Pods (If Needed)
         script: |
           export PATH="/opt/homebrew/bin:$PATH"
           cd ios
-          /opt/homebrew/bin/pod install --verbose
+          if [ ! -f "Podfile.lock" ]; then
+            echo "Podfile.lock not found → Running pod install"
+            pod install --verbose
+          else
+            echo "Podfile.lock exists → Skipping pod install"
+          fi
           cd ..
 
-      # 4. BUILD BẰNG XCODEBUILD (BỎ QUA FLUTTER TOOLS)
-      - name: Build with xcodebuild
+      # 4. BUILD IOS (BỎ QUA POD INSTALL)
+      - name: Build iOS (Skip Pod Install)
         script: |
           export PATH="/opt/homebrew/bin:$PATH"
-          cd ios
-          xcodebuild -workspace Runner.xcworkspace \
-                     -scheme Runner \
-                     -configuration Release \
-                     -derivedDataPath build \
-                     -allowProvisioningUpdates \
-                     -quiet \
-                     CODE_SIGNING_REQUIRED=NO \
-                     CODE_SIGNING_ALLOWED=NO
-          cd ..
+          flutter build ios --release --no-codesign --verbose
 
       # 5. PACKAGE IPA
       - name: Package IPA
         script: |
           mkdir -p Payload
-          cp -R ios/build/Build/Products/Release-iphoneos/Runner.app Payload/
+          cp -R build/ios/Release-iphoneos/Runner.app Payload/
           zip -r Runner.ipa Payload
           rm -rf Payload
           mv Runner.ipa build/
 
     artifacts:
       - build/Runner.ipa
+      - ios/Podfile.lock
 
     publishing:
       email:
