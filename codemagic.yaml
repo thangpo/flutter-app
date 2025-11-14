@@ -3,103 +3,80 @@ workflows:
     name: iOS Unsigned Build
     instance_type: mac_mini_m2
     max_build_duration: 120
-
     environment:
       flutter: stable
       xcode: latest
       vars:
         HOMEBREW_NO_AUTO_UPDATE: 1
         HOMEBREW_NO_ANALYTICS: 1
-        COCOAPODS_DISABLE_DETERMINISTIC_UUIDS: 1
-
     cache:
       cache_paths:
         - $HOME/.pub-cache
         - $HOME/Library/Caches/Homebrew
         - ios/Pods
         - ios/Podfile.lock
-        - ios/Flutter/Generated.xcconfig
-        - ios/build  # Cache DerivedData để tăng tốc
-
     scripts:
-      # 1. CÀI COCOAPODS TỪ HOMEBREW
+      # 1. CÀI COCOAPODS
       - name: Install CocoaPods
         script: |
           brew install cocoapods
           export PATH="/opt/homebrew/bin:$PATH"
-          echo "CocoaPods version: $(pod --version)"
+          pod --version
 
-      # 2. FLUTTER PUB GET
-      - name: Flutter Pub Get
+      # 1.1 FIX REPO COCOAPODS (XOÁ JSDELIVR, DÙNG CDN CHÍNH THỨC)
+      - name: Fix CocoaPods Specs repo
         script: |
           export PATH="/opt/homebrew/bin:$PATH"
-          flutter pub get
 
-      # 3. CÀI PODS (CHỈ CHẠY NẾU CHƯA CÓ Podfile.lock)
-      - name: Install Pods (Only if needed)
+          echo "=== CocoaPods repos BEFORE ==="
+          pod repo list || true
+
+          echo "=== Remove jsDelivr Specs repo if exists ==="
+          rm -rf ~/.cocoapods/repos/jsdelivr-cocoa || true
+          rm -rf ~/.cocoapods/repos/cdn.jsdelivr.net-* || true
+
+          echo "=== Ensure official CocoaPods CDN (trunk) is added ==="
+          pod repo add trunk https://cdn.cocoapods.org/ || true
+          pod repo update
+
+          echo "=== CocoaPods repos AFTER ==="
+          pod repo list || true
+
+      # 2. CLEAN (NHƯNG GIỮ LẠI PODS & PODFILE.LOCK)
+      - name: Clean (Keep Pods)
+        script: |
+          export PATH="/opt/homebrew/bin:$PATH"
+          flutter clean
+          flutter pub get
+          rm -rf ~/Library/Developer/Xcode/DerivedData/*
+
+      # 3. CÀI PODS (CHỈ CHẠY NẾU CHƯA CÓ)
+      - name: Install Pods (If Needed)
         script: |
           export PATH="/opt/homebrew/bin:$PATH"
           cd ios
           if [ ! -f "Podfile.lock" ]; then
             echo "Podfile.lock not found → Running pod install"
-            /opt/homebrew/bin/pod install --verbose
+            pod install --verbose
           else
             echo "Podfile.lock exists → Skipping pod install"
           fi
           cd ..
 
-      # 4. BUILD VỚI XCODEBUILD (BỎ QUA FLUTTER TOOLS)
-      - name: Build with xcodebuild
+      # 4. BUILD IOS (BỎ QUA POD INSTALL)
+      - name: Build iOS (Skip Pod Install)
         script: |
           export PATH="/opt/homebrew/bin:$PATH"
-          cd ios
+          flutter build ios --release --no-codesign --verbose
 
-          echo "Starting xcodebuild..."
-          xcodebuild -workspace Runner.xcworkspace \
-                     -scheme Runner \
-                     -configuration Release \
-                     -derivedDataPath build \
-                     CODE_SIGNING_REQUIRED=NO \
-                     CODE_SIGNING_ALLOWED=NO \
-                     -quiet
-
-          # Kiểm tra build có thành công không
-          if [ $? -ne 0 ]; then
-            echo "xcodebuild failed!"
-            exit 1
-          fi
-
-          cd ..
-
-      # 5. PACKAGE IPA (ĐÃ SỬA ĐƯỜNG DẪN + KIỂM TRA LỖI)
+      # 5. PACKAGE IPA
       - name: Package IPA
         script: |
-          APP_PATH="ios/build/Build/Products/Release-iphoneos/Runner.app"
-          IPA_OUTPUT="build/Runner.ipa"
-
-          # Kiểm tra Runner.app có tồn tại không
-          if [ ! -d "$APP_PATH" ]; then
-            echo "ERROR: $APP_PATH not found!"
-            echo "Listing ios/build/Build/Products/Release-iphoneos/:"
-            ls -la ios/build/Build/Products/Release-iphoneos/ || true
-            exit 1
-          fi
-
-          echo "Found Runner.app → Packaging IPA..."
-
-          # Tạo thư mục
           mkdir -p Payload
-          cp -R "$APP_PATH" Payload/
-
-          # Tạo IPA
+          cp -R build/ios/Release-iphoneos/Runner.app Payload/
           zip -r Runner.ipa Payload
           rm -rf Payload
-
-          # Tạo thư mục build và di chuyển IPA
-          mkdir -p build
-          mv Runner.ipa "$IPA_OUTPUT"
-
-          echo "Runner.ipa created successfully at $IPA_OUTPUT"
+          mv Runner.ipa build/
 
     artifacts:
       - build/Runner.ipa
