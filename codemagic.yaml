@@ -9,8 +9,7 @@ workflows:
 
     scripts:
       - name: Get Flutter packages
-        script: |
-          flutter pub get
+        script: flutter pub get
 
       - name: Clean Flutter & Cocoapods
         script: |
@@ -19,15 +18,15 @@ workflows:
           rm -f ios/Podfile.lock
           export COCOAPODS_DISABLE_STATS=true
 
-      - name: Install Pods using CDN
+      - name: Install Pods using CDN (Apple Silicon safe)
         script: |
           cd ios
-          pod install --repo-update
+          sudo arch -x86_64 gem install ffi
+          arch -x86_64 pod install --repo-update
           cd ..
 
       - name: Build iOS (no code sign)
-        script: |
-          flutter build ios --release --no-codesign --verbose
+        script: flutter build ios --release --no-codesign --verbose
 
       - name: Package IPA
         script: |
