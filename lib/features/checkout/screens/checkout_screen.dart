@@ -35,7 +35,6 @@ import 'package:flutter_sixvalley_ecommerce/features/offline_payment/screens/off
 import 'package:flutter_sixvalley_ecommerce/features/checkout/widgets/payment_method_bottom_sheet_widget.dart';
 
 
-
 class CheckoutScreen extends StatefulWidget {
   final List<CartModel> cartList;
   final bool fromProductDetails;
