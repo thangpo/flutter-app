@@ -1,10 +1,10 @@
-platform :ios, '15.0'  # Tăng từ 14.0 → 15.0
+# === BẮT BUỘC: Chỉ 1 dòng platform ===
+platform :ios, '15.0'
 
+# Nguồn CocoaPods chính thức
 source 'https://cdn.cocoapods.org/'
-# source 'https://cdn.jsdelivr.net/cocoa/Specs/'
-platform :ios, '14.0'
 
-# Disable CocoaPods analytics to speed up CI/CD
+# Tắt analytics để tăng tốc CI/CD
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 
 project 'Runner', {
@@ -13,6 +13,7 @@ project 'Runner', {
   'Release' => :release,
 }
 
+# === Tìm FLUTTER_ROOT ===
 def flutter_root
   generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
   unless File.exist?(generated_xcode_build_settings_path)
@@ -30,6 +31,7 @@ require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelpe
 
 flutter_ios_podfile_setup
 
+# === TARGET CHÍNH ===
 target 'Runner' do
   use_frameworks!
   use_modular_headers!
@@ -37,7 +39,7 @@ target 'Runner' do
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
 end
 
-# Fix lỗi DOS_OBJECT_USE_OBJC
+# === FIX LỖI DOS_OBJECT_USE_OBJC (XCODE 15+) ===
 post_integrate do |installer|
   compiler_flags_key = 'COMPILER_FLAGS'
   project_path = 'Pods/Pods.xcodeproj'
@@ -45,35 +47,33 @@ post_integrate do |installer|
   project = Xcodeproj::Project.open(project_path)
   project.targets.each do |target|
     target.build_phases.each do |build_phase|
-      if build_phase.is_a?(Xcodeproj::Project::Object::PBXSourcesBuildPhase)
-        build_phase.files.each do |file|
-          if !file.settings.nil? && file.settings.key?(compiler_flags_key)
-            compiler_flags = file.settings[compiler_flags_key]
-            file.settings[compiler_flags_key] = compiler_flags.gsub(/-DOS_OBJECT_USE_OBJC=0\s*/, '')
-          end
-        end
+      next unless build_phase.is_a?(Xcodeproj::Project::Object::PBXSourcesBuildPhase)
+      build_phase.files.each do |file|
+        next if file.settings.nil? || !file.settings.key?(compiler_flags_key)
+        compiler_flags = file.settings[compiler_flags_key]
+        file.settings[compiler_flags_key] = compiler_flags.gsub(/-DOS_OBJECT_USE_OBJC=0\s*/, '')
       end
     end
   end
   project.save()
 end
 
-# Cấu hình bắt buộc cho Xcode mới + no-codesign
+# === CẤU HÌNH BẮT BUỘC CHO XCODE MỚI + NO-CODESIGN ===
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
 
     target.build_configurations.each do |config|
-      # Đặt deployment target cho tất cả pod
+      # Bắt buộc: tất cả pod phải >= iOS 15.0
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
 
-      # Thêm macro nếu cần
+      # Macro tùy chỉnh (nếu cần)
       config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [
         '$(inherited)',
         'AUDIO_SESSION_MICROPHONE=0'
       ]
 
-      # Tắt code signing (dùng với --no-codesign)
+      # Tắt code signing (dùng với --no-codesign hoặc xcodebuild)
       config.build_settings['EXPANDED_CODE_SIGN_IDENTITY'] = ""
       config.build_settings['CODE_SIGNING_REQUIRED'] = "NO"
       config.build_settings['CODE_SIGNING_ALLOWED'] = "NO"
