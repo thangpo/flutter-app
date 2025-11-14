@@ -9,29 +9,27 @@ workflows:
       vars:
         HOMEBREW_NO_AUTO_UPDATE: 1
         HOMEBREW_NO_ANALYTICS: 1
-        # Bắt buộc: tắt ffi
         COCOAPODS_DISABLE_DETERMINISTIC_UUIDS: 1
     cache:
       cache_paths:
         - $HOME/.pub-cache
         - $HOME/Library/Caches/Homebrew
+        - $HOME/.gem
     scripts:
-      # 1. Cài CocoaPods từ Homebrew (KHÔNG dùng gem)
+      # 1. CÀI COCOAPODS TỪ HOMEBREW (AN TOÀN NHẤT)
       - name: Install CocoaPods (Homebrew)
         script: |
           brew install cocoapods
-          pod --version
+          echo "CocoaPods: $(pod --version)"
 
-      # 2. Patch ffi (bắt buộc để tránh crash)
-      - name: Patch ffi gem
+      # 2. CÀI FFI PURE RUBY (KHÔNG COMPILE)
+      - name: Install ffi (pure Ruby)
         script: |
-          # Xóa ffi cũ
           gem uninstall ffi -a -x || true
-          # Cài ffi không native (pure Ruby)
           gem install ffi --platform=ruby -- --disable-system-libffi
           echo "FFI installed (pure Ruby)"
 
-      # 3. Clean project
+      # 3. CLEAN PROJECT
       - name: Clean Project
         script: |
           flutter clean
@@ -39,7 +37,7 @@ workflows:
           rm -rf ios/Pods ios/Podfile.lock
           rm -rf ~/Library/Developer/Xcode/DerivedData/*
 
-      # 4. Install Pods
+      # 4. INSTALL PODS
       - name: Install Pods
         script: |
           cd ios
@@ -47,12 +45,12 @@ workflows:
           pod install --verbose
           cd ..
 
-      # 5. Build iOS (no codesign)
+      # 5. BUILD IOS
       - name: Build iOS
         script: |
           flutter build ios --release --no-codesign --verbose
 
-      # 6. Package IPA
+      # 6. PACKAGE IPA
       - name: Package IPA
         script: |
           mkdir -p Payload
@@ -64,7 +62,11 @@ workflows:
     artifacts:
       - build/Runner.ipa
       - ios/Podfile.lock
+
     publishing:
       email:
         recipients:
           - your-email@example.com
+        notify:
+          success: true
+          failure: true
