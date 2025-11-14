@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
 import 'dart:math';
@@ -13,6 +13,7 @@ import 'package:video_player/video_player.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 
 class SocialStoryViewerScreen extends StatefulWidget {
   final List<SocialStory> stories;
@@ -381,7 +382,8 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
   void _precacheNextImage() {
     final SocialStoryItem? nextItem = _nextItem;
     if (nextItem == null || nextItem.isVideo) return;
-    final String? url = nextItem.mediaUrl ?? nextItem.thumbUrl;
+    final String? url =
+        _resolveStoryMediaUrl(nextItem.mediaUrl ?? nextItem.thumbUrl);
     if (url == null || url.isEmpty) return;
     precacheImage(CachedNetworkImageProvider(url), context);
   }
@@ -389,7 +391,7 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
   Future<void> _prefetchNextVideo() async {
     final SocialStoryItem? nextItem = _nextItem;
     if (nextItem == null || !nextItem.isVideo) return;
-    final String? url = nextItem.mediaUrl;
+    final String? url = _resolveStoryMediaUrl(nextItem.mediaUrl);
     if (url == null || url.isEmpty) return;
 
     if (_nextVideoUrl == url &&
@@ -854,8 +856,9 @@ class _StoryMedia extends StatelessWidget {
       );
     }
 
-    final String? url =
-        item!.mediaUrl ?? item!.thumbUrl ?? story.mediaUrl ?? story.thumbUrl;
+    final String? url = _resolveStoryMediaUrl(
+      item!.mediaUrl ?? item!.thumbUrl ?? story.mediaUrl ?? story.thumbUrl,
+    );
     if (url == null || url.isEmpty) {
       return const SizedBox();
     }
@@ -1139,102 +1142,133 @@ class _StoryFooterState extends State<_StoryFooter>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (widget.caption != null && widget.caption!.trim().isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(
-                widget.caption!.replaceAll(
-                    RegExp(r'<br\s*/?>', caseSensitive: false), '\n'),
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: Colors.white,
-                  height: 1.4,
-                ),
-              ),
-            ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.black45,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: Colors.white24, width: 1),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    getTranslated('send_message_placeholder', context) ??
-                        'Send a message...',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: Colors.white70,
-                    ),
-                  ),
-                ),
-                const Icon(Icons.send, color: Colors.white70, size: 18),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
+          // if (widget.caption != null && widget.caption!.trim().isNotEmpty)
+          //   Padding(
+          //     padding: const EdgeInsets.only(bottom: 12),
+          //     child: Text(
+          //       widget.caption!.replaceAll(
+          //           RegExp(r'<br\s*/?>', caseSensitive: false), '\n'),
+          //       style: theme.textTheme.bodyLarge?.copyWith(
+          //         color: Colors.white,
+          //         height: 1.4,
+          //       ),
+          //     ),
+          //   ),
           SizedBox(
-            height: 96,
+            height: 104,
             child: Stack(
               key: _effectsStackKey,
               clipBehavior: Clip.none,
               children: [
                 Align(
                   alignment: Alignment.bottomCenter,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: _reactionOrder.map((reactionLabel) {
-                      final bool isSelected = selected == reactionLabel;
-                      return GestureDetector(
-                        onTap: () => _handleTap(reactionLabel),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              key: _iconKeys[reactionLabel],
-                              width: 48,
-                              height: 48,
-                              decoration: BoxDecoration(
-                                color:
-                                    isSelected ? Colors.white : Colors.black54,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: isSelected
-                                      ? Colors.white
-                                      : Colors.white24,
-                                  width: 1,
-                                ),
-                                boxShadow: isSelected
-                                    ? [
-                                        BoxShadow(
-                                          color: Colors.white.withOpacity(0.35),
-                                          blurRadius: 14,
-                                          spreadRadius: 2,
+                  child: SizedBox(
+                    height: 56,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final double width = constraints.maxWidth;
+                        final double placeholderMin = width * .35;
+                        final double placeholderMax = width * .65;
+
+                        return ScrollConfiguration(
+                          behavior: ScrollConfiguration.of(context).copyWith(
+                            scrollbars: false,
+                            overscroll: false,
+                          ),
+                          child: ListView.separated(
+                            physics: const BouncingScrollPhysics(),
+                            padding: EdgeInsets.zero,
+                            scrollDirection: Axis.horizontal,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(width: 12),
+                            itemCount: _reactionOrder.length + 1,
+                            itemBuilder: (BuildContext context, int index) {
+                              if (index == 0) {
+                                return ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    minWidth:
+                                        placeholderMin.clamp(140.0, width),
+                                    maxWidth:
+                                        placeholderMax.clamp(180.0, width),
+                                  ),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black45,
+                                      borderRadius: BorderRadius.circular(999),
+                                      border: Border.all(
+                                        color: Colors.white24,
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            getTranslated(
+                                                    'send_message_placeholder',
+                                                    context) ??
+                                                'Send a message...',
+                                            overflow: TextOverflow.ellipsis,
+                                            style: theme.textTheme.bodyMedium
+                                                ?.copyWith(
+                                              color: Colors.white70,
+                                            ),
+                                          ),
                                         ),
-                                      ]
-                                    : null,
-                              ),
-                              alignment: Alignment.center,
-                              child: _StoryReactionIcon(
-                                reaction: reactionLabel,
-                                size: isSelected ? 28 : 24,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            // Text(
-                            //   _storyReactionLabel(context, reactionLabel),
-                            //   style: theme.textTheme.bodySmall?.copyWith(
-                            //     color: Colors.white,
-                            //     fontWeight: isSelected
-                            //         ? FontWeight.w600
-                            //         : FontWeight.normal,
-                            //   ),
-                            // ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
+                                        const SizedBox(width: 8),
+                                        const Icon(Icons.send,
+                                            color: Colors.white70, size: 20),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              }
+
+                              final String reactionLabel =
+                                  _reactionOrder[index - 1];
+                              final bool isSelected = selected == reactionLabel;
+                              return GestureDetector(
+                                onTap: () => _handleTap(reactionLabel),
+                                child: Container(
+                                  key: _iconKeys[reactionLabel],
+                                  width: 48,
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? Colors.white
+                                        : Colors.black54,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? Colors.white
+                                          : Colors.white24,
+                                      width: 1,
+                                    ),
+                                    boxShadow: isSelected
+                                        ? [
+                                            BoxShadow(
+                                              color: Colors.white
+                                                  .withValues(alpha: .35),
+                                              blurRadius: 14,
+                                              spreadRadius: 2,
+                                            ),
+                                          ]
+                                        : null,
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: _StoryReactionIcon(
+                                    reaction: reactionLabel,
+                                    size: isSelected ? 28 : 24,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 ),
                 ..._flyingReactions.map((flying) {
@@ -1612,24 +1646,6 @@ String _storyReactionAsset(String reaction) {
   }
 }
 
-String _storyReactionLabel(BuildContext context, String reaction) {
-  switch (normalizeSocialReaction(reaction)) {
-    case 'Love':
-      return getTranslated('reaction_love', context) ?? 'Love';
-    case 'HaHa':
-      return getTranslated('reaction_haha', context) ?? 'Haha';
-    case 'Wow':
-      return getTranslated('reaction_wow', context) ?? 'Wow';
-    case 'Sad':
-      return getTranslated('reaction_sad', context) ?? 'Sad';
-    case 'Angry':
-      return getTranslated('reaction_angry', context) ?? 'Angry';
-    case 'Like':
-    default:
-      return getTranslated('reaction_like', context) ?? 'Like';
-  }
-}
-
 String? _relativeTimeText(BuildContext context, DateTime? time) {
   if (time == null) return null;
   final Duration diff = DateTime.now().difference(time);
@@ -1651,4 +1667,16 @@ String? _relativeTimeText(BuildContext context, DateTime? time) {
   final int weeks = (diff.inDays / 7).floor();
   final String unit = getTranslated('weeks_short', context) ?? 'w';
   return '$weeks $unit';
+}
+
+String? _resolveStoryMediaUrl(String? url) {
+  if (url == null) return null;
+  final String trimmed = url.trim();
+  if (trimmed.isEmpty) return null;
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed;
+  }
+  final String base = AppConstants.socialBaseUrl.replaceAll(RegExp(r'/$'), '');
+  final String path = trimmed.startsWith('/') ? trimmed : '/$trimmed';
+  return '$base$path';
 }

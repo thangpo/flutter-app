@@ -649,6 +649,10 @@ class SocialLiveRepository {
         _isTruthy(map['is_admin'] ?? map['admin'] ?? map['is_moderator']);
     final bool isOwner =
         _isTruthy(map['is_owner'] ?? map['owner'] ?? map['is_creator']);
+    final int? followersCount =
+        _coerceInt(map['followers_count'] ?? map['followers']);
+    final String? about =
+        _normalizeString(map['about'] ?? map['bio'] ?? map['about_me']);
 
     return SocialUser(
       id: id,
@@ -658,6 +662,8 @@ class SocialLiveRepository {
       userName: userName,
       avatarUrl: avatar,
       coverUrl: cover,
+      followersCount: followersCount,
+      about: about,
       isAdmin: isAdmin,
       isOwner: isOwner,
     );
