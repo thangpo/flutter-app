@@ -15,6 +15,7 @@ workflows:
         - $HOME/Library/Caches/Homebrew
         - ios/Pods
         - ios/Podfile.lock
+        - ios/Flutter/Generated.xcconfig
     scripts:
       # 1. CÀI COCOAPODS
       - name: Install CocoaPods
@@ -23,45 +24,46 @@ workflows:
           export PATH="/opt/homebrew/bin:$PATH"
           pod --version
 
-      # 2. CLEAN (NHƯNG GIỮ LẠI PODS & PODFILE.LOCK)
-      - name: Clean (Keep Pods)
+      # 2. CLEAN & PUB GET
+      - name: Flutter Pub Get
         script: |
           export PATH="/opt/homebrew/bin:$PATH"
-          flutter clean
           flutter pub get
-          rm -rf ~/Library/Developer/Xcode/DerivedData/*
 
-      # 3. CÀI PODS (CHỈ CHẠY NẾU CHƯA CÓ)
-      - name: Install Pods (If Needed)
+      # 3. CÀI PODS (LUÔN CHẠY 1 LẦN)
+      - name: Install Pods
         script: |
           export PATH="/opt/homebrew/bin:$PATH"
           cd ios
-          if [ ! -f "Podfile.lock" ]; then
-            echo "Podfile.lock not found → Running pod install"
-            /opt/homebrew/bin/pod install --verbose
-          else
-            echo "Podfile.lock exists → Skipping pod install"
-          fi
+          /opt/homebrew/bin/pod install --verbose
           cd ..
 
-      # 4. BUILD IOS (BỎ QUA POD INSTALL)
-      - name: Build iOS (Skip Pod Install)
+      # 4. BUILD BẰNG XCODEBUILD (BỎ QUA FLUTTER TOOLS)
+      - name: Build with xcodebuild
         script: |
           export PATH="/opt/homebrew/bin:$PATH"
-          flutter build ios --release --no-codesign --verbose
+          cd ios
+          xcodebuild -workspace Runner.xcworkspace \
+                     -scheme Runner \
+                     -configuration Release \
+                     -derivedDataPath build \
+                     -allowProvisioningUpdates \
+                     -quiet \
+                     CODE_SIGNING_REQUIRED=NO \
+                     CODE_SIGNING_ALLOWED=NO
+          cd ..
 
       # 5. PACKAGE IPA
       - name: Package IPA
         script: |
           mkdir -p Payload
-          cp -R build/ios/Release-iphoneos/Runner.app Payload/
+          cp -R ios/build/Build/Products/Release-iphoneos/Runner.app Payload/
           zip -r Runner.ipa Payload
           rm -rf Payload
           mv Runner.ipa build/
 
     artifacts:
       - build/Runner.ipa
-      - ios/Podfile.lock
 
     publishing:
       email:
