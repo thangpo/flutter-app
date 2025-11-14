@@ -1,6 +1,10 @@
 platform :ios, '15.0'  # Tăng từ 14.0 → 15.0
 
-# Tắt analytics CocoaPods
+source 'https://cdn.cocoapods.org/'
+# source 'https://cdn.jsdelivr.net/cocoa/Specs/'
+platform :ios, '14.0'
+
+# Disable CocoaPods analytics to speed up CI/CD
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 
 project 'Runner', {
