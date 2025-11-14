@@ -3077,6 +3077,11 @@ class SocialRepository {
   }
 
   List<SocialUser> parseUsers(Response res, {int? max}) {
+    final Iterable<dynamic>? explicitUsers = _extractUsersArray(res.data);
+    if (explicitUsers != null) {
+      return _parseUsersFromIterable(explicitUsers, max: max);
+    }
+
     final Set<String> seen = <String>{};
     final List<SocialUser> users = <SocialUser>[];
 
@@ -3116,6 +3121,32 @@ class SocialRepository {
     visit(res.data);
     if (max != null && users.length > max) {
       return users.sublist(0, max);
+    }
+    return users;
+  }
+
+  Iterable<dynamic>? _extractUsersArray(dynamic data) {
+    if (data is Map) {
+      final dynamic direct = data['users'];
+      if (direct is Iterable) return direct;
+      final dynamic nested = data['data'];
+      if (nested is Map) {
+        final dynamic nestedUsers = nested['users'];
+        if (nestedUsers is Iterable) return nestedUsers;
+      }
+    }
+    return null;
+  }
+
+  List<SocialUser> _parseUsersFromIterable(Iterable<dynamic> source, {int? max}) {
+    final List<SocialUser> users = <SocialUser>[];
+    final Set<String> seen = <String>{};
+    for (final dynamic raw in source) {
+      if (raw is! Map) continue;
+      final SocialUser? user = _parseUser(raw);
+      if (user == null || !seen.add(user.id)) continue;
+      users.add(user);
+      if (max != null && users.length >= max) break;
     }
     return users;
   }
@@ -3535,6 +3566,20 @@ class SocialRepository {
           map['i_follow'] ??
           map['following'],
     );
+    final String? genderText =
+        _normalizeString(map['gender_text'] ?? map['gender']);
+    final String? birthday = _normalizeString(map['birthday']);
+    final Map<String, dynamic> details = (map['details'] is Map)
+        ? Map<String, dynamic>.from(map['details'])
+        : const <String, dynamic>{};
+    final int? followersCount = _coerceInt(
+      map['followers_count'] ??
+          map['followers'] ??
+          details['followers_count'] ??
+          details['followers'],
+    );
+    final String? about =
+        _normalizeString(map['about'] ?? map['bio'] ?? details['about']);
 
     return SocialUser(
       id: id,
@@ -3544,6 +3589,10 @@ class SocialRepository {
       userName: userName,
       avatarUrl: avatar,
       coverUrl: cover,
+      genderText: genderText,
+      birthday: birthday,
+      followersCount: followersCount,
+      about: about,
       isAdmin: isAdmin,
       isOwner: isOwner,
       isFriend: isFriend,
@@ -3617,6 +3666,20 @@ class SocialRepository {
             .toString();
     final String? avatar = _absoluteUrl(avatarRaw);
     final String? cover = _absoluteUrl(coverRaw);
+    final String? genderText =
+        _normalizeString(map['gender_text'] ?? map['gender']);
+    final String? birthday = _normalizeString(map['birthday']);
+    final Map<String, dynamic> details = (map['details'] is Map)
+        ? Map<String, dynamic>.from(map['details'])
+        : const <String, dynamic>{};
+    final int? followersCount = _coerceInt(
+      map['followers_count'] ??
+          map['followers'] ??
+          details['followers_count'] ??
+          details['followers'],
+    );
+    final String? about =
+        _normalizeString(map['about'] ?? map['bio'] ?? details['about']);
 
     return SocialUser(
       id: id,
@@ -3626,6 +3689,10 @@ class SocialRepository {
       userName: userName,
       avatarUrl: avatar,
       coverUrl: cover,
+      genderText: genderText,
+      birthday: birthday,
+      followersCount: followersCount,
+      about: about,
     );
   }
 

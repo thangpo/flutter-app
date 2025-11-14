@@ -393,19 +393,17 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
       return;
     }
     FocusScope.of(context).unfocus();
-    final TextEditingController controller =
-        TextEditingController(text: _textController.text);
     final SocialController socialController = context.read<SocialController>();
     if (!socialController.loadingPostColors &&
         socialController.postBackgroundPresets.isEmpty) {
       socialController.loadPostBackgrounds(force: true);
     }
-    String selectedId = _selectedBackgroundId ??
+    final String? initialId = _selectedBackgroundId ??
         (socialController.postBackgroundPresets.isNotEmpty
             ? socialController.postBackgroundPresets.first.id
             : (PostBackgroundPresets.defaults.isNotEmpty
                 ? PostBackgroundPresets.defaults.first.id
-                : ''));
+                : null));
     final _BackgroundPickerResult? result =
         await showModalBottomSheet<_BackgroundPickerResult>(
       context: context,
@@ -415,176 +413,14 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (BuildContext ctx) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom,
-          ),
-          child: StatefulBuilder(
-            builder: (BuildContext ctx, StateSetter setModalState) {
-              final ThemeData theme = Theme.of(ctx);
-              return Consumer<SocialController>(
-                builder: (BuildContext context, SocialController social, _) {
-                  final List<PostBackgroundPreset> presets =
-                      social.postBackgroundPresets.isNotEmpty
-                          ? social.postBackgroundPresets
-                          : PostBackgroundPresets.defaults;
-                  if (presets.isNotEmpty &&
-                      presets.every((PostBackgroundPreset element) =>
-                          element.id != selectedId)) {
-                    selectedId = presets.first.id;
-                  }
-                  final PostBackgroundPreset preset =
-                      PostBackgroundPresets.findById(presets, selectedId) ??
-                          presets.first;
-                  final bool canSave = controller.text.trim().isNotEmpty;
-                  return SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                getTranslated(
-                                        'select_background_color', context) ??
-                                    'Select background',
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                            if (_hasBackground)
-                              TextButton(
-                                onPressed: () => Navigator.of(ctx).pop(
-                                  _BackgroundPickerResult(
-                                    null,
-                                    controller.text.trim(),
-                                  ),
-                                ),
-                                child: Text(
-                                  getTranslated('remove_background', context) ??
-                                      'Remove',
-                                ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 18),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 36,
-                          ),
-                          decoration: preset.decoration(
-                            borderRadius: BorderRadius.circular(24),
-                          ),
-                          child: TextField(
-                            controller: controller,
-                            maxLines: 5,
-                            minLines: 3,
-                            textAlign: TextAlign.center,
-                            textCapitalization: TextCapitalization.sentences,
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              color: preset.textColor,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            cursorColor: preset.textColor,
-                            decoration: InputDecoration(
-                              hintText: getTranslated(
-                                    'post_background_hint',
-                                    context,
-                                  ) ??
-                                  'Share something...',
-                              hintStyle: TextStyle(
-                                color: preset.textColor.withOpacity(.7),
-                              ),
-                              border: InputBorder.none,
-                            ),
-                            onChanged: (_) => setModalState(() {}),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: presets
-                              .map(
-                                (PostBackgroundPreset option) =>
-                                    GestureDetector(
-                                  onTap: () {
-                                    setModalState(() {
-                                      selectedId = option.id;
-                                    });
-                                  },
-                                  child: Container(
-                                    width: 58,
-                                    height: 58,
-                                    decoration: option.decoration(
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: selectedId == option.id
-                                          ? Border.all(
-                                              color: theme.colorScheme.primary,
-                                              width: 3,
-                                            )
-                                          : null,
-                                    ),
-                                    child: selectedId == option.id
-                                        ? Icon(
-                                            Icons.check,
-                                            color: option.textColor,
-                                          )
-                                        : null,
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                        ),
-                        const SizedBox(height: 24),
-                        Row(
-                          children: [
-                            TextButton(
-                              onPressed: () => Navigator.of(ctx).pop(),
-                              child: Text(
-                                  getTranslated('cancel', context) ?? 'Cancel'),
-                            ),
-                            const Spacer(),
-                            ElevatedButton(
-                              onPressed: canSave
-                                  ? () => Navigator.of(ctx).pop(
-                                        _BackgroundPickerResult(
-                                          selectedId,
-                                          controller.text.trim(),
-                                        ),
-                                      )
-                                  : null,
-                              child: Text(
-                                getTranslated('apply_background', context) ??
-                                    'Apply',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              );
-            },
-          ),
+        return _BackgroundPickerSheet(
+          initialText: _textController.text,
+          initialBackgroundId: initialId,
+          canRemoveExisting: _hasBackground,
         );
       },
     );
-    if (!mounted) {
-      controller.dispose();
-      return;
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      controller.dispose();
-    });
-    if (result == null) return;
+    if (!mounted || result == null) return;
     setState(() {
       _selectedBackgroundId = result.backgroundId;
       final String trimmed = result.text.trim();
@@ -736,6 +572,8 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
         onTap: _openBackgroundPicker,
       ),
     ];
+    final bool isKeyboardVisible =
+        MediaQuery.of(context).viewInsets.bottom > 0;
 
     return Scaffold(
       appBar: AppBar(
@@ -808,7 +646,12 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
                 ),
               ),
             ),
-            _buildActionsList(actions, theme),
+            _buildActionsList(
+              context,
+              actions,
+              theme,
+              isKeyboardVisible,
+            ),
           ],
         ),
       ),
@@ -1200,10 +1043,82 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
     );
   }
 
-  Widget _buildActionsList(List<_ComposeAction> actions, ThemeData theme) {
+  Widget _buildActionsList(
+    BuildContext context,
+    List<_ComposeAction> actions,
+    ThemeData theme,
+    bool compact,
+  ) {
     final ColorScheme cs = theme.colorScheme;
+    final double safeBottom = MediaQuery.of(context).padding.bottom;
+    final double bottomPadding = safeBottom > 12 ? safeBottom : 12;
+    final Widget fullList = Column(
+      key: const ValueKey('full_actions'),
+      mainAxisSize: MainAxisSize.min,
+      children: actions.map((action) {
+        return InkWell(
+          onTap: action.onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: action.color.withOpacity(.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(action.icon, color: action.color),
+                ),
+                const SizedBox(width: 14),
+                Text(
+                  action.label,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+
+    final Widget compactList = SingleChildScrollView(
+      key: const ValueKey('compact_actions'),
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
+        children: actions
+            .map(
+              (action) => Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: Tooltip(
+                  message: action.label,
+                  child: InkWell(
+                    onTap: action.onTap,
+                    borderRadius: BorderRadius.circular(24),
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: action.color.withOpacity(.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(action.icon, color: action.color),
+                    ),
+                  ),
+                ),
+              ),
+            )
+            .toList(),
+      ),
+    );
+
     return Container(
       width: double.infinity,
+      padding: EdgeInsets.only(bottom: bottomPadding),
       decoration: BoxDecoration(
         color: cs.surface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
@@ -1215,36 +1130,9 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
           ),
         ],
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: actions.map((action) {
-          return InkWell(
-            onTap: action.onTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: action.color.withOpacity(.12),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(action.icon, color: action.color),
-                  ),
-                  const SizedBox(width: 14),
-                  Text(
-                    action.label,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }).toList(),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 200),
+        child: compact ? compactList : fullList,
       ),
     );
   }
@@ -1948,4 +1836,213 @@ class _BackgroundPickerResult {
   final String text;
 
   const _BackgroundPickerResult(this.backgroundId, this.text);
+}
+
+class _BackgroundPickerSheet extends StatefulWidget {
+  final String initialText;
+  final String? initialBackgroundId;
+  final bool canRemoveExisting;
+
+  const _BackgroundPickerSheet({
+    required this.initialText,
+    required this.initialBackgroundId,
+    required this.canRemoveExisting,
+  });
+
+  @override
+  State<_BackgroundPickerSheet> createState() => _BackgroundPickerSheetState();
+}
+
+class _BackgroundPickerSheetState extends State<_BackgroundPickerSheet> {
+  late final TextEditingController _controller;
+  String? _selectedId;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialText);
+    _selectedId = widget.initialBackgroundId;
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handlePresetTap(String id) {
+    if (_selectedId == id) return;
+    setState(() {
+      _selectedId = id;
+    });
+  }
+
+  void _apply() {
+    final String text = _controller.text.trim();
+    if (text.isEmpty || _selectedId == null) return;
+    Navigator.of(context).pop(
+      _BackgroundPickerResult(_selectedId, text),
+    );
+  }
+
+  void _removeBackground() {
+    Navigator.of(context).pop(
+      _BackgroundPickerResult(null, _controller.text.trim()),
+    );
+  }
+
+  void _cancel() {
+    Navigator.of(context).pop();
+  }
+
+  String? _ensureValidSelection(List<PostBackgroundPreset> presets) {
+    if (presets.isEmpty) return null;
+    final String? current = _selectedId;
+    final bool hasCurrent = current != null &&
+        presets.any((PostBackgroundPreset preset) => preset.id == current);
+    if (hasCurrent) return current;
+    final String fallback = presets.first.id;
+    if (current != fallback) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _selectedId = fallback;
+          });
+        }
+      });
+    }
+    return fallback;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final SocialController social = context.watch<SocialController>();
+    final List<PostBackgroundPreset> presets =
+        social.postBackgroundPresets.isNotEmpty
+            ? social.postBackgroundPresets
+            : PostBackgroundPresets.defaults;
+    final String? effectiveId = _ensureValidSelection(presets);
+    final PostBackgroundPreset? preset = effectiveId != null && presets.isNotEmpty
+        ? PostBackgroundPresets.findById(presets, effectiveId) ??
+            presets.first
+        : (presets.isNotEmpty ? presets.first : null);
+    final bool canSave = _controller.text.trim().isNotEmpty &&
+        effectiveId != null;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    getTranslated('select_background_color', context) ??
+                        'Select background',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                if (widget.canRemoveExisting)
+                  TextButton(
+                    onPressed: _removeBackground,
+                    child: Text(
+                      getTranslated('remove_background', context) ?? 'Remove',
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            if (preset != null)
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 36),
+                decoration: preset.decoration(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: TextField(
+                  controller: _controller,
+                  maxLines: 5,
+                  minLines: 3,
+                  textAlign: TextAlign.center,
+                  textCapitalization: TextCapitalization.sentences,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    color: preset.textColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  cursorColor: preset.textColor,
+                  decoration: InputDecoration(
+                    hintText: getTranslated('post_background_hint', context) ??
+                        'Share something...',
+                    hintStyle: TextStyle(
+                      color: preset.textColor.withOpacity(.7),
+                    ),
+                    border: InputBorder.none,
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+            const SizedBox(height: 20),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: presets
+                  .map(
+                    (PostBackgroundPreset option) => GestureDetector(
+                      onTap: () => _handlePresetTap(option.id),
+                      child: Container(
+                        width: 58,
+                        height: 58,
+                        decoration: option.decoration(
+                          borderRadius: BorderRadius.circular(16),
+                          border: effectiveId == option.id
+                              ? Border.all(
+                                  color: theme.colorScheme.primary,
+                                  width: 3,
+                                )
+                              : null,
+                        ),
+                        child: effectiveId == option.id
+                            ? Icon(
+                                Icons.check,
+                                color: option.textColor,
+                              )
+                            : null,
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                TextButton(
+                  onPressed: _cancel,
+                  child: Text(
+                    getTranslated('cancel', context) ?? 'Cancel',
+                  ),
+                ),
+                const Spacer(),
+                ElevatedButton(
+                  onPressed: canSave ? _apply : null,
+                  child: Text(
+                    getTranslated('apply_background', context) ?? 'Apply',
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
