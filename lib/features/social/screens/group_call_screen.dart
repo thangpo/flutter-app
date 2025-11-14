@@ -1,9 +1,12 @@
-// G:\flutter-app\lib\features\social\screens\group_call_screen.dart
+// lib/features/social/screens/group_call_screen.dart
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+
+// dùng navigatorKey làm fallback pop
+import 'package:flutter_sixvalley_ecommerce/main.dart' show navigatorKey;
 
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_call_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_chat_controller.dart';
@@ -52,13 +55,10 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   bool _leaving = false;
   String? _error;
 
-  // Auto-close guard when status becomes idle/ended
-  bool _closingByStatus = false;
-
   bool get _isVideo => widget.mediaType == 'video';
   bool get _isCreator => _gc.isCreator;
 
-  // ✅ Luôn trả về int an toàn
+  // Luôn trả về int an toàn
   int get _myId {
     try {
       final ctrl = context.read<GroupChatController>();
@@ -79,26 +79,6 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     return widget.callId == null;
   }
 
-  void _handleStatusChanged(CallStatus st) {
-    if (!mounted) return;
-    setState(() {}); // sync UI như cũ
-
-    if (_leaving) return; // đã rời thủ công
-
-    // Khi controller cleanup (idle) hoặc báo ended → tự đóng màn hình
-    if (st == CallStatus.idle || st == CallStatus.ended) {
-      if (_closingByStatus) return;
-      _closingByStatus = true;
-      _leaving = true; // tránh leave trùng trong dispose
-
-      _disposeMediaAndPCs().whenComplete(() {
-        if (mounted) {
-          Navigator.of(context).maybePop();
-        }
-      });
-    }
-  }
-
   @override
   void initState() {
     super.initState();
@@ -110,7 +90,16 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     _gc.onPeersChanged = (peers) {
       _reconcilePeers(peers);
     };
-    _gc.onStatusChanged = _handleStatusChanged;
+    _gc.onStatusChanged = (st) async {
+      // Khi server báo ended/idle ở nơi khác -> tự đóng UI
+      if ((st == CallStatus.ended || st == CallStatus.idle) && !_leaving) {
+        _leaving = true;
+        await _disposeMediaAndPCs();
+        await _popScreen();
+        return;
+      }
+      if (mounted) setState(() {});
+    };
 
     _start();
   }
@@ -140,7 +129,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(_error!)));
-        Navigator.of(context).maybePop();
+        await _popScreen();
       }
       return;
     } finally {
@@ -234,7 +223,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
             'stun:stun1.l.google.com:19302',
           ],
         },
-        // ✅ TURN fallback
+        // TURN fallback
         {
           'urls': [
             'turn:social.vnshop247.com:3478?transport=udp',
@@ -247,7 +236,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
         },
       ],
       'sdpSemantics': 'unified-plan',
-      // 'iceTransportPolicy': 'relay', // bật khi cần ép đi TURN
+      // 'iceTransportPolicy': 'relay',
       'bundlePolicy': 'max-bundle',
     };
 
@@ -264,7 +253,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       }
     }
 
-    // ===== BẮT BUỘC: transceiver recv cho unified-plan =====
+    // ===== transceiver recv cho unified-plan =====
     try {
       await pc.addTransceiver(
         kind: RTCRtpMediaType.RTCRtpMediaTypeAudio,
@@ -420,7 +409,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     await pc.setRemoteDescription(RTCSessionDescription(sdp, 'offer'));
 
     final answer = await pc.createAnswer({
-      // ✅ đảm bảo nhận media khi trả lời
+      // đảm bảo nhận media khi trả lời
       'offerToReceiveAudio': 1,
       'offerToReceiveVideo': 1,
     });
@@ -463,7 +452,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
         ? null
         : ev['sdpMid'] as String?;
 
-    // ✅ de-dupe ICE per peer
+    // de-dupe ICE per peer
     final key = '$cand|${mid ?? ""}|${mline ?? -1}';
     final seen = _addedCandKeysByUser.putIfAbsent(fromId, () => <String>{});
     if (seen.contains(key)) return;
@@ -488,7 +477,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       final callId = _gc.currentCallId;
       if (callId != null) {
         if (_isCreator) {
-          await _gc.endRoom(callId); // ✅ creator đóng phòng
+          await _gc.endRoom(callId); // creator đóng phòng
         } else {
           await _gc.leaveRoom(callId);
         }
@@ -496,8 +485,51 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     } catch (_) {
     } finally {
       await _disposeMediaAndPCs();
-      if (mounted) Navigator.of(context).maybePop();
+      await _popScreen();
     }
+  }
+
+  // helper pop cứng: thử nhiều đường + removeRoute fallback
+  Future<void> _popScreen() async {
+    if (!mounted) return;
+
+    // 1) Pop bằng context hiện tại
+    try {
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+        return;
+      }
+    } catch (_) {}
+
+    // 2) Pop rootNavigator
+    try {
+      if (Navigator.of(context, rootNavigator: true).canPop()) {
+        Navigator.of(context, rootNavigator: true).pop();
+        return;
+      }
+    } catch (_) {}
+
+    // 3) Pop qua navigatorKey (nếu màn được mở bằng navigatorKey)
+    try {
+      if ((navigatorKey.currentState?.canPop() ?? false)) {
+        navigatorKey.currentState?.pop();
+        return;
+      }
+    } catch (_) {}
+
+    // 4) Hạ sách: removeRoute(thisRoute) khỏi stack
+    try {
+      final route = ModalRoute.of(context);
+      if (route != null) {
+        navigatorKey.currentState?.removeRoute(route);
+        return;
+      }
+    } catch (_) {}
+
+    // 5) Cùng lắm thì về root
+    try {
+      navigatorKey.currentState?.popUntil((r) => r.isFirst);
+    } catch (_) {}
   }
 
   Future<void> _disposeMediaAndPCs() async {
@@ -540,12 +572,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     _gc.onStatusChanged = null;
 
     final callId = _gc.currentCallId;
-    final st = _gc.status;
-
-    // Chỉ gọi leave nếu còn trong call và chưa rời bằng luồng khác
-    if (callId != null &&
-        !_leaving &&
-        (st == CallStatus.ongoing || st == CallStatus.ringing)) {
+    if (callId != null && !_leaving) {
       _gc.leaveRoom(callId).catchError((_) {});
     }
 
