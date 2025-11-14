@@ -1,11 +1,8 @@
 // lib/features/social/controllers/group_call_controller.dart
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/webrtc_group_signaling_repository.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/group_call_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart' show navigatorKey;
 
 enum CallStatus { idle, ringing, ongoing, ended }
 
@@ -20,7 +17,6 @@ class GroupCallController extends ChangeNotifier {
   bool _pollingEnabled = false;
   Timer? _pollTimer;
   bool _pollInFlight = false;
-
   int _tick = 0;
 
   void Function(Map<String, dynamic> ev)? onOffer;
@@ -30,7 +26,7 @@ class GroupCallController extends ChangeNotifier {
   void Function(Set<int> peers)? onPeersChanged;
   void Function(CallStatus status)? onStatusChanged;
 
-  // ✅ mới: đánh dấu mình có phải là creator của phòng hiện tại không
+  // Đánh dấu mình có phải creator phòng hiện tại không
   bool _isCreator = false;
   bool get isCreator => _isCreator;
 
@@ -40,21 +36,21 @@ class GroupCallController extends ChangeNotifier {
   Timer? _inboxTimer;
   String? _watchGroupId;
   int? _lastNotifiedCallId; // dedupe theo call_id
-  bool _opening = false;
   void Function(Map<String, dynamic> call)? onIncoming;
 
+  /// Chỉ poll inbox và gọi onIncoming; KHÔNG tự điều hướng UI
   void watchGroupInbox(
     String groupId, {
     Duration period = const Duration(seconds: 3),
-    bool autoOpen = true,
+    bool autoOpen = false, // giữ tham số cho tương thích, nhưng bỏ auto open
   }) {
     if (_watchGroupId != null && _watchGroupId != groupId) {
       stopWatchingInbox();
     }
     _watchGroupId = groupId;
-    _inboxTick(autoOpen: autoOpen);
+    _inboxTick();
     _inboxTimer?.cancel();
-    _inboxTimer = Timer.periodic(period, (_) => _inboxTick(autoOpen: autoOpen));
+    _inboxTimer = Timer.periodic(period, (_) => _inboxTick());
     debugPrint(
         '[GROUP-INBOX] Watching group=$groupId every ${period.inSeconds}s');
   }
@@ -64,15 +60,12 @@ class GroupCallController extends ChangeNotifier {
     _inboxTimer = null;
     _watchGroupId = null;
     _lastNotifiedCallId = null;
-    _opening = false;
     debugPrint('[GROUP-INBOX] Stopped watching.');
   }
 
-  Future<void> forceCheckInbox({bool autoOpen = true}) async {
-    await _inboxTick(autoOpen: autoOpen);
-  }
+  Future<void> forceCheckInbox() async => _inboxTick();
 
-  Future<void> _inboxTick({required bool autoOpen}) async {
+  Future<void> _inboxTick() async {
     final gid = _watchGroupId;
     if (gid == null) return;
 
@@ -84,12 +77,11 @@ class GroupCallController extends ChangeNotifier {
       final statusStr = '${call['status'] ?? ''}';
       final media = (call['media'] == 'video') ? 'video' : 'audio';
 
-      // ✅ DEDUPE theo call_id, KHÔNG dựa vào 'joined'
       if (callId == null || _lastNotifiedCallId == callId) return;
       if (statusStr != 'ringing' && statusStr != 'ongoing') return;
 
       debugPrint(
-          '[GROUP-INBOX] Incoming group-call: call_id=$callId, gid=$gid, media=$media, status=$statusStr');
+          '[GROUP-INBOX] Incoming call: call_id=$callId, gid=$gid, media=$media, status=$statusStr');
       _lastNotifiedCallId = callId;
 
       onIncoming?.call({
@@ -98,25 +90,6 @@ class GroupCallController extends ChangeNotifier {
         'media': media,
         'status': statusStr,
       });
-
-      // Chỉ autoOpen khi được yêu cầu và chưa mở
-      if (autoOpen && !_opening) {
-        _opening = true;
-        final nav = navigatorKey.currentState;
-        if (nav != null) {
-          await nav.push(
-            MaterialPageRoute(
-              builder: (_) => GroupCallScreen(
-                groupId: gid,
-                mediaType: media,
-                callId: callId, // attach & join
-                groupName: 'Cuộc gọi nhóm',
-              ),
-            ),
-          );
-        }
-        _opening = false;
-      }
     } catch (e) {
       debugPrint('[GROUP-INBOX] inbox error: $e');
     }
@@ -140,9 +113,7 @@ class GroupCallController extends ChangeNotifier {
       throw Exception('no_call_id');
     }
 
-    // ✅ mình là creator của phòng này
     _isCreator = true;
-
     currentCallId = callId;
     status = CallStatus.ringing;
     notifyListeners();
@@ -155,9 +126,7 @@ class GroupCallController extends ChangeNotifier {
 
   // ====================== CALLEE FLOW ======================
   Future<void> attachAndJoin({required int callId}) async {
-    // ✅ callee không phải creator
     _isCreator = false;
-
     currentCallId = callId;
     status = CallStatus.ongoing;
     notifyListeners();
@@ -185,13 +154,19 @@ class GroupCallController extends ChangeNotifier {
   }
 
   // ====================== SEND SIGNALS ======================
-  Future<void> sendOffer(
-      {required int callId, required int toUserId, required String sdp}) async {
+  Future<void> sendOffer({
+    required int callId,
+    required int toUserId,
+    required String sdp,
+  }) async {
     await signaling.offer(callId: callId, toUserId: toUserId, sdp: sdp);
   }
 
-  Future<void> sendAnswer(
-      {required int callId, required int toUserId, required String sdp}) async {
+  Future<void> sendAnswer({
+    required int callId,
+    required int toUserId,
+    required String sdp,
+  }) async {
     await signaling.answer(callId: callId, toUserId: toUserId, sdp: sdp);
   }
 
@@ -246,14 +221,12 @@ class GroupCallController extends ChangeNotifier {
             case 'candidate':
               onCandidate?.call(ev);
               break;
-            default:
-              break;
           }
         }
       }
 
-      // refresh peers mỗi 5s
-      _tick = (_tick + 1) % 5;
+      // refresh peers mỗi 2s (có thể nâng lên 5s khi production)
+      _tick = (_tick + 1) % 2;
       if (_tick == 0) {
         final newPeers = await signaling.peers(callId: callId);
         final newSet = newPeers.toSet();
@@ -296,26 +269,22 @@ class GroupCallController extends ChangeNotifier {
     notifyListeners();
     _emitStatus();
     if (kDebugMode) {
-      print('GroupCallController: cleaned up (old call $oldId)');
+      debugPrint('GroupCallController: cleaned up (old call $oldId)');
     }
   }
 
-  // ✅ FIXED: extract call_id an toàn từ mọi dạng JSON
   int? _extractCallId(dynamic resp) {
     if (resp == null) return null;
-
     if (resp is Map) {
       dynamic v = resp['call_id'] ??
           resp['id'] ??
           resp['data']?['call_id'] ??
           resp['call']?['id'] ??
           resp['call']?['call_id'];
-
       if (v is int) return v;
       if (v is num) return v.toInt();
       if (v is String) return int.tryParse(v);
     }
-
     debugPrint('[GROUP-CALL] ⚠️ _extractCallId failed: $resp');
     return null;
   }

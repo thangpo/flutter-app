@@ -50,27 +50,75 @@ class WebRTCGroupSignalingRepositoryImpl
   final String serverKey;
   final Future<String?> Function() getAccessToken;
   final Duration requestTimeout;
+  final http.Client? _client; // optional DI
 
-  // ✅ Dùng router để né lỗi .php.php
-  static const String endpointPath = '/api/';
+  // Router mode để né /webrtc_group.php trực tiếp
+  static const String _endpointPath = '/api/';
+
+  late final Uri _endpointUri;
 
   WebRTCGroupSignalingRepositoryImpl({
     required this.baseUrl,
     required this.serverKey,
     required this.getAccessToken,
     this.requestTimeout = const Duration(seconds: 15),
-  }) {
-    _endpointUri = Uri.parse('$baseUrl$endpointPath');
+    http.Client? client,
+  }) : _client = client {
+    final root = baseUrl.endsWith('/')
+        ? baseUrl.substring(0, baseUrl.length - 1)
+        : baseUrl;
+    _endpointUri = Uri.parse('$root$_endpointPath');
     if (kDebugMode) {
       debugPrint('[SIGNALING] INIT endpoint=$_endpointUri (router mode)');
     }
   }
 
-  late Uri _endpointUri;
-
   String _maskKey(String key) {
     if (key.length < 10) return key;
     return '${key.substring(0, 5)}...${key.substring(key.length - 5)}';
+  }
+
+  Never _throwApiError(Map<String, dynamic> j, int httpCode) {
+    final api = j['api_status'];
+    final err = j['error'] ??
+        (j['errors'] is Map ? (j['errors']['error_text'] ?? '') : '') ??
+        'Unknown error';
+    throw GroupSignalingException(httpCode, 'api_status=$api: $err', j);
+  }
+
+  void _ensureOk(Map<String, dynamic> j,
+      {bool allow204 = false, int http = 200}) {
+    final st = j['api_status'];
+    if (st == 200) return;
+    if (allow204 && st == 204) return;
+    _throwApiError(j, http);
+  }
+
+  int? _asInt(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v is String) return int.tryParse(v);
+    return null;
+  }
+
+  List<int> _parsePeers(dynamic v) {
+    if (v is List) {
+      return v
+          .map((e) => _asInt(e) ?? 0)
+          .where((e) => e > 0)
+          .toList(growable: false);
+    }
+    return const <int>[];
+  }
+
+  List<Map<String, dynamic>> _parseEvents(dynamic v) {
+    if (v is List) {
+      return v
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList(growable: false);
+    }
+    return const <Map<String, dynamic>>[];
   }
 
   Future<Map<String, dynamic>> _post(
@@ -79,9 +127,11 @@ class WebRTCGroupSignalingRepositoryImpl
   }) async {
     final token = await getAccessToken();
     final body = <String, String>{
-      'type': 'webrtc_group', // 🔑 quan trọng cho router
+      'type': 'webrtc_group', // bắt buộc cho router
       'server_key': serverKey.trim(),
       if (token != null && token.isNotEmpty) 'access_token': token,
+      if (token != null && token.isNotEmpty)
+        's': token, // nhiều nhánh server chỉ đọc 's'
       ...fields,
     };
 
@@ -93,7 +143,17 @@ class WebRTCGroupSignalingRepositoryImpl
     }
 
     try {
-      final resp = await http.post(_endpointUri, body: body).timeout(
+      final client = _client ?? http.Client();
+      final resp = await client
+          .post(
+            _endpointUri,
+            headers: {
+              'Accept': 'application/json',
+              // Content-Type để http tự set urlencoded
+            },
+            body: body,
+          )
+          .timeout(
             requestTimeout,
             onTimeout: () => throw TimeoutException('Request timeout'),
           );
@@ -102,7 +162,8 @@ class WebRTCGroupSignalingRepositoryImpl
       final txt = resp.body;
       if (kDebugMode) {
         debugPrint(
-            '[SIGNALING] RESP $status ${txt.length > 700 ? txt.substring(0, 700) + "..." : txt}');
+          '[SIGNALING] RESP $status ${txt.length > 1200 ? txt.substring(0, 1200) + "..." : txt}',
+        );
       }
 
       if (status < 200 || status >= 300) {
@@ -114,12 +175,16 @@ class WebRTCGroupSignalingRepositoryImpl
         throw GroupSignalingException(status, 'Empty body');
       }
 
-      final json = jsonDecode(txt);
-      if (json is! Map) {
+      final decoded = jsonDecode(txt);
+      if (decoded is! Map) {
         throw GroupSignalingException(status, 'Invalid JSON', txt);
       }
+      final json = Map<String, dynamic>.from(decoded);
 
-      return Map<String, dynamic>.from(json);
+      // WoWonder thường trả api_status trong body
+      _ensureOk(json, allow204: allow204, http: status);
+
+      return json;
     } catch (e) {
       if (e is GroupSignalingException) rethrow;
       throw GroupSignalingException(0, 'Network/Timeout error: $e');
@@ -145,21 +210,16 @@ class WebRTCGroupSignalingRepositoryImpl
   @override
   Future<List<int>> join({required int callId}) async {
     final json = await _post({'action': 'join', 'call_id': '$callId'});
-    return (json['peers'] as List?)
-            ?.map((e) => int.tryParse('$e') ?? 0)
-            .where((e) => e > 0)
-            .toList() ??
-        [];
+    // peers có thể nằm trực tiếp hoặc dưới data.peers
+    final peers = _parsePeers(json['peers'] ?? json['data']?['peers']);
+    return peers;
   }
 
   @override
   Future<List<int>> peers({required int callId}) async {
     final json = await _post({'action': 'peers', 'call_id': '$callId'});
-    return (json['peers'] as List?)
-            ?.map((e) => int.tryParse('$e') ?? 0)
-            .where((e) => e > 0)
-            .toList() ??
-        [];
+    final peers = _parsePeers(json['peers'] ?? json['data']?['peers']);
+    return peers;
   }
 
   @override
@@ -211,12 +271,12 @@ class WebRTCGroupSignalingRepositoryImpl
   @override
   Future<List<Map<String, dynamic>>> poll({required int callId}) async {
     final json = await _post({'action': 'poll', 'call_id': '$callId'});
-    final items = (json['items'] as List?)
-            ?.map<Map<String, dynamic>>(
-                (e) => Map<String, dynamic>.from(e as Map))
-            .toList() ??
-        [];
-    return items;
+    // server có thể trả items, events, hoặc data.items
+    final list = json['items'] ??
+        json['events'] ??
+        json['data']?['items'] ??
+        json['data']?['events'];
+    return _parseEvents(list);
   }
 
   @override
@@ -234,6 +294,9 @@ class WebRTCGroupSignalingRepositoryImpl
     final json =
         await _post({'action': 'inbox', 'group_id': groupId}, allow204: true);
     if (json['api_status'] == 204) return null;
-    return Map<String, dynamic>.from(json['call'] ?? {});
+    // call có thể ở call hoặc data.call
+    final call = (json['call'] ?? json['data']?['call']);
+    if (call is Map) return Map<String, dynamic>.from(call);
+    return null;
   }
 }

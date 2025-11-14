@@ -130,7 +130,6 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   Future<void> _prepareLocalMedia() async {
     await _localRenderer.initialize();
 
-    // Có thể nâng constraints theo nhu cầu; giữ đơn giản + ổn định
     final Map<String, dynamic> constraints = {
       'audio': true,
       'video': _isVideo
@@ -214,7 +213,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
             'stun:stun1.l.google.com:19302',
           ],
         },
-        // ✅ TURN fallback (tham khảo cấu hình 1-1)
+        // ✅ TURN fallback
         {
           'urls': [
             'turn:social.vnshop247.com:3478?transport=udp',
@@ -227,13 +226,13 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
         },
       ],
       'sdpSemantics': 'unified-plan',
-      // Debug NAT: ép toàn bộ qua TURN khi cần
-      // 'iceTransportPolicy': 'relay',
+      // 'iceTransportPolicy': 'relay', // bật khi cần ép đi TURN
+      'bundlePolicy': 'max-bundle',
     };
 
     final pc = await createPeerConnection(config);
 
-    // Unified-Plan: addTrack các track local
+    // ===== Local tracks (send) =====
     final s = _localStream;
     if (s != null) {
       for (final t in s.getAudioTracks()) {
@@ -244,7 +243,19 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       }
     }
 
-    // ✅ Giới hạn bitrate video gửi đi để ổn định (~800 kbps)
+    // ===== BẮT BUỘC: transceiver recv cho unified-plan =====
+    try {
+      await pc.addTransceiver(
+        kind: RTCRtpMediaType.RTCRtpMediaTypeAudio,
+        init: RTCRtpTransceiverInit(direction: TransceiverDirection.RecvOnly),
+      );
+      await pc.addTransceiver(
+        kind: RTCRtpMediaType.RTCRtpMediaTypeVideo,
+        init: RTCRtpTransceiverInit(direction: TransceiverDirection.RecvOnly),
+      );
+    } catch (_) {}
+
+    // (Tùy chọn) giới hạn bitrate video gửi đi (~800 kbps)
     try {
       final senders = await pc.getSenders();
       for (final sn in senders) {
@@ -260,11 +271,9 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
           ));
         }
       }
-    } catch (_) {
-      // Có thể không hỗ trợ ở một số nền tảng — bỏ qua
-    }
+    } catch (_) {}
 
-    // ICE: gửi candidate lên server
+    // ICE out
     pc.onIceCandidate = (c) {
       if (c.candidate == null) return;
       final callId = _gc.currentCallId;
@@ -278,26 +287,47 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       );
     };
 
-    // Nhận remote stream
-    pc.onTrack = (RTCTrackEvent event) async {
-      if (event.streams.isNotEmpty) {
-        final stream = event.streams[0];
-        final r = _remoteRendererByUser[peerId] ?? RTCVideoRenderer();
-        if (!_remoteRendererByUser.containsKey(peerId)) {
-          await r.initialize();
-          _remoteRendererByUser[peerId] = r;
-        }
-        r.srcObject = stream;
-        if (mounted) setState(() {});
+    // ===== Remote media in =====
+    pc.onTrack = (RTCTrackEvent e) async {
+      // 1) ưu tiên dùng stream có sẵn
+      MediaStream? stream = e.streams.isNotEmpty ? e.streams.first : null;
+
+      // 2) fallback khi streams trống (unified-plan)
+      if (stream == null) {
+        stream = await createLocalMediaStream('remote_$peerId');
+        await stream.addTrack(e.track);
       }
+
+      var r = _remoteRendererByUser[peerId];
+      if (r == null) {
+        r = RTCVideoRenderer();
+        await r.initialize();
+        _remoteRendererByUser[peerId] = r;
+      }
+      r.srcObject = stream;
+      if (mounted) setState(() {});
     };
 
-    // ✅ ICE restart khi rớt
-    pc.onIceConnectionState = (state) async {
-      if (state == RTCIceConnectionState.RTCIceConnectionStateDisconnected ||
-          state == RTCIceConnectionState.RTCIceConnectionStateFailed) {
+    // Debug/khôi phục ICE
+    pc.onIceConnectionState = (st) async {
+      debugPrint('[ICE][$peerId] $st');
+      if (st == RTCIceConnectionState.RTCIceConnectionStateDisconnected ||
+          st == RTCIceConnectionState.RTCIceConnectionStateFailed) {
         await _attemptIceRestart(peerId, pc);
       }
+    };
+    pc.onConnectionState = (st) => debugPrint('[PC][$peerId] $st');
+
+    // (Optional) hỗ trợ Plan-B cũ: onAddStream
+    pc.onAddStream = (MediaStream stream) async {
+      var r = _remoteRendererByUser[peerId];
+      if (r == null) {
+        r = RTCVideoRenderer();
+        await r.initialize();
+        _remoteRendererByUser[peerId] = r;
+      }
+      r.srcObject = stream;
+      if (mounted) setState(() {});
     };
 
     _pcByUser[peerId] = pc;
@@ -333,7 +363,6 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     } catch (_) {
       // ignore
     } finally {
-      // cho ICE gathering một chút rồi mới cho phép lần kế tiếp
       Future.delayed(const Duration(seconds: 4), () {
         _iceRestartingByUser[peerId] = false;
       });
@@ -344,7 +373,10 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     final pc = _pcByUser[peerId];
     if (pc == null) return;
 
-    final offer = await pc.createOffer({});
+    final offer = await pc.createOffer({
+      'offerToReceiveAudio': 1,
+      'offerToReceiveVideo': 1,
+    });
     await pc.setLocalDescription(offer);
 
     final callId = _gc.currentCallId;
@@ -366,7 +398,11 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     final pc = _pcByUser[fromId]!;
     await pc.setRemoteDescription(RTCSessionDescription(sdp, 'offer'));
 
-    final answer = await pc.createAnswer({});
+    final answer = await pc.createAnswer({
+      // ✅ đảm bảo nhận media khi trả lời
+      'offerToReceiveAudio': 1,
+      'offerToReceiveVideo': 1,
+    });
     await pc.setLocalDescription(answer);
 
     final callId = _gc.currentCallId;
@@ -482,7 +518,6 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     _gc.onPeersChanged = null;
     _gc.onStatusChanged = null;
 
-    // Khi dispose không auto "end" để tránh đóng phòng ngoài ý muốn
     final callId = _gc.currentCallId;
     if (callId != null) {
       _gc.leaveRoom(callId).catchError((_) {});
