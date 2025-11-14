@@ -52,13 +52,21 @@ workflows:
           flutter pub get
           rm -rf ~/Library/Developer/Xcode/DerivedData/*
 
-      # 3. BUILD IOS (ĐỂ FLUTTER TỰ POD INSTALL)
+      # 3. DEBUG POD INSTALL — BẮT LỖI THẬT SỰ Ở ĐÂY
+      - name: Debug pod install
+        script: |
+          export PATH="/opt/homebrew/bin:$PATH"
+          set -x
+          cd ios
+          pod install --verbose
+
+      # 4. BUILD IOS
       - name: Build iOS
         script: |
           export PATH="/opt/homebrew/bin:$PATH"
           flutter build ios --release --no-codesign --verbose
 
-      # 4. PACKAGE IPA
+      # 5. PACKAGE IPA
       - name: Package IPA
         script: |
           mkdir -p Payload
