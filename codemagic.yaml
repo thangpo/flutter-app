@@ -6,14 +6,22 @@ workflows:
     environment:
       flutter: stable
       xcode: latest
+
     scripts:
       - name: Get Flutter packages
         script: |
           flutter pub get
 
-      - name: Update CocoaPods Specs
+      - name: Clean Cocoapods (force reset)
         script: |
-          pod repo update
+          rm -rf ios/Pods
+          rm -f ios/Podfile.lock
+
+      - name: Install Pods using CDN
+        script: |
+          cd ios
+          pod install --repo-update
+          cd ..
 
       - name: Build iOS (no code sign)
         script: |
@@ -21,7 +29,6 @@ workflows:
 
       - name: Package IPA
         script: |
-          set -e
           mkdir -p build/ios/ipa/Payload
           cp -R build/ios/iphoneos/Runner.app build/ios/ipa/Payload/
           cd build/ios/ipa
