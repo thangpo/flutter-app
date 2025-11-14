@@ -9,6 +9,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_reel.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post_color.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_search_result.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post_reaction.dart';
 
 abstract class SocialServiceInterface {
   Future<List<SocialPost>> getNewsFeed({int limit, String? afterPostId});
@@ -55,6 +56,19 @@ abstract class SocialServiceInterface {
   });
   Future<SocialUser?> getCurrentUser();
   Future<SocialPost?> getPostById({required String postId});
+  Future<List<SocialPostReaction>> getPostReactions({
+    required String postId,
+    String? reactionFilter,
+    int limit = 25,
+    String? offset,
+  });
+  Future<List<SocialPostReaction>> getReactions({
+    required String targetId,
+    required String type,
+    String? reactionFilter,
+    int limit = 25,
+    String? offset,
+  });
   Future<List<SocialComment>> getPostComments(
       {required String postId, int? limit, int? offset});
   Future<List<SocialComment>> getCommentReplies({required String commentId});
