@@ -1,3 +1,4 @@
+//G:\flutter-app\lib\features\social\controllers\call_controller.dart
 import 'dart:convert';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
@@ -5,12 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../domain/models/ice_candidate_lite.dart';
 import '../domain/repositories/webrtc_signaling_repository.dart';
 
-/// CallController quản lý state & signaling cho 1-1 call (WebRTC).
-/// Tương thích với code cũ:
-/// - getter: ready, activeCallId, activeMediaType
-/// - methods: init(), startCall({calleeId, mediaType}), endCall(),
-///            attachIncoming({callId, mediaType})
-/// Đồng thời cung cấp: sendOffer/Answer/Candidate, action(), attachCall().
+
 class CallController extends ChangeNotifier {
   CallController({WebRTCSignalingRepository? signaling})
       : signaling = signaling ?? WebRTCSignalingRepository();
