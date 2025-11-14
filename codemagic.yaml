@@ -12,10 +12,12 @@ workflows:
         script: |
           flutter pub get
 
-      - name: Clean Cocoapods (force reset)
+      - name: Clean Flutter & Cocoapods
         script: |
+          flutter clean
           rm -rf ios/Pods
           rm -f ios/Podfile.lock
+          export COCOAPODS_DISABLE_STATS=true
 
       - name: Install Pods using CDN
         script: |
@@ -25,12 +27,12 @@ workflows:
 
       - name: Build iOS (no code sign)
         script: |
-          flutter build ios --release --no-codesign
+          flutter build ios --release --no-codesign --verbose
 
       - name: Package IPA
         script: |
           mkdir -p build/ios/ipa/Payload
-          cp -R build/ios/iphoneos/Runner.app build/ios/ipa/Payload/
+          cp -R build/ios/Release-iphoneos/Runner.app build/ios/ipa/Payload/
           cd build/ios/ipa
           zip -r Runner.ipa Payload
           mv Runner.ipa ../../Runner.ipa
