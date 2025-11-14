@@ -96,7 +96,7 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 final database = AppDatabase();
-
+ 
 // tránh mở màn nhận cuộc gọi trùng
 bool _incomingCallRouting = false;
 

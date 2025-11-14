@@ -52,6 +52,9 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   bool _leaving = false;
   String? _error;
 
+  // Auto-close guard when status becomes idle/ended
+  bool _closingByStatus = false;
+
   bool get _isVideo => widget.mediaType == 'video';
   bool get _isCreator => _gc.isCreator;
 
@@ -76,6 +79,26 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     return widget.callId == null;
   }
 
+  void _handleStatusChanged(CallStatus st) {
+    if (!mounted) return;
+    setState(() {}); // sync UI như cũ
+
+    if (_leaving) return; // đã rời thủ công
+
+    // Khi controller cleanup (idle) hoặc báo ended → tự đóng màn hình
+    if (st == CallStatus.idle || st == CallStatus.ended) {
+      if (_closingByStatus) return;
+      _closingByStatus = true;
+      _leaving = true; // tránh leave trùng trong dispose
+
+      _disposeMediaAndPCs().whenComplete(() {
+        if (mounted) {
+          Navigator.of(context).maybePop();
+        }
+      });
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -87,9 +110,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     _gc.onPeersChanged = (peers) {
       _reconcilePeers(peers);
     };
-    _gc.onStatusChanged = (_) {
-      if (mounted) setState(() {});
-    };
+    _gc.onStatusChanged = _handleStatusChanged;
 
     _start();
   }
@@ -519,7 +540,12 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     _gc.onStatusChanged = null;
 
     final callId = _gc.currentCallId;
-    if (callId != null) {
+    final st = _gc.status;
+
+    // Chỉ gọi leave nếu còn trong call và chưa rời bằng luồng khác
+    if (callId != null &&
+        !_leaving &&
+        (st == CallStatus.ongoing || st == CallStatus.ringing)) {
       _gc.leaveRoom(callId).catchError((_) {});
     }
 

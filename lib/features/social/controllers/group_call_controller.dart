@@ -26,23 +26,24 @@ class GroupCallController extends ChangeNotifier {
   void Function(Set<int> peers)? onPeersChanged;
   void Function(CallStatus status)? onStatusChanged;
 
-  // Đánh dấu mình có phải creator phòng hiện tại không
   bool _isCreator = false;
   bool get isCreator => _isCreator;
+
+  // ✅ auto-close khi peer rỗng liên tục (member)
+  int _emptyPeersCount = 0;
 
   void init() {}
 
   // ====================== WATCH INBOX ======================
   Timer? _inboxTimer;
   String? _watchGroupId;
-  int? _lastNotifiedCallId; // dedupe theo call_id
+  int? _lastNotifiedCallId;
   void Function(Map<String, dynamic> call)? onIncoming;
 
-  /// Chỉ poll inbox và gọi onIncoming; KHÔNG tự điều hướng UI
   void watchGroupInbox(
     String groupId, {
     Duration period = const Duration(seconds: 3),
-    bool autoOpen = false, // giữ tham số cho tương thích, nhưng bỏ auto open
+    bool autoOpen = false, // giữ tham số cho tương thích
   }) {
     if (_watchGroupId != null && _watchGroupId != groupId) {
       stopWatchingInbox();
@@ -149,6 +150,9 @@ class GroupCallController extends ChangeNotifier {
     try {
       await signaling.end(callId: callId);
     } finally {
+      // Phát 1 nhịp 'ended' để UI nắm bắt rồi cleanup → idle
+      status = CallStatus.ended;
+      _emitStatus();
       _cleanup();
     }
   }
@@ -225,17 +229,30 @@ class GroupCallController extends ChangeNotifier {
         }
       }
 
-      // refresh peers mỗi 2s (có thể nâng lên 5s khi production)
+      // refresh peers mỗi 2s (prod có thể tăng 5s)
       _tick = (_tick + 1) % 2;
       if (_tick == 0) {
         final newPeers = await signaling.peers(callId: callId);
         final newSet = newPeers.toSet();
+
+        // cập nhật participants
         if (!_setEquals(participants, newSet)) {
           participants
             ..clear()
             ..addAll(newSet);
           onPeersChanged?.call(Set<int>.from(participants));
           notifyListeners();
+        }
+
+        // ✅ Auto-close cho member nếu không còn ai trong 3 lần liên tiếp (~3s)
+        if (!_isCreator) {
+          _emptyPeersCount = participants.isEmpty ? (_emptyPeersCount + 1) : 0;
+          if (_emptyPeersCount >= 3) {
+            _cleanup();
+            return;
+          }
+        } else {
+          _emptyPeersCount = 0;
         }
       }
     } catch (e) {
