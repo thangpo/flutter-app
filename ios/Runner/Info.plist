@@ -17,11 +17,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-
-	<key>NSFaceIDUsageDescription</key>
-    <string>Ứng dụng cần dùng FaceID để xác thực</string>
-
 	<string>$(MARKETING_VERSION)</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Ứng dụng cần dùng FaceID để xác thực</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
 	<key>CFBundleURLTypes</key>
