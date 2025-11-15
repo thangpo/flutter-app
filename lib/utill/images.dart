@@ -252,4 +252,5 @@ class Images {
   static const String myReviewIconWhite = 'assets/svg/my_review_icon_white.svg';
   static const String uploadImageIcon = 'assets/svg/upload_image_icon.svg';
   static const String storeChatIcon = 'assets/svg/store_chat_icon.svg';
+  static const String pageImage = 'assets/images/page.png';
 }

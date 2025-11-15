@@ -194,6 +194,10 @@ import 'data/datasource/remote/dio/logging_interceptor.dart';
 import 'features/loyaltyPoint/domain/repositories/loyalty_point_repository.dart';
 import 'features/search_product/domain/repositories/search_product_repository.dart';
 import 'package:get/get.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_page_repository.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_page_service.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_page_service_interface.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_page_controller.dart';
 
 
 final sl = GetIt.instance;
@@ -268,6 +272,11 @@ Future<void> init() async {
         dioClient: sl<DioClient>(),
         sharedPreferences: sl<SharedPreferences>(),
       ));
+  sl.registerLazySingleton<SocialPageRepository>(() => SocialPageRepository(
+    dioClient: sl<DioClient>(),
+    sharedPreferences: sl<SharedPreferences>(),
+  ));
+
 
   // Provider
   sl.registerFactory(() => CategoryController(categoryServiceInterface: sl()));
@@ -325,6 +334,11 @@ Future<void> init() async {
   sl.registerFactory(() => SocialFriendsController(sl()));
   sl.registerFactory(
       () => SocialGroupController(service: sl<SocialGroupServiceInterface>()));
+  sl.registerFactory(
+        () => SocialPageController(
+      service: sl<SocialPageServiceInterface>(),
+    ),
+  );
 
   //interface
   AddressRepoInterface addressRepoInterface =
@@ -634,6 +648,13 @@ Future<void> init() async {
         socialRepository: sl<SocialRepository>(),
         ecomService: sl<ProfileServiceInterface>(),
   ));
+
   sl.registerLazySingleton<SocialGroupServiceInterface>(
       () => SocialGroupService(socialRepository: sl<SocialRepository>()));
+  sl.registerLazySingleton<SocialPageServiceInterface>(
+        () => SocialPageService(
+      socialPageRepository: sl<SocialPageRepository>(),
+    ),
+  );
+
 }

@@ -80,6 +80,9 @@ import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_call_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/webrtc_group_signaling_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_page_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_page_service_interface.dart';
+
 
 
 
@@ -409,6 +412,10 @@ Future<void> main() async {
       ChangeNotifierProvider(
         create: (_) => di.sl<SocialGroupController>(),
       ),
+      ChangeNotifierProvider(
+        create: (_) => di.sl<SocialPageController>(),
+      ),
+
       ChangeNotifierProvider(
         create: (_) => GroupChatController(GroupChatRepository()),
       ),
