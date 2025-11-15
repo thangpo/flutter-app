@@ -25,7 +25,7 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
   DateTime? _startDate;
   DateTime? _endDate;
   final _websiteCtrl = TextEditingController();
-  final _pageCtrl = TextEditingController();
+  // final _pageCtrl = TextEditingController();
   final _locationCtrl = TextEditingController();
   final List<String> _audienceList = [];
   final _audienceCtrl = TextEditingController();
@@ -144,17 +144,17 @@ class _CreateAdsScreenState extends State<CreateAdsScreen> {
                       onPickImage: _pickImage,
                       isDark: isDark,
                     ),
-                    Step2Widget(
-                      headlineCtrl: _headlineCtrl,
-                      descCtrl: _descCtrl,
-                      startDate: _startDate,
-                      endDate: _endDate,
-                      websiteCtrl: _websiteCtrl,
-                      pageCtrl: _pageCtrl,
-                      onPickStartDate: () => _pickDate(true),
-                      onPickEndDate: () => _pickDate(false),
-                      isDark: isDark,
-                    ),
+                    // Step2Widget(
+                    //   headlineCtrl: _headlineCtrl,
+                    //   descCtrl: _descCtrl,
+                    //   startDate: _startDate,
+                    //   endDate: _endDate,
+                    //   websiteCtrl: _websiteCtrl,
+                    //   // pageCtrl: _pageCtrl,
+                    //   onPickStartDate: () => _pickDate(true),
+                    //   onPickEndDate: () => _pickDate(false),
+                    //   isDark: isDark,
+                    // ),
                     Step3Widget(
                       locationCtrl: _locationCtrl,
                       audienceList: _audienceList,
@@ -349,7 +349,7 @@ class Step2Widget extends StatelessWidget {
           prefixIcon: Icon(icon, color: Colors.blue.shade700),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           filled: true,
-          fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey[800] : Colors.grey[50],
+          // fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey[800] : Colors.grey[50],
         ),
         validator: (v) => v!.trim().isEmpty ? 'Bắt buộc' : null,
       ),
@@ -367,7 +367,7 @@ class Step2Widget extends StatelessWidget {
             prefixIcon: const Icon(Icons.calendar_today),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             filled: true,
-            fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey[800] : Colors.grey[50],
+            // fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey[800] : Colors.grey[50],
           ),
           child: Text(date != null ? '${date.day}/${date.month}/${date.year}' : 'Chọn ngày'),
         ),
@@ -486,7 +486,7 @@ class Step3Widget extends StatelessWidget {
           prefixIcon: Icon(icon, color: Colors.blue.shade700),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           filled: true,
-          fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey[800] : Colors.grey[50],
+          // fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey[800] : Colors.grey[50],
         ),
         validator: (v) => v!.trim().isEmpty ? 'Bắt buộc' : null,
       ),
@@ -499,7 +499,7 @@ class Step3Widget extends StatelessWidget {
       decoration: InputDecoration(
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         filled: true,
-        fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey[800] : Colors.grey[50],
+        // fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey[800] : Colors.grey[50],
       ),
       items: items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
       onChanged: onChanged,
