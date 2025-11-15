@@ -11,6 +11,12 @@ workflows:
         script: |
           flutter pub get
 
+      - name: Clean iOS Pods & update repo
+        script: |
+          cd ios
+          rm -rf Pods Podfile.lock
+          pod repo update
+
       - name: Build iOS (no code sign)
         script: |
           flutter build ios --release --no-codesign
