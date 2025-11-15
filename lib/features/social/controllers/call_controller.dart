@@ -8,6 +8,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/
 /// Quản lý WebRTC signaling (server WoWonder).
 class CallController extends ChangeNotifier {
   WebRTCSignalingRepository? _repo;
+  Future<void>? _initFuture;
 
   bool ready = false;
   String? lastError;
@@ -22,7 +23,27 @@ class CallController extends ChangeNotifier {
   String? sdpAnswer;
   List<IceCandidatePayload> iceCandidates = const [];
 
-  Future<void> init() async {
+  Future<void> init({bool force = false}) async {
+    if (force) {
+      _repo = null;
+      ready = false;
+      _initFuture = null;
+    }
+    await ensureInitialized();
+  }
+
+  Future<void> ensureInitialized() async {
+    if (ready && _repo != null) return;
+    _initFuture ??= _doInit();
+    try {
+      await _initFuture;
+    } catch (e) {
+      _initFuture = null;
+      rethrow;
+    }
+  }
+
+  Future<void> _doInit() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(AppConstants.socialAccessToken) ?? '';
@@ -41,6 +62,7 @@ class CallController extends ChangeNotifier {
       ready = false;
       lastError = '$e';
       notifyListeners();
+      rethrow;
     }
   }
 
@@ -49,7 +71,7 @@ class CallController extends ChangeNotifier {
   /// Caller bắt đầu gọi
   Future<int> startCall(
       {required int calleeId, String mediaType = 'video'}) async {
-    _ensureRepo();
+    await _ensureRepo();
     try {
       final id =
           await _repo!.createCall(recipientId: calleeId, mediaType: mediaType);
@@ -68,7 +90,7 @@ class CallController extends ChangeNotifier {
   /// Callee gắn vào một cuộc gọi đang đổ chuông (để poll & thao tác).
   Future<void> attachIncoming(
       {required int callId, required String mediaType}) async {
-    _ensureRepo();
+    await _ensureRepo();
     activeCallId = callId;
     activeMediaType = mediaType;
     _startPolling();
@@ -77,7 +99,7 @@ class CallController extends ChangeNotifier {
 
   /// Kết thúc cuộc gọi (gửi action=end + dọn trạng thái)
   Future<void> endCall() async {
-    _ensureRepo();
+    await _ensureRepo();
     final id = activeCallId;
     _stopPolling();
     if (id != null) {
@@ -90,14 +112,14 @@ class CallController extends ChangeNotifier {
 
   /// Gửi OFFER (Caller)
   Future<void> sendOffer(String sdp) async {
-    _ensureRepo();
+    await _ensureRepo();
     final id = _requireCallId();
     await _repo!.sendOffer(callId: id, sdp: sdp);
   }
 
   /// Gửi ANSWER (Callee)
   Future<void> sendAnswer(String sdp) async {
-    _ensureRepo();
+    await _ensureRepo();
     final id = _requireCallId();
     await _repo!.sendAnswer(callId: id, sdp: sdp);
   }
@@ -108,7 +130,7 @@ class CallController extends ChangeNotifier {
     String? sdpMid,
     int? sdpMLineIndex,
   }) async {
-    _ensureRepo();
+    await _ensureRepo();
     final id = _requireCallId();
     await _repo!.sendCandidate(
       callId: id,
@@ -120,7 +142,7 @@ class CallController extends ChangeNotifier {
 
   /// Thao tác nhanh: 'answer' | 'decline' | 'end'
   Future<String> action(String actionName) async {
-    _ensureRepo();
+    await _ensureRepo();
     final id = _requireCallId();
     final st = await _repo!.action(callId: id, action: actionName);
     callStatus = st;
@@ -130,7 +152,7 @@ class CallController extends ChangeNotifier {
 
   /// Poll thủ công
   Future<void> pollOnce() async {
-    _ensureRepo();
+    await _ensureRepo();
     final id = _requireCallId();
     final pr = await _repo!.poll(callId: id);
     _applyPollResult(pr);
@@ -175,7 +197,8 @@ class CallController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _ensureRepo() {
+  Future<void> _ensureRepo() async {
+    await ensureInitialized();
     if (!ready || _repo == null) {
       throw StateError('CallController not ready. Hãy gọi init() trước.');
     }

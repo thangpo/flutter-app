@@ -244,8 +244,7 @@ Future<void> main() async {
       ChangeNotifierProvider(
         create: (_) => GroupChatController(GroupChatRepository()),
       ),
-          ChangeNotifierProvider(create: (_) => CallController()..init()),
-
+      ChangeNotifierProvider(create: (_) => CallController()),
       ChangeNotifierProvider(
         create: (_) => SocialNotificationsController(
           repo: SocialNotificationsRepository(),

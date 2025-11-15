@@ -416,6 +416,14 @@ final Set<int> _handledCallIds = {}; // chặn popup lặp
   // ====== GỌI 1-1 qua CallController ======
   Future<void> _startCall(String mediaType) async {
     final call = context.read<CallController>();
+    try {
+      await call.ensureInitialized();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Không thể khởi tạo CallController: $e')),
+      );
+      return;
+    }
     if (!call.ready) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('CallController chưa sẵn sàng')),

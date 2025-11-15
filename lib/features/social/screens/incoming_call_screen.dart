@@ -28,9 +28,26 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _attachController();
+    });
+  }
+
+  Future<void> _attachController() async {
     final call = context.read<CallController>();
-    // Gắn vào cuộc gọi để controller bắt đầu poll
-    call.attachIncoming(callId: widget.callId, mediaType: widget.mediaType);
+    try {
+      await call.ensureInitialized();
+      await call.attachIncoming(
+        callId: widget.callId,
+        mediaType: widget.mediaType,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Không thể kết nối cuộc gọi: $e')),
+      );
+      Navigator.of(context).pop();
+    }
   }
 
   Future<void> _answer() async {
