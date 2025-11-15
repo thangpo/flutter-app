@@ -2,87 +2,28 @@ workflows:
   ios-unsigned:
     name: iOS Unsigned Build
     instance_type: mac_mini_m2
-    max_build_duration: 120
+    max_build_duration: 60
     environment:
       flutter: stable
       xcode: latest
-      vars:
-        HOMEBREW_NO_AUTO_UPDATE: 1
-        HOMEBREW_NO_ANALYTICS: 1
-    cache:
-      cache_paths:
-        - $HOME/.pub-cache
-        - $HOME/Library/Caches/Homebrew
-        # Tạm thời bỏ cache Pods để tránh kéo lỗi cũ:
-        # - ios/Pods
-        # - ios/Podfile.lock
     scripts:
-      # 1. CÀI COCOAPODS
-      - name: Install CocoaPods
+      - name: Get Flutter packages
         script: |
-          brew install cocoapods
-          export PATH="/opt/homebrew/bin:$PATH"
-          pod --version
-
-      # 1.1 FIX REPO COCOAPODS (XOÁ JSDELIVR, DÙNG CDN CHÍNH THỨC)
-      - name: Fix CocoaPods Specs repo
-        script: |
-          export PATH="/opt/homebrew/bin:$PATH"
-
-          echo "=== CocoaPods repos BEFORE ==="
-          pod repo list || true
-
-          echo "=== Remove old Specs repos (jsDelivr or trunk) ==="
-          rm -rf ~/.cocoapods/repos/jsdelivr-cocoa || true
-          rm -rf ~/.cocoapods/repos/cdn.jsdelivr.net-* || true
-          rm -rf ~/.cocoapods/repos/trunk || true
-
-          echo "=== Add official CocoaPods CDN (trunk) ==="
-          pod repo add trunk https://cdn.cocoapods.org/
-          pod repo update
-
-          echo "=== CocoaPods repos AFTER ==="
-          pod repo list || true
-
-      # 2. CLEAN + PUB GET
-      - name: Clean & pub get
-        script: |
-          export PATH="/opt/homebrew/bin:$PATH"
-          flutter clean
           flutter pub get
-          rm -rf ~/Library/Developer/Xcode/DerivedData/*
 
-      # 3. DEBUG POD INSTALL — BẮT LỖI THẬT SỰ Ở ĐÂY
-      - name: Debug pod install
+      - name: Build iOS (no code sign)
         script: |
-          export PATH="/opt/homebrew/bin:$PATH"
-          set -x
-          cd ios
-          pod install --verbose
+          flutter build ios --release --no-codesign
 
-      # 4. BUILD IOS
-      - name: Build iOS
-        script: |
-          export PATH="/opt/homebrew/bin:$PATH"
-          flutter build ios --release --no-codesign --verbose
-
-      # 5. PACKAGE IPA
       - name: Package IPA
         script: |
-          mkdir -p Payload
-          cp -R build/ios/Release-iphoneos/Runner.app Payload/
+          set -e
+          mkdir -p build/ios/ipa/Payload
+          cp -R build/ios/iphoneos/Runner.app build/ios/ipa/Payload/
+          cd build/ios/ipa
           zip -r Runner.ipa Payload
-          rm -rf Payload
-          mv Runner.ipa build/
+          mv Runner.ipa ../../Runner.ipa
+          cd ../../..
 
     artifacts:
       - build/Runner.ipa
-      - ios/Podfile.lock
-
-    publishing:
-      email:
-        recipients:
-          - your-email@example.com
-        notify:
-          success: true
-          failure: true
