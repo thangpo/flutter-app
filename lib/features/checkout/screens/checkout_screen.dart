@@ -3,36 +3,36 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_sixvalley_ecommerce/main.dart';
-import 'package:flutter_sixvalley_ecommerce/features/address/controllers/address_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/address/screens/saved_address_list_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/cart/domain/models/cart_model.dart';
-import 'package:flutter_sixvalley_ecommerce/features/checkout/controllers/checkout_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/checkout/widgets/checkout_condition_checkbox.dart';
-import 'package:flutter_sixvalley_ecommerce/features/checkout/widgets/payment_method_bottom_sheet_widget.dart';
-import 'package:flutter_sixvalley_ecommerce/features/offline_payment/screens/offline_payment_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/profile/controllers/profile_contrroller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/shipping/controllers/shipping_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/utill/dimensions.dart';
+import 'package:flutter_sixvalley_ecommerce/utill/custom_themes.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/debounce_helper.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/price_converter.dart';
+import 'package:flutter_sixvalley_ecommerce/common/basewidget/amount_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:flutter_sixvalley_ecommerce/common/basewidget/custom_button_widget.dart';
+import 'package:flutter_sixvalley_ecommerce/features/cart/domain/models/cart_model.dart';
+import 'package:flutter_sixvalley_ecommerce/common/basewidget/custom_app_bar_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/cart/controllers/cart_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/common/basewidget/custom_textfield_widget.dart';
+import 'package:flutter_sixvalley_ecommerce/features/dashboard/screens/dashboard_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/features/coupon/controllers/coupon_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/splash/controllers/splash_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/utill/custom_themes.dart';
-import 'package:flutter_sixvalley_ecommerce/utill/dimensions.dart';
-import 'package:flutter_sixvalley_ecommerce/common/basewidget/amount_widget.dart';
-import 'package:flutter_sixvalley_ecommerce/common/basewidget/animated_custom_dialog_widget.dart';
-import 'package:flutter_sixvalley_ecommerce/common/basewidget/custom_app_bar_widget.dart';
-import 'package:flutter_sixvalley_ecommerce/common/basewidget/custom_button_widget.dart';
-import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
-import 'package:flutter_sixvalley_ecommerce/common/basewidget/custom_textfield_widget.dart';
-import 'package:flutter_sixvalley_ecommerce/features/checkout/widgets/choose_payment_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/features/checkout/widgets/coupon_apply_widget.dart';
-import 'package:flutter_sixvalley_ecommerce/features/checkout/widgets/shipping_details_widget.dart';
+import 'package:flutter_sixvalley_ecommerce/features/address/controllers/address_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/common/basewidget/animated_custom_dialog_widget.dart';
+import 'package:flutter_sixvalley_ecommerce/features/checkout/widgets/choose_payment_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/features/checkout/widgets/wallet_payment_widget.dart';
-import 'package:flutter_sixvalley_ecommerce/features/dashboard/screens/dashboard_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/profile/controllers/profile_contrroller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/checkout/controllers/checkout_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/shipping/controllers/shipping_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/checkout/widgets/shipping_details_widget.dart';
+import 'package:flutter_sixvalley_ecommerce/features/address/screens/saved_address_list_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/checkout/widgets/order_place_dialog_widget.dart';
+import 'package:flutter_sixvalley_ecommerce/features/checkout/widgets/checkout_condition_checkbox.dart';
+import 'package:flutter_sixvalley_ecommerce/features/offline_payment/screens/offline_payment_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/checkout/widgets/payment_method_bottom_sheet_widget.dart';
 
 
 class CheckoutScreen extends StatefulWidget {
@@ -76,6 +76,7 @@ class CheckoutScreenState extends State<CheckoutScreen> {
   final TextEditingController _controller = TextEditingController();
   final GlobalKey<FormState> passwordFormKey = GlobalKey<FormState>();
   final FocusNode _orderNoteNode = FocusNode();
+
   double _order = 0;
   double? _couponDiscount;
   double? _referralDiscount;
@@ -86,17 +87,10 @@ class CheckoutScreenState extends State<CheckoutScreen> {
   final Map<String, double> _originalShopFeesVND = {};
   final Map<String, String> _shopNames = {};
   final Map<String, double> _shopFreeDeliverySavings = {};
-  Map<String, dynamic> _buildCheckedIds() {
-    final Map<String, dynamic> checkedIds = {};
-    _shopShippingFeesVND.forEach((shopId, feeVND) {
-      checkedIds[shopId] = {
-        "name": _shopNames[shopId] ?? "Shop $shopId",
-        "fee": feeVND,
-      };
-    });
-    return checkedIds;
-  }
-  static const double USD_TO_VND_RATE = 26000.0;
+  bool _hasAnyFreeDelivery = false;
+  String? _lastShippingCalculationKey;
+
+  static const double USD_TO_VND_RATE = 26315.78947368420995189808;
   DebounceHelper debounceHelper = DebounceHelper(milliseconds: 500);
 
   @override
@@ -122,26 +116,22 @@ class CheckoutScreenState extends State<CheckoutScreen> {
     }
 
     Provider.of<CheckoutController>(context, listen: false).clearData();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _calculateShippingFeeIfNeeded();
+    });
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final couponProvider = Provider.of<CouponController>(context);
-    final checkoutProvider = Provider.of<CheckoutController>(context);
-
-    if (couponProvider.discount != null &&
-        checkoutProvider.addressIndex != null &&
-        widget.hasPhysical &&
-        !_isCalculatingShipping) {
-      debounceHelper.run(() {
-        if (mounted) {
-          _calculateShippingFee();
-        }
-      });
-    }
+  Map<String, dynamic> _buildCheckedIds() {
+    final Map<String, dynamic> checkedIds = {};
+    _shopShippingFeesVND.forEach((shopId, feeVND) {
+      checkedIds[shopId] = {
+        "name": _shopNames[shopId] ?? "Shop $shopId",
+        "fee": feeVND,
+      };
+    });
+    return checkedIds;
   }
-
   double _convertVNDtoUSD(double vndAmount) {
     return vndAmount / USD_TO_VND_RATE;
   }
@@ -156,7 +146,7 @@ class CheckoutScreenState extends State<CheckoutScreen> {
         }
       }
     }
-    debugPrint("Cart IDs by Group: $result");
+    debugPrint("📦 Cart IDs by Group: $result");
     return result;
   }
 
@@ -164,25 +154,70 @@ class CheckoutScreenState extends State<CheckoutScreen> {
     Map<String, (int, String, String, int?)> shopInfo = {};
     Map<String, int> groupIndexMap = {};
     int locationIndex = 0;
+
     for (final cart in widget.cartList) {
       if (!cart.isChecked! || cart.cartGroupId == null) continue;
       if (groupIndexMap.containsKey(cart.cartGroupId)) continue;
       groupIndexMap[cart.cartGroupId!] = locationIndex++;
     }
+
     for (final cart in widget.cartList) {
       if (!cart.isChecked! || cart.cartGroupId == null) continue;
       if (shopInfo.containsKey(cart.cartGroupId)) continue;
+
       final idx = groupIndexMap[cart.cartGroupId!];
       if (idx == null || idx >= widget.fromDistrictIds.length) continue;
+
       final districtId = widget.fromDistrictIds[idx];
       final wardId = widget.fromWardIds[idx];
       final shopId = cart.sellerIs == 'admin' ? 0 : cart.sellerId;
+
       if (districtId == null || wardId == null) continue;
+
       final shopName = cart.shopInfo ?? 'Shop #${cart.cartGroupId}';
       shopInfo[cart.cartGroupId!] = (districtId, wardId, shopName, shopId);
     }
-    debugPrint("Shop Info by Group: $shopInfo");
+
+    debugPrint("🏪 Shop Info by Group: $shopInfo");
     return shopInfo;
+  }
+
+  String _getShippingCalculationKey() {
+    final orderProvider = Provider.of<CheckoutController>(context, listen: false);
+    final addressController = Provider.of<AddressController>(context, listen: false);
+    final couponProvider = Provider.of<CouponController>(context, listen: false);
+
+    final addressIndex = orderProvider.addressIndex;
+    final addressId = addressIndex != null &&
+        addressController.addressList != null &&
+        addressIndex < addressController.addressList!.length
+        ? addressController.addressList![addressIndex].id
+        : null;
+
+    final couponCode = couponProvider.isApplied ? couponProvider.couponCode : '';
+
+    return '$addressId-$couponCode';
+  }
+
+  void _calculateShippingFeeIfNeeded() {
+    if (!widget.hasPhysical || widget.onlyDigital) {
+      return;
+    }
+
+    if (_isCalculatingShipping) {
+      debugPrint('⏳ Shipping calculation already in progress, skipping...');
+      return;
+    }
+
+    final currentKey = _getShippingCalculationKey();
+    if (currentKey == _lastShippingCalculationKey) {
+      debugPrint('✅ Shipping already calculated for this state: $currentKey');
+      return;
+    }
+
+    debugPrint('🔄 Recalculating shipping: $currentKey (prev: $_lastShippingCalculationKey)');
+    _lastShippingCalculationKey = currentKey;
+    _calculateShippingFee();
   }
 
   Future<bool> _checkFreeDeliveryForShop({
@@ -191,7 +226,8 @@ class CheckoutScreenState extends State<CheckoutScreen> {
     required int sellerId,
   }) async {
     try {
-      debugPrint("🚀 _checkFreeDeliveryForShop CALLED for sellerId=$sellerId, cartId=$cartId");
+      debugPrint("🚚 Checking free delivery for seller $sellerId (cart: $cartId, fee: $feeVND VND)");
+
       final response = await http.post(
         Uri.parse('https://vnshop247.com/api/v1/free/free-delivery'),
         headers: {
@@ -202,17 +238,21 @@ class CheckoutScreenState extends State<CheckoutScreen> {
           "fee": feeVND,
           "cart_id": cartId,
           "seller_id": sellerId,
+          "coupon_type": "free_delivery",
         }),
       );
+
       debugPrint("📭 Free delivery API response: ${response.statusCode} - ${response.body}");
-      debugPrint("Free Delivery API (cart_id: $cartId, seller_id: $sellerId): ${response.statusCode} - ${response.body}");
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data['ok'] == 1;
+        final isFree = data['ok'] == 1;
+        debugPrint(isFree ? "✅ Shop $sellerId: FREE DELIVERY" : "❌ Shop $sellerId: No free delivery");
+        return isFree;
       }
       return false;
     } catch (e) {
-      debugPrint("Error checking free delivery for seller $sellerId: $e");
+      debugPrint("⚠️ Error checking free delivery for seller $sellerId: $e");
       return false;
     }
   }
@@ -229,6 +269,10 @@ class CheckoutScreenState extends State<CheckoutScreen> {
       });
       return;
     }
+    if (_isCalculatingShipping) {
+      debugPrint('⏸️ Already calculating, skipping duplicate call');
+      return;
+    }
 
     final orderProvider = Provider.of<CheckoutController>(context, listen: false);
     final addressController = Provider.of<AddressController>(context, listen: false);
@@ -237,7 +281,7 @@ class CheckoutScreenState extends State<CheckoutScreen> {
         addressController.addressList == null ||
         orderProvider.addressIndex! >= addressController.addressList!.length) {
       setState(() {
-        _shippingError = 'Please select a delivery address';
+        _shippingError = 'Vui lòng chọn địa chỉ giao hàng';
         _calculatedShippingFee = 0;
         _shopShippingFeesVND.clear();
         _shopNames.clear();
@@ -253,7 +297,7 @@ class CheckoutScreenState extends State<CheckoutScreen> {
 
     if (toDistrictId == 0 || toWardCode.isEmpty) {
       setState(() {
-        _shippingError = 'Invalid delivery address';
+        _shippingError = 'Địa chỉ giao hàng không hợp lệ';
         _calculatedShippingFee = 0;
         _shopShippingFeesVND.clear();
         _shopNames.clear();
@@ -270,21 +314,17 @@ class CheckoutScreenState extends State<CheckoutScreen> {
       _shopNames.clear();
       _originalShopFeesVND.clear();
       _shopFreeDeliverySavings.clear();
+      _hasAnyFreeDelivery = false; // Reset flag
     });
 
     try {
       double totalShippingCostVND = 0;
       final cartIdsByGroup = _getCartIdsByGroupId();
       final shopInfoByGroup = _getShopInfoByGroupId();
-
       final couponProvider = Provider.of<CouponController>(context, listen: false);
-      final hasCoupon = couponProvider.isApplied;
+      final hasCoupon = couponProvider.isApplied && couponProvider.couponCode.isNotEmpty;
 
-      debugPrint("🎟️ Coupon status:");
-      debugPrint("hasCoupon (applied): $hasCoupon");
-      debugPrint("   → hasCoupon: $hasCoupon");
-      debugPrint("   → couponCode: '${couponProvider.couponCode}'");
-      debugPrint("   → discount: ${couponProvider.discount}");
+      debugPrint("🎟️ Coupon status: applied=${couponProvider.isApplied}, code='${couponProvider.couponCode}', discount=${couponProvider.discount}");
 
       for (final entry in cartIdsByGroup.entries) {
         final groupId = entry.key;
@@ -322,96 +362,95 @@ class CheckoutScreenState extends State<CheckoutScreen> {
           if (data['ok'] == true) {
             final feeVND = (data['totalShippingCost'] ?? 0).toDouble();
             final shopIdStr = shopId.toString();
-
             _originalShopFeesVND[shopIdStr] = feeVND;
             _shopShippingFeesVND[shopIdStr] = feeVND;
             _shopNames[shopIdStr] = shopName;
 
             debugPrint("💰 Shop $shopId: Original shipping fee = $feeVND VND");
-            debugPrint("🎟️ hasCoupon = $hasCoupon (discount: ${couponProvider.discount}, code: ${couponProvider.couponCode})");
 
             if (hasCoupon) {
-              debugPrint("🔍 BẮT ĐẦU kiểm tra free delivery cho shop $shopId ($shopName)...");
-
+              debugPrint("🔍 Checking free delivery for shop $shopId...");
               final cartIdForCheck = cartIds.first;
               final sellerIdForCheck = shopId ?? 0;
 
-              debugPrint("   → cart_id: $cartIdForCheck");
-              debugPrint("   → seller_id: $sellerIdForCheck");
-              debugPrint("   → fee: $feeVND VND");
-
               try {
-                debugPrint("   → Đang gọi API _checkFreeDeliveryForShop...");
                 final isFree = await _checkFreeDeliveryForShop(
                   feeVND: feeVND,
                   cartId: cartIdForCheck,
                   sellerId: sellerIdForCheck,
                 );
 
-                debugPrint("   → Kết quả trả về: isFree = $isFree");
-
                 if (isFree) {
                   _shopFreeDeliverySavings[shopIdStr] = feeVND;
                   _shopShippingFeesVND[shopIdStr] = 0;
-                  debugPrint("✅ Shop $shopId được MIỄN PHÍ vận chuyển! Tiết kiệm $feeVND VND");
+                  _hasAnyFreeDelivery = true;
+                  debugPrint("✅ Shop $shopId: FREE DELIVERY! Saved $feeVND VND");
                 } else {
-                  debugPrint("❌ Shop $shopId KHÔNG được miễn phí vận chuyển");
+                  debugPrint("❌ Shop $shopId: No free delivery");
                 }
               } catch (e) {
-                debugPrint("⚠️ Lỗi khi kiểm tra free delivery cho shop $shopId: $e");
+                debugPrint("⚠️ Error checking free delivery for shop $shopId: $e");
               }
             } else {
-              debugPrint("⚠️ KHÔNG CÓ COUPON - Bỏ qua kiểm tra free delivery");
-              debugPrint("   → discount: ${couponProvider.discount}");
-              debugPrint("   → couponCode: ${couponProvider.couponCode}");
+              debugPrint("ℹ️ No valid coupon - skipping free delivery check");
             }
 
             totalShippingCostVND += _shopShippingFeesVND[shopIdStr]!;
           } else {
-            setState(() {
-              _shippingError = data['message'] ?? 'Shipping calculation failed';
-              _isCalculatingShipping = false;
-            });
+            if (mounted) {
+              setState(() {
+                _shippingError = data['message'] ?? 'Không thể tính phí ship';
+                _isCalculatingShipping = false;
+              });
+            }
             return;
           }
         } else {
-          setState(() {
-            _shippingError = 'Server error: ${response.statusCode}';
-            _isCalculatingShipping = false;
-          });
+          if (mounted) {
+            setState(() {
+              _shippingError = 'Lỗi server: ${response.statusCode}';
+              _isCalculatingShipping = false;
+            });
+          }
           return;
         }
       }
 
       final totalShippingCostUSD = _convertVNDtoUSD(totalShippingCostVND);
 
-      debugPrint("📊 Final shipping summary:");
-      debugPrint("   Total VND: $totalShippingCostVND");
-      debugPrint("   Total USD: $totalShippingCostUSD");
-      debugPrint("   Free delivery savings: ${_shopFreeDeliverySavings.length} shops");
+      debugPrint("📊 Shipping calculation completed:");
+      debugPrint(" Total VND: $totalShippingCostVND");
+      debugPrint(" Total USD: $totalShippingCostUSD");
+      debugPrint(" Free delivery shops: ${_shopFreeDeliverySavings.length}");
+      debugPrint(" Has any free delivery: $_hasAnyFreeDelivery");
 
-      setState(() {
-        _calculatedShippingFee = totalShippingCostUSD;
-        _isCalculatingShipping = false;
-        _shippingError = null;
-      });
+      if (mounted) {
+        setState(() {
+          _calculatedShippingFee = totalShippingCostUSD;
+          _isCalculatingShipping = false;
+          _shippingError = null;
+        });
+      }
     } catch (e, stack) {
       debugPrint("❌ Exception in shipping calculation: $e\n$stack");
-      setState(() {
-        _shippingError = 'Network error: $e';
-        _isCalculatingShipping = false;
-        _calculatedShippingFee = 0;
-        _shopShippingFeesVND.clear();
-        _shopNames.clear();
-        _originalShopFeesVND.clear();
-        _shopFreeDeliverySavings.clear();
-      });
+      if (mounted) {
+        setState(() {
+          _shippingError = 'Lỗi mạng: $e';
+          _isCalculatingShipping = false;
+          _calculatedShippingFee = 0;
+          _shopShippingFeesVND.clear();
+          _shopNames.clear();
+          _originalShopFeesVND.clear();
+          _shopFreeDeliverySavings.clear();
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     _order = widget.totalOrderAmount + widget.discount;
+
     return Scaffold(
       resizeToAvoidBottomInset: true,
       key: _scaffoldKey,
@@ -457,10 +496,14 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                                         (orderProvider.isCheckCreateAccount &&
                                             (passwordFormKey.currentState?.validate() ?? false))) {
                                       String orderNote = orderProvider.orderNoteController.text.trim();
-                                      String couponCode = couponProvider.discount != null && couponProvider.discount != 0
+                                      String couponCode = (couponProvider.discount != null &&
+                                          couponProvider.discount! > 0 &&
+                                          !_hasAnyFreeDelivery)
                                           ? couponProvider.couponCode
                                           : '';
-                                      String couponCodeAmount = couponProvider.discount != null && couponProvider.discount != 0
+                                      String couponCodeAmount = (couponProvider.discount != null &&
+                                          couponProvider.discount! > 0 &&
+                                          !_hasAnyFreeDelivery)
                                           ? couponProvider.discount.toString()
                                           : '0';
 
@@ -473,7 +516,6 @@ class CheckoutScreenState extends State<CheckoutScreen> {
 
                                       if (orderProvider.paymentMethodIndex != -1) {
                                         final checkedIds = _buildCheckedIds();
-
                                         orderProvider.digitalPaymentPlaceOrder(
                                           orderNote: orderNote,
                                           customerId: Provider.of<AuthController>(context, listen: false).isLoggedIn()
@@ -576,15 +618,6 @@ class CheckoutScreenState extends State<CheckoutScreen> {
         builder: (context, authProvider, _) {
           return Consumer<CheckoutController>(
             builder: (context, orderProvider, _) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (orderProvider.addressIndex != null &&
-                    !_isCalculatingShipping &&
-                    _calculatedShippingFee == 0 &&
-                    widget.hasPhysical) {
-                  _calculateShippingFee();
-                }
-              });
-
               return Column(
                 children: [
                   Expanded(
@@ -605,10 +638,11 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                                 _shopNames.clear();
                                 _originalShopFeesVND.clear();
                                 _shopFreeDeliverySavings.clear();
+                                _lastShippingCalculationKey = null;
                               });
                               debounceHelper.run(() {
                                 if (mounted) {
-                                  _calculateShippingFee();
+                                  _calculateShippingFeeIfNeeded();
                                 }
                               });
                             },
@@ -617,7 +651,17 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                         if (Provider.of<AuthController>(context, listen: false).isLoggedIn())
                           Padding(
                             padding: const EdgeInsets.only(bottom: Dimensions.paddingSizeSmall),
-                            child: CouponApplyWidget(couponController: _controller, orderAmount: _order),
+                            child: Consumer<CheckoutController>(
+                              builder: (context, checkoutProvider, _) {
+                                final bool hasValidAddress = checkoutProvider.addressIndex != null &&
+                                    Provider.of<AddressController>(context, listen: false).addressList != null &&
+                                    checkoutProvider.addressIndex! < Provider.of<AddressController>(context, listen: false).addressList!.length;
+
+                                return hasValidAddress
+                                    ? CouponApplyWidget(couponController: _controller, orderAmount: _order)
+                                    : const SizedBox.shrink();
+                              },
+                            ),
                           ),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeSmall),
@@ -625,7 +669,10 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                         ),
                         Padding(
                           padding: const EdgeInsets.fromLTRB(
-                              Dimensions.paddingSizeDefault, Dimensions.paddingSizeDefault, Dimensions.paddingSizeDefault, Dimensions.paddingSizeSmall),
+                              Dimensions.paddingSizeDefault,
+                              Dimensions.paddingSizeDefault,
+                              Dimensions.paddingSizeDefault,
+                              Dimensions.paddingSizeSmall),
                           child: Text(
                             getTranslated('order_summary', context) ?? '',
                             style: textMedium.copyWith(
@@ -640,8 +687,8 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                             builder: (context, checkoutController, child) {
                               _couponDiscount = Provider.of<CouponController>(context).discount ?? 0;
                               _referralDiscount = Provider.of<CheckoutController>(context).referralAmount?.amount ?? 0;
-
                               double finalShippingFee = widget.hasPhysical ? _calculatedShippingFee : 0;
+                              double actualCouponDiscount = _hasAnyFreeDelivery ? 0 : (_couponDiscount ?? 0);
 
                               return Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -655,23 +702,6 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                                     title: '${getTranslated('sub_total', context)} (${widget.quantity} ${getTranslated('item', context)})',
                                     amount: PriceConverter.convertPrice(context, _order),
                                   ),
-
-                                  if (_shopFreeDeliverySavings.isNotEmpty)
-                                    Column(
-                                      children: _shopFreeDeliverySavings.entries.map((entry) {
-                                        final shopId = entry.key;
-                                        final savedVND = entry.value;
-                                        final savedUSD = _convertVNDtoUSD(savedVND);
-                                        final shopName = _shopNames[shopId] ?? "Shop $shopId";
-
-                                        return AmountWidget(
-                                          title: 'Miễn phí vận chuyển ($shopName)',
-                                          amount: '-${PriceConverter.convertPrice(context, savedUSD)}',
-                                          amountStyle: TextStyle(color: Colors.green),
-                                        );
-                                      }).toList(),
-                                    ),
-
                                   if (widget.hasPhysical)
                                     Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -682,17 +712,19 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                                               child: AmountWidget(
                                                 title: getTranslated('shipping_fee', context),
                                                 amount: _isCalculatingShipping
-                                                    ? 'Calculating...'
+                                                    ? 'Đang tính...'
                                                     : _shippingError != null
-                                                    ? 'Error'
+                                                    ? 'Lỗi'
                                                     : PriceConverter.convertPrice(context, finalShippingFee),
                                               ),
                                             ),
                                             if (_isCalculatingShipping)
-                                              const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                                              const SizedBox(
+                                                  width: 16,
+                                                  height: 16,
+                                                  child: CircularProgressIndicator(strokeWidth: 2)),
                                           ],
                                         ),
-
                                         if (!_isCalculatingShipping && _shippingError == null && _shopNames.isNotEmpty)
                                           Padding(
                                             padding: const EdgeInsets.only(left: 16, top: 4),
@@ -710,18 +742,31 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                                                   child: Row(
                                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                                     children: [
-                                                      Text(
-                                                        "• $shopName${isFree ? ' (Miễn phí)' : ''}",
-                                                        style: textRegular.copyWith(
-                                                          fontSize: Dimensions.fontSizeSmall,
-                                                          color: isFree ? Colors.green : Theme.of(context).hintColor,
+                                                      Expanded(
+                                                        child: Text(
+                                                          "• $shopName",
+                                                          style: textRegular.copyWith(
+                                                            fontSize: Dimensions.fontSizeSmall,
+                                                            color: Theme.of(context).hintColor,
+                                                          ),
                                                         ),
                                                       ),
+                                                      if (isFree)
+                                                        Text(
+                                                          PriceConverter.convertPrice(context, _convertVNDtoUSD(originalFeeVND)),
+                                                          style: textRegular.copyWith(
+                                                            fontSize: Dimensions.fontSizeSmall,
+                                                            decoration: TextDecoration.lineThrough,
+                                                            color: Theme.of(context).hintColor,
+                                                          ),
+                                                        ),
+                                                      const SizedBox(width: 8),
                                                       Text(
                                                         isFree ? 'Miễn phí' : PriceConverter.convertPrice(context, feeUSD),
                                                         style: textRegular.copyWith(
                                                           fontSize: Dimensions.fontSizeSmall,
                                                           color: isFree ? Colors.green : null,
+                                                          fontWeight: isFree ? FontWeight.bold : FontWeight.normal,
                                                         ),
                                                       ),
                                                     ],
@@ -732,7 +777,6 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                                           ),
                                       ],
                                     ),
-
                                   if (_shippingError != null)
                                     Padding(
                                       padding: const EdgeInsets.only(top: 4),
@@ -741,19 +785,54 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                                         style: const TextStyle(color: Colors.red, fontSize: 12),
                                       ),
                                     ),
+                                  AmountWidget(
+                                    title: getTranslated('discount', context),
+                                    amount: PriceConverter.convertPrice(context, widget.discount),
+                                  ),
+                                  if ((_couponDiscount ?? 0) > 0 && !_hasAnyFreeDelivery)
+                                    AmountWidget(
+                                      title: getTranslated('coupon_voucher', context),
+                                      amount: PriceConverter.convertPrice(context, _couponDiscount),
+                                    ),
+                                  if (_shopFreeDeliverySavings.isNotEmpty)
+                                    Column(
+                                      children: _shopFreeDeliverySavings.entries.map((entry) {
+                                        final shopId = entry.key;
+                                        final savedVND = entry.value;
+                                        final savedUSD = _convertVNDtoUSD(savedVND);
+                                        final shopName = _shopNames[shopId] ?? "Shop $shopId";
 
-                                  AmountWidget(title: getTranslated('discount', context), amount: PriceConverter.convertPrice(context, widget.discount)),
-                                  AmountWidget(title: getTranslated('coupon_voucher', context), amount: PriceConverter.convertPrice(context, _couponDiscount)),
-                                  AmountWidget(title: getTranslated('tax', context), amount: PriceConverter.convertPrice(context, widget.tax)),
+                                        return AmountWidget(
+                                          title: 'Miễn phí ship - $shopName',
+                                          amount: '-${PriceConverter.convertPrice(context, savedUSD)}',
+                                          amountStyle: const TextStyle(
+                                            color: Colors.green,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  AmountWidget(
+                                    title: getTranslated('tax', context),
+                                    amount: PriceConverter.convertPrice(context, widget.tax),
+                                  ),
                                   if ((_referralDiscount ?? 0) > 0)
-                                    AmountWidget(title: getTranslated('referral_discount', context), amount: PriceConverter.convertPrice(context, _referralDiscount)),
+                                    AmountWidget(
+                                      title: getTranslated('referral_discount', context),
+                                      amount: PriceConverter.convertPrice(context, _referralDiscount),
+                                    ),
                                   const SizedBox(height: Dimensions.paddingSizeSmall),
                                   Divider(height: 5, color: Theme.of(context).hintColor),
                                   AmountWidget(
                                     title: getTranslated('total_payable', context),
                                     amount: PriceConverter.convertPrice(
                                       context,
-                                      _order + finalShippingFee - (_referralDiscount ?? 0) - widget.discount - (_couponDiscount ?? 0) + widget.tax,
+                                      _order +
+                                          finalShippingFee -
+                                          (_referralDiscount ?? 0) -
+                                          widget.discount -
+                                          actualCouponDiscount +
+                                          widget.tax,
                                     ),
                                   ),
                                 ],
@@ -762,13 +841,20 @@ class CheckoutScreenState extends State<CheckoutScreen> {
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(Dimensions.paddingSizeDefault, Dimensions.paddingSizeDefault, Dimensions.paddingSizeDefault, 0),
+                          padding: const EdgeInsets.fromLTRB(
+                              Dimensions.paddingSizeDefault,
+                              Dimensions.paddingSizeDefault,
+                              Dimensions.paddingSizeDefault,
+                              0),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 '${getTranslated('order_note', context)}',
-                                style: textRegular.copyWith(fontSize: Dimensions.fontSizeLarge, color: Theme.of(context).textTheme.bodyLarge?.color),
+                                style: textRegular.copyWith(
+                                  fontSize: Dimensions.fontSizeLarge,
+                                  color: Theme.of(context).textTheme.bodyLarge?.color,
+                                ),
                               ),
                               const SizedBox(height: Dimensions.paddingSizeSmall),
                               CustomTextFieldWidget(
@@ -796,7 +882,8 @@ class CheckoutScreenState extends State<CheckoutScreen> {
 
   void _callback(bool isSuccess, String message, String orderID, bool createAccount) async {
     if (isSuccess) {
-      Navigator.of(Get.context!).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const DashBoardScreen()), (route) => false);
+      Navigator.of(Get.context!).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const DashBoardScreen()), (route) => false);
       showAnimatedDialog(
         context,
         OrderPlaceDialogWidget(

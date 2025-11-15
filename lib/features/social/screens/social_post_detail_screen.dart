@@ -5,9 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_sixvalley_ecommerce/di_container.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_comment.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post_reaction.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_service_interface.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:video_player/video_player.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
@@ -16,11 +17,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter_sixvalley_ecommerce/features/product_details/screens/product_details_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/price_converter.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/share_post_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/chat_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/shared_post_preview.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/social_feeling_helper.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/social_post_media.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/live_screen.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/social_post_text_block.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
 
@@ -197,6 +198,58 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
       MaterialPageRoute(
         builder: (_) => SharePostScreen(post: post),
         fullscreenDialog: true,
+      ),
+    );
+  }
+
+  Future<void> _openReactionsSheet(
+    SocialPost post, {
+    String? focusReaction,
+  }) async {
+    if (post.reactionCount <= 0) return;
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => FractionallySizedBox(
+        heightFactor: 0.9,
+        child: _PostReactionsSheet(
+          targetId: post.id,
+          targetType: 'post',
+          totalCount: post.reactionCount,
+          breakdown: post.reactionBreakdown,
+          initialReaction: focusReaction,
+          sheetTitle: getTranslated('reactions', context),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openCommentReactionsSheet(
+    SocialComment comment, {
+    bool isReply = false,
+  }) async {
+    if (comment.reactionCount <= 0) return;
+    if (!mounted) return;
+    final String title = getTranslated(
+          isReply ? 'reply_reactions' : 'comment_reactions',
+          context,
+        ) ??
+        (isReply ? 'Reply reactions' : 'Comment reactions');
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => FractionallySizedBox(
+        heightFactor: 0.9,
+        child: _PostReactionsSheet(
+          targetId: comment.id,
+          targetType: isReply ? 'reply' : 'comment',
+          totalCount: comment.reactionCount,
+          breakdown: const <String, int>{},
+          sheetTitle: title,
+        ),
       ),
     );
   }
@@ -613,7 +666,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 12),
                                   ),
-                                  const SizedBox(height: 12),
+                                  const SizedBox(height: 4),
                                 ],
                                 if (hasPoll) ...[
                                   Padding(
@@ -666,8 +719,8 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                     ),
                                   ),
                                 Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 8),
+                                  padding:
+                                      const EdgeInsets.fromLTRB(12, 8, 12, 0),
                                   child: Row(
                                     children: [
                                       Expanded(
@@ -764,33 +817,55 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                 if (showStats)
                                   Padding(
                                     padding: const EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 8),
+                                        horizontal: 12, vertical: 2),
                                     child: Row(
                                       children: [
                                         if (showReactions)
                                           Expanded(
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                if (topReactions.isNotEmpty)
-                                                  _ReactionIconStack(
-                                                      labels: topReactions),
-                                                if (topReactions.isNotEmpty)
-                                                  const SizedBox(width: 6),
-                                                Text(
-                                                  _formatSocialCount(
-                                                      reactionCount),
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .bodySmall
-                                                      ?.copyWith(
-                                                        color: onSurface
-                                                            .withOpacity(.85),
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                      ),
+                                            child: Material(
+                                              color: Colors.transparent,
+                                              child: InkWell(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                onTap: () =>
+                                                    _openReactionsSheet(
+                                                  current,
                                                 ),
-                                              ],
+                                                child: Padding(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(vertical: 4),
+                                                  child: Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      if (topReactions
+                                                          .isNotEmpty)
+                                                        _ReactionIconStack(
+                                                            labels:
+                                                                topReactions),
+                                                      if (topReactions
+                                                          .isNotEmpty)
+                                                        const SizedBox(
+                                                            width: 6),
+                                                      Text(
+                                                        _formatSocialCount(
+                                                            reactionCount),
+                                                        style: Theme.of(context)
+                                                            .textTheme
+                                                            .bodySmall
+                                                            ?.copyWith(
+                                                              color: onSurface
+                                                                  .withOpacity(
+                                                                      .85),
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
+                                                            ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
                                             ),
                                           )
                                         else
@@ -841,11 +916,11 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                           },
                         ),
                         Padding(
-                          padding: const EdgeInsets.all(12),
+                          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 4),
                               Divider(color: onSurface.withOpacity(.12)),
                               const SizedBox(height: 8),
                               Row(
@@ -944,8 +1019,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                           : null,
                                                   child: (c.userAvatar ==
                                                               null ||
-                                                          c.userAvatar!
-                                                              .isEmpty)
+                                                          c.userAvatar!.isEmpty)
                                                       ? const Icon(Icons.person,
                                                           size: 16)
                                                       : null,
@@ -1009,13 +1083,13 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                         child: Text(
                                                           c.text!,
                                                           style: Theme.of(
-                                                                    context)
-                                                                .textTheme
-                                                                .bodyMedium
-                                                                ?.copyWith(
-                                                                  color: Colors
-                                                                      .black,
-                                                                ) ??
+                                                                      context)
+                                                                  .textTheme
+                                                                  .bodyMedium
+                                                                  ?.copyWith(
+                                                                    color: Colors
+                                                                        .black,
+                                                                  ) ??
                                                               const TextStyle(
                                                                   color: Colors
                                                                       .black),
@@ -1095,30 +1169,35 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                                   const SizedBox(
                                                                       width:
                                                                           12),
-                                                                  Row(
-                                                                    mainAxisSize:
-                                                                        MainAxisSize
-                                                                            .min,
-                                                                    children: [
-                                                                      _reactionIcon(
-                                                                          'Like',
-                                                                          size:
-                                                                              18),
-                                                                      const SizedBox(
-                                                                          width:
-                                                                              4),
-                                                                      Text(
-                                                                        _formatSocialCount(
-                                                                            c.reactionCount),
-                                                                        style: Theme.of(context)
-                                                                            .textTheme
-                                                                            .bodySmall
-                                                                            ?.copyWith(
-                                                                              color: onSurface.withOpacity(.6),
-                                                                              fontWeight: FontWeight.w600,
-                                                                            ),
-                                                                      ),
-                                                                    ],
+                                                                  GestureDetector(
+                                                                    onTap: () =>
+                                                                        _openCommentReactionsSheet(
+                                                                            c),
+                                                                    child: Row(
+                                                                      mainAxisSize:
+                                                                          MainAxisSize
+                                                                              .min,
+                                                                      children: [
+                                                                        _reactionIcon(
+                                                                            'Like',
+                                                                            size:
+                                                                                18),
+                                                                        const SizedBox(
+                                                                            width:
+                                                                                4),
+                                                                        Text(
+                                                                          _formatSocialCount(
+                                                                              c.reactionCount),
+                                                                          style: Theme.of(context)
+                                                                              .textTheme
+                                                                              .bodySmall
+                                                                              ?.copyWith(
+                                                                                color: onSurface.withOpacity(.6),
+                                                                                fontWeight: FontWeight.w600,
+                                                                              ),
+                                                                        ),
+                                                                      ],
+                                                                    ),
                                                                   ),
                                                                 ],
                                                               ],
@@ -1243,6 +1322,17 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                             .requestFocus(
                                                                 _commentFocus);
                                                       },
+                                                      onShowReactions:
+                                                          (target,
+                                                                  {bool
+                                                                      isReply =
+                                                                          false,
+                                                                  BuildContext?
+                                                                      context}) =>
+                                                              _openCommentReactionsSheet(
+                                                        target,
+                                                        isReply: isReply,
+                                                      ),
                                                     ),
                                                   ],
                                                 ),
@@ -1769,6 +1859,755 @@ String _reactionActionLabel(BuildContext context, String reaction) {
   }
 }
 
+class _PostReactionsSheet extends StatefulWidget {
+  final String targetId;
+  final String targetType;
+  final int totalCount;
+  final Map<String, int> breakdown;
+  final String? initialReaction;
+  final String? sheetTitle;
+  _PostReactionsSheet({
+    required this.targetId,
+    required this.targetType,
+    required this.totalCount,
+    required Map<String, int> breakdown,
+    this.initialReaction,
+    this.sheetTitle,
+    Key? key,
+  })  : breakdown = Map<String, int>.unmodifiable(breakdown),
+        super(key: key);
+
+  @override
+  State<_PostReactionsSheet> createState() => _PostReactionsSheetState();
+}
+
+class _PostReactionsSheetState extends State<_PostReactionsSheet> {
+  static const int _pageSize = 30;
+  final ScrollController _scrollController = ScrollController();
+  final Set<String> _actionLoading = <String>{};
+  final Set<String> _loadingReactions = <String>{};
+  final Map<String, List<SocialPostReaction>> _buckets =
+      <String, List<SocialPostReaction>>{};
+  final List<SocialPostReaction> _allEntries = <SocialPostReaction>[];
+  final Map<String, String?> _reactionOffsets = <String, String?>{};
+  final Map<String, bool> _hasMoreByReaction = <String, bool>{};
+  final Set<String> _knownRowKeys = <String>{};
+  bool _initialLoaded = false;
+  String? _selectedReaction;
+  String? _currentUserId;
+  String? _accessToken;
+
+  @override
+  void initState() {
+    super.initState();
+    try {
+      final SocialController ctrl = context.read<SocialController>();
+      _currentUserId = ctrl.currentUser?.id;
+      _accessToken = ctrl.accessToken;
+    } catch (_) {}
+    _selectedReaction = (widget.initialReaction?.isNotEmpty ?? false)
+        ? widget.initialReaction
+        : null;
+    for (final String reaction in _kReactionOrder) {
+      _hasMoreByReaction[reaction] = (widget.breakdown[reaction] ?? 0) > 0;
+    }
+    widget.breakdown.forEach((reaction, count) {
+      _hasMoreByReaction[reaction] = count > 0;
+    });
+    _scrollController.addListener(_handleScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _loadInitial(reset: true);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_handleScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _handleScroll() {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    if (position.pixels < position.maxScrollExtent - 160) return;
+    _maybeLoadMoreForCurrentFilter();
+  }
+
+  Future<void> _loadInitial({bool reset = false}) async {
+    const String loadingKey = '__all__';
+    if (_loadingReactions.contains(loadingKey)) return;
+    _loadingReactions.add(loadingKey);
+    if (reset) {
+      _buckets.clear();
+      _allEntries.clear();
+      _reactionOffsets.clear();
+      _knownRowKeys.clear();
+      _hasMoreByReaction.clear();
+      for (final String reaction in _kReactionOrder) {
+        _hasMoreByReaction[reaction] = (widget.breakdown[reaction] ?? 0) > 0;
+      }
+      _initialLoaded = false;
+    }
+    setState(() {});
+    final svc = sl<SocialServiceInterface>();
+    try {
+      final reactions = await svc.getReactions(
+        targetId: widget.targetId,
+        type: widget.targetType,
+        reactionFilter: _kAllReactionCodes,
+        limit: _pageSize,
+        offset: null,
+      );
+      if (!mounted) return;
+      _ingestReactions(reactions);
+      setState(() {
+        _initialLoaded = true;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      showCustomSnackBar(e.toString(), context, isError: true);
+      setState(() {
+        _initialLoaded = true;
+      });
+    } finally {
+      _loadingReactions.remove(loadingKey);
+      if (mounted) setState(() {});
+    }
+  }
+
+  void _maybeLoadMoreForCurrentFilter() {
+    if (_selectedReaction == null) {
+      final String? next = _nextReactionNeedingData();
+      if (next != null) {
+        _loadMoreForReaction(next);
+      }
+      return;
+    }
+    final String reaction = _selectedReaction!;
+    if (_shouldLoadMore(reaction)) {
+      _loadMoreForReaction(reaction);
+    }
+  }
+
+  bool _shouldLoadMore(String reaction) {
+    if (_loadingReactions.contains(reaction)) return false;
+    return _hasMoreByReaction[reaction] ?? false;
+  }
+
+  String? _nextReactionNeedingData() {
+    for (final String reaction in _kReactionOrder) {
+      if (_shouldLoadMore(reaction)) return reaction;
+    }
+    return null;
+  }
+
+  Future<void> _loadMoreForReaction(String reaction) async {
+    if (_loadingReactions.contains(reaction)) return;
+    _loadingReactions.add(reaction);
+    setState(() {});
+    final svc = sl<SocialServiceInterface>();
+    try {
+      final reactions = await svc.getReactions(
+        targetId: widget.targetId,
+        type: widget.targetType,
+        reactionFilter: _reactionCodeForLabel(reaction) ?? '1',
+        limit: _pageSize,
+        offset: _reactionOffsets[reaction],
+      );
+      if (!mounted) return;
+      final List<SocialPostReaction> filtered =
+          reactions.where((e) => e.reaction == reaction).toList();
+      _ingestReactions(filtered);
+      if (filtered.isEmpty ||
+          (_buckets[reaction]?.length ?? 0) >=
+              (widget.breakdown[reaction] ?? 0)) {
+        _hasMoreByReaction[reaction] = false;
+      }
+      if (filtered.isNotEmpty) {
+        final SocialPostReaction? last = filtered.lastWhere(
+          (e) => e.reaction == reaction && e.rowId != null,
+          orElse: () => filtered.last,
+        );
+        _reactionOffsets[reaction] = last?.rowId;
+      }
+      setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      showCustomSnackBar(e.toString(), context, isError: true);
+      setState(() {});
+    } finally {
+      _loadingReactions.remove(reaction);
+      if (mounted) setState(() {});
+    }
+  }
+
+  void _ingestReactions(List<SocialPostReaction> reactions) {
+    if (reactions.isEmpty) return;
+    bool updated = false;
+    final Set<String> touchedReactions = <String>{};
+    for (final SocialPostReaction reaction in reactions) {
+      final String label =
+          reaction.reaction.isNotEmpty ? reaction.reaction : 'Like';
+      touchedReactions.add(label);
+      final String rowKey =
+          '${label}_${reaction.rowId ?? '${reaction.user.id}_${reaction.user.userName ?? ''}'}';
+      if (_knownRowKeys.contains(rowKey)) continue;
+      _knownRowKeys.add(rowKey);
+      _buckets.putIfAbsent(label, () => <SocialPostReaction>[]).add(reaction);
+      _allEntries.add(reaction);
+      _hasMoreByReaction.putIfAbsent(label, () => true);
+      if (reaction.rowId != null) {
+        final int? current = int.tryParse(_reactionOffsets[label] ?? '');
+        final int? incoming = int.tryParse(reaction.rowId!);
+        if (incoming != null && (current == null || incoming > current)) {
+          _reactionOffsets[label] = reaction.rowId;
+        }
+      }
+      updated = true;
+    }
+    if (!updated) return;
+
+    int orderKey(SocialPostReaction r) {
+      final int? id = int.tryParse(r.rowId ?? '');
+      return id ?? (_allEntries.indexOf(r) + 1);
+    }
+
+    _allEntries.sort((a, b) => orderKey(a).compareTo(orderKey(b)));
+    for (final List<SocialPostReaction> bucket in _buckets.values) {
+      bucket.sort((a, b) => orderKey(a).compareTo(orderKey(b)));
+    }
+    for (final String reaction in touchedReactions) {
+      final int have = _buckets[reaction]?.length ?? 0;
+      final int total = widget.breakdown[reaction] ?? have;
+      _hasMoreByReaction[reaction] = have < total;
+    }
+  }
+
+  List<_ReactionFilterOption> _buildFilterOptions(BuildContext context) {
+    final List<_ReactionFilterOption> items = <_ReactionFilterOption>[
+      _ReactionFilterOption(
+        value: null,
+        label: getTranslated('all', context) ?? 'All',
+        count: _effectiveReactionCount(null),
+      ),
+    ];
+    for (final String reaction in _kReactionOrder) {
+      final int count = _effectiveReactionCount(reaction);
+      if (count <= 0) continue;
+      items.add(
+        _ReactionFilterOption(
+          value: reaction,
+          label: _reactionActionLabel(context, reaction),
+          count: count,
+        ),
+      );
+    }
+    return items;
+  }
+
+  int _effectiveReactionCount(String? reaction) {
+    if (reaction == null) {
+      final int loaded = _allEntries.length;
+      if (loaded > 0) return loaded;
+      return widget.totalCount;
+    }
+    final int loaded = _buckets[reaction]?.length ?? 0;
+    final int expected = widget.breakdown[reaction] ?? 0;
+    return loaded > expected ? loaded : expected;
+  }
+
+  void _onSelectFilter(String? reaction) {
+    if (_selectedReaction == reaction) return;
+    setState(() {
+      _selectedReaction = reaction;
+    });
+    if (reaction != null && (_buckets[reaction]?.isEmpty ?? true)) {
+      _loadMoreForReaction(reaction);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final Color surface = theme.colorScheme.surface;
+    final Color onSurface = theme.colorScheme.onSurface;
+    final filters = _buildFilterOptions(context);
+    final Widget filterBar = SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: filters.map((option) {
+          final bool selected = option.value == _selectedReaction ||
+              (option.value == null && _selectedReaction == null);
+          final theme = Theme.of(context);
+          final bool isLight = theme.brightness == Brightness.light;
+          final Color textColor = selected
+              ? (isLight ? Colors.black : Colors.white)
+              : theme.colorScheme.onSurface.withOpacity(0.7);
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(999),
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
+              onTap: () => _onSelectFilter(option.value),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: const BoxDecoration(color: Colors.transparent),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (option.value != null) ...[
+                          _reactionIcon(option.value!, size: 18),
+                          const SizedBox(width: 6),
+                          Text(
+                            _formatSocialCount(option.count),
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: textColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ] else ...[
+                          Text(
+                            (getTranslated('all', context) ?? 'All'),
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: textColor,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _formatSocialCount(option.count),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: textColor.withOpacity(0.8),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeInOut,
+                      height: 2,
+                      width: selected ? 36 : 0,
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? theme.colorScheme.primary
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+
+    final Widget listSection = Expanded(
+      child: _buildList(context, onSurface),
+    );
+
+    return Material(
+      color: Colors.transparent,
+      child: SafeArea(
+        child: ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: surface,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 12),
+                Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: onSurface.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  widget.sheetTitle ??
+                      (getTranslated('reactions', context) ?? 'Reactions'),
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${_formatSocialCount(widget.totalCount)} ${getTranslated('reactions', context) ?? 'reactions'}',
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(color: onSurface.withOpacity(0.7)),
+                ),
+                const SizedBox(height: 12),
+                if (filters.length > 1 || widget.totalCount > 0) filterBar,
+                const SizedBox(height: 12),
+                listSection,
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildList(BuildContext context, Color onSurface) {
+    final List<SocialPostReaction> entries = _currentEntries;
+    final bool isLoadingCurrent = _isLoadingCurrentFilter;
+    if (!_initialLoaded && isLoadingCurrent) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final bool hasEntries = entries.isNotEmpty;
+    if (!hasEntries) {
+      return RefreshIndicator(
+        onRefresh: () => _loadInitial(reset: true),
+        child: ListView(
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          children: [
+            const SizedBox(height: 120),
+            Icon(Icons.emoji_emotions_outlined,
+                size: 36, color: onSurface.withOpacity(0.4)),
+            const SizedBox(height: 12),
+            Text(
+              getTranslated('no_reactions', context) ?? 'Chưa có cảm xúc nào.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(color: onSurface.withOpacity(0.7)),
+            ),
+            const SizedBox(height: 120),
+          ],
+        ),
+      );
+    }
+    final bool showTailLoader = _isLoadingCurrentFilter ||
+        (_selectedReaction == null && _loadingReactions.isNotEmpty);
+    return RefreshIndicator(
+      onRefresh: () => _loadInitial(reset: true),
+      child: ListView.builder(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(bottom: 24),
+        itemCount: entries.length + (showTailLoader ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index >= entries.length) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            );
+          }
+          final SocialPostReaction entry = entries[index];
+          final bool isCurrentUser =
+              _currentUserId != null && _currentUserId == entry.user.id;
+          final Widget? actionButton = _buildActionButton(context, entry);
+          return _ReactionUserTile(
+            reaction: entry,
+            isCurrentUser: isCurrentUser,
+            actionButton: actionButton,
+          );
+        },
+      ),
+    );
+  }
+
+  Widget? _buildActionButton(
+      BuildContext context, SocialPostReaction reaction) {
+    final _ReactionActionType type = _resolveActionType(reaction);
+    if (type == _ReactionActionType.none) return null;
+    final bool loading = _actionLoading.contains(reaction.user.id);
+    final theme = Theme.of(context);
+    final Color buttonColor = theme.colorScheme.primary;
+    final Color textColor = theme.colorScheme.onPrimary;
+    final String label = switch (type) {
+      _ReactionActionType.follow =>
+        getTranslated('follow', context) ?? 'Follow',
+      _ReactionActionType.message =>
+        getTranslated('message', context) ?? 'Message',
+      _ReactionActionType.none => '',
+    };
+
+    Widget buildChild() {
+      if (loading) {
+        return const SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        );
+      }
+      return Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+
+    final VoidCallback? handler = (type == _ReactionActionType.none || loading)
+        ? null
+        : () => _handleAction(type, reaction);
+
+    final ButtonStyleButton button = ElevatedButton(
+      onPressed: handler,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: buttonColor,
+        foregroundColor: Colors.white,
+        minimumSize: const Size(0, 34),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+      ),
+      child: buildChild(),
+    );
+
+    return SizedBox(
+      height: 34,
+      child: button,
+    );
+  }
+
+  _ReactionActionType _resolveActionType(SocialPostReaction reaction) {
+    final String userId = reaction.user.id;
+    if (userId.isEmpty) return _ReactionActionType.none;
+    if (_currentUserId != null && _currentUserId == userId) {
+      return _ReactionActionType.none;
+    }
+    if (reaction.user.isFollowing) {
+      return _ReactionActionType.message;
+    }
+    return _ReactionActionType.follow;
+  }
+
+  Future<void> _handleAction(
+      _ReactionActionType type, SocialPostReaction reaction) async {
+    switch (type) {
+      case _ReactionActionType.follow:
+        await _handleFollowAction(reaction);
+        break;
+      case _ReactionActionType.message:
+        await _handleMessageAction(reaction);
+        break;
+      case _ReactionActionType.none:
+        break;
+    }
+  }
+
+  Future<void> _handleFollowAction(SocialPostReaction reaction) async {
+    final String userId = reaction.user.id;
+    if (userId.isEmpty) return;
+    if (_actionLoading.contains(userId)) return;
+    setState(() {
+      _actionLoading.add(userId);
+    });
+    try {
+      final svc = sl<SocialServiceInterface>();
+      final bool followed = await svc.toggleFollow(targetUserId: userId);
+      if (!mounted) return;
+      setState(() {
+        _actionLoading.remove(userId);
+        if (followed) {
+          _updateEntryUser(userId, (user) => user.copyWith(isFollowing: true));
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _actionLoading.remove(userId);
+      });
+      showCustomSnackBar(e.toString(), context, isError: true);
+    }
+  }
+
+  Future<void> _handleMessageAction(SocialPostReaction reaction) async {
+    final String? token = _accessToken;
+    if (token == null || token.isEmpty) {
+      showCustomSnackBar(
+        getTranslated('login_required', context) ?? 'Please login to continue',
+        context,
+        isError: true,
+      );
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          accessToken: token,
+          peerUserId: reaction.user.id,
+          peerName: reaction.user.displayName ?? reaction.user.userName,
+          peerAvatar: reaction.user.avatarUrl,
+        ),
+      ),
+    );
+  }
+
+  void _updateEntryUser(
+    String userId,
+    SocialUser Function(SocialUser current) mapper,
+  ) {
+    void updateList(List<SocialPostReaction> list) {
+      for (int i = 0; i < list.length; i++) {
+        if (list[i].user.id == userId) {
+          list[i] = list[i].copyWith(user: mapper(list[i].user));
+        }
+      }
+    }
+
+    updateList(_allEntries);
+    for (final List<SocialPostReaction> bucket in _buckets.values) {
+      updateList(bucket);
+    }
+  }
+
+  List<SocialPostReaction> get _currentEntries {
+    if (_selectedReaction == null) return _allEntries;
+    return _buckets[_selectedReaction] ?? const <SocialPostReaction>[];
+  }
+
+  bool get _isLoadingCurrentFilter {
+    if (_selectedReaction == null) {
+      return !_initialLoaded && _loadingReactions.contains('__all__');
+    }
+    return _loadingReactions.contains(_selectedReaction);
+  }
+}
+
+class _ReactionFilterOption {
+  final String? value;
+  final String label;
+  final int count;
+  const _ReactionFilterOption({
+    required this.value,
+    required this.label,
+    required this.count,
+  });
+}
+
+enum _ReactionActionType { none, follow, message }
+
+class _ReactionUserTile extends StatelessWidget {
+  final SocialPostReaction reaction;
+  final bool isCurrentUser;
+  final Widget? actionButton;
+  const _ReactionUserTile({
+    required this.reaction,
+    required this.isCurrentUser,
+    this.actionButton,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final SocialUser user = reaction.user;
+    final String displayName = user.displayName ??
+        user.userName ??
+        (getTranslated('user', context) ?? 'User');
+    final bool showMutual =
+        !isCurrentUser && (reaction.mutualFriendsCount ?? 0) > 0;
+    final String? subtitle = showMutual
+        ? '${reaction.mutualFriendsCount} ${getTranslated('mutual_friends', context) ?? 'bạn chung'}'
+        : null;
+
+    return ListTile(
+      onTap: () => _navigateToProfile(context, user.id),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      leading: _AvatarWithReaction(
+        reaction: reaction.reaction,
+        avatarUrl: user.avatarUrl,
+      ),
+      title: Text(
+        displayName,
+        style: Theme.of(context)
+            .textTheme
+            .bodyLarge
+            ?.copyWith(fontWeight: FontWeight.w600),
+      ),
+      subtitle: subtitle != null
+          ? Text(
+              subtitle,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: Theme.of(context).hintColor),
+            )
+          : null,
+      trailing: actionButton != null
+          ? SizedBox(
+              width: 124,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: actionButton,
+              ),
+            )
+          : null,
+    );
+  }
+}
+
+class _AvatarWithReaction extends StatelessWidget {
+  final String reaction;
+  final String? avatarUrl;
+  const _AvatarWithReaction({required this.reaction, this.avatarUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    final ImageProvider? avatarProvider =
+        (avatarUrl != null && avatarUrl!.isNotEmpty)
+            ? CachedNetworkImageProvider(avatarUrl!)
+            : null;
+    return SizedBox(
+      width: 52,
+      height: 52,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: CircleAvatar(
+              backgroundImage: avatarProvider,
+              child: avatarProvider == null
+                  ? const Icon(Icons.person, size: 24)
+                  : null,
+            ),
+          ),
+          Positioned(
+            bottom: -2,
+            right: -2,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                shape: BoxShape.circle,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(2),
+                child: _reactionIcon(reaction, size: 18),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ReactionIconStack extends StatelessWidget {
   final List<String> labels;
   final double size;
@@ -1853,10 +2692,13 @@ class _RepliesLazy extends StatefulWidget {
   final SocialComment comment;
   final SocialServiceInterface service;
   final void Function(SocialComment) onRequestReply;
+  final void Function(SocialComment comment, {bool isReply, BuildContext? context})?
+      onShowReactions;
   const _RepliesLazy(
       {required this.comment,
       required this.service,
-      required this.onRequestReply});
+      required this.onRequestReply,
+      this.onShowReactions});
   @override
   State<_RepliesLazy> createState() => _RepliesLazyState();
 }
@@ -2086,23 +2928,29 @@ class _RepliesLazyState extends State<_RepliesLazy> {
                                   // Chỉ chèn khoảng cách & cụm (👍 + count) khi count > 0
                                   if (r.reactionCount > 0) ...[
                                     const SizedBox(width: 12),
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        _reactionIcon('Like', size: 18),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          _formatSocialCount(r.reactionCount),
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall
-                                              ?.copyWith(
-                                                color:
-                                                    onSurface.withOpacity(.6),
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                        ),
-                                      ],
+                                    GestureDetector(
+                                      onTap: () => widget.onShowReactions
+                                          ?.call(r, isReply: true),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          _reactionIcon('Like', size: 18),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            _formatSocialCount(
+                                                r.reactionCount),
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.copyWith(
+                                                  color: onSurface
+                                                      .withOpacity(.6),
+                                                  fontWeight:
+                                                      FontWeight.w600,
+                                                ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ],
                                 ],
@@ -2418,6 +3266,31 @@ String _reactionPngPath(String r) {
     default:
       return 'assets/images/reactions/like_outline.png';
   }
+}
+
+const List<String> _kReactionOrder = <String>[
+  'Like',
+  'Love',
+  'HaHa',
+  'Wow',
+  'Sad',
+  'Angry',
+];
+
+const Map<String, String> _kReactionCodeLookup = <String, String>{
+  'Like': '1',
+  'Love': '2',
+  'HaHa': '3',
+  'Wow': '4',
+  'Sad': '5',
+  'Angry': '6',
+};
+
+const String _kAllReactionCodes = '1,2,3,4,5,6';
+
+String? _reactionCodeForLabel(String? label) {
+  if (label == null || label.isEmpty) return null;
+  return _kReactionCodeLookup[label];
 }
 
 String _basename(String path) {

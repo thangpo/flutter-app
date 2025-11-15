@@ -40,6 +40,9 @@ class DashBoardScreenState extends State<DashBoardScreen> {
   late List<NavigationModel> _screens;
   final GlobalKey<ScaffoldMessengerState> _scaffoldKey = GlobalKey();
   final PageStorageBucket bucket = PageStorageBucket();
+  final GlobalKey<SocialFeedScreenState> _socialFeedKey =
+      GlobalKey<SocialFeedScreenState>();
+  int? _socialTabIndex;
 
   bool singleVendor = false;
 
@@ -95,7 +98,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       NavigationModel(
         name: 'social',
         icon: Images.SocialIcon,
-        screen: const SocialFeedScreen(),
+        screen: SocialFeedScreen(key: _socialFeedKey),
       ),
 
       // NavigationModel(
@@ -129,6 +132,9 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       NavigationModel(
           name: 'more', icon: Images.moreImage, screen: const MoreScreen()),
     ];
+
+    _socialTabIndex =
+        _screens.indexWhere((element) => element.name == 'social');
 
     NetworkInfo.checkConnectivity(context);
   }
@@ -185,6 +191,23 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     });
   }
 
+  void _handleNavigationTap(NavigationModel item, int index) {
+    final bool isSocialTab =
+        _socialTabIndex != null && index == _socialTabIndex;
+    final bool isCurrent = _pageIndex == index;
+    if (isSocialTab && isCurrent) {
+      final SocialFeedScreenState? state = _socialFeedKey.currentState;
+      if (state == null) return;
+      if (!state.isAtTop) {
+        state.scrollToTop();
+      } else {
+        state.refreshFeed();
+      }
+      return;
+    }
+    _setPage(index);
+  }
+
   List<Widget> _getBottomWidget(bool isSingleVendor) {
     List<Widget> list = [];
     for (int index = 0; index < _screens.length; index++) {
@@ -202,7 +225,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
                   name: item.name,
                   icon: item.icon,
                   showCartCount: item.showCartIcon ?? false,
-                  onTap: () => _setPage(index),
+                  onTap: () => _handleNavigationTap(item, index),
                 ),
                 // 🔴 Chấm đỏ (dùng Selector để tránh rebuild toàn bộ)
                 Selector<SocialNotificationsController, bool>(
@@ -211,7 +234,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
                   builder: (_, hasUnread, __) {
                     if (!hasUnread) return const SizedBox.shrink();
                     return Positioned(
-                      top: 10,
+                      top: 6,
                       right: MediaQuery.of(context).size.width / 12 - 10,
                       child: Container(
                         width: 9,
@@ -238,7 +261,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
               name: item.name,
               icon: item.icon,
               showCartCount: item.showCartIcon ?? false,
-              onTap: () => _setPage(index),
+              onTap: () => _handleNavigationTap(item, index),
             ),
           ),
         );

@@ -967,11 +967,12 @@ class SocialRepository {
     }
   }
 
-  Future<ApiResponseModel<Response>> fetchStoryReactions({
-    required String storyId,
+  Future<ApiResponseModel<Response>> fetchReactions({
+    required String targetId,
+    required String type,
     String? reactionFilter,
     int? limit,
-    int? offset,
+    String? offset,
   }) async {
     try {
       final String? token = _getSocialAccessToken();
@@ -985,12 +986,12 @@ class SocialRepository {
 
       final form = FormData.fromMap({
         'server_key': AppConstants.socialServerKey,
-        'type': 'story',
-        'id': storyId,
+        'type': type,
+        'id': targetId,
         if (reactionFilter != null && reactionFilter.isNotEmpty)
           'reaction': reactionFilter,
         if (limit != null) 'limit': '$limit',
-        if (offset != null) 'offset': '$offset',
+        if (offset != null && offset.isNotEmpty) 'offset': offset,
       });
 
       final Response res = await dioClient.post(
@@ -3123,6 +3124,36 @@ class SocialRepository {
       return users.sublist(0, max);
     }
     return users;
+  }
+
+  Future<ApiResponseModel<Response>> fetchStoryReactions({
+    required String storyId,
+    String? reactionFilter,
+    int? limit,
+    int? offset,
+  }) {
+    return fetchReactions(
+      targetId: storyId,
+      type: 'story',
+      reactionFilter: reactionFilter,
+      limit: limit,
+      offset: offset?.toString(),
+    );
+  }
+
+  Future<ApiResponseModel<Response>> fetchPostReactions({
+    required String postId,
+    String? reactionFilter,
+    int? limit,
+    String? offset,
+  }) {
+    return fetchReactions(
+      targetId: postId,
+      type: 'post',
+      reactionFilter: reactionFilter,
+      limit: limit,
+      offset: offset,
+    );
   }
 
   Iterable<dynamic>? _extractUsersArray(dynamic data) {
