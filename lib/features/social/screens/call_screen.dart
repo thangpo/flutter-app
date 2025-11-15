@@ -1,8 +1,9 @@
+import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:provider/provider.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/call_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 
 class CallScreen extends StatefulWidget {
   final bool isCaller;
@@ -25,293 +26,322 @@ class CallScreen extends StatefulWidget {
 }
 
 class _CallScreenState extends State<CallScreen> {
-  RTCPeerConnection? _pc;
-  MediaStream? _localStream;
-  final _localRenderer = RTCVideoRenderer();
-  final _remoteRenderer = RTCVideoRenderer();
-
+  RtcEngine? _engine;
+  AgoraCallSession? _session;
+  int? _remoteUid;
+  bool _joined = false;
   bool _micOn = true;
   bool _camOn = true;
+  String? _error;
+
+  bool get _isVideo => widget.mediaType == 'video';
 
   @override
   void initState() {
     super.initState();
-    _initRenderers().then((_) => _boot());
-  }
-
-  Future<void> _initRenderers() async {
-    await _localRenderer.initialize();
-    await _remoteRenderer.initialize();
+    _boot();
   }
 
   Future<void> _boot() async {
     final call = context.read<CallController>();
-    if (call.activeCallId != widget.callId) {
-      call.activeCallId = widget.callId;
-    }
-
-    // 1) PeerConnection + local stream
-    final pc = await createPeerConnection(
-      {
-        'sdpSemantics': 'unified-plan',
-        'iceServers': [
-          {'urls': 'stun:stun.l.google.com:19302'},
-          {'urls': 'stun:global.stun.twilio.com:3478?transport=udp'},
-        ],
-      },
-      {},
-    );
-    _pc = pc;
-
-    final constraints = <String, dynamic>{
-      'audio': true,
-      'video': widget.mediaType == 'video'
-          ? {
-              'facingMode': 'user',
-              'width': {'ideal': 1280},
-              'height': {'ideal': 720},
-              'frameRate': {'ideal': 30},
-            }
-          : false,
-    };
-
-    final stream = await navigator.mediaDevices.getUserMedia(constraints);
-    _localStream = stream;
-    for (var track in stream.getTracks()) {
-      await pc.addTrack(track, stream);
-    }
-    _localRenderer.srcObject = stream;
-
-    pc.onTrack = (evt) {
-      if (evt.streams.isNotEmpty) {
-        _remoteRenderer.srcObject = evt.streams.first;
-        setState(() {});
-      }
-    };
-
-    pc.onIceCandidate = (cand) async {
-      if (cand.candidate == null || cand.candidate!.isEmpty) return;
-      try {
-        await call.sendCandidate(
-          candidate: cand.candidate!,
-          sdpMid: cand.sdpMid,
-          sdpMLineIndex: cand.sdpMLineIndex,
-        );
-      } catch (_) {}
-    };
-
-    // Lắng nghe thay đổi trạng thái/SDP/ICE từ CallController
-    call.addListener(_onControllerChange);
-
-    // 2) Khởi động theo vai trò
-    if (widget.isCaller) {
-      await _asCaller(call);
-    } else {
-      await _asCallee(call);
-    }
-  }
-
-  Future<void> _asCaller(CallController call) async {
-    final offer = await _pc!.createOffer();
-    await _pc!.setLocalDescription(offer);
-    await call.sendOffer(offer.sdp!);
-    // Answer & ICE sẽ tới qua polling -> _onControllerChange xử lý
-  }
-
-  Future<void> _asCallee(CallController call) async {
-    // Có thể offer đã có sẵn trong controller
-    await _tryApplyRemoteOfferAndAnswer(call);
-    // Nếu chưa có, _onControllerChange sẽ gọi lại sau khi poll
-  }
-
-  Future<void> _tryApplyRemoteOfferAndAnswer(CallController call) async {
-    final offerSdp = call.sdpOffer;
-    if (offerSdp == null || offerSdp.isEmpty || _pc == null) return;
-
-    final currentRemote = await _pc!.getRemoteDescription();
-    if (currentRemote?.sdp != offerSdp) {
-      await _pc!.setRemoteDescription(
-        RTCSessionDescription(offerSdp, 'offer'),
-      );
-    }
-
-    final answer = await _pc!.createAnswer();
-    await _pc!.setLocalDescription(answer);
-    await call.sendAnswer(answer.sdp!);
-  }
-
-  Future<void> _onControllerChange() async {
-    if (!mounted || _pc == null) return;
-    final call = context.read<CallController>();
-
-    // 1) Caller: khi có ANSWER → setRemote
-    if (widget.isCaller &&
-        call.sdpAnswer != null &&
-        call.sdpAnswer!.isNotEmpty) {
-      final currentRemote = await _pc!.getRemoteDescription();
-      if (currentRemote?.sdp != call.sdpAnswer) {
-        await _pc!.setRemoteDescription(
-          RTCSessionDescription(call.sdpAnswer!, 'answer'),
-        );
-      }
-    }
-
-    // 2) Callee: nếu vừa nhận OFFER muộn thì xử lý
-    if (!widget.isCaller &&
-        call.sdpOffer != null &&
-        call.sdpOffer!.isNotEmpty) {
-      await _tryApplyRemoteOfferAndAnswer(call);
-    }
-
-    // 3) Apply ICE candidates nhận từ server
-    if (call.iceCandidates.isNotEmpty) {
-      for (final c in call.iceCandidates) {
-        try {
-          await _pc!.addCandidate(
-            RTCIceCandidate(c.candidate, c.sdpMid, c.sdpMLineIndex),
-          );
-        } catch (_) {}
-      }
-      // Server sẽ đánh dấu delivered nên không bị lặp lại
-    }
-
-    // 4) Kết thúc từ server → đóng màn
-    if (call.callStatus == 'declined' || call.callStatus == 'ended') {
-      if (mounted) Navigator.of(context).maybePop();
-    }
-  }
-
-  Future<void> _toggleMic() async {
-    _micOn = !_micOn;
-    for (final t in _localStream?.getAudioTracks() ?? const []) {
-      t.enabled = _micOn;
-    }
-    setState(() {});
-  }
-
-  Future<void> _toggleCam() async {
-    if (widget.mediaType != 'video') return;
-    _camOn = !_camOn;
-    for (final t in _localStream?.getVideoTracks() ?? const []) {
-      t.enabled = _camOn;
-    }
-    setState(() {});
-  }
-
-  Future<void> _switchCamera() async {
-    if (widget.mediaType != 'video') return;
-    for (final t in _localStream?.getVideoTracks() ?? const []) {
-      await Helper.switchCamera(t);
-    }
-  }
-
-  Future<void> _hangup() async {
-    final call = context.read<CallController>();
     try {
-      await call.endCall();
-    } catch (_) {}
-    if (mounted) Navigator.of(context).pop();
+      final AgoraCallSession session = await call.prepareAgoraSession();
+      final RtcEngine engine = createAgoraRtcEngine();
+      await engine.initialize(
+        const RtcEngineContext(appId: AppConstants.socialAgoraAppId),
+      );
+      await engine.setChannelProfile(
+        ChannelProfileType.channelProfileCommunication,
+      );
+      await engine.setClientRole(
+        role: ClientRoleType.clientRoleBroadcaster,
+      );
+      if (_isVideo) {
+        await engine.enableVideo();
+        await engine.startPreview();
+      } else {
+        await engine.disableVideo();
+      }
+
+      engine.registerEventHandler(
+        RtcEngineEventHandler(
+          onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
+            if (!mounted) return;
+            setState(() {
+              _joined = true;
+            });
+          },
+          onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
+            if (!mounted) return;
+            setState(() => _remoteUid = remoteUid);
+          },
+          onUserOffline: (
+            RtcConnection connection,
+            int remoteUid,
+            UserOfflineReasonType reason,
+          ) {
+            if (!mounted) return;
+            if (_remoteUid == remoteUid) {
+              setState(() => _remoteUid = null);
+            }
+          },
+          onLeaveChannel: (RtcConnection connection, RtcStats stats) {
+            if (!mounted) return;
+            setState(() {
+              _joined = false;
+              _remoteUid = null;
+            });
+          },
+          onError: (ErrorCodeType code, String message) {
+            debugPrint('Agora call error: $code - $message');
+            if (!mounted) return;
+            setState(() => _error = 'Agora error: $message');
+          },
+        ),
+      );
+
+      await engine.joinChannel(
+        token: session.token,
+        channelId: session.channelName,
+        uid: session.uid,
+        options: ChannelMediaOptions(
+          publishCameraTrack: _isVideo,
+          publishMicrophoneTrack: true,
+          autoSubscribeAudio: true,
+          autoSubscribeVideo: _isVideo,
+        ),
+      );
+
+      if (!mounted) {
+        await engine.leaveChannel();
+        engine.release();
+        return;
+      }
+
+      setState(() {
+        _engine = engine;
+        _session = session;
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = 'Không thể khởi tạo cuộc gọi: $e');
+    }
   }
 
   @override
   void dispose() {
-    final call = context.read<CallController>();
-    call.removeListener(_onControllerChange);
-
-    _localRenderer.dispose();
-    _remoteRenderer.dispose();
-
-    _localStream?.getTracks().forEach((t) => t.stop());
-    _localStream?.dispose();
-
-    _pc?.close();
-    _pc?.dispose();
-
+    _disposeEngine();
     super.dispose();
+  }
+
+  void _disposeEngine() {
+    final RtcEngine? engine = _engine;
+    _engine = null;
+    if (engine != null) {
+      engine.stopPreview();
+      engine.leaveChannel();
+      engine.release();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isVideo = widget.mediaType == 'video';
-    final peerName =
-        widget.peerName ?? (widget.isCaller ? 'Đang gọi...' : 'Cuộc gọi đến');
-
+    final String title = widget.peerName ?? 'Cuộc gọi';
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text(peerName),
+        title: Text(title),
         backgroundColor: Colors.black,
         elevation: 0,
-        actions: [
-          if (isVideo)
-            IconButton(
-              icon: const Icon(Icons.cameraswitch),
-              onPressed: _switchCamera,
-              tooltip: 'Đổi camera',
-            ),
-        ],
+        actions: _isVideo
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.cameraswitch),
+                  onPressed: _switchCamera,
+                  tooltip: 'Đổi camera',
+                ),
+              ]
+            : null,
       ),
       body: SafeArea(
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: isVideo
-                  ? RTCVideoView(
-                      _remoteRenderer,
-                      objectFit:
-                          RTCVideoViewObjectFit.RTCVideoViewObjectFitContain,
-                    )
-                  : _AudioOnlyBackdrop(name: peerName),
-            ),
-            if (isVideo)
-              Positioned(
-                right: 12,
-                top: 12,
-                width: 120,
-                height: 180,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    color: Colors.black54,
-                    child: RTCVideoView(
-                      _localRenderer,
-                      mirror: true,
-                      objectFit:
-                          RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-                    ),
+        child: Consumer<CallController>(
+          builder: (context, call, _) {
+            if (call.callStatus == 'ended' || call.callStatus == 'declined') {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (Navigator.of(context).canPop()) {
+                  Navigator.of(context).pop();
+                }
+              });
+            }
+            return Stack(
+              children: [
+                Positioned.fill(
+                  child: _isVideo ? _buildVideoContent() : _buildAudioContent(),
+                ),
+                if (_isVideo)
+                  Positioned(
+                    right: 16,
+                    top: 16,
+                    width: 120,
+                    height: 180,
+                    child: _buildLocalPreview(),
+                  ),
+                if (_error != null)
+                  Positioned(
+                    left: 16,
+                    right: 16,
+                    top: 16,
+                    child: _buildErrorBanner(_error!),
+                  ),
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 32),
+                    child: _buildControls(),
                   ),
                 ),
-              ),
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 24),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _circleBtn(
-                      icon: _micOn ? Icons.mic : Icons.mic_off,
-                      onTap: _toggleMic,
-                    ),
-                    const SizedBox(width: 16),
-                    if (isVideo)
-                      _circleBtn(
-                        icon: _camOn ? Icons.videocam : Icons.videocam_off,
-                        onTap: _toggleCam,
-                      ),
-                    const SizedBox(width: 16),
-                    _circleBtn(
-                      icon: Icons.call_end,
-                      bg: Colors.red,
-                      onTap: _hangup,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
+              ],
+            );
+          },
         ),
       ),
+    );
+  }
+
+  Widget _buildVideoContent() {
+    final RtcEngine? engine = _engine;
+    final AgoraCallSession? session = _session;
+    if (engine == null || session == null) {
+      return _buildStatus(
+        message: 'Đang chuẩn bị camera...',
+      );
+    }
+    final int? remoteUid = _remoteUid;
+    if (remoteUid == null) {
+      return _buildStatus(
+        message: 'Đang chờ đối phương...',
+      );
+    }
+    return AgoraVideoView(
+      controller: VideoViewController.remote(
+        rtcEngine: engine,
+        connection: RtcConnection(channelId: session.channelName),
+        canvas: VideoCanvas(uid: remoteUid),
+      ),
+    );
+  }
+
+  Widget _buildLocalPreview() {
+    final RtcEngine? engine = _engine;
+    if (engine == null || !_isVideo || !_camOn) {
+      return Container(
+        decoration: BoxDecoration(
+          color: Colors.black54,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        alignment: Alignment.center,
+        child: const Icon(Icons.videocam_off, color: Colors.white70),
+      );
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: AgoraVideoView(
+        controller: VideoViewController(
+          rtcEngine: engine,
+          canvas: const VideoCanvas(uid: 0),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAudioContent() {
+    final String name = widget.peerName ?? 'Cuộc gọi';
+    final String subtitle = _error ??
+        (_joined ? 'Đang trò chuyện' : 'Đang kết nối với đối phương...');
+    return Container(
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircleAvatar(
+            radius: 56,
+            backgroundImage:
+                (widget.peerAvatar != null && widget.peerAvatar!.isNotEmpty)
+                    ? NetworkImage(widget.peerAvatar!)
+                    : null,
+            child: (widget.peerAvatar == null || widget.peerAvatar!.isEmpty)
+                ? const Icon(Icons.person, size: 56)
+                : null,
+          ),
+          const SizedBox(height: 16),
+          Text(name, style: const TextStyle(color: Colors.white, fontSize: 22)),
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            style: const TextStyle(color: Colors.white70),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatus({required String message}) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(
+            width: 36,
+            height: 36,
+            child: CircularProgressIndicator(color: Colors.white),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            message,
+            style: const TextStyle(color: Colors.white70),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorBanner(String message) {
+    return Material(
+      color: Colors.red.shade600.withOpacity(0.9),
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Text(
+          message,
+          style: const TextStyle(color: Colors.white),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildControls() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _circleBtn(
+          icon: _micOn ? Icons.mic : Icons.mic_off,
+          onTap: _toggleMic,
+        ),
+        const SizedBox(width: 16),
+        if (_isVideo)
+          _circleBtn(
+            icon: _camOn ? Icons.videocam : Icons.videocam_off,
+            onTap: _toggleCam,
+          ),
+        if (_isVideo) const SizedBox(width: 16),
+        _circleBtn(
+          icon: Icons.call_end,
+          bg: Colors.red,
+          onTap: _hangup,
+        ),
+      ],
     );
   }
 
@@ -333,30 +363,39 @@ class _CallScreenState extends State<CallScreen> {
       ),
     );
   }
-}
 
-class _AudioOnlyBackdrop extends StatelessWidget {
-  final String name;
-  const _AudioOnlyBackdrop({required this.name});
+  Future<void> _toggleMic() async {
+    final RtcEngine? engine = _engine;
+    if (engine == null) return;
+    final bool next = !_micOn;
+    await engine.muteLocalAudioStream(!next);
+    if (!mounted) return;
+    setState(() => _micOn = next);
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: Colors.black,
-      alignment: Alignment.center,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const CircleAvatar(
-            radius: 48,
-            child: Icon(Icons.person, size: 48),
-          ),
-          const SizedBox(height: 12),
-          Text(name, style: const TextStyle(color: Colors.white, fontSize: 18)),
-          const SizedBox(height: 6),
-          const Text('Đang kết nối…', style: TextStyle(color: Colors.white70)),
-        ],
-      ),
-    );
+  Future<void> _toggleCam() async {
+    if (!_isVideo) return;
+    final RtcEngine? engine = _engine;
+    if (engine == null) return;
+    final bool next = !_camOn;
+    await engine.muteLocalVideoStream(!next);
+    await engine.enableLocalVideo(next);
+    if (!mounted) return;
+    setState(() => _camOn = next);
+  }
+
+  Future<void> _switchCamera() async {
+    if (!_isVideo) return;
+    final RtcEngine? engine = _engine;
+    if (engine == null) return;
+    await engine.switchCamera();
+  }
+
+  Future<void> _hangup() async {
+    try {
+      await context.read<CallController>().endCall();
+    } catch (_) {}
+    if (!mounted) return;
+    Navigator.of(context).pop();
   }
 }

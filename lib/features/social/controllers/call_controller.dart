@@ -4,11 +4,40 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/webrtc_signaling_repository.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_live_repository.dart';
 
-/// Quản lý WebRTC signaling (server WoWonder).
+class AgoraCallSession {
+  final int callId;
+  final String channelName;
+  final String token;
+  final int uid;
+  final DateTime createdAt;
+  final DateTime? expiresAt;
+
+  const AgoraCallSession({
+    required this.callId,
+    required this.channelName,
+    required this.token,
+    required this.uid,
+    required this.createdAt,
+    this.expiresAt,
+  });
+
+  bool get isExpired =>
+      expiresAt != null ? DateTime.now().isAfter(expiresAt!) : false;
+}
+
+/// Quản lý signaling cùng trạng thái cuộc gọi.
 class CallController extends ChangeNotifier {
   WebRTCSignalingRepository? _repo;
   Future<void>? _initFuture;
+  final SocialLiveRepository _agoraRepo = SocialLiveRepository(
+    apiBaseUrl: AppConstants.socialBaseUrl,
+    serverKey: AppConstants.socialServerKey,
+  );
+
+  String? _accessToken;
+  AgoraCallSession? _agoraSession;
 
   bool ready = false;
   String? lastError;
@@ -48,6 +77,7 @@ class CallController extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(AppConstants.socialAccessToken) ?? '';
       final serverKey = AppConstants.socialServerKey;
+      _accessToken = token.isNotEmpty ? token : null;
 
       _repo = WebRTCSignalingRepository(
         baseUrl: '${AppConstants.socialBaseUrl}/api/webrtc',
@@ -110,7 +140,7 @@ class CallController extends ChangeNotifier {
     _clearState();
   }
 
-  /// Gửi OFFER (Caller)
+  /// Gửi OFFER (Caller) — giữ lại để tương thích với backend signaling
   Future<void> sendOffer(String sdp) async {
     await _ensureRepo();
     final id = _requireCallId();
@@ -150,15 +180,13 @@ class CallController extends ChangeNotifier {
     return st;
   }
 
-  /// Poll thủ công
+  /// Poll thường xuyên
   Future<void> pollOnce() async {
     await _ensureRepo();
     final id = _requireCallId();
     final pr = await _repo!.poll(callId: id);
     _applyPollResult(pr);
   }
-
-  // ---------------- internal ----------------
 
   void _startPolling() {
     _stopPolling();
@@ -194,6 +222,7 @@ class CallController extends ChangeNotifier {
     sdpOffer = null;
     sdpAnswer = null;
     iceCandidates = const [];
+    _agoraSession = null;
     notifyListeners();
   }
 
@@ -208,6 +237,95 @@ class CallController extends ChangeNotifier {
     final id = activeCallId;
     if (id == null) throw StateError('Chưa có activeCallId.');
     return id;
+  }
+
+  Future<AgoraCallSession> prepareAgoraSession() async {
+    final int callId = _requireCallId();
+    final String defaultChannel = 'call_$callId';
+    final String? accessToken = _accessToken;
+    if (accessToken == null || accessToken.isEmpty) {
+      throw StateError('Thiếu accessToken để lấy Agora token.');
+    }
+
+    final AgoraCallSession? cached = _agoraSession;
+    if (cached != null && cached.callId == callId && !cached.isExpired) {
+      return cached;
+    }
+
+    final Map<String, dynamic>? payload = await _agoraRepo.generateAgoraToken(
+      accessToken: accessToken,
+      channelName: defaultChannel,
+      uid: 0,
+      role: 'publisher',
+    );
+
+    final Map<String, dynamic> normalized = payload ?? <String, dynamic>{};
+    final String? token = _extractToken(normalized);
+    if (token == null || token.isEmpty) {
+      throw StateError('Không lấy được token Agora cho cuộc gọi.');
+    }
+
+    final String resolvedChannel =
+        (normalized['channel_name'] ?? normalized['channel'])
+                ?.toString()
+                .trim() ??
+            defaultChannel;
+
+    DateTime? expiresAt;
+    final int? expireEpoch = _toInt(
+      normalized['expire_at'] ??
+          normalized['expire_time'] ??
+          normalized['expiry'] ??
+          normalized['expire_ts'],
+    );
+    if (expireEpoch != null && expireEpoch > 0) {
+      if (expireEpoch > 1000000000000) {
+        expiresAt = DateTime.fromMillisecondsSinceEpoch(
+          expireEpoch,
+          isUtc: true,
+        ).toLocal();
+      } else if (expireEpoch > 1000000000) {
+        expiresAt = DateTime.fromMillisecondsSinceEpoch(
+          expireEpoch * 1000,
+          isUtc: true,
+        ).toLocal();
+      }
+    }
+
+    final AgoraCallSession session = AgoraCallSession(
+      callId: callId,
+      channelName: resolvedChannel,
+      token: token,
+      uid: 0,
+      createdAt: DateTime.now(),
+      expiresAt: expiresAt,
+    );
+    _agoraSession = session;
+    notifyListeners();
+    return session;
+  }
+
+  String? _extractToken(Map<String, dynamic> map) {
+    final List<String> keys = <String>[
+      'agora_token',
+      'token_agora',
+      'rtc_token',
+      'token',
+    ];
+    for (final String key in keys) {
+      final String? value = map[key]?.toString();
+      if (value != null && value.trim().isNotEmpty) {
+        return value.trim();
+      }
+    }
+    return null;
+  }
+
+  int? _toInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString());
   }
 
   @override
