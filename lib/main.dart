@@ -92,6 +92,8 @@ Future<void> main() async {
           appId: "1:948810422905:android:e0118faea13be3d29d12a8",
           messagingSenderId: "948810422905",
           projectId: "vnshop247-1fb1d"));
+    } else {
+      await Firebase.initializeApp();
     }
   }
 
