@@ -82,6 +82,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/incoming_cal
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/call_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/call_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/webrtc_signaling_repository.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/fcm/fcm_chat_handler.dart';
 
 // Group call
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_call_controller.dart';
@@ -112,6 +113,7 @@ const AndroidNotificationChannel _callInviteChannel =
 // Background FCM
 Future<void> myBackgroundMessageHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
+  
 }
 
 // ===== 1-1: open UI khi tap heads-up =====
@@ -215,6 +217,7 @@ Future<void> _scheduleGroupCallInviteOpen(Map<String, dynamic> data) async {
 Future<void> main() async {
   HttpOverrides.global = MyHttpOverrides();
   WidgetsFlutterBinding.ensureInitialized();
+  
 
   if (Firebase.apps.isEmpty) {
     if (Platform.isAndroid) {
@@ -228,6 +231,7 @@ Future<void> main() async {
       );
     }
   }
+  FcmChatHandler.initialize();
 
   await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
     alert: false,

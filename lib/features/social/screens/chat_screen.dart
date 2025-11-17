@@ -1,31 +1,34 @@
 // lib/features/social/screens/chat_screen.dart
-import 'dart:async'; 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:encrypt/encrypt.dart' as enc;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-// UI + data
+import 'package:provider/provider.dart';
+
+// Bubble + repo
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/chat_message_bubble.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_chat_repository.dart';
 
-// 🔔 Calling
-import 'package:provider/provider.dart';
+// Call
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/call_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/call_invite.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/incoming_call_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/call_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/incoming_call_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/call_invite.dart';
 
-import 'dart:typed_data';
-import 'package:encrypt/encrypt.dart' as enc;
+// FCM Realtime
+import 'package:flutter_sixvalley_ecommerce/features/social/fcm/fcm_chat_handler.dart';
 
 class ChatScreen extends StatefulWidget {
   final String accessToken;
-  final String peerUserId; // id người nhận
+  final String peerUserId;
   final String? peerName;
   final String? peerAvatar;
 
@@ -42,136 +45,199 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
+  // ============ Core ===============
   final repo = SocialChatRepository();
-
   final _inputCtrl = TextEditingController();
   final _scroll = ScrollController();
 
+  List<Map<String, dynamic>> _messages = [];
   bool _loading = false;
   bool _sending = false;
   bool _hasMore = true;
   String? _beforeId;
-  List<Map<String, dynamic>> _messages = [];
 
-  // ===== Recorder =====
+  late final String _peerId;
+
+  // =========== Recorder ==============
   final _recorder = FlutterSoundRecorder();
   bool _recReady = false;
   bool _recOn = false;
 
-  // Messenger-like
+  // UI scroll logic
   bool _showScrollToBottom = false;
   int _lastItemCount = 0;
 
-  late final String _peerId;
+  // Tránh mở nhiều lần IncomingCall
+  final Set<int> _handledIncoming = {};
 
-  // 🔔 Tránh mở IncomingCallScreen nhiều lần cho cùng 1 call_id
-  final Set<int> _handledIncomingCallIds = {};
-
-  // Poll messages
-  Timer? _pollTimer;
+  // FCM realtime stream
+  StreamSubscription? _fcmStream;
 
   @override
   void initState() {
     super.initState();
     _peerId = widget.peerUserId;
+
     _initRecorder();
-    _loadInit();
+    _loadInitialMessages();
 
-    // Scroll listener
-    _scroll.addListener(() {
-      // Hiện nút mũi tên khi cách đáy > 300px
-      final dist = _scroll.position.hasContentDimensions
-          ? (_scroll.position.maxScrollExtent - _scroll.position.pixels)
-          : 0.0;
-      final show = dist > 300;
-      if (_showScrollToBottom != show) {
-        setState(() => _showScrollToBottom = show);
-      }
+    // Realtime từ FCM
+    _listenRealtime();
 
-      // Kéo lên gần đầu thì nạp tin cũ
-      if (_scroll.position.pixels <= 80 && _hasMore && !_loading) {
-        _fetchOlder();
-      }
-    });
-
-    // 🔁 Poll tin mới 2s/lần (gần real-time)
-    _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-      _pollNewMessages();
-    });
+    _scroll.addListener(_onScroll);
   }
 
   @override
   void dispose() {
     _inputCtrl.dispose();
     _scroll.dispose();
-    _pollTimer?.cancel();
+    _fcmStream?.cancel();
+
     if (_recOn) _recorder.stopRecorder();
     _recorder.closeRecorder();
+
     super.dispose();
   }
 
-  // ===== utils =====
-
-  String _plainTextOf(Map<String, dynamic> m) {
-    final display = (m['display_text'] ?? '').toString();
-    if (display.isNotEmpty) return display;
-
-    final raw = (m['text'] ?? '').toString();
-    final timeStr = '${m['time'] ?? ''}';
-    final dec = _tryDecryptWoWonder(raw, timeStr);
-    return (dec ?? raw).trim();
+  // =================================================
+  // REALTIME LISTENER (NO POLLING)
+  // =================================================
+  void _listenRealtime() {
+    _fcmStream = FcmChatHandler.messagesStream.listen((evt) {
+      if (evt.peerId != _peerId) return;
+      _reloadLatest();
+    });
   }
 
-  /// Giải mã theo chuẩn WoWonder: AES-ECB, key = 16 byte từ 'time'
-  String? _tryDecryptWoWonder(String base64Text, String timeStr) {
-    if (base64Text.isEmpty || timeStr.isEmpty) return null;
-    final keyStr = timeStr.padRight(16, '0').substring(0, 16);
-    try {
-      final data = base64.decode(base64.normalize(base64Text));
-      // Thử PKCS7
-      final e1 = enc.Encrypter(enc.AES(
-        enc.Key(Uint8List.fromList(utf8.encode(keyStr))),
-        mode: enc.AESMode.ecb,
-        padding: 'PKCS7',
-      ));
-      final p1 = e1.decrypt(enc.Encrypted(data));
-      return p1.replaceAll('\x00', '').trim();
-    } catch (_) {
-      try {
-        final data = base64.decode(base64.normalize(base64Text));
-        // Thử no padding
-        final e2 = enc.Encrypter(enc.AES(
-          enc.Key.fromUtf8(keyStr),
-          mode: enc.AESMode.ecb,
-          padding: null,
-        ));
-        final p2 = e2.decrypt(enc.Encrypted(data));
-        return p2.replaceAll('\x00', '').trim();
-      } catch (_) {
-        return null;
-      }
+  // =================================================
+  // INITIAL LOAD
+  // =================================================
+  Future<void> _loadInitialMessages() async {
+    await _fetchNew();
+    await repo.readChats(
+      token: widget.accessToken,
+      peerUserId: _peerId,
+    );
+    _scrollToBottom(immediate: true);
+  }
+
+  // =================================================
+  // SCROLL
+  // =================================================
+  void _onScroll() {
+    if (!_scroll.hasClients) return;
+
+    final dist = _scroll.position.maxScrollExtent - _scroll.position.pixels;
+
+    final show = dist > 300;
+    if (show != _showScrollToBottom) {
+      setState(() => _showScrollToBottom = show);
+    }
+
+    if (_scroll.position.pixels <= 80 && _hasMore && !_loading) {
+      _fetchOlder();
     }
   }
 
-  int _msgId(Map<String, dynamic> m) =>
-      int.tryParse('${m['id'] ?? m['message_id'] ?? m['msg_id'] ?? ''}') ?? 0;
+  // =================================================
+  // MESSAGE FETCHING
+  // =================================================
 
-  String _msgIdStr(Map<String, dynamic> m) =>
-      '${m['id'] ?? m['message_id'] ?? m['msg_id'] ?? ''}';
+  Future<void> _reloadLatest() async {
+    try {
+      final list = await repo.getUserMessages(
+        token: widget.accessToken,
+        peerUserId: _peerId,
+        limit: 30,
+      );
 
-  void _sortAscById(List<Map<String, dynamic>> list) {
-    list.sort((a, b) => _msgId(a).compareTo(_msgId(b)));
+      list.sort((a, b) => (_msgId(a)).compareTo(_msgId(b)));
+
+      _mergeIncoming(list, toTail: true);
+
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint("realtime reload error: $e");
+    }
   }
 
+  Future<void> _fetchNew() async {
+    if (_loading) return;
+    setState(() => _loading = true);
+    try {
+      final list = await repo.getUserMessages(
+        token: widget.accessToken,
+        peerUserId: _peerId,
+        limit: 30,
+      );
+
+      list.sort((a, b) => _msgId(a).compareTo(_msgId(b)));
+      _messages = list;
+
+      if (list.isNotEmpty) _beforeId = _msgIdStr(list.first);
+
+      _hasMore = list.length >= 30;
+
+      setState(() {});
+      _scrollToBottom(immediate: true);
+    } finally {
+      setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _fetchOlder() async {
+    if (_loading || !_hasMore) return;
+
+    setState(() => _loading = true);
+    final oldMax = _scroll.hasClients ? _scroll.position.maxScrollExtent : 0.0;
+
+    try {
+      final older = await repo.getUserMessages(
+        token: widget.accessToken,
+        peerUserId: _peerId,
+        limit: 30,
+        beforeMessageId: _beforeId,
+      );
+
+      if (older.isNotEmpty) {
+        older.sort((a, b) => _msgId(a).compareTo(_msgId(b)));
+
+        _beforeId = _msgIdStr(older.first);
+        _mergeIncoming(older, toTail: false);
+
+        if (_scroll.hasClients) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            final newMax = _scroll.position.maxScrollExtent;
+            final delta = newMax - oldMax;
+            final want = _scroll.position.pixels + delta;
+
+            _scroll.jumpTo(want.clamp(
+              _scroll.position.minScrollExtent,
+              _scroll.position.maxScrollExtent,
+            ));
+          });
+        }
+      } else {
+        _hasMore = false;
+      }
+    } finally {
+      setState(() => _loading = false);
+    }
+  }
+
+  // =================================================
+  // MERGE
+  // =================================================
   void _mergeIncoming(List<Map<String, dynamic>> incoming,
       {required bool toTail}) {
     if (incoming.isEmpty) return;
-    _sortAscById(incoming);
 
     if (_messages.isEmpty) {
       _messages = [...incoming];
       return;
     }
+
+    incoming.sort((a, b) => _msgId(a).compareTo(_msgId(b)));
 
     final exist = _messages.map(_msgIdStr).toSet();
     final filtered = incoming.where((m) {
@@ -186,117 +252,28 @@ class _ChatScreenState extends State<ChatScreen> {
     } else {
       _messages.insertAll(0, filtered);
     }
-    _sortAscById(_messages);
+
+    _messages.sort((a, b) => _msgId(a).compareTo(_msgId(b)));
   }
 
-  // ===== recorder =====
-  Future<void> _initRecorder() async {
-    final micOk = await _ensureMic();
-    if (!micOk) return;
+  // =================================================
+  // ID
+  // =================================================
+  int _msgId(Map<String, dynamic> m) =>
+      int.tryParse('${m['id'] ?? m['message_id'] ?? m['msg_id'] ?? ''}') ?? 0;
 
-    await _recorder.openRecorder();
-    await _recorder.setSubscriptionDuration(const Duration(milliseconds: 100));
-    _recReady = true;
-    setState(() {});
-  }
+  String _msgIdStr(Map<String, dynamic> m) =>
+      '${m['id'] ?? m['message_id'] ?? m['msg_id'] ?? ''}';
 
-  Future<bool> _ensureMic() async {
-    final st = await Permission.microphone.status;
-    if (st.isGranted) return true;
-    final rs = await Permission.microphone.request();
-    return rs.isGranted;
-  }
-
-  // ===== data =====
-  Future<void> _loadInit() async {
-    await _fetchNew();
-    await repo.readChats(token: widget.accessToken, peerUserId: _peerId);
-    _scrollToBottom(immediate: true); // vào là ở tin mới nhất
-  }
-
-  Future<void> _fetchNew() async {
-    if (_loading) return;
-    setState(() => _loading = true);
-    try {
-      final list = await repo.getUserMessages(
-        token: widget.accessToken,
-        peerUserId: _peerId,
-        limit: 30,
-      );
-      _sortAscById(list);
-      _messages = list;
-      if (list.isNotEmpty) _beforeId = _msgIdStr(list.first);
-      _hasMore = list.length >= 30;
-      setState(() {});
-      _scrollToBottom(immediate: true);
-    } catch (e) {
-      debugPrint('load messages error: $e');
-    } finally {
-      setState(() => _loading = false);
-    }
-  }
-
-  /// 🔁 Poll new: lấy 30 tin mới nhất, merge vào list hiện tại
-  Future<void> _pollNewMessages() async {
-    if (!mounted) return;
-    if (_loading) return; // tránh đụng _fetchNew / _fetchOlder
-
-    try {
-      final list = await repo.getUserMessages(
-        token: widget.accessToken,
-        peerUserId: _peerId,
-        limit: 30,
-      );
-      _sortAscById(list);
-      _mergeIncoming(list, toTail: true);
-      if (mounted) setState(() {});
-    } catch (e) {
-      debugPrint('poll new messages error: $e');
-    }
-  }
-
-  Future<void> _fetchOlder() async {
-    if (_loading || !_hasMore) return;
-    setState(() => _loading = true);
-    final oldMax = _scroll.hasClients ? _scroll.position.maxScrollExtent : 0.0;
-
-    try {
-      final older = await repo.getUserMessages(
-        token: widget.accessToken,
-        peerUserId: _peerId,
-        limit: 30,
-        beforeMessageId: _beforeId,
-      );
-      if (older.isNotEmpty) {
-        _sortAscById(older);
-        _beforeId = _msgIdStr(older.first);
-        _mergeIncoming(older, toTail: false);
-
-        if (_scroll.hasClients) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            final newMax = _scroll.position.maxScrollExtent;
-            final delta = newMax - oldMax;
-            final want = _scroll.position.pixels + delta;
-            _scroll.jumpTo(want.clamp(
-              _scroll.position.minScrollExtent,
-              _scroll.position.maxScrollExtent,
-            ));
-          });
-        }
-      } else {
-        _hasMore = false;
-      }
-    } catch (e) {
-      debugPrint('load older error: $e');
-    } finally {
-      setState(() => _loading = false);
-    }
-  }
-
+  // =================================================
+  // SCROLL
+  // =================================================
   void _scrollToBottom({bool immediate = false}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scroll.hasClients) return;
+
       final target = _scroll.position.maxScrollExtent + 40;
+
       if (immediate) {
         _scroll.jumpTo(target);
       } else {
@@ -309,32 +286,41 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  // ===== send =====
+  // =================================================
+  // SEND TEXT
+  // =================================================
   Future<void> _sendText() async {
     final text = _inputCtrl.text.trim();
     if (text.isEmpty || _sending) return;
+
     setState(() => _sending = true);
+
     try {
       final sent = await repo.sendMessage(
         token: widget.accessToken,
         peerUserId: _peerId,
         text: text,
       );
+
       _inputCtrl.clear();
+
       if (sent != null) {
         _mergeIncoming([sent], toTail: true);
         setState(() {});
         _scrollToBottom();
       }
-    } catch (e) {
-      debugPrint('send text error: $e');
     } finally {
       setState(() => _sending = false);
     }
   }
 
+  // =================================================
+  // FILE & VOICE
+  // =================================================
+
   Future<void> _pickAndSendFile() async {
     if (_sending) return;
+
     final res = await FilePicker.platform.pickFiles(allowMultiple: false);
     if (res == null || res.files.isEmpty) return;
     final path = res.files.single.path;
@@ -352,8 +338,6 @@ class _ChatScreenState extends State<ChatScreen> {
         setState(() {});
         _scrollToBottom();
       }
-    } catch (e) {
-      debugPrint('send file error: $e');
     } finally {
       setState(() => _sending = false);
     }
@@ -366,10 +350,10 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     if (_recOn) {
-      // Stop & gửi file
       final path = await _recorder.stopRecorder();
       _recOn = false;
       setState(() {});
+
       if (path != null) {
         setState(() => _sending = true);
         try {
@@ -383,14 +367,11 @@ class _ChatScreenState extends State<ChatScreen> {
             setState(() {});
             _scrollToBottom();
           }
-        } catch (e) {
-          debugPrint('send voice error: $e');
         } finally {
           setState(() => _sending = false);
         }
       }
     } else {
-      // Start ghi âm
       final dir = await getTemporaryDirectory();
       final filename = 'voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
       final fullPath = '${dir.path}/$filename';
@@ -408,29 +389,51 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> _initRecorder() async {
+    final micOk = await _ensureMic();
+    if (!micOk) return;
+
+    await _recorder.openRecorder();
+    await _recorder.setSubscriptionDuration(
+      const Duration(milliseconds: 100),
+    );
+    _recReady = true;
+    setState(() {});
+  }
+
+  Future<bool> _ensureMic() async {
+    final st = await Permission.microphone.status;
+    if (st.isGranted) return true;
+
+    final rs = await Permission.microphone.request();
+    return rs.isGranted;
+  }
+
+  // =================================================
+  // REFRESH
+  // =================================================
   Future<void> _onRefresh() async {
     await _fetchNew();
     await repo.readChats(token: widget.accessToken, peerUserId: _peerId);
   }
 
-  // ====== Bắt đầu cuộc gọi, giống Messenger ======
+  // =================================================
+  // CALL
+  // =================================================
   Future<void> _startCall(String mediaType) async {
     final call = context.read<CallController>();
+
     try {
-      if (!call.ready) {
-        await call.init();
-      }
+      if (!call.ready) await call.init();
 
       final calleeId = int.tryParse(_peerId) ?? 0;
       if (calleeId <= 0) throw 'peerUserId không hợp lệ';
 
-      // 1) Tạo cuộc gọi trên server signaling
       final callId = await call.startCall(
         calleeId: calleeId,
-        mediaType: mediaType, // 'audio' | 'video'
+        mediaType: mediaType,
       );
 
-      // 2) Gửi message mời gọi (để bên kia thấy “Cuộc gọi thoại/video” trong chat)
       final payload = {
         'type': 'call_invite',
         'call_id': callId,
@@ -444,8 +447,8 @@ class _ChatScreenState extends State<ChatScreen> {
         text: jsonEncode(payload),
       );
 
-      // 3) Caller vào luôn màn CallScreen (đang gọi)
       if (!mounted) return;
+
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -466,17 +469,63 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // ===== UI =====
+  // =================================================
+  // DECRYPT
+  // =================================================
+  String _plainTextOf(Map<String, dynamic> m) {
+    final display = (m['display_text'] ?? '').toString();
+    if (display.isNotEmpty) return display;
+
+    final raw = (m['text'] ?? '').toString();
+    final timeStr = '${m['time'] ?? ''}';
+
+    final dec = _tryDecryptWoWonder(raw, timeStr);
+    return (dec ?? raw).trim();
+  }
+
+  String? _tryDecryptWoWonder(String base64Text, String timeStr) {
+    if (base64Text.isEmpty || timeStr.isEmpty) return null;
+
+    final keyStr = timeStr.padRight(16, '0').substring(0, 16);
+
+    try {
+      final data = base64.decode(base64.normalize(base64Text));
+      final e1 = enc.Encrypter(enc.AES(
+        enc.Key(Uint8List.fromList(utf8.encode(keyStr))),
+        mode: enc.AESMode.ecb,
+        padding: 'PKCS7',
+      ));
+      final p1 = e1.decrypt(enc.Encrypted(data));
+      return p1.replaceAll('\x00', '').trim();
+    } catch (_) {
+      try {
+        final data = base64.decode(base64.normalize(base64Text));
+        final e2 = enc.Encrypter(enc.AES(
+          enc.Key.fromUtf8(keyStr),
+          mode: enc.AESMode.ecb,
+          padding: null,
+        ));
+        final p2 = e2.decrypt(enc.Encrypted(data));
+        return p2.replaceAll('\x00', '').trim();
+      } catch (_) {
+        return null;
+      }
+    }
+  }
+
+  // =================================================
+  // UI
+  // =================================================
   @override
   Widget build(BuildContext context) {
     final title = widget.peerName ?? 'Chat';
     final peerAvatar = widget.peerAvatar ?? '';
 
-    // Auto scroll về cuối khi có tin mới và đang ở gần đáy
     final distFromBottom = _scroll.hasClients
         ? (_scroll.position.maxScrollExtent - _scroll.position.pixels)
         : 0.0;
     final nearBottom = distFromBottom < 200;
+
     if (_messages.length != _lastItemCount) {
       if (_messages.length > _lastItemCount && nearBottom) {
         _scrollToBottom();
@@ -490,7 +539,9 @@ class _ChatScreenState extends State<ChatScreen> {
           children: [
             if (peerAvatar.isNotEmpty)
               CircleAvatar(
-                  radius: 16, backgroundImage: NetworkImage(peerAvatar)),
+                radius: 16,
+                backgroundImage: NetworkImage(peerAvatar),
+              ),
             if (peerAvatar.isNotEmpty) const SizedBox(width: 8),
             Flexible(
               child: Text(title, overflow: TextOverflow.ellipsis),
@@ -499,8 +550,6 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         elevation: 0,
         centerTitle: false,
-
-        // 👇 Nút gọi thoại & video
         actions: [
           Consumer<CallController>(
             builder: (ctx, call, _) {
@@ -528,7 +577,6 @@ class _ChatScreenState extends State<ChatScreen> {
             children: [
               if (_loading && _messages.isEmpty)
                 const LinearProgressIndicator(minHeight: 2),
-
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: _onRefresh,
@@ -541,18 +589,13 @@ class _ChatScreenState extends State<ChatScreen> {
                       final m = _messages[i];
                       final isMe = (m['position'] == 'right');
 
-                      // 🔍 Bắt CallInvite trong nội dung đã giải mã
                       final plain = _plainTextOf(m);
-                      debugPrint('[INV-DEBUG] plain=$plain');
                       final inv = CallInvite.tryParse(plain);
 
                       if (inv != null && !inv.isExpired()) {
                         final callId = inv.callId;
-
-                        // 🔔 Nếu là lời mời từ phía kia & chưa xử lý, tự mở IncomingCallScreen
-                        if (!isMe &&
-                            !_handledIncomingCallIds.contains(callId)) {
-                          _handledIncomingCallIds.add(callId);
+                        if (!isMe && !_handledIncoming.contains(callId)) {
+                          _handledIncoming.add(callId);
 
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             if (!mounted) return;
@@ -570,7 +613,6 @@ class _ChatScreenState extends State<ChatScreen> {
                           });
                         }
 
-                        // Vẫn hiển thị bubble lịch sử cuộc gọi
                         if (!isMe) {
                           final msgAvatar =
                               (m['user_data']?['avatar'] ?? '').toString();
@@ -600,7 +642,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           );
                         }
 
-                        // tin do mình gửi (caller)
+                        // yourself
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 4.0),
                           child: Row(
@@ -614,7 +656,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         );
                       }
 
-                      // avatar trái cho đối phương (kiểu Messenger)
+                      // normal bubble
                       if (!isMe) {
                         final msgAvatar =
                             (m['user_data']?['avatar'] ?? '').toString();
@@ -648,7 +690,6 @@ class _ChatScreenState extends State<ChatScreen> {
                         );
                       }
 
-                      // tin của mình: căn phải, không avatar
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4.0),
                         child: Row(
@@ -668,8 +709,6 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
               ),
-
-              // Composer kiểu Messenger
               SafeArea(
                 top: false,
                 minimum: const EdgeInsets.fromLTRB(8, 6, 8, 8),
@@ -730,8 +769,6 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ],
           ),
-
-          // Nút tròn mũi tên xuống
           if (_showScrollToBottom)
             Positioned(
               right: 12,
@@ -755,7 +792,9 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  // ===== tile hiển thị lời mời gọi =====
+  // =================================================
+  // CALL INVITE TILE
+  // =================================================
   Widget _buildCallInviteTile(CallInvite inv, {required bool isMe}) {
     final isVideo = inv.mediaType == 'video';
     final bg = isMe ? const Color(0xFF2F80ED) : const Color(0xFFEFEFEF);
