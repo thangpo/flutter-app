@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     android:targetSandboxVersion="1"
     xmlns:tools="http://schemas.android.com/tools"
-    package="com.vnshop247"
+    package="com.vnsshop.ecommerce">
     >
 
     <uses-permission android:name="android.permission.INTERNET"/>
