@@ -10,8 +10,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Bubble + repo
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/chat_message_bubble.dart';
@@ -78,12 +78,27 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _pollInFlight = false;
   Duration _pollInterval = const Duration(seconds: 5);
 
+  // =========== Reactions ============
+  // 1: 👍, 2: ❤️, 3: 😂, 4: 😮, 5: 😢, 6: 😡
+  static const Map<int, String> _reactionEmojis = {
+    1: '👍',
+    2: '❤️',
+    3: '😂',
+    4: '😮',
+    5: '😢',
+    6: '😡',
+  };
+
+  /// Lưu reaction local: { messageId(String) : reactionId(int) }
+  Map<String, int> _localReactions = {};
+
   @override
   void initState() {
     super.initState();
     _peerId = widget.peerUserId;
 
     _initRecorder();
+    _loadLocalReactions(); // load map reaction local
     _loadInitialMessages();
 
     // Realtime từ FCM (nếu có)
@@ -107,6 +122,72 @@ class _ChatScreenState extends State<ChatScreen> {
     _recorder.closeRecorder();
 
     super.dispose();
+  }
+
+  // =================================================
+  // REACTIONS LOCAL STORAGE
+  // =================================================
+  String get _reactionsStorageKey => 'chat_reactions_$_peerId';
+
+  Future<void> _loadLocalReactions() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_reactionsStorageKey);
+      if (raw == null || raw.isEmpty) return;
+
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return;
+
+      final map = <String, int>{};
+      decoded.forEach((k, v) {
+        if (k is! String) return;
+        int val;
+        if (v is int) {
+          val = v;
+        } else if (v is String) {
+          val = int.tryParse(v) ?? 0;
+        } else if (v is num) {
+          val = v.toInt();
+        } else {
+          return;
+        }
+        if (val > 0) map[k] = val;
+      });
+
+      _localReactions = map;
+    } catch (e) {
+      debugPrint('loadLocalReactions error: $e');
+    }
+  }
+
+  Future<void> _saveLocalReactions() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_reactionsStorageKey, jsonEncode(_localReactions));
+    } catch (e) {
+      debugPrint('saveLocalReactions error: $e');
+    }
+  }
+
+  int _getReactionForMessage(Map<String, dynamic> m) {
+    final local = _localReactions[_msgIdStr(m)];
+    if (local != null && local > 0) return local;
+
+    final val = m['reaction'];
+    if (val is int) return val;
+    if (val is String) return int.tryParse(val) ?? 0;
+    return 0;
+  }
+
+  void _applyLocalReactionsToMessages() {
+    if (_localReactions.isEmpty) return;
+    for (final m in _messages) {
+      final idStr = _msgIdStr(m);
+      final r = _localReactions[idStr];
+      if (r != null && r > 0) {
+        m['reaction'] = r;
+      }
+    }
   }
 
   // =================================================
@@ -189,7 +270,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
       list.sort((a, b) => (_msgId(a)).compareTo(_msgId(b)));
 
+      // merge + apply reactions local
       _mergeIncoming(list, toTail: true);
+      _applyLocalReactionsToMessages();
 
       if (!mounted) return;
       setState(() {});
@@ -210,6 +293,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
       list.sort((a, b) => _msgId(a).compareTo(_msgId(b)));
       _messages = list;
+      _applyLocalReactionsToMessages();
 
       if (list.isNotEmpty) _beforeId = _msgIdStr(list.first);
 
@@ -243,6 +327,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
         _beforeId = _msgIdStr(older.first);
         _mergeIncoming(older, toTail: false);
+        _applyLocalReactionsToMessages();
 
         if (_scroll.hasClients) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -347,6 +432,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
       if (sent != null) {
         _mergeIncoming([sent], toTail: true);
+        _applyLocalReactionsToMessages();
         if (mounted) {
           setState(() {});
           _scrollToBottom();
@@ -380,6 +466,7 @@ class _ChatScreenState extends State<ChatScreen> {
       );
       if (sent != null) {
         _mergeIncoming([sent], toTail: true);
+        _applyLocalReactionsToMessages();
         if (mounted) {
           setState(() {});
           _scrollToBottom();
@@ -413,6 +500,7 @@ class _ChatScreenState extends State<ChatScreen> {
           );
           if (sent != null) {
             _mergeIncoming([sent], toTail: true);
+            _applyLocalReactionsToMessages();
             if (mounted) {
               setState(() {});
               _scrollToBottom();
@@ -567,6 +655,121 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // =================================================
+  // REACTION HANDLERS
+  // =================================================
+  Future<void> _onLongPressMessage(Map<String, dynamic> message) async {
+    final id = _msgId(message);
+    if (id <= 0) return;
+
+    final current = _getReactionForMessage(message);
+    final selected = await _showReactionPicker(current);
+    if (selected == null) return;
+
+    await _toggleReactionForMessage(message, selected);
+  }
+
+  Future<int?> _showReactionPicker(int current) {
+    return showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16, left: 40, right: 40),
+          child: Container(
+            height: 56,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: const [
+                BoxShadow(
+                  blurRadius: 8,
+                  offset: Offset(0, -2),
+                  color: Colors.black26,
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: _reactionEmojis.entries.map((entry) {
+                final isSelected = entry.key == current;
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => Navigator.of(ctx).pop(entry.key),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                    child: Text(
+                      entry.value,
+                      style: TextStyle(
+                        fontSize: isSelected ? 28 : 24,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _toggleReactionForMessage(
+      Map<String, dynamic> message, int pickedId) async {
+    final idStr = _msgIdStr(message);
+    if (idStr.isEmpty) return;
+
+    final current = _getReactionForMessage(message);
+    final newReaction = current == pickedId ? 0 : pickedId;
+    final reactionStr = newReaction == 0 ? '' : newReaction.toString();
+
+    // Cập nhật UI + local cache
+    setState(() {
+      message['reaction'] = newReaction;
+      if (newReaction == 0) {
+        _localReactions.remove(idStr);
+      } else {
+        _localReactions[idStr] = newReaction;
+      }
+    });
+    _saveLocalReactions();
+
+    // Gọi API (không rollback nếu lỗi)
+    try {
+      await repo.reactMessage(
+        token: widget.accessToken,
+        messageId: idStr,
+        reaction: reactionStr,
+      );
+    } catch (e) {
+      debugPrint('reactMessage error: $e');
+    }
+  }
+
+  Widget _buildReactionBadge(int reactionId, {required bool isMe}) {
+    if (reactionId == 0) return const SizedBox.shrink();
+    final emoji = _reactionEmojis[reactionId] ?? '👍';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: const [
+          BoxShadow(
+            blurRadius: 4,
+            offset: Offset(0, 1),
+            color: Colors.black26,
+          ),
+        ],
+      ),
+      child: Text(
+        emoji,
+        style: const TextStyle(fontSize: 14),
+      ),
+    );
+  }
+
+  // =================================================
   // UI
   // =================================================
   @override
@@ -673,7 +876,7 @@ class _ChatScreenState extends State<ChatScreen> {
                               msgAvatar.isNotEmpty ? msgAvatar : peerAvatar;
 
                           return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 4.0),
+                            padding: const EdgeInsets.symmetric(vertical: 8.0),
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
@@ -697,7 +900,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
                         // yourself
                         return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4.0),
+                          padding: const EdgeInsets.symmetric(vertical: 8.0),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
@@ -709,6 +912,8 @@ class _ChatScreenState extends State<ChatScreen> {
                         );
                       }
 
+                      final reactionId = _getReactionForMessage(m);
+
                       // normal bubble
                       if (!isMe) {
                         final msgAvatar =
@@ -717,7 +922,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             msgAvatar.isNotEmpty ? msgAvatar : peerAvatar;
 
                         return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4.0),
+                          padding: const EdgeInsets.symmetric(vertical: 8.0),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
@@ -732,10 +937,27 @@ class _ChatScreenState extends State<ChatScreen> {
                               ),
                               const SizedBox(width: 8),
                               Flexible(
-                                child: ChatMessageBubble(
-                                  key: ValueKey('${m['id'] ?? m.hashCode}'),
-                                  message: m,
-                                  isMe: false,
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onLongPress: () => _onLongPressMessage(m),
+                                  child: Stack(
+                                    clipBehavior: Clip.none,
+                                    children: [
+                                      ChatMessageBubble(
+                                        key: ValueKey(
+                                            '${m['id'] ?? m.hashCode}'),
+                                        message: m,
+                                        isMe: false,
+                                      ),
+                                      if (reactionId != 0)
+                                        Positioned(
+                                          bottom: -14,
+                                          left: 8,
+                                          child: _buildReactionBadge(reactionId,
+                                              isMe: false),
+                                        ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ],
@@ -743,16 +965,33 @@ class _ChatScreenState extends State<ChatScreen> {
                         );
                       }
 
+                      // my message
                       return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4.0),
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
                             Flexible(
-                              child: ChatMessageBubble(
-                                key: ValueKey('${m['id'] ?? m.hashCode}'),
-                                message: m,
-                                isMe: true,
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onLongPress: () => _onLongPressMessage(m),
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    ChatMessageBubble(
+                                      key: ValueKey('${m['id'] ?? m.hashCode}'),
+                                      message: m,
+                                      isMe: true,
+                                    ),
+                                    if (reactionId != 0)
+                                      Positioned(
+                                        bottom: -14,
+                                        right: 8,
+                                        child: _buildReactionBadge(reactionId,
+                                            isMe: true),
+                                      ),
+                                  ],
+                                ),
                               ),
                             ),
                           ],

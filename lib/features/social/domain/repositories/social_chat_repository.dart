@@ -10,8 +10,6 @@ import 'package:path/path.dart' as p;
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/wowonder_text.dart';
 
-
-
 class SocialChatRepository {
   // ================= Helpers =================
   bool _notEmpty(String? s) => s != null && s.trim().isNotEmpty;
@@ -134,7 +132,6 @@ class SocialChatRepository {
     }
   }
 
-
   Map<String, dynamic>? _parseSendResponse(String body) {
     final map = jsonDecode(body) as Map<String, dynamic>;
     final ok = (map['api_status'] ?? map['status']) == 200;
@@ -211,7 +208,6 @@ class SocialChatRepository {
     if (res.statusCode != 200) _throwApi(res.body, httpCode: res.statusCode);
   }
 
-
   MediaType _mimeFromPath(String path) {
     final ext = p.extension(path).toLowerCase();
     if (ext == '.m4a') return MediaType('audio', 'mp4');
@@ -226,6 +222,7 @@ class SocialChatRepository {
     if (ext == '.zip') return MediaType('application', 'zip');
     return MediaType('application', 'octet-stream');
   }
+
   // ================= SEND (text / gif / file) =================
   // ===== SEND (text / gif / file) =====
   Future<Map<String, dynamic>?> sendMessage({
@@ -310,7 +307,34 @@ class SocialChatRepository {
     return parsed;
   }
 
+  // ================= REACT MESSAGE =================
+  Future<void> reactMessage({
+    required String token,
+    required String messageId,
+    required String reaction,
+  }) async {
+    final url = Uri.parse(
+      '${AppConstants.socialBaseUrl}/api/react_message?access_token=$token',
+    );
 
-  
+    final req = http.MultipartRequest('POST', url)
+      ..fields['server_key'] = AppConstants.socialServerKey
+      ..fields['id'] = messageId
+      ..fields['reaction'] = reaction.toString();
 
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+
+    if (kDebugMode) {
+      debugPrint('react_message -> ${res.statusCode} ${res.body}');
+    }
+
+    if (res.statusCode != 200) {
+      _throwApi(res.body, httpCode: res.statusCode);
+    } else {
+      final map = jsonDecode(res.body) as Map<String, dynamic>;
+      final ok = (map['api_status'] ?? map['status']) == 200;
+      if (!ok) _throwApi(res.body);
+    }
+  }
 }
