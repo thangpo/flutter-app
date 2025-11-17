@@ -4,4 +4,8 @@ abstract class SocialPageServiceInterface {
   Future<List<SocialGetPage>> getRecommendedPages({
     int limit,
   });
+  Future<List<SocialGetPage>> getMyPages({
+    int limit = 20,
+  });
+  Future<List<SocialArticleCategory>> getArticleCategories();
 }

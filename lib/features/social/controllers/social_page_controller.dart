@@ -12,7 +12,10 @@ class SocialPageController with ChangeNotifier {
   // State cho "Page gợi ý"
   final _PageListState _recommendedState = _PageListState();
 
-  // ====== GETTERS cho UI dùng ======
+  // State cho "Trang của bạn"
+  final _PageListState _myPagesState = _PageListState();
+
+  // ================== GETTERS: GỢI Ý ==================
 
   /// Danh sách page gợi ý (read-only)
   List<SocialGetPage> get suggestedPages =>
@@ -34,7 +37,24 @@ class SocialPageController with ChangeNotifier {
   /// Thông báo lỗi (nếu có)
   String? get suggestedError => _recommendedState.error;
 
-  // ====== HÀM PUBLIC CHO UI GỌI ======
+  // ================== GETTERS: TRANG CỦA BẠN ==================
+
+  /// Danh sách "Trang của bạn"
+  List<SocialGetPage> get myPages =>
+      List<SocialGetPage>.unmodifiable(_myPagesState.items);
+
+  bool get myPagesInitialized => _myPagesState.initialized;
+
+  bool get refreshingMyPages =>
+      _myPagesState.refreshing && !_myPagesState.loading;
+
+  bool get loadingMyPages => _myPagesState.loading;
+
+  bool get hasMoreMyPages => _myPagesState.hasMore;
+
+  String? get myPagesError => _myPagesState.error;
+
+  // ================== HÀM: GỢI Ý ==================
 
   /// Đảm bảo đã load dữ liệu gợi ý (dùng trong initState / addPostFrameCallback)
   Future<void> ensureSuggestedLoaded() async {
@@ -58,7 +78,6 @@ class SocialPageController with ChangeNotifier {
     try {
       final List<SocialGetPage> pages = await service.getRecommendedPages(
         limit: _pageSize,
-        // offset: 0,
       );
 
       state.items = List<SocialGetPage>.from(pages);
@@ -76,7 +95,7 @@ class SocialPageController with ChangeNotifier {
     }
   }
 
-  /// Load thêm page gợi ý (nếu endpoint support offset)
+  /// Load thêm page gợi ý (nếu endpoint support offset sau này)
   Future<void> loadMoreSuggested() async {
     final state = _recommendedState;
     if (state.loading || state.refreshing || !state.hasMore) return;
@@ -88,6 +107,7 @@ class SocialPageController with ChangeNotifier {
     try {
       final List<SocialGetPage> pages = await service.getRecommendedPages(
         limit: _pageSize,
+        // TODO: nếu backend support offset thì pass offset ở đây
         // offset: state.offset,
       );
 
@@ -130,6 +150,77 @@ class SocialPageController with ChangeNotifier {
     }
     state.items = updated;
     notifyListeners();
+  }
+
+  // ================== HÀM: TRANG CỦA BẠN ==================
+
+  /// Đảm bảo đã load "Trang của bạn"
+  Future<void> ensureMyPagesLoaded() async {
+    if (_myPagesState.initialized ||
+        _myPagesState.loading ||
+        _myPagesState.refreshing) {
+      return;
+    }
+    await refreshMyPages();
+  }
+
+  /// Refresh lại "Trang của bạn"
+  Future<void> refreshMyPages() async {
+    final state = _myPagesState;
+    if (state.refreshing) return;
+
+    state.refreshing = true;
+    state.error = null;
+    notifyListeners();
+
+    try {
+      final List<SocialGetPage> pages =
+      await service.getMyPages(limit: _pageSize);
+
+      state.items = List<SocialGetPage>.from(pages);
+      state.offset = pages.length;
+      state.hasMore = pages.length >= _pageSize;
+      state.initialized = true;
+    } catch (e) {
+      state.error = e.toString();
+      state.hasMore = state.items.isNotEmpty;
+      state.initialized = true;
+      rethrow;
+    } finally {
+      state.refreshing = false;
+      notifyListeners();
+    }
+  }
+
+  /// (Tuỳ chọn) sau này nếu có API phân trang cho my_pages thì implement tiếp
+  Future<void> loadMoreMyPages() async {
+    final state = _myPagesState;
+    if (state.loading || state.refreshing || !state.hasMore) return;
+
+    state.loading = true;
+    state.error = null;
+    notifyListeners();
+
+    try {
+      final List<SocialGetPage> pages =
+      await service.getMyPages(limit: _pageSize);
+      // TODO: nếu backend có offset thì truyền offset = state.offset
+
+      if (pages.isEmpty) {
+        state.hasMore = false;
+      } else {
+        final merged = List<SocialGetPage>.from(state.items)..addAll(pages);
+        state.items = merged;
+        state.offset = merged.length;
+        state.hasMore = pages.length >= _pageSize;
+      }
+    } catch (e) {
+      state.error = e.toString();
+      rethrow;
+    } finally {
+      state.loading = false;
+      notifyListeners();
+    }
   }
 }
 

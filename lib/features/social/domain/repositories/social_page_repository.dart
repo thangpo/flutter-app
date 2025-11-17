@@ -55,6 +55,32 @@ class SocialPageRepository {
     return _absoluteUrl(normalized) ?? normalized;
   }
 
+  List<SocialGetPage> _parsePagesFromResponse(Response res) {
+    final List<SocialGetPage> result = <SocialGetPage>[];
+    dynamic data = res.data;
+
+    if (data is String) {
+      try {
+        data = jsonDecode(data);
+      } catch (_) {
+        return result;
+      }
+    }
+
+    if (data is! Map) return result;
+    final int status = (data['api_status'] as num?)?.toInt() ?? 0;
+    if (status != 200) return result;
+
+    final List<dynamic> list = data['data'] as List<dynamic>? ?? const [];
+    for (final dynamic item in list) {
+      if (item is! Map) continue;
+      final SocialGetPage? page = _parseGetPageMap(item);
+      if (page != null) result.add(page);
+    }
+    return result;
+  }
+
+
   /// 1) Gọi API lấy page gợi ý
   Future<ApiResponseModel<Response>> fetchRecommendedPages({
     int limit = 10,
@@ -90,39 +116,14 @@ class SocialPageRepository {
 
   /// 2) Parse Response -> List<SocialGetPage>
   List<SocialGetPage> parseRecommendedPages(Response res) {
-    final List<SocialGetPage> result = <SocialGetPage>[];
-
-    dynamic data = res.data;
-
-    // Phòng trường hợp API trả string JSON
-    if (data is String) {
-      try {
-        data = jsonDecode(data);
-      } catch (_) {
-        return result;
-      }
-    }
-
-    if (data is! Map) return result;
-
-    // Dựa theo JSON bạn gửi: { api_status: 200, data: [ {...}, {...} ] }
-    final int status = (data['api_status'] as num?)?.toInt() ?? 0;
-    if (status != 200) {
-      return result;
-    }
-
-    final List<dynamic> list = data['data'] as List<dynamic>? ?? const [];
-
-    for (final dynamic item in list) {
-      if (item is! Map) continue;
-      final SocialGetPage? page = _parseGetPageMap(item);
-      if (page != null) {
-        result.add(page);
-      }
-    }
-
-    return result;
+    return _parsePagesFromResponse(res);
   }
+
+// parse my pages
+  List<SocialGetPage> parseMyPages(Response res) {
+    return _parsePagesFromResponse(res);
+  }
+
 
   /// 3) Helper parse từng page map -> SocialGetPage
   SocialGetPage? _parseGetPageMap(Map raw) {
@@ -142,5 +143,92 @@ class SocialPageRepository {
       // Nếu parse lỗi thì bỏ qua để không crash
       return null;
     }
+  }
+
+  //lấy page của tôi
+  Future<ApiResponseModel<Response>> getMyPage({
+    int limit = 100,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError(
+          'Please log in to your social network account',
+        );
+      }
+
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialGetMyPage}?access_token=$token';
+
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+
+        'limit': limit.toString(),
+        'type': 'my_pages',
+      });
+
+      final Response res = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+  Future<ApiResponseModel<Response>> fetchArticleCategories() async {
+    try {
+      final String? token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError(
+          'Please log in to your social network account',
+        );
+      }
+
+      // https://social.vnshop247.com/api/get_category?access_token=...
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialGetCategory}?access_token=$token';
+
+      final formData = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+      });
+
+      final Response res = await dioClient.post(
+        url,
+        data: formData,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+  /// Parse Response -> List<SocialArticleCategory>
+  List<SocialArticleCategory> parseArticleCategories(Response res) {
+    final List<SocialArticleCategory> result = <SocialArticleCategory>[];
+
+    dynamic data = res.data;
+
+    // Trường hợp API trả JSON dạng string
+    if (data is String) {
+      try {
+        data = jsonDecode(data);
+      } catch (_) {
+        return result;
+      }
+    }
+
+    if (data is! Map) return result;
+    final Map<String, dynamic> map = data as Map<String, dynamic>;
+
+    final int status = (map['api_status'] as num?)?.toInt() ?? 0;
+    if (status != 200) return result;
+
+    final List<dynamic> list = map['categories'] as List<dynamic>? ?? const [];
+    return SocialArticleCategory.listFromJson(list);
   }
 }

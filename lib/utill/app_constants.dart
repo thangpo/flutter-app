@@ -79,7 +79,8 @@ class AppConstants {
 
   //lấy page
   static const String socialFetchRecommendPage='/api/fetch-recommended';
-
+  static const String socialGetMyPage='/api/get-my-pages';
+  static const String socialGetCategory='/api/get_category';
   //follow
   static const String socialFollowUser = '/api/follow-user';
   static const String socialUpdateDataUser = '/api/update-user-data';

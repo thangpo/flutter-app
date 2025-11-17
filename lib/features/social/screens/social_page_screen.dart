@@ -18,6 +18,7 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
   bool _requestedSuggestedPages = false;
+  bool _requestedMyPages = false;
 
   @override
   void initState() {
@@ -29,12 +30,22 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+
+    // Lần đầu vào màn sẽ gọi load gợi ý
     if (!_requestedSuggestedPages) {
       _requestedSuggestedPages = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        // Tạm thời chỉ load gợi ý
         context.read<SocialPageController>().ensureSuggestedLoaded();
+      });
+    }
+
+    // Lần đầu vào màn sẽ gọi load "Trang của bạn"
+    if (!_requestedMyPages) {
+      _requestedMyPages = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        context.read<SocialPageController>().ensureMyPagesLoaded();
       });
     }
   }
@@ -47,6 +58,7 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
 
   Future<void> _openCreatePage() async {
     // TODO: mở màn tạo page thật sự
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -59,6 +71,9 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
 
   Future<void> _reloadSuggested() =>
       context.read<SocialPageController>().refreshSuggested();
+
+  Future<void> _reloadMyPages() =>
+      context.read<SocialPageController>().refreshMyPages();
 
   @override
   Widget build(BuildContext context) {
@@ -117,7 +132,7 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
       ),
       body: Column(
         children: [
-          // TabBar giống Groups
+          // TabBar giống SocialGroupsScreen
           Container(
             color: appBarBackground,
             child: TabBar(
@@ -148,9 +163,9 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
             child: TabBarView(
               controller: _tabController,
               children: [
-                _buildForYouTab(context),      // tab gợi ý (đã có logic)
-                _buildMyPagesTab(context),     // placeholder + nút tạo trang
-                _buildLikedPagesTab(context),  // placeholder
+                _buildForYouTab(context),
+                _buildMyPagesTab(context),
+                _buildLikedPagesTab(context),
               ],
             ),
           ),
@@ -225,75 +240,149 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return ListView(
-      padding: const EdgeInsets.all(12),
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Text(
-            getTranslated('your_pages', context) ?? 'Trang của bạn',
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: colorScheme.onSurface,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ) ??
-                TextStyle(
-                  color: colorScheme.onSurface,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: theme.cardColor,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: colorScheme.outline.withValues(alpha: 0.12),
+    final controller = context.watch<SocialPageController>();
+    final List<SocialGetPage> pages = controller.myPages;
+    final bool loading = controller.loadingMyPages;
+
+    final headerStyle = theme.textTheme.titleMedium?.copyWith(
+      color: colorScheme.onSurface,
+      fontSize: 16,
+      fontWeight: FontWeight.w600,
+    ) ??
+        TextStyle(
+          color: colorScheme.onSurface,
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+        );
+
+    return RefreshIndicator(
+      onRefresh: _reloadMyPages,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(12),
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              getTranslated('your_pages', context) ?? 'Trang của bạn',
+              style: headerStyle,
             ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                getTranslated('no_pages_yet', context) ??
-                    'Bạn chưa tạo trang nào.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurface.withValues(alpha: 0.8),
-                ) ??
-                    TextStyle(
-                      color: colorScheme.onSurface.withValues(alpha: 0.8),
-                      fontSize: 13,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                getTranslated('create_page_description', context) ??
-                    'Hãy tạo một trang cho thương hiệu, doanh nghiệp hoặc cộng đồng của bạn.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurface.withValues(alpha: 0.7),
-                ) ??
-                    TextStyle(
-                      color: colorScheme.onSurface.withValues(alpha: 0.7),
-                      fontSize: 12,
-                    ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _openCreatePage,
-                  icon: const Icon(Icons.add),
-                  label: Text(
-                    getTranslated('create_page', context) ?? 'Tạo trang',
-                  ),
+
+          // Loading lần đầu
+          if (loading && pages.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+
+          // Không có page nào
+          if (!loading && pages.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: theme.cardColor,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: colorScheme.outline.withValues(alpha: 0.12),
                 ),
               ),
-            ],
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    getTranslated('no_pages_yet', context) ??
+                        'Bạn chưa tạo trang nào.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurface
+                          .withValues(alpha: 0.8),
+                    ) ??
+                        TextStyle(
+                          color: colorScheme.onSurface
+                              .withValues(alpha: 0.8),
+                          fontSize: 13,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    getTranslated(
+                        'create_page_description', context) ??
+                        'Hãy tạo một trang cho thương hiệu, doanh nghiệp hoặc cộng đồng của bạn.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurface
+                          .withValues(alpha: 0.7),
+                    ) ??
+                        TextStyle(
+                          color: colorScheme.onSurface
+                              .withValues(alpha: 0.7),
+                          fontSize: 12,
+                        ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _openCreatePage,
+                      icon: const Icon(Icons.add),
+                      label: Text(
+                        getTranslated('create_page', context) ??
+                            'Tạo trang',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // Có danh sách page
+          if (pages.isNotEmpty) ..._buildPageListItems(context, pages),
+
+          const SizedBox(height: 16),
+
+          // Box "Khám phá thêm" + QuickAction tạo trang (giống groups)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: theme.cardColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: colorScheme.outline.withValues(alpha: 0.12),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  getTranslated('explore_more', context) ??
+                      'Khám phá thêm',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: colorScheme.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ) ??
+                      TextStyle(
+                        color: colorScheme.onSurface,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    _QuickAction(
+                      icon: Icons.flag,
+                      label: getTranslated('create_page', context) ??
+                          'Tạo trang',
+                      onTap: _openCreatePage,
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -303,6 +392,7 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
+    // TODO: sau này dùng controller.likedPages
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -544,14 +634,176 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
 
     return '$category • $likesLabel';
   }
+
+  // ───────────────── LIST ITEM CHO "TRANG CỦA BẠN" ─────────────────
+
+  List<Widget> _buildPageListItems(
+      BuildContext context, List<SocialGetPage> pages) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final Color mutedColor = colorScheme.onSurface.withValues(alpha: 0.6);
+
+    return pages
+        .map(
+          (page) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            // TODO: mở màn chi tiết page
+            // Navigator.of(context).push(...);
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color:
+                    colorScheme.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    image: (page.avatarUrl.isNotEmpty)
+                        ? DecorationImage(
+                      image: NetworkImage(page.avatarUrl),
+                      fit: BoxFit.cover,
+                    )
+                        : null,
+                  ),
+                  child: page.avatarUrl.isEmpty
+                      ? Icon(
+                    Icons.flag,
+                    color: colorScheme.primary,
+                  )
+                      : null,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        page.name.isNotEmpty
+                            ? page.name
+                            : page.username,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurface,
+                          fontWeight: FontWeight.w600,
+                        ) ??
+                            TextStyle(
+                              color: colorScheme.onSurface,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _formatPageActivity(page),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: mutedColor,
+                        ) ??
+                            TextStyle(
+                              color: mutedColor,
+                              fontSize: 12,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    )
+        .toList();
+  }
+
+  String _formatPageActivity(SocialGetPage page) {
+    final int likes = page.likesCount;
+    final int posts = page.usersPost;
+
+    final String likesLabel = likes > 0
+        ? '$likes ${getTranslated('likes', context) ?? 'lượt thích'}'
+        : (getTranslated('no_likes_yet', context) ?? 'Chưa có lượt thích');
+
+    final String postsLabel = posts > 0
+        ? '$posts ${getTranslated('posts', context) ?? 'bài viết'}'
+        : (getTranslated('no_posts_yet', context) ?? 'Chưa có bài viết');
+
+    return '$likesLabel • $postsLabel';
+  }
 }
 
-// OPTIONAL: nếu bạn vẫn đang gọi SocialPagesForYouScreen ở MoreScreen
+// OPTIONAL: nếu MoreScreen vẫn đang gọi SocialPagesForYouScreen
 class SocialPagesForYouScreen extends StatelessWidget {
   const SocialPagesForYouScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return const SocialPagesScreen();
+  }
+}
+
+class _QuickAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final BorderRadius radius = BorderRadius.circular(10);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: radius,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            borderRadius: radius,
+            border: Border.all(
+              color: colorScheme.outline.withValues(alpha: 0.12),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: colorScheme.primary, size: 20),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  label,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ) ??
+                      TextStyle(
+                        color: colorScheme.onSurface,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

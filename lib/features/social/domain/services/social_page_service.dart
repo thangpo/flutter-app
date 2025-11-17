@@ -41,4 +41,58 @@ class SocialPageService implements SocialPageServiceInterface {
     ApiChecker.checkApi(resp);
     return <SocialGetPage>[]; // trong trường hợp checkApi không throw
   }
+  @override
+  Future<List<SocialGetPage>> getMyPages({int limit = 20}) async {
+    final ApiResponseModel<Response> resp =
+    await socialPageRepository.getMyPage(limit: limit);
+
+    if (resp.isSuccess && resp.response != null) {
+      final dynamic data = resp.response!.data;
+
+      final int status =
+          int.tryParse('${data?['api_status'] ?? data?['status'] ?? 200}') ??
+              200;
+
+      if (status == 200) {
+        // JSON getMyPage cùng format với recommended → có thể tái dùng parser
+        return socialPageRepository.parseMyPages(resp.response!);
+      }
+
+      final String message = (data?['errors']?['error_text'] ??
+          data?['message'] ??
+          'Failed to load your pages')
+          .toString();
+      throw Exception(message);
+    }
+
+    ApiChecker.checkApi(resp);
+    return <SocialGetPage>[];
+  }
+  @override
+  Future<List<SocialArticleCategory>> getArticleCategories() async {
+    final ApiResponseModel<Response> resp =
+    await socialPageRepository.fetchArticleCategories();
+
+    if (resp.isSuccess && resp.response != null) {
+      final dynamic data = resp.response!.data;
+
+      final int status =
+          int.tryParse('${data?['api_status'] ?? data?['status'] ?? 200}') ??
+              200;
+
+      if (status == 200) {
+        // Dùng parser trong repository
+        return socialPageRepository.parseArticleCategories(resp.response!);
+      }
+
+      final String message = (data?['errors']?['error_text'] ??
+          data?['message'] ??
+          'Failed to load article categories')
+          .toString();
+      throw Exception(message);
+    }
+
+    ApiChecker.checkApi(resp);
+    return <SocialArticleCategory>[];
+  }
 }

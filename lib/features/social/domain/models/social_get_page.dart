@@ -141,3 +141,41 @@ class SocialGetPage {
         .toList();
   }
 }
+class SocialArticleCategory {
+  final int id;
+  final String name;
+
+  const SocialArticleCategory({
+    required this.id,
+    required this.name,
+  });
+
+  factory SocialArticleCategory.fromJson(Map<String, dynamic> json) {
+    int _toInt(dynamic v) {
+      if (v == null) return 0;
+      if (v is int) return v;
+      if (v is double) return v.toInt();
+      return int.tryParse(v.toString()) ?? 0;
+    }
+
+    return SocialArticleCategory(
+      id: _toInt(json['id']),
+      name: (json['name'] ?? '') as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'id': id,
+      'name': name,
+    };
+  }
+
+  static List<SocialArticleCategory> listFromJson(List<dynamic> list) {
+    return list
+        .map((e) => SocialArticleCategory.fromJson(
+      e as Map<String, dynamic>,
+    ))
+        .toList();
+  }
+}
