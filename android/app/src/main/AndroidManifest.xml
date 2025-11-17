@@ -1,34 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    android:targetSandboxVersion="1"
     xmlns:tools="http://schemas.android.com/tools"
     package="com.vnsshop.ecommerce">
-    >
 
+    <!-- Kết nối mạng -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- Giới hạn permissions “cũ” cho SDK thấp -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
-    <!-- NÊN BỎ: WRITE_EXTERNAL_STORAGE. Nếu vẫn cần, đặt maxSdkVersion=29 -->
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
-
-    <uses-permission android:name="android.permission.BLUETOOTH" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
-
-    <!-- Android 13+ granular media -->
+    <!-- Media (Android 13+) -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
 
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" tools:node="remove"/>
-    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
-    <uses-permission android:name="android.permission.USE_FINGERPRINT"/>
+    <!-- Storage cũ (Android < 13) -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
+
+    <!-- Location -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
 
     <!-- Camera + Micro -->
     <uses-permission android:name="android.permission.CAMERA" />
@@ -36,11 +30,10 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
-
-
-    <!-- Tuỳ chọn nhưng khuyên dùng -->
+    <!-- Optional -->
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
+    <!-- Queries API 30+ -->
     <queries>
         <intent>
             <action android:name="android.intent.action.VIEW" />
@@ -60,27 +53,28 @@
         <intent>
             <action android:name="android.media.action.IMAGE_CAPTURE" />
         </intent>
-        <provider android:authorities="com.facebook.katana.provider.PlatformProvider" />
     </queries>
 
     <application
-        android:label="VNShop247"
         android:name="${applicationName}"
-        android:requestLegacyExternalStorage="true"
-        android:usesCleartextTraffic="true"
-        android:extractNativeLibs="true"
-        android:networkSecurityConfig="@xml/network_security_config"
+        android:label="VNShop247"
         android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:extractNativeLibs="true"
         android:allowBackup="false"
         android:fullBackupContent="false">
 
-        <meta-data android:name="com.google.android.geo.API_KEY" android:value="YOUR_MAP_KEY_HERE" />
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="YOUR_MAP_KEY_HERE"/>
 
+        <!-- Flutter Main Activity -->
         <activity
             android:name=".MainActivity"
-            android:exported = "true"
-            android:launchMode="singleTop"
+            android:exported="true"
             android:theme="@style/LaunchTheme"
+            android:launchMode="singleTop"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
@@ -89,7 +83,6 @@
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
 
-            <!-- Giữ 1 cái SplashScreenDrawable thôi -->
             <meta-data
                 android:name="io.flutter.embedding.android.SplashScreenDrawable"
                 android:resource="@drawable/launch_background" />
@@ -98,29 +91,25 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+
             <intent-filter>
-                <action android:name="FLUTTER_NOTIFICATION_CLICK" />
-                <category android:name="android.intent.category.DEFAULT" />
+                <action android:name="FLUTTER_NOTIFICATION_CLICK"/>
+                <category android:name="android.intent.category.DEFAULT"/>
             </intent-filter>
         </activity>
 
-        <meta-data
-            android:name="flutterEmbedding"
-            android:value="2" />
+        <meta-data android:name="flutterEmbedding" android:value="2"/>
 
-        <!-- Giữ 1 meta-data ApplicationId duy nhất -->
-        <meta-data
-            android:name="com.facebook.sdk.ApplicationId"
+        <!-- Facebook -->
+        <meta-data android:name="com.facebook.sdk.ApplicationId"
             android:value="@string/facebook_app_id"/>
-
-        <meta-data
-            android:name="com.facebook.sdk.ClientToken"
+        <meta-data android:name="com.facebook.sdk.ClientToken"
             android:value="@string/facebook_client_token"/>
 
-        <activity android:name="com.facebook.FacebookActivity"
-            android:configChanges="keyboard|keyboardHidden|screenLayout|screenSize|orientation"
-            android:label="@string/app_name"
-            android:exported="true" />
+        <activity
+            android:name="com.facebook.FacebookActivity"
+            android:exported="true"
+            android:configChanges="keyboard|keyboardHidden|screenLayout|screenSize|orientation" />
 
         <activity
             android:name="com.facebook.CustomTabActivity"
@@ -133,6 +122,7 @@
             </intent-filter>
         </activity>
 
+        <!-- Flutter Downloader -->
         <provider
             android:name="vn.hunghd.flutterdownloader.DownloadedFileProvider"
             android:authorities="${applicationId}.flutter_downloader.provider"
@@ -142,6 +132,8 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/provider_paths"/>
         </provider>
+
+        <!-- Firebase Notification -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/notification_icon" />
@@ -152,4 +144,5 @@
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="vnshop247_channel" />
     </application>
+
 </manifest>
