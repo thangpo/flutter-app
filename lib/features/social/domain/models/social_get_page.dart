@@ -78,13 +78,29 @@ class SocialGetPage {
       return s == '1' || s == 'true';
     }
 
+    String? _norm(dynamic v) {
+      if (v == null) return null;
+      final s = v.toString().trim();
+      if (s.isEmpty) return null;
+      if (s.toLowerCase() == 'null' || s.toLowerCase() == 'undefined') {
+        return null;
+      }
+      return s;
+    }
+
+    final String? about = _norm(json['about']);
+    final String? pageDesc = _norm(json['page_description']);
+
     return SocialGetPage(
       pageId: _toInt(json['page_id']),
       ownerUserId: _toInt(json['user_id']),
       username: (json['username'] ?? '') as String,
       name: (json['name'] ?? json['page_title'] ?? '') as String,
       pageName: (json['page_name'] ?? '') as String,
-      description: (json['about'] ?? json['page_description']) as String?,
+
+      // 🔥 Dòng quan trọng:
+      description: about ?? pageDesc,
+
       avatarUrl: (json['avatar'] ?? '') as String,
       coverUrl: (json['cover'] ?? '') as String,
       url: (json['url'] ?? '') as String,
@@ -101,10 +117,11 @@ class SocialGetPage {
       type: json['type'] as String?,
       website: json['website'] as String?,
       facebook: json['facebook'] as String?,
-      instagram: json['instgram'] as String?, // API sai chính tả
+      instagram: json['instgram'] as String?,
       youtube: json['youtube'] as String?,
     );
   }
+
 
   Map<String, dynamic> toJson() {
     return {

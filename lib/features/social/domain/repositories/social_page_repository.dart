@@ -2,7 +2,8 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'dart:io';
+import 'package:path/path.dart' as p;
 import 'package:flutter_sixvalley_ecommerce/data/datasource/remote/dio/dio_client.dart';
 import 'package:flutter_sixvalley_ecommerce/data/datasource/remote/exception/api_error_handler.dart';
 import 'package:flutter_sixvalley_ecommerce/data/model/api_response.dart';
@@ -144,10 +145,15 @@ class SocialPageRepository {
       return null;
     }
   }
+  SocialGetPage? parseSinglePageFromMap(Map raw) {
+    return _parseGetPageMap(raw);
+  }
+
 
   //lấy page của tôi
   Future<ApiResponseModel<Response>> getMyPage({
     int limit = 100,
+    String type = 'my_pages'
   }) async {
     try {
       final token = _getSocialAccessToken();
@@ -162,9 +168,8 @@ class SocialPageRepository {
 
       final form = FormData.fromMap({
         'server_key': AppConstants.socialServerKey,
-
         'limit': limit.toString(),
-        'type': 'my_pages',
+        'type': type
       });
 
       final Response res = await dioClient.post(
@@ -178,6 +183,41 @@ class SocialPageRepository {
       return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
     }
   }
+  Future<ApiResponseModel<Response>> getLikedPages({
+    required String userId,
+    int limit = 100,
+    String type = 'liked_pages'
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError(
+          'Please log in to your social network account',
+        );
+      }
+
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialGetMyPage}?access_token=$token';
+
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'user_id': userId,
+        'limit': limit.toString(),
+        'type': type
+      });
+
+      final Response res = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
   Future<ApiResponseModel<Response>> fetchArticleCategories() async {
     try {
       final String? token = _getSocialAccessToken();
@@ -231,4 +271,177 @@ class SocialPageRepository {
     final List<dynamic> list = map['categories'] as List<dynamic>? ?? const [];
     return SocialArticleCategory.listFromJson(list);
   }
+  Future<ApiResponseModel<Response>> createPage({
+    required String pageName,
+    required String pageTitle,
+    required int categoryId,
+    String? description,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError(
+          'Please log in to your social network account',
+        );
+      }
+
+      // TODO: định nghĩa AppConstants.socialCreatePage = '/api/create-page';
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialCreatePage}?access_token=$token';
+
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'page_name': pageName,
+        'page_title': pageTitle,
+        'page_category': categoryId.toString(),
+        if (description != null && description.trim().isNotEmpty)
+          'page_description': description.trim(),
+      });
+
+      final Response res = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+  Future<ApiResponseModel<Response>> updatePage({
+    required int pageId,
+    String? pageName,
+    String? pageTitle,
+    String? description,
+    int? categoryId,
+    File? avatar,
+    File? cover,
+    Map<String, dynamic>? extraFields,
+  }) async {
+    final Map<String, dynamic> payload = <String, dynamic>{
+      'page_id': pageId.toString(),
+    };
+
+    if (pageName != null && pageName.trim().isNotEmpty) {
+      payload['page_name'] = pageName.trim();
+    }
+    if (pageTitle != null && pageTitle.trim().isNotEmpty) {
+      payload['page_title'] = pageTitle.trim();
+    }
+    if (description != null && description.trim().isNotEmpty) {
+      // theo doc: page_description
+      payload['page_description'] = description.trim();
+    }
+    if (categoryId != null) {
+      payload['page_category'] = categoryId.toString();
+    }
+    if (avatar != null) {
+      payload['avatar'] = avatar;
+    }
+    if (cover != null) {
+      payload['cover'] = cover;
+    }
+    if (extraFields != null && extraFields.isNotEmpty) {
+      payload.addAll(extraFields);
+    }
+
+    return updatePageFromPayload(payload);
+  }
+
+  /// Hàm generic: nhận payload Map<String, dynamic> (giống payload pop từ EditPageScreen)
+  ///
+  /// payload ví dụ:
+  /// {
+  ///   'page_id': '123',        // BẮT BUỘC
+  ///   'page_name': 'abc',
+  ///   'page_title': 'ABC',
+  ///   'page_description': '...',
+  ///   'avatar': File,
+  ///   'cover': File,
+  ///   ...
+  /// }
+  Future<ApiResponseModel<Response>> updatePageFromPayload(
+      Map<String, dynamic> payload) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError(
+          'Please log in to your social network account',
+        );
+      }
+
+      if (!payload.containsKey('page_id')) {
+        return ApiResponseModel.withError('page_id is required');
+      }
+
+      // TODO: định nghĩa trong AppConstants:
+      // static const String socialUpdatePage = '/api/update-page-data';
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialUpdateDatePage}?access_token=$token';
+
+      // Build form data
+      final Map<String, dynamic> formMap = <String, dynamic>{
+        'server_key': AppConstants.socialServerKey,
+      };
+
+      payload.forEach((key, value) {
+        if (value == null) return;
+
+        if (value is File) {
+          formMap[key] = MultipartFile.fromFileSync(
+            value.path,
+            filename: p.basename(value.path),
+          );
+        } else {
+          formMap[key] = value;
+        }
+      });
+
+      final formData = FormData.fromMap(formMap);
+
+      final Response res = await dioClient.post(
+        url,
+        data: formData,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+  /// Parse response của update-page -> SocialGetPage
+  ///
+  /// WoWonder thường trả:
+  /// {
+  ///   "api_status": 200,
+  ///   "page_data": { ... page fields ... }
+  /// }
+  ///
+  /// Hoặc 1 số bản có thể trả "data" thay vì "page_data".
+  SocialGetPage? parseUpdatedPage(Response res) {
+    dynamic data = res.data;
+
+    if (data is String) {
+      try {
+        data = jsonDecode(data);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    if (data is! Map) return null;
+    final Map<String, dynamic> map = data as Map<String, dynamic>;
+
+    final int status = (map['api_status'] as num?)?.toInt() ?? 0;
+    if (status != 200) return null;
+
+    final dynamic rawPage = map['page_data'] ?? map['data'];
+    if (rawPage is! Map) return null;
+
+    return _parseGetPageMap(rawPage);
+  }
+
 }

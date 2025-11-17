@@ -6,6 +6,10 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 
 import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_page_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/edit_page_screen.dart';
+
+
 
 class SocialPagesScreen extends StatefulWidget {
   const SocialPagesScreen({super.key});
@@ -19,12 +23,22 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
   late final TabController _tabController;
   bool _requestedSuggestedPages = false;
   bool _requestedMyPages = false;
+  bool _requestedLikedPages = false;
+
 
   @override
   void initState() {
     super.initState();
     // 3 tab: Dành cho bạn / Trang của bạn / Đã thích
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);_tabController.addListener(() {
+      if (_tabController.index == 2 && !_requestedLikedPages) {
+        _requestedLikedPages = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          context.read<SocialPageController>().ensureLikedPagesLoaded();
+        });
+      }
+    });
   }
 
   @override
@@ -57,23 +71,45 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
   }
 
   Future<void> _openCreatePage() async {
-    // TODO: mở màn tạo page thật sự
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          getTranslated('create_page_coming_soon', context) ??
-              'Chức năng tạo trang sẽ sớm được bổ sung.',
-        ),
+
+    final bool? created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => const CreatePageScreen(),
+        fullscreenDialog: true,
       ),
     );
+
+    if (created == true && mounted) {
+      // Controller.createPage() đã tự thêm vào myPages,
+      // tuỳ anh muốn:
+      // 1) Chỉ chuyển sang tab "Trang của bạn":
+      _tabController.animateTo(1);
+
+      // 2) Hoặc thêm refresh từ server (nếu muốn chắc chắn):
+      // await context.read<SocialPageController>().refreshMyPages();
+    }
   }
+  String _buildPageCategory(SocialGetPage page) {
+    // Nếu API trả tên category (vd "Cửa hàng", "Giải trí")
+    if (page.category.isNotEmpty) {
+      return page.category;
+    }
+
+    // Fallback nếu category rỗng
+    return getTranslated('page', context) ?? 'Trang';
+  }
+
+
 
   Future<void> _reloadSuggested() =>
       context.read<SocialPageController>().refreshSuggested();
 
   Future<void> _reloadMyPages() =>
       context.read<SocialPageController>().refreshMyPages();
+  Future<void> _reloadLikedPages() =>
+      context.read<SocialPageController>().refreshLikedPages();
+
 
   @override
   Widget build(BuildContext context) {
@@ -392,25 +428,57 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    // TODO: sau này dùng controller.likedPages
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Text(
-          getTranslated('liked_pages_coming_soon', context) ??
-              'Tính năng danh sách trang đã thích\nsẽ được bổ sung trong các phiên bản tiếp theo.',
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: colorScheme.onSurface.withValues(alpha: 0.7),
-          ) ??
-              TextStyle(
-                color: colorScheme.onSurface.withValues(alpha: 0.7),
-                fontSize: 13,
-              ),
-        ),
+    final controller = context.watch<SocialPageController>();
+    final List<SocialGetPage> pages = controller.likedPages;
+    final bool loading = controller.loadingLikedPages;
+
+    final headerStyle = theme.textTheme.titleMedium?.copyWith(
+      color: colorScheme.onSurface,
+      fontSize: 16,
+      fontWeight: FontWeight.w600,
+    ) ??
+        TextStyle(
+          color: colorScheme.onSurface,
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+        );
+
+    return RefreshIndicator(
+      onRefresh: _reloadLikedPages,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(12),
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              getTranslated('liked_pages', context) ?? 'Trang đã thích',
+              style: headerStyle,
+            ),
+          ),
+
+          // Loading lần đầu
+          if (loading && pages.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+
+          // Không có trang đã thích
+          if (!loading && pages.isEmpty)
+            _buildEmptyBox(
+              context: context,
+              message: getTranslated('no_liked_pages_yet', context) ??
+                  'Bạn chưa thích trang nào.',
+            ),
+
+          // Có danh sách page đã thích → tái sử dụng list item giống "Trang của bạn"
+          if (pages.isNotEmpty) ..._buildPageListItems(context, pages),
+        ],
       ),
     );
   }
+
 
   // ───────────────── COMMON: GRID + CARD + EMPTY ─────────────────
 
@@ -657,12 +725,12 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Row(
               children: [
+                // Avatar
                 Container(
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color:
-                    colorScheme.primary.withValues(alpha: 0.12),
+                    color: colorScheme.primary.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
                     image: (page.avatarUrl.isNotEmpty)
                         ? DecorationImage(
@@ -678,15 +746,17 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
                   )
                       : null,
                 ),
+
                 const SizedBox(width: 12),
+
+                // Tên + activity
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // ─ tên page ─
                       Text(
-                        page.name.isNotEmpty
-                            ? page.name
-                            : page.username,
+                        page.name.isNotEmpty ? page.name : page.username,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodyMedium?.copyWith(
@@ -699,7 +769,26 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
                               fontWeight: FontWeight.w600,
                             ),
                       ),
-                      const SizedBox(height: 4),
+
+                      const SizedBox(height: 2),
+
+                      // ─ category ─
+                      Text(
+                        _buildPageCategory(page),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: mutedColor,
+                        ) ??
+                            TextStyle(
+                              color: mutedColor,
+                              fontSize: 12,
+                            ),
+                      ),
+
+                      const SizedBox(height: 2),
+
+                      // ─ likes • posts ─
                       Text(
                         _formatPageActivity(page),
                         maxLines: 1,
@@ -715,6 +804,12 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
                     ],
                   ),
                 ),
+
+
+                const SizedBox(width: 4),
+
+                // Nút 3 chấm
+                _buildPageMoreButton(context, page, mutedColor),
               ],
             ),
           ),
@@ -723,6 +818,73 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
     )
         .toList();
   }
+  Widget _buildPageMoreButton(
+      BuildContext context,
+      SocialGetPage page,
+      Color iconColor,
+      ) {
+    return PopupMenuButton<String>(
+      icon: Icon(Icons.more_vert, color: iconColor),
+      onSelected: (value) {
+        switch (value) {
+          case 'edit':
+            _onEditPage(page);
+            break;
+        // sau này anh có thể thêm 'delete', 'pin', ...
+        }
+      },
+      itemBuilder: (ctx) => <PopupMenuEntry<String>>[
+        PopupMenuItem<String>(
+          value: 'edit',
+          child: Text(
+            getTranslated('edit_page', ctx) ?? 'Chỉnh sửa trang',
+          ),
+        ),
+      ],
+    );
+  }
+  void _onEditPage(SocialGetPage page) async {
+    final payload = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(
+        builder: (_) => EditPageScreen(
+          pageId: page.pageId,
+          initialPageName: page.pageName,       // hoặc page.username nếu anh muốn
+          initialPageTitle: page.name,
+          initialDescription: page.description,
+          initialCategoryName: page.category,
+          initialAvatarUrl: page.avatarUrl,
+          initialCoverUrl: page.coverUrl,
+        ),
+      ),
+    );
+
+    if (payload != null && mounted) {
+      final ctrl = context.read<SocialPageController>();
+
+      final ok = await ctrl.updatePageFromPayload(payload);
+
+      if (!ok) {
+        final msg = ctrl.updatePageError ?? 'Cập nhật trang thất bại';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg)),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              getTranslated('update_page_success', context) ??
+                  'Cập nhật trang thành công.',
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+
+
+
+
 
   String _formatPageActivity(SocialGetPage page) {
     final int likes = page.likesCount;
