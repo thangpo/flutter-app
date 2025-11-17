@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -57,7 +58,6 @@ class SocialService implements SocialServiceInterface {
     required this.socialRepository,
     this.ecomService,
   });
-
   // ========== PRIVATE HELPERS ==========
   String? _absoluteUrl(String? raw) {
     if (raw == null) return null;
@@ -154,7 +154,6 @@ class SocialService implements SocialServiceInterface {
     return null;
   }
 
-
   List<SocialPostReaction> _parsePostReactions(Response response) {
     final dynamic root = response.data;
     dynamic dataField = root;
@@ -163,8 +162,7 @@ class SocialService implements SocialServiceInterface {
           root['data'] ?? root['users'] ?? root['result'] ?? root['reactions'];
     }
 
-    final Iterable<Map<String, dynamic>> rows =
-        _expandReactionRows(dataField);
+    final Iterable<Map<String, dynamic>> rows = _expandReactionRows(dataField);
     if (rows.isEmpty) return const <SocialPostReaction>[];
 
     final List<SocialPostReaction> parsed = <SocialPostReaction>[];
@@ -207,8 +205,7 @@ class SocialService implements SocialServiceInterface {
   }
 
   Iterable<Map<String, dynamic>> _expandReactionRows(dynamic dataField) {
-    final List<Map<String, dynamic>> aggregated =
-        <Map<String, dynamic>>[];
+    final List<Map<String, dynamic>> aggregated = <Map<String, dynamic>>[];
 
     void addEntry(dynamic entry, {String? fallbackReaction}) {
       if (entry is Map) {
@@ -236,8 +233,7 @@ class SocialService implements SocialServiceInterface {
       }
     } else if (dataField is Map) {
       dataField.forEach((key, value) {
-        final String? reactionTag =
-            key != null ? key.toString().trim() : null;
+        final String? reactionTag = key != null ? key.toString().trim() : null;
         if (value is List) {
           for (final dynamic entry in value) {
             addEntry(entry, fallbackReaction: reactionTag);
@@ -621,6 +617,73 @@ class SocialService implements SocialServiceInterface {
 
     ApiChecker.checkApi(resp);
     throw Exception('Create story failed');
+  }
+
+  // create poke
+  @override
+  Future<bool> createPoke(int userId) async {
+    final resp = await socialRepository.createPoke(userId);
+    if (resp.isSuccess && resp.response != null) {
+      final raw = resp.response!.data;
+      final Map<String, dynamic> data =
+      raw is Map<String, dynamic> ? raw : jsonDecode(raw.toString());
+      final int status = int.tryParse('${data['api_status'] ?? 0}') ?? 0;
+      // Thành công
+      if (status == 200) return true;
+      // Trường hợp WoWonder trả 400 KHÔNG CÓ errors
+      if (status == 400) {
+        return false; // ← user đã bị chọc rồi
+      }
+      // Nếu server có trả thêm phần errors
+      final String message = (data['errors']?['error_text'] ??
+          data['message'] ??
+          '')
+          .toString();
+      throw Exception(message);
+    }
+    ApiChecker.checkApi(resp);
+    throw Exception("Poke failed");
+  }
+  // fetch pokes
+  @override
+  Future<List<Map<String, dynamic>>> fetchPokes() async {
+    final resp = await socialRepository.fetchPokes();
+
+    if (resp.isSuccess && resp.response != null) {
+      final raw = resp.response!.data;
+
+      final Map<String, dynamic> data =
+      raw is Map<String, dynamic> ? raw : jsonDecode(raw.toString());
+
+      final int status = int.tryParse('${data['api_status'] ?? 0}') ?? 0;
+
+      if (status == 200) {
+        final list = data['data'];
+        if (list is List) {
+          return List<Map<String, dynamic>>.from(list);
+        }
+        return [];
+      }
+
+      throw Exception("Fetch failed");
+    }
+
+    ApiChecker.checkApi(resp);
+    throw Exception("Fetch pokes failed");
+  }
+  // remove poke
+  @override
+  Future<bool> removePoke(int pokeId) async {
+    final resp = await socialRepository.removePoke(pokeId);
+    if (resp.isSuccess && resp.response != null) {
+      final raw = resp.response!.data;
+      final Map<String, dynamic> data =
+      raw is Map<String, dynamic> ? raw : jsonDecode(raw.toString());
+      final int status = int.tryParse('${data['api_status'] ?? 0}') ?? 0;
+      if (status == 200) return true;     // 🟢 Xoá thành công
+      if (status == 400) return false;    // 🔴 Lỗi
+    }
+    return false;
   }
 
   @override
@@ -1537,8 +1600,7 @@ class SocialService implements SocialServiceInterface {
       final dynamic errorText = errors is Map ? errors['error_text'] : null;
       final dynamic message =
           errorText ?? (data is Map ? data['message'] : null);
-      throw Exception(
-          (message ?? 'Unable to load reactions').toString());
+      throw Exception((message ?? 'Unable to load reactions').toString());
     }
     ApiChecker.checkApi(resp);
     return const <SocialPostReaction>[];

@@ -38,11 +38,13 @@ const Set<String> _profileTypes = {
   'following',
   'visited_profile',
   'accepted_request',
+  'poke',
 };
 const Set<String> _profileOpenActions = {
   'open_following',
   'open_profile',
   'open_visited_profile',
+  'open_poke',
 };
 
 // Mở story

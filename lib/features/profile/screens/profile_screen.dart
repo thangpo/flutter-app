@@ -228,6 +228,7 @@ class ProfileScreenState extends State<ProfileScreen> {
                     '${profile.userInfoModel!.fName} ${profile.userInfoModel!.lName ?? ''}',
                     style: textBold.copyWith(color:  Theme.of(context).colorScheme.secondaryContainer, fontSize: Dimensions.fontSizeLarge),
                   ),
+
                 ]),
                 const SizedBox(height: Dimensions.paddingSizeLarge),
 

@@ -387,6 +387,8 @@ class _NotificationItemState extends State<NotificationItem> {
         return "đã bắt đầu theo dõi bạn.";
       case 'viewed_story':
         return "đã xem story của bạn.";
+        case 'poke':
+      return "đã chọc bạn.";
       default:
         return "đã tương tác với bạn.";
     }
@@ -460,6 +462,9 @@ class _NotificationItemState extends State<NotificationItem> {
         return Icons.person_add_alt_1_rounded;
       case 'viewed_story':
         return Icons.visibility_rounded;
+        case 'poke':
+      return Icons.touch_app_rounded;
+
       default:
         return Icons.notifications_rounded;
     }
@@ -481,6 +486,8 @@ class _NotificationItemState extends State<NotificationItem> {
       case 'group_admin': return const Color(0xFF1877F2); // Blue check
       case 'following': return const Color(0xFFFB6B90); // Pink coral
       case 'viewed_story': return const Color(0xFFF94892); // Magenta
+      case 'poke':
+        return const Color(0xFF0A84FF);
       default: return const Color(0xFFAAAAAA);
     }
   }

@@ -25,6 +25,11 @@ abstract class SocialServiceInterface {
     String? storyDescription,
     String? highlightHash,
   });
+  Future<bool> createPoke(int userId);
+  Future<bool> removePoke(int pokeId);
+
+  Future<List<Map<String, dynamic>>> fetchPokes();
+
   Future<void> reactToPost({
     required String postId,
     required String reaction,
