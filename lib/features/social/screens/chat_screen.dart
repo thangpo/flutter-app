@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:encrypt/encrypt.dart' as enc;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Clipboard
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -91,6 +92,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// Lưu reaction local: { messageId(String) : reactionId(int) }
   Map<String, int> _localReactions = {};
+
+  /// Tin nhắn đang được "trả lời"
+  Map<String, dynamic>? _replyingToMessage;
 
   @override
   void initState() {
@@ -413,24 +417,42 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // =================================================
-  // SEND TEXT
+  // SEND TEXT (có reply_id)
   // =================================================
   Future<void> _sendText() async {
     final text = _inputCtrl.text.trim();
     if (text.isEmpty || _sending) return;
 
-    setState(() => _sending = true);
+    final replying = _replyingToMessage;
+    String? replyId;
+    if (replying != null) {
+      replyId = _msgIdStr(replying);
+    }
+
+    setState(() {
+      _sending = true;
+      _replyingToMessage = null;
+    });
 
     try {
       final sent = await repo.sendMessage(
         token: widget.accessToken,
         peerUserId: _peerId,
         text: text,
+        replyToMessageId: replyId,
       );
 
       _inputCtrl.clear();
 
       if (sent != null) {
+        if (replyId != null &&
+            (sent['reply_id'] == null || '${sent['reply_id']}' == '0')) {
+          sent['reply_id'] = replyId;
+        }
+        if (replying != null) {
+          sent['reply'] ??= Map<String, dynamic>.from(replying);
+        }
+
         _mergeIncoming([sent], toTail: true);
         _applyLocalReactionsToMessages();
         if (mounted) {
@@ -655,62 +677,346 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // =================================================
-  // REACTION HANDLERS
+  // REPLY HELPERS
   // =================================================
-  Future<void> _onLongPressMessage(Map<String, dynamic> message) async {
+
+  bool _hasReplyTag(Map<String, dynamic> m) {
+    final v = m['reply_id'] ?? m['reply_to_id'] ?? (m['reply']?['id']);
+    if (v == null) return false;
+    final s = v.toString();
+    return s.isNotEmpty && s != '0';
+  }
+
+  Map<String, dynamic>? _findRepliedMessage(Map<String, dynamic> m) {
+    final r = m['reply'];
+    if (r is Map<String, dynamic>) {
+      return r;
+    }
+    final id = '${m['reply_id'] ?? m['reply_to_id'] ?? ''}';
+    if (id.isEmpty || id == '0') return null;
+
+    for (final msg in _messages) {
+      if (_msgIdStr(msg) == id) return msg;
+    }
+    return null;
+  }
+
+    /// Header nhỏ: "Tran đã trả lời tin nhắn của chính mình" / "Bạn đã trả lời Tran" ...
+    /// Dòng text: "Bạn đã trả lời Tran" / "Tran đã trả lời tin nhắn của chính mình"
+  Widget _buildReplyHeader({
+    required Map<String, dynamic> message,
+    Map<String, dynamic>? replyMsg,
+    required bool isMe,
+  }) {
+    final peerName = widget.peerName ?? '';
+
+    // Đoán người được reply có phải chính người gửi message hay không
+    bool repliedIsMe = false;
+    if (replyMsg != null) {
+      final rpPos = replyMsg['position'];
+
+      if (rpPos == 'right') {
+        repliedIsMe = isMe;
+      } else if (rpPos == 'left') {
+        repliedIsMe = !isMe;
+      } else {
+        final fromUserId = message['user_data']?['user_id']?.toString() ??
+            message['from_id']?.toString();
+        final replyUserId = replyMsg['user_data']?['user_id']?.toString() ??
+            replyMsg['from_id']?.toString();
+
+        if (fromUserId != null &&
+            replyUserId != null &&
+            fromUserId.isNotEmpty &&
+            replyUserId.isNotEmpty) {
+          repliedIsMe = fromUserId == replyUserId;
+        }
+      }
+    }
+
+    final senderName =
+        message['user_data']?['name']?.toString().trim().isNotEmpty == true
+            ? message['user_data']['name'].toString()
+            : peerName;
+
+    String text;
+    if (isMe && repliedIsMe) {
+      text = 'Bạn đã trả lời tin nhắn của chính mình';
+    } else if (isMe && !repliedIsMe) {
+      text = senderName.isNotEmpty
+          ? 'Bạn đã trả lời $senderName'
+          : 'Bạn đã trả lời';
+    } else if (!isMe && repliedIsMe) {
+      final name = senderName.isNotEmpty ? senderName : 'Người kia';
+      text = '$name đã trả lời tin nhắn của chính mình';
+    } else {
+      final name = senderName.isNotEmpty ? senderName : 'Người kia';
+      text = '$name đã trả lời bạn';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 2, bottom: 2),
+      child: Align(
+        alignment: isMe
+            ? Alignment.centerRight
+            : Alignment.centerLeft, // dóng theo bubble
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.reply, size: 12, color: Colors.grey),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                text,
+                style: const TextStyle(
+                  fontSize: 10, // chữ bé hơn 1 tẹo
+                  color: Colors.grey, // không nền, chỉ chữ xám
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+
+
+  /// Thanh nội dung tin nhắn được reply (quote bar)
+    /// Thanh nội dung tin nhắn được reply (quote)
+  Widget _buildReplyPreview(
+    Map<String, dynamic> replyMsg, {
+    required bool isMe,
+  }) {
+    final text = _plainTextOf(replyMsg);
+
+    final bgColor = Colors.grey.shade200; // nền xám nhẹ
+    final maxWidth = MediaQuery.of(context).size.width * 0.6; // ~ nửa màn hình
+
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            text.isEmpty ? '(Tin nhắn)' : text,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.black87, // chữ đen
+              fontStyle: FontStyle.italic, // nghiêng
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // =================================================
+  // REACTION + ACTION HANDLERS
+  // =================================================
+
+  Future<void> _onLongPressMessage(
+      Map<String, dynamic> message, bool isMe) async {
     final id = _msgId(message);
     if (id <= 0) return;
 
     final current = _getReactionForMessage(message);
-    final selected = await _showReactionPicker(current);
-    if (selected == null) return;
 
-    await _toggleReactionForMessage(message, selected);
+    final result = await _showMessageMenu(current, isMe: isMe);
+    if (result == null) return;
+
+    if (result.reactionId != null) {
+      await _toggleReactionForMessage(message, result.reactionId!);
+      return;
+    }
+
+    switch (result.action) {
+      case _MessageAction.reply:
+        setState(() {
+          _replyingToMessage = message;
+        });
+        break;
+      case _MessageAction.copy:
+        final text = _plainTextOf(message);
+        if (text.isNotEmpty) {
+          await Clipboard.setData(ClipboardData(text: text));
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Đã sao chép tin nhắn')),
+            );
+          }
+        }
+        break;
+      case _MessageAction.delete:
+        await _deleteMessage(message);
+        break;
+      case _MessageAction.forward:
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('Chức năng chuyển tiếp sẽ được hỗ trợ sau.')),
+          );
+        }
+        break;
+      case null:
+        break;
+    }
   }
 
-  Future<int?> _showReactionPicker(int current) {
-    return showModalBottomSheet<int>(
+  Future<_MessageMenuResult?> _showMessageMenu(int currentReaction,
+      {required bool isMe}) {
+    return showModalBottomSheet<_MessageMenuResult>(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 16, left: 40, right: 40),
-          child: Container(
-            height: 56,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: const [
-                BoxShadow(
-                  blurRadius: 8,
-                  offset: Offset(0, -2),
-                  color: Colors.black26,
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 8, left: 8, right: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Thanh reaction
+                Container(
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: const [
+                      BoxShadow(
+                        blurRadius: 8,
+                        offset: Offset(0, -2),
+                        color: Colors.black26,
+                      ),
+                    ],
+                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      ..._reactionEmojis.entries.map((entry) {
+                        final isSelected = entry.key == currentReaction;
+                        return GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => Navigator.of(ctx).pop(
+                            _MessageMenuResult(reactionId: entry.key),
+                          ),
+                          child: Padding(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 4.0),
+                            child: Text(
+                              entry.value,
+                              style: TextStyle(
+                                fontSize: isSelected ? 28 : 24,
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.add, size: 22),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Hàng action
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: const [
+                      BoxShadow(
+                        blurRadius: 8,
+                        offset: Offset(0, -2),
+                        color: Colors.black26,
+                      ),
+                    ],
+                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _MessageActionButton(
+                        icon: Icons.reply,
+                        label: 'Trả lời',
+                        onTap: () => Navigator.of(ctx).pop(
+                          const _MessageMenuResult(
+                              action: _MessageAction.reply),
+                        ),
+                      ),
+                      _MessageActionButton(
+                        icon: Icons.copy,
+                        label: 'Sao chép',
+                        onTap: () => Navigator.of(ctx).pop(
+                          const _MessageMenuResult(action: _MessageAction.copy),
+                        ),
+                      ),
+                      _MessageActionButton(
+                        icon: Icons.delete_outline,
+                        label: 'Xóa',
+                        onTap: () => Navigator.of(ctx).pop(
+                          const _MessageMenuResult(
+                              action: _MessageAction.delete),
+                        ),
+                      ),
+                      _MessageActionButton(
+                        icon: Icons.forward,
+                        label: 'Chuyển tiếp',
+                        onTap: () => Navigator.of(ctx).pop(
+                          const _MessageMenuResult(
+                              action: _MessageAction.forward),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: _reactionEmojis.entries.map((entry) {
-                final isSelected = entry.key == current;
-                return GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => Navigator.of(ctx).pop(entry.key),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                    child: Text(
-                      entry.value,
-                      style: TextStyle(
-                        fontSize: isSelected ? 28 : 24,
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
             ),
           ),
         );
       },
     );
+  }
+
+  Future<void> _deleteMessage(Map<String, dynamic> message) async {
+    final idStr = _msgIdStr(message);
+    if (idStr.isEmpty) return;
+
+    try {
+      final ok = await repo.deleteMessage(
+        token: widget.accessToken,
+        messageId: idStr,
+      );
+
+      if (ok) {
+        setState(() {
+          _messages.removeWhere((m) => _msgIdStr(m) == idStr);
+        });
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Không xóa được tin nhắn')),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('deleteMessage error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không xóa được tin nhắn: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _toggleReactionForMessage(
@@ -722,7 +1028,6 @@ class _ChatScreenState extends State<ChatScreen> {
     final newReaction = current == pickedId ? 0 : pickedId;
     final reactionStr = newReaction == 0 ? '' : newReaction.toString();
 
-    // Cập nhật UI + local cache
     setState(() {
       message['reaction'] = newReaction;
       if (newReaction == 0) {
@@ -733,7 +1038,6 @@ class _ChatScreenState extends State<ChatScreen> {
     });
     _saveLocalReactions();
 
-    // Gọi API (không rollback nếu lỗi)
     try {
       await repo.reactMessage(
         token: widget.accessToken,
@@ -913,6 +1217,8 @@ class _ChatScreenState extends State<ChatScreen> {
                       }
 
                       final reactionId = _getReactionForMessage(m);
+                      final hasReply = _hasReplyTag(m);
+                      final replyMsg = hasReply ? _findRepliedMessage(m) : null;
 
                       // normal bubble
                       if (!isMe) {
@@ -937,29 +1243,55 @@ class _ChatScreenState extends State<ChatScreen> {
                               ),
                               const SizedBox(width: 8),
                               Flexible(
-                                child: GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onLongPress: () => _onLongPressMessage(m),
-                                  child: Stack(
-                                    clipBehavior: Clip.none,
-                                    children: [
-                                      ChatMessageBubble(
-                                        key: ValueKey(
-                                            '${m['id'] ?? m.hashCode}'),
-                                        message: m,
-                                        isMe: false,
-                                      ),
-                                      if (reactionId != 0)
-                                        Positioned(
-                                          bottom: -14,
-                                          left: 8,
-                                          child: _buildReactionBadge(reactionId,
+                                child: _SwipeReplyWrapper(
+                                  isMe: false,
+                                  onReply: () {
+                                    setState(() {
+                                      _replyingToMessage = m;
+                                    });
+                                  },
+                                  child: GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
+                                    onLongPress: () =>
+                                        _onLongPressMessage(m, false),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        if (hasReply)
+                                          _buildReplyHeader(
+                                            message: m,
+                                            replyMsg: replyMsg,
+                                            isMe: false,
+                                          ),
+                                        if (replyMsg != null)
+                                          _buildReplyPreview(replyMsg,
                                               isMe: false),
+                                        Stack(
+                                          clipBehavior: Clip.none,
+                                          children: [
+                                            ChatMessageBubble(
+                                              key: ValueKey(
+                                                  '${m['id'] ?? m.hashCode}'),
+                                              message: m,
+                                              isMe: false,
+                                            ),
+                                            if (reactionId != 0)
+                                              Positioned(
+                                                bottom: -14,
+                                                left: 8,
+                                                child: _buildReactionBadge(
+                                                    reactionId,
+                                                    isMe: false),
+                                              ),
+                                          ],
                                         ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
+
                             ],
                           ),
                         );
@@ -972,28 +1304,54 @@ class _ChatScreenState extends State<ChatScreen> {
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
                             Flexible(
-                              child: GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onLongPress: () => _onLongPressMessage(m),
-                                child: Stack(
-                                  clipBehavior: Clip.none,
-                                  children: [
-                                    ChatMessageBubble(
-                                      key: ValueKey('${m['id'] ?? m.hashCode}'),
-                                      message: m,
-                                      isMe: true,
-                                    ),
-                                    if (reactionId != 0)
-                                      Positioned(
-                                        bottom: -14,
-                                        right: 8,
-                                        child: _buildReactionBadge(reactionId,
+                              child: _SwipeReplyWrapper(
+                                isMe: true,
+                                onReply: () {
+                                  setState(() {
+                                    _replyingToMessage = m;
+                                  });
+                                },
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onLongPress: () =>
+                                      _onLongPressMessage(m, true),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      if (hasReply)
+                                        _buildReplyHeader(
+                                          message: m,
+                                          replyMsg: replyMsg,
+                                          isMe: true,
+                                        ),
+                                      if (replyMsg != null)
+                                        _buildReplyPreview(replyMsg,
                                             isMe: true),
+                                      Stack(
+                                        clipBehavior: Clip.none,
+                                        children: [
+                                          ChatMessageBubble(
+                                            key: ValueKey(
+                                                '${m['id'] ?? m.hashCode}'),
+                                            message: m,
+                                            isMe: true,
+                                          ),
+                                          if (reactionId != 0)
+                                            Positioned(
+                                              bottom: -14,
+                                              right: 8,
+                                              child: _buildReactionBadge(
+                                                  reactionId,
+                                                  isMe: true),
+                                            ),
+                                        ],
                                       ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
+
                           ],
                         ),
                       );
@@ -1001,6 +1359,52 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
               ),
+              // Thanh "Đang trả lời..."
+              if (_replyingToMessage != null)
+                Container(
+                  width: double.infinity,
+                  margin:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 3,
+                        height: 32,
+                        margin: const EdgeInsets.only(right: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.blue,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          _plainTextOf(_replyingToMessage!),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: () {
+                          setState(() {
+                            _replyingToMessage = null;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
               SafeArea(
                 top: false,
                 minimum: const EdgeInsets.fromLTRB(8, 6, 8, 8),
@@ -1123,6 +1527,150 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// ================== HỖ TRỢ MENU ==================
+
+enum _MessageAction { reply, copy, delete, forward }
+
+class _MessageMenuResult {
+  final int? reactionId;
+  final _MessageAction? action;
+
+  const _MessageMenuResult({this.reactionId, this.action});
+}
+
+class _MessageActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _MessageActionButton({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 22),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+
+
+}
+
+
+class _SwipeReplyWrapper extends StatefulWidget {
+  final Widget child;
+  final bool isMe;
+  final VoidCallback onReply;
+
+  const _SwipeReplyWrapper({
+    required this.child,
+    required this.isMe,
+    required this.onReply,
+  });
+
+  @override
+  State<_SwipeReplyWrapper> createState() => _SwipeReplyWrapperState();
+}
+
+
+class _SwipeReplyWrapperState extends State<_SwipeReplyWrapper> {
+  double _dragDx = 0;
+  static const double _maxShift = 80; // kéo tối đa ~80px
+
+  @override
+  Widget build(BuildContext context) {
+    // Giới hạn theo hướng cho phép
+    double effectiveDx;
+    if (widget.isMe) {
+      // mình: chỉ cho kéo sang trái (âm)
+      effectiveDx = _dragDx.clamp(-_maxShift, 0);
+    } else {
+      // người khác: chỉ cho kéo sang phải (dương)
+      effectiveDx = _dragDx.clamp(0, _maxShift);
+    }
+
+    final progress =
+        (effectiveDx.abs() / _maxShift).clamp(0.0, 1.0); // 0 -> 1 cho icon
+
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragUpdate: (details) {
+        setState(() {
+          _dragDx += details.delta.dx;
+        });
+      },
+      onHorizontalDragEnd: (_) {
+        final threshold =
+            _maxShift * 0.6; // phải kéo > ~60% maxShift mới trigger
+
+        bool trigger = false;
+        if (widget.isMe) {
+          trigger = effectiveDx <= -threshold;
+        } else {
+          trigger = effectiveDx >= threshold;
+        }
+
+        if (trigger) {
+          widget.onReply();
+        }
+
+        setState(() {
+          _dragDx = 0; // snap bubble về chỗ cũ
+        });
+      },
+      onHorizontalDragCancel: () {
+        setState(() {
+          _dragDx = 0;
+        });
+      },
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Icon reply nằm ở phía “kéo ra”
+          Positioned(
+            left: widget.isMe ? null : 0,
+            right: widget.isMe ? 0 : null,
+            child: Opacity(
+              opacity: progress,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                child: const Icon(
+                  Icons.reply,
+                  size: 18,
+                  color: Colors.blueGrey,
+                ),
+              ),
+            ),
+          ),
+          // Bubble dịch chuyển theo tay
+          Transform.translate(
+            offset: Offset(effectiveDx, 0),
+            child: widget.child,
+          ),
+        ],
       ),
     );
   }

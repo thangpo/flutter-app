@@ -1,6 +1,8 @@
 // lib/features/social/domain/repositories/social_chat_repository.dart
 import 'dart:convert';
 import 'dart:io';
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -224,14 +226,13 @@ class SocialChatRepository {
   }
 
   // ================= SEND (text / gif / file) =================
-  // ===== SEND (text / gif / file) =====
   Future<Map<String, dynamic>?> sendMessage({
     required String token,
     required String peerUserId,
     String? text,
     String? gifUrl,
     String? filePath,
-    String? replyId, // optional
+    String? replyToMessageId, // đổi tên cho khớp ChatScreen
   }) async {
     final base =
         '${AppConstants.socialBaseUrl}${AppConstants.socialChatSendMessageUri}?access_token=$token';
@@ -248,7 +249,9 @@ class SocialChatRepository {
         ..fields['message_hash_id'] =
             DateTime.now().microsecondsSinceEpoch.toString();
 
-      if (_notEmpty(replyId)) req.fields['reply_id'] = replyId!;
+      if (_notEmpty(replyToMessageId)) {
+        req.fields['reply_id'] = replyToMessageId!;
+      }
 
       final filename = p.basename(filePath!);
       final ct = _guessMediaType(filePath);
@@ -285,7 +288,7 @@ class SocialChatRepository {
       'message_hash_id': DateTime.now().microsecondsSinceEpoch.toString(),
       if (_notEmpty(text)) 'text': text!,
       if (_notEmpty(gifUrl)) 'gif': gifUrl!,
-      if (_notEmpty(replyId)) 'reply_id': replyId!,
+      if (_notEmpty(replyToMessageId)) 'reply_id': replyToMessageId!,
     };
 
     final res =
@@ -335,6 +338,46 @@ class SocialChatRepository {
       final map = jsonDecode(res.body) as Map<String, dynamic>;
       final ok = (map['api_status'] ?? map['status']) == 200;
       if (!ok) _throwApi(res.body);
+    }
+  }
+
+  Future<bool> deleteMessage({
+    required String token,
+    required String messageId,
+  }) async {
+    try {
+      final uri = Uri.parse(
+        '${AppConstants.socialBaseUrl}/api/delete_message?access_token=$token',
+      );
+
+      // Gửi dạng form body bình thường, WoWonder vẫn nhận được
+      final resp = await http.post(
+        uri,
+        body: {
+          'server_key': AppConstants.socialServerKey,
+          'message_id': messageId,
+        },
+      );
+
+      if (resp.statusCode != 200) {
+        debugPrint(
+            'deleteMessage httpStatus != 200: ${resp.statusCode} ${resp.body}');
+        return false;
+      }
+
+      dynamic data = jsonDecode(resp.body);
+      if (data is! Map<String, dynamic>) {
+        return false;
+      }
+
+      final status = int.tryParse(
+              '${data['api_status'] ?? data['status'] ?? data['code'] ?? ''}') ??
+          0;
+
+      return status == 200;
+    } catch (e, st) {
+      debugPrint('deleteMessage error: $e\n$st');
+      return false;
     }
   }
 }
