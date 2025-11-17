@@ -1,4 +1,4 @@
-//branch huydev
+//G:\flutter-app\lib\features\social\controllers\social_chat_controller.dart
 import 'dart:async';
 import 'package:get/get.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_chat_repository.dart';
@@ -135,13 +135,15 @@ class SocialChatController extends GetxController {
 
   // ===== Internal =====
 
-  void _startPolling() {
+    void _startPolling() {
     _stopPolling();
     _pollErrorCount = 0;
+    _pollInterval = const Duration(seconds: 3); // nhanh hơn
     isPolling.value = true;
 
     _pollTimer = Timer.periodic(_pollInterval, (_) => _pollOnce());
   }
+
 
   void _stopPolling() {
     isPolling.value = false;
@@ -155,28 +157,35 @@ class SocialChatController extends GetxController {
 
     _fetching = true;
     try {
+      // ❗ KHÔNG dùng afterMessageId nữa
       final fresh = await repo.getUserMessages(
         token: _token!,
         peerUserId: _peerId!,
-        limit: 25,
-        afterMessageId: _lastId == null ? null : _lastId!.toString(),
+        limit: 50, // lấy 50 tin gần nhất là đủ
+        // afterMessageId: _lastId == null ? null : _lastId!.toString(),
       );
 
       if (fresh.isNotEmpty) {
-        // Tin mới -> sort tăng dần
+        // Sắp xếp tăng dần theo id để giữ invariant
         fresh.sort((a, b) => _msgId(a).compareTo(_msgId(b)));
+
+        // Gộp vào list hiện tại, _mergeIncoming đã tự lọc trùng
         _mergeIncoming(fresh, toTail: true);
+
+        // Cập nhật _lastId (dùng cho logic khác nếu cần)
         _updateLastIdFromTail();
+
+        // Đánh dấu đã đọc (debounce)
         _debouncedMarkRead();
       }
 
       // reset backoff
       _pollErrorCount = 0;
-      _ensurePollInterval(const Duration(seconds: 7));
-    } catch (_) {
+      _ensurePollInterval(const Duration(seconds: 3)); // làm realtime hơn chút
+    } catch (e) {
       _pollErrorCount++;
       if (_pollErrorCount >= 3) {
-        _ensurePollInterval(const Duration(seconds: 12));
+        _ensurePollInterval(const Duration(seconds: 10));
       }
     } finally {
       _fetching = false;

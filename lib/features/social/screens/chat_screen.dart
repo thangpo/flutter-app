@@ -73,6 +73,11 @@ class _ChatScreenState extends State<ChatScreen> {
   // FCM realtime stream
   StreamSubscription? _fcmStream;
 
+  // ===== POLLING REALTIME (fallback nếu FCM không bắn) =====
+  Timer? _pollTimer;
+  bool _pollInFlight = false;
+  Duration _pollInterval = const Duration(seconds: 5);
+
   @override
   void initState() {
     super.initState();
@@ -81,8 +86,11 @@ class _ChatScreenState extends State<ChatScreen> {
     _initRecorder();
     _loadInitialMessages();
 
-    // Realtime từ FCM
+    // Realtime từ FCM (nếu có)
     _listenRealtime();
+
+    // Polling fallback
+    _startPolling();
 
     _scroll.addListener(_onScroll);
   }
@@ -93,6 +101,8 @@ class _ChatScreenState extends State<ChatScreen> {
     _scroll.dispose();
     _fcmStream?.cancel();
 
+    _stopPolling();
+
     if (_recOn) _recorder.stopRecorder();
     _recorder.closeRecorder();
 
@@ -100,13 +110,39 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // =================================================
-  // REALTIME LISTENER (NO POLLING)
+  // REALTIME LISTENER (FCM)
   // =================================================
   void _listenRealtime() {
     _fcmStream = FcmChatHandler.messagesStream.listen((evt) {
       if (evt.peerId != _peerId) return;
       _reloadLatest();
     });
+  }
+
+  // =================================================
+  // POLLING REALTIME (fallback)
+  // =================================================
+  void _startPolling() {
+    _stopPolling();
+    _pollTimer = Timer.periodic(_pollInterval, (_) => _pollOnce());
+  }
+
+  void _stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+  }
+
+  Future<void> _pollOnce() async {
+    if (!mounted) return;
+    if (_pollInFlight) return;
+
+    _pollInFlight = true;
+    try {
+      // dùng cùng logic với FCM realtime
+      await _reloadLatest();
+    } finally {
+      _pollInFlight = false;
+    }
   }
 
   // =================================================
@@ -155,7 +191,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
       _mergeIncoming(list, toTail: true);
 
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      setState(() {});
     } catch (e) {
       debugPrint("realtime reload error: $e");
     }
@@ -181,7 +218,9 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() {});
       _scrollToBottom(immediate: true);
     } finally {
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -221,7 +260,9 @@ class _ChatScreenState extends State<ChatScreen> {
         _hasMore = false;
       }
     } finally {
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -306,11 +347,15 @@ class _ChatScreenState extends State<ChatScreen> {
 
       if (sent != null) {
         _mergeIncoming([sent], toTail: true);
-        setState(() {});
-        _scrollToBottom();
+        if (mounted) {
+          setState(() {});
+          _scrollToBottom();
+        }
       }
     } finally {
-      setState(() => _sending = false);
+      if (mounted) {
+        setState(() => _sending = false);
+      }
     }
   }
 
@@ -335,11 +380,15 @@ class _ChatScreenState extends State<ChatScreen> {
       );
       if (sent != null) {
         _mergeIncoming([sent], toTail: true);
-        setState(() {});
-        _scrollToBottom();
+        if (mounted) {
+          setState(() {});
+          _scrollToBottom();
+        }
       }
     } finally {
-      setState(() => _sending = false);
+      if (mounted) {
+        setState(() => _sending = false);
+      }
     }
   }
 
@@ -364,11 +413,15 @@ class _ChatScreenState extends State<ChatScreen> {
           );
           if (sent != null) {
             _mergeIncoming([sent], toTail: true);
-            setState(() {});
-            _scrollToBottom();
+            if (mounted) {
+              setState(() {});
+              _scrollToBottom();
+            }
           }
         } finally {
-          setState(() => _sending = false);
+          if (mounted) {
+            setState(() => _sending = false);
+          }
         }
       }
     } else {
