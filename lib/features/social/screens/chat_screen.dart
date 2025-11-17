@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:http/http.dart' as http;
 
 import 'package:encrypt/encrypt.dart' as enc;
 import 'package:file_picker/file_picker.dart';
@@ -13,6 +14,14 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:get/get.dart';
+
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_friends_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_friend.dart';
+
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_chat_controller.dart';
+import 'package:http/http.dart' as http;
 
 // Bubble + repo
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/chat_message_bubble.dart';
@@ -79,8 +88,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _pollInFlight = false;
   Duration _pollInterval = const Duration(seconds: 5);
 
-  // =========== Reactions ============
-  // 1: 👍, 2: ❤️, 3: 😂, 4: 😮, 5: 😢, 6: 😡
+
   static const Map<int, String> _reactionEmojis = {
     1: '👍',
     2: '❤️',
@@ -859,14 +867,20 @@ class _ChatScreenState extends State<ChatScreen> {
       case _MessageAction.delete:
         await _deleteMessage(message);
         break;
-      case _MessageAction.forward:
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('Chức năng chuyển tiếp sẽ được hỗ trợ sau.')),
-          );
-        }
+                  case _MessageAction.forward:
+        if (!mounted) break;
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => _ForwardMessageScreen(
+              originalMessage: message,
+              accessToken: widget.accessToken,
+              repo: repo,
+            ),
+          ),
+        );
         break;
+
+
       case null:
         break;
     }
@@ -1669,6 +1683,441 @@ class _SwipeReplyWrapperState extends State<_SwipeReplyWrapper> {
           Transform.translate(
             offset: Offset(effectiveDx, 0),
             child: widget.child,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+class _ForwardMessageScreen extends StatefulWidget {
+  final Map<String, dynamic> originalMessage;
+  final String accessToken;
+  final SocialChatRepository repo;
+
+  const _ForwardMessageScreen({
+    super.key,
+    required this.originalMessage,
+    required this.accessToken,
+    required this.repo,
+  });
+
+  @override
+  State<_ForwardMessageScreen> createState() => _ForwardMessageScreenState();
+}
+
+class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
+  final TextEditingController _searchCtrl = TextEditingController();
+
+  SocialFriendsController? _friendsCtrl;
+  GroupChatController? _groupCtrl;
+
+  List<SocialFriend> _allFriends = [];
+  List<Map<String, dynamic>> _allGroups = [];
+
+  bool _loadingList = true;
+  bool _sending = false;
+  String _keyword = '';
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _initData();
+    _searchCtrl.addListener(() {
+      setState(() {
+        _keyword = _searchCtrl.text.trim().toLowerCase();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _initData() async {
+    setState(() {
+      _loadingList = true;
+      _error = null;
+    });
+
+    try {
+      // 🔹 Friends (GetX)
+      if (Get.isRegistered<SocialFriendsController>()) {
+        _friendsCtrl = Get.find<SocialFriendsController>();
+
+        // Ưu tiên filtered nếu đã search, không thì friends
+        final friends = _friendsCtrl!.filtered.isNotEmpty
+            ? _friendsCtrl!.filtered
+            : _friendsCtrl!.friends;
+
+        _allFriends = List<SocialFriend>.from(friends);
+      }
+
+      // 🔹 Groups (Provider)
+      _groupCtrl = context.read<GroupChatController>();
+      if (_groupCtrl!.groups.isEmpty) {
+        await _groupCtrl!.loadGroups();
+      }
+      _allGroups = List<Map<String, dynamic>>.from(_groupCtrl!.groups as List);
+    } catch (e, st) {
+      debugPrint('Forward initData error: $e\n$st');
+      _error = e.toString();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingList = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _forwardToFriend(SocialFriend f) async {
+    await _forwardCore(
+        targetId: f.id.toString(), isGroup: false, targetName: f.name ?? '');
+  }
+
+  Future<void> _forwardToGroup(Map<String, dynamic> g) async {
+    final groupId = (g['group_id'] ?? g['id'] ?? '').toString();
+    final groupName = (g['group_name'] ?? g['name'] ?? 'Nhóm').toString();
+    if (groupId.isEmpty) return;
+
+    await _forwardCore(targetId: groupId, isGroup: true, targetName: groupName);
+  }
+
+  Future<void> _forwardCore({
+    required String targetId,
+    required bool isGroup,
+    required String targetName,
+  }) async {
+    if (_sending) return;
+
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+
+    final m = widget.originalMessage;
+
+    try {
+      Map<String, dynamic>? sent;
+
+      final mediaUrl = (m['media_url'] ?? m['media'] ?? '').toString();
+      final isMedia = (m['is_image'] == true) ||
+          (m['is_video'] == true) ||
+          (m['is_audio'] == true) ||
+          (m['is_file'] == true);
+
+      // caption dùng chung cho cả text lẫn media
+      final caption = (m['display_text'] ?? m['text'] ?? '').toString().trim();
+
+      // ================= MEDIA =================
+      if (isMedia && mediaUrl.isNotEmpty && mediaUrl.startsWith('http')) {
+        final uri = Uri.parse(mediaUrl);
+        final res = await http.get(uri);
+
+        if (res.statusCode == 200) {
+          final dir = await getTemporaryDirectory();
+          final name = uri.pathSegments.isNotEmpty
+              ? uri.pathSegments.last
+              : 'forward_${DateTime.now().millisecondsSinceEpoch}';
+          final file = File('${dir.path}/$name');
+          await file.writeAsBytes(res.bodyBytes);
+
+          if (isGroup) {
+            // 👉 forward vào nhóm
+            final gc = _groupCtrl ?? context.read<GroupChatController>();
+
+            // đoán type theo cờ is_image / is_video / is_audio / is_file
+            String mediaType = 'file';
+            if (m['is_image'] == true)
+              mediaType = 'image';
+            else if (m['is_video'] == true)
+              mediaType = 'video';
+            else if (m['is_audio'] == true) mediaType = 'voice';
+
+            // ⬇️ Ở group: text là tham số bắt buộc
+            await gc.sendMessage(
+              targetId,
+              caption, // có thể rỗng, không sao
+              file: file,
+              type: mediaType,
+            );
+            sent = {}; // đánh dấu là đã gửi xong
+          } else {
+            // 👉 forward 1-1
+            sent = await widget.repo.sendMessage(
+              token: widget.accessToken,
+              peerUserId: targetId,
+              filePath: file.path,
+              // nếu có caption thì đính kèm luôn
+              text: caption.isNotEmpty ? caption : null,
+            );
+          }
+        }
+      }
+
+      // ================= TEXT =================
+      if (sent == null) {
+        final text = (m['display_text'] ?? m['text'] ?? '').toString().trim();
+        if (text.isEmpty) {
+          throw 'Tin nhắn này không thể chuyển tiếp (không có nội dung).';
+        }
+
+        if (isGroup) {
+          final gc = _groupCtrl ?? context.read<GroupChatController>();
+
+          await gc.sendMessage(
+            targetId,
+            text, // ⬅️ text bắt buộc
+          );
+        } else {
+          sent = await widget.repo.sendMessage(
+            token: widget.accessToken,
+            peerUserId: targetId,
+            text: text,
+          );
+        }
+      }
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Đã chuyển tiếp cho ${targetName.isNotEmpty ? targetName : targetId}',
+          ),
+        ),
+      );
+      Navigator.of(context).pop();
+    } catch (e, st) {
+      debugPrint('forwardCore error: $e\n$st');
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sending = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final m = widget.originalMessage;
+    final previewText =
+        (m['display_text'] ?? m['text'] ?? '').toString().trim();
+    final mediaUrl = (m['media_url'] ?? m['media'] ?? '').toString();
+    final isImage = m['is_image'] == true && mediaUrl.startsWith('http');
+
+    // Filter theo keyword
+    var friends = _allFriends;
+    var groups = _allGroups;
+    if (_keyword.isNotEmpty) {
+      friends = friends
+          .where((f) =>
+              (f.name ?? '').toLowerCase().contains(_keyword) ||
+              f.id.toString().contains(_keyword))
+          .toList();
+
+      groups = groups.where((g) {
+        final name =
+            (g['group_name'] ?? g['name'] ?? '').toString().toLowerCase();
+        final id = (g['group_id'] ?? g['id'] ?? '').toString();
+        return name.contains(_keyword) || id.contains(_keyword);
+      }).toList();
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Chuyển tiếp tin nhắn'),
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 📌 Preview tin nhắn
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Tin nhắn cần chuyển tiếp:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (isImage)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            mediaUrl,
+                            height: 120,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      if (previewText.isNotEmpty) ...[
+                        if (isImage) const SizedBox(height: 6),
+                        Text(
+                          previewText,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                      if (!isImage && previewText.isEmpty)
+                        const Text('(Tin nhắn media)'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // 🔍 Search
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: TextField(
+              controller: _searchCtrl,
+              decoration: const InputDecoration(
+                hintText: 'Tìm kiếm bạn bè hoặc nhóm...',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
+          ),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+              child: Text(
+                _error!,
+                style: const TextStyle(color: Colors.red, fontSize: 12),
+              ),
+            ),
+
+          const SizedBox(height: 4),
+          Expanded(
+            child: _loadingList
+                ? const Center(child: CircularProgressIndicator())
+                : (friends.isEmpty && groups.isEmpty)
+                    ? const Center(
+                        child: Text(
+                          'Không có bạn bè hoặc nhóm nào.\nHãy thử đổi từ khoá tìm kiếm.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      )
+                    : ListView(
+                        children: [
+                          if (friends.isNotEmpty) ...[
+                            const Padding(
+                              padding: EdgeInsets.fromLTRB(16, 4, 16, 4),
+                              child: Text(
+                                'Bạn bè',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                            ...friends.map((f) {
+                              final avatar = f.avatar ?? '';
+                              final name = f.name ?? 'User #${f.id}';
+                              return ListTile(
+                                onTap:
+                                    _sending ? null : () => _forwardToFriend(f),
+                                leading: CircleAvatar(
+                                  backgroundImage: avatar.isNotEmpty
+                                      ? NetworkImage(avatar)
+                                      : null,
+                                  child: avatar.isEmpty
+                                      ? Text(
+                                          name.isNotEmpty
+                                              ? name[0].toUpperCase()
+                                              : '?',
+                                        )
+                                      : null,
+                                ),
+                                title: Text(
+                                  name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                subtitle: Text(
+                                  'ID: ${f.id}',
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                                trailing: const Icon(Icons.chevron_right),
+                              );
+                            }),
+                            const Divider(height: 16),
+                          ],
+                          if (groups.isNotEmpty) ...[
+                            const Padding(
+                              padding: EdgeInsets.fromLTRB(16, 4, 16, 4),
+                              child: Text(
+                                'Nhóm chat',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                            ...groups.map((g) {
+                              final groupId =
+                                  (g['group_id'] ?? g['id'] ?? '').toString();
+                              final groupName =
+                                  (g['group_name'] ?? g['name'] ?? 'Không tên')
+                                      .toString();
+                              final avatar =
+                                  (g['avatar'] ?? g['image'] ?? '').toString();
+
+                              return ListTile(
+                                onTap: (_sending || groupId.isEmpty)
+                                    ? null
+                                    : () => _forwardToGroup(g),
+                                leading: CircleAvatar(
+                                  backgroundImage: avatar.isNotEmpty
+                                      ? NetworkImage(avatar)
+                                      : null,
+                                  child: avatar.isEmpty
+                                      ? Text(
+                                          groupName.isNotEmpty
+                                              ? groupName[0].toUpperCase()
+                                              : '?',
+                                        )
+                                      : null,
+                                ),
+                                title: Text(
+                                  groupName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                subtitle: Text(
+                                  'ID nhóm: $groupId',
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                                trailing: const Icon(Icons.chevron_right),
+                              );
+                            }),
+                          ],
+                        ],
+                      ),
           ),
         ],
       ),

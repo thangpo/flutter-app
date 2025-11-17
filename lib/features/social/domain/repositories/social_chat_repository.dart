@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
+
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
@@ -380,4 +381,79 @@ class SocialChatRepository {
       return false;
     }
   }
+
+
+  // ================= SEARCH USERS (forward) =================
+  /// Tìm người dùng WoWonder để chuyển tiếp tin nhắn
+  ///
+  /// Trả về list map có các key tối thiểu:
+  /// { user_id, name, avatar }
+  Future<List<Map<String, dynamic>>> searchUsers({
+    required String token,
+    String query = '',
+    int limit = 30,
+  }) async {
+    try {
+      final uri = Uri.parse(
+        '${AppConstants.socialBaseUrl}/api/get_users?access_token=$token',
+      );
+
+      final body = <String, String>{
+        'server_key': AppConstants.socialServerKey,
+        // tuỳ backend: type = search / get_users
+        'type': 'search',
+        'limit': '$limit',
+      };
+
+      if (query.trim().isNotEmpty) {
+        // tuỳ backend: có thể là search_query / keyword / search_key
+        body['search_query'] = query.trim();
+      }
+
+      final res =
+          await http.post(uri, body: body).timeout(const Duration(seconds: 20));
+
+      if (kDebugMode) {
+        debugPrint('searchUsers -> ${res.statusCode} ${res.body}');
+      }
+
+      if (res.statusCode != 200) {
+        _throwApi(res.body, httpCode: res.statusCode);
+      }
+
+      final data = jsonDecode(res.body);
+      if (data is! Map<String, dynamic>) return [];
+
+      final ok =
+          (data['api_status'] ?? data['status'] ?? data['code'] ?? 0) == 200;
+      if (!ok) {
+        _throwApi(res.body);
+      }
+
+      final rawList = (data['users'] ?? data['data'] ?? []) as List;
+      final List<Map<String, dynamic>> out = [];
+
+      for (final item in rawList) {
+        if (item is! Map) continue;
+        final m = Map<String, dynamic>.from(item as Map);
+
+        final id = '${m['user_id'] ?? m['id'] ?? ''}'.trim();
+        if (id.isEmpty) continue;
+
+        out.add({
+          'user_id': id,
+          'name': (m['name'] ?? m['username'] ?? '').toString(),
+          'avatar': _absUrl((m['avatar'] ?? m['avatar_url'] ?? '').toString()),
+        });
+      }
+
+      return out;
+    } catch (e, st) {
+      debugPrint('searchUsers error: $e\n$st');
+      return [];
+    }
+  }
+
+
+
 }
