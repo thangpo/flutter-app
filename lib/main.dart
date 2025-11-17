@@ -1,4 +1,3 @@
-// lib/main.dart
 import 'dart:io';
 import 'dart:convert';
 
@@ -95,7 +94,7 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 final database = AppDatabase();
- 
+
 // tránh mở màn nhận cuộc gọi trùng
 bool _incomingCallRouting = false;
 
@@ -184,6 +183,33 @@ void _handleGroupCallInviteOpen(Map<String, dynamic> data) {
         ),
       )
       .whenComplete(() => _incomingCallRouting = false);
+}
+
+/// =========================
+/// Helpers: đảm bảo navigator sẵn sàng
+/// dùng cho getInitialMessage (terminated app)
+/// =========================
+Future<void> _waitNavigatorAndOpen(void Function() openFn) async {
+  for (int i = 0; i < 20; i++) {
+    final nav = navigatorKey.currentState;
+    if (nav != null) {
+      openFn();
+      return;
+    }
+    await Future.delayed(const Duration(milliseconds: 100));
+  }
+}
+
+Future<void> _scheduleCallInviteOpen(Map<String, dynamic> data) async {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    _waitNavigatorAndOpen(() => _handleCallInviteOpen(data));
+  });
+}
+
+Future<void> _scheduleGroupCallInviteOpen(Map<String, dynamic> data) async {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    _waitNavigatorAndOpen(() => _handleGroupCallInviteOpen(data));
+  });
 }
 
 Future<void> main() async {
@@ -279,11 +305,11 @@ Future<void> main() async {
       final t = (initialMessage.data['type'] ?? '').toString();
 
       if (t == 'call_invite') {
-        _handleCallInviteOpen(initialMessage.data);
+        await _scheduleCallInviteOpen(initialMessage.data);
       } else if (t == 'call_invite_group' ||
           (initialMessage.data.containsKey('call_id') &&
               initialMessage.data.containsKey('group_id'))) {
-        _handleGroupCallInviteOpen(initialMessage.data);
+        await _scheduleGroupCallInviteOpen(initialMessage.data);
       } else if (initialMessage.data['api_status'] != null ||
           initialMessage.data['detail'] != null) {
         await handlePushNavigation(initialMessage);
@@ -466,23 +492,20 @@ Future<void> main() async {
         )..init(),
       ),
 
+      // Group call
       ChangeNotifierProvider(
         create: (_) {
           final repo = WebRTCGroupSignalingRepositoryImpl(
-            baseUrl: AppConstants.socialBaseUrl, // https://social.vnshop247.com
+            baseUrl: AppConstants.socialBaseUrl,
             serverKey: AppConstants.socialServerKey,
             getAccessToken: () async {
               final sp = await SharedPreferences.getInstance();
               return sp.getString(AppConstants.socialAccessToken);
             },
           );
-
-
           return GroupCallController(signaling: repo)..init();
         },
       ),
-
-
     ],
     child: MyApp(body: body),
   ));
