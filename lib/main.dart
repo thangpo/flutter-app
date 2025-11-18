@@ -332,8 +332,11 @@ Future<void> main() async {
           _handleCallInviteOpen(map);
           return;
         }
-
-        await handlePushNavigationFromMap(map);
+        //  điều hướng social
+        if ((map['type'] ?? '') == 'interact') {
+          await handlePushNavigationFromMap(map);
+          return;
+        }
       } catch (e) {
         debugPrint('parse payload error: $e');
       }
@@ -348,20 +351,10 @@ Future<void> main() async {
     await FirebaseMessaging.instance.getInitialMessage();
 
     if (initialMessage != null) {
-      print('🔥 getInitialMessage: ${initialMessage.data}');
-
-      // Log analytics cho notification
-      analytics.logEvent(
-        name: 'notification_opened_app',
-        parameters: {
-          'notification_type': initialMessage.data['type'] ?? 'unknown',
-        },
-      );
-
       if ((initialMessage.data['type'] ?? '') == 'call_invite') {
         _handleCallInviteOpen(initialMessage.data);
       } else if (initialMessage.data['api_status'] != null ||
-          initialMessage.data['detail'] != null) {
+          initialMessage.data['type'] != null) {
         await handlePushNavigation(initialMessage);
       } else {
         await handlePushNavigation(initialMessage);
@@ -371,21 +364,14 @@ Future<void> main() async {
     await NotificationHelper.initialize(flutterLocalNotificationsPlugin);
 
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
-      print('🔥 onMessageOpenedApp (main): ${message.data}');
-
-      // Log analytics
-      analytics.logEvent(
-        name: 'notification_tapped',
-        parameters: {
-          'notification_type': message.data['type'] ?? 'unknown',
-        },
-      );
-
       if ((message.data['type'] ?? '') == 'call_invite') {
         _handleCallInviteOpen(message.data);
         return;
       }
-      await handlePushNavigation(message);
+      if ((message.data['type'] ?? '') == 'interact') {
+        await handlePushNavigation(message);
+        return;
+      }
     });
 
     FirebaseMessaging.onMessage.listen((RemoteMessage message) async {

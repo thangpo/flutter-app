@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:flutter_sixvalley_ecommerce/data/datasource/remote/dio/dio_client.dart';
@@ -36,7 +37,6 @@ class SocialRepository {
     required this.dioClient,
     required this.sharedPreferences,
   });
-
   String? _getSocialAccessToken() {
     return sharedPreferences.getString(AppConstants.socialAccessToken);
   }
@@ -1488,6 +1488,100 @@ class SocialRepository {
         data: form,
         options: Options(contentType: 'multipart/form-data'),
       );
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+  Future<ApiResponseModel<Response>> createPoke(int userId) async {
+    try {
+      final token = _getSocialAccessToken();
+      final url = "${AppConstants.socialBaseUrl}/api/poke?access_token=$token";
+
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'type': 'create',
+        'user_id': userId.toString(),
+      });
+
+      final res = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+  Future<ApiResponseModel<Response>> fetchPokes() async {
+    try {
+      final token = _getSocialAccessToken();
+      final url = "${AppConstants.socialBaseUrl}/api/poke?access_token=$token";
+
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'type': 'fetch',
+      });
+
+      final res = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+  Future<ApiResponseModel<Response>> removePoke(int pokeId) async {
+    try {
+      final token = _getSocialAccessToken();
+      final url = "${AppConstants.socialBaseUrl}/api/poke?access_token=$token";
+
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'type': 'remove',
+        'poke_id': pokeId.toString(),
+      });
+
+      final res = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      debugPrint('res remove: $res');
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+  Future<ApiResponseModel<Response>> addToFamily(
+      int userId,
+      String relationshipType,
+      ) async {
+    try {
+      final token = _getSocialAccessToken();
+      final url =
+          "${AppConstants.socialBaseUrl}/api/add-to-family?access_token=$token";
+
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'user_id': userId.toString(),
+        'type': relationshipType,
+      });
+
+      final res = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
       return ApiResponseModel.withSuccess(res);
     } catch (e) {
       return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));

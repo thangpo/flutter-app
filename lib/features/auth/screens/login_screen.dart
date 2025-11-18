@@ -23,6 +23,7 @@ import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
 import 'package:flutter_sixvalley_ecommerce/services/biometric_service.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/domain/services/user_log_service.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/firebase_token_updater.dart';
 
 class LoginScreen extends StatefulWidget {
   final bool fromLogout;
@@ -49,7 +50,8 @@ class _LoginScreenState extends State<LoginScreen> {
       await _userLogService.saveUserLogData(
         UserLogData(email: email, password: password),
       );
-
+      // cập nhật fcm token mới
+      await FirebaseTokenUpdater.update();
       // chuyển sang màn hình chính
       Navigator.pushReplacementNamed(context, "/home");
     } else {
@@ -100,6 +102,8 @@ class _LoginScreenState extends State<LoginScreen> {
         MaterialPageRoute(builder: (_) => const DashBoardScreen()),
             (route) => false,
       );
+      // cập nhật fcm token mới
+      await FirebaseTokenUpdater.update();
     } else {
       showCustomSnackBar("Đăng nhập bằng sinh trắc học thất bại", context);
     }

@@ -312,6 +312,12 @@ class AuthController with ChangeNotifier {
         await Provider.of<SocialController>(Get.context!, listen: false)
             .loadCurrentUser(force: true);
       } catch (_) {}
+      // 🔴 CẬP NHẬT FCM TOKEN CHO USER SOCIAL VỪA ĐĂNG KÝ
+      try {
+        await FirebaseTokenUpdater.update();
+      } catch (e) {
+        debugPrint('[FCM] update after social registration failed: $e');
+      }
       // ========== END EXTERNAL CALL ==========
 
       Future<void> saveSocialUserId(String userId) async {
@@ -563,6 +569,12 @@ class AuthController with ChangeNotifier {
         await Provider.of<SocialController>(Get.context!, listen: false)
             .loadCurrentUser(force: true);
       } catch (_) {}
+      // 🔴 CẬP NHẬT FCM TOKEN CHO USER SOCIAL VỪA LOGIN
+      try {
+        await FirebaseTokenUpdater.update();
+      } catch (e) {
+        debugPrint('[FCM] update after social login failed: $e');
+      }
       // ========== END EXTERNAL SOCIAL AUTH ==========
       if (token != null && token.isNotEmpty) {
         authServiceInterface.saveUserToken(token);
