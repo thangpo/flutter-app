@@ -19,6 +19,7 @@ import 'package:get/get.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_friends_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_friend.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/chat_info_screen.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_chat_controller.dart';
 import 'package:http/http.dart' as http;
@@ -1109,42 +1110,73 @@ class _ChatScreenState extends State<ChatScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            if (peerAvatar.isNotEmpty)
-              CircleAvatar(
-                radius: 16,
-                backgroundImage: NetworkImage(peerAvatar),
-              ),
-            if (peerAvatar.isNotEmpty) const SizedBox(width: 8),
-            Flexible(
-              child: Text(title, overflow: TextOverflow.ellipsis),
-            ),
-          ],
-        ),
         elevation: 0,
         centerTitle: false,
+        title: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ChatInfoScreen(
+                  peerId: widget.peerUserId,
+                  peerName: widget.peerName ?? '',
+                  peerAvatar: widget.peerAvatar ?? '',
+                  accessToken: widget.accessToken,
+                ),
+              ),
+            );
+          },
+          child: Row(
+            children: [
+              if (peerAvatar.isNotEmpty)
+                CircleAvatar(
+                  radius: 20,
+                  backgroundImage: NetworkImage(peerAvatar),
+                ),
+              if (peerAvatar.isNotEmpty) const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  
+                ],
+              ),
+            ],
+          ),
+        ),
         actions: [
           Consumer<CallController>(
             builder: (ctx, call, _) {
               final enabled = call.ready;
-              return Row(children: [
-                IconButton(
-                  tooltip: 'Gọi thoại',
-                  icon: const Icon(Icons.call),
-                  onPressed: enabled ? () => _startCall('audio') : null,
-                ),
-                IconButton(
-                  tooltip: 'Gọi video',
-                  icon: const Icon(Icons.videocam),
-                  onPressed: enabled ? () => _startCall('video') : null,
-                ),
-              ]);
+              return Row(
+                children: [
+                  IconButton(
+                    tooltip: 'Gọi thoại',
+                    icon: const Icon(Icons.call),
+                    onPressed: enabled ? () => _startCall('audio') : null,
+                  ),
+                  IconButton(
+                    tooltip: 'Gọi video',
+                    icon: const Icon(Icons.videocam),
+                    onPressed: enabled ? () => _startCall('video') : null,
+                  ),
+                ],
+              );
             },
           ),
           const SizedBox(width: 4),
         ],
       ),
+
       body: Stack(
         children: [
           Column(

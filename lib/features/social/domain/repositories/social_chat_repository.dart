@@ -454,6 +454,96 @@ class SocialChatRepository {
     }
   }
 
+  /// Lấy media trong đoạn chat (1-1 hoặc group)
+  ///
+  /// - Nếu truyền [peerUserId] -> lấy media của chat 1-1
+  /// - Nếu truyền [groupId]   -> lấy media của nhóm
+  /// - [mediaType]: images | videos | audio | links | docs
+  Future<List<Map<String, dynamic>>> getChatMedia({
+    required String token,
+    String? peerUserId,
+    String? groupId,
+    String mediaType = 'images',
+    int limit = 30,
+    int offset = 0,
+  }) async {
+    if ((peerUserId == null || peerUserId.isEmpty) &&
+        (groupId == null || groupId.isEmpty)) {
+      throw ArgumentError(
+          'getChatMedia: cần truyền peerUserId (chat 1-1) hoặc groupId (group chat)');
+    }
+
+    // POST http://.../api/chat?access_token=XXX
+    final url = Uri.parse(
+      '${AppConstants.socialBaseUrl}/api/chat?access_token=$token',
+    );
+
+    final body = <String, String>{
+      'server_key': AppConstants.socialServerKey,
+      'type': 'get_media',
+      'media_type': mediaType, // images,videos,audio,links,docs
+      'limit': '$limit',
+      'offset': '$offset',
+      if (peerUserId != null && peerUserId.isNotEmpty) 'user_id': peerUserId,
+      if (groupId != null && groupId!.isNotEmpty) 'group_id': groupId!,
+    };
+
+    final res =
+        await http.post(url, body: body).timeout(const Duration(seconds: 20));
+
+    if (kDebugMode) {
+      debugPrint('getChatMedia[$mediaType] -> ${res.statusCode} ${res.body}');
+    }
+
+    if (res.statusCode != 200) {
+      _throwApi(res.body, httpCode: res.statusCode);
+    }
+
+    final map = jsonDecode(res.body) as Map<String, dynamic>;
+    final ok = (map['api_status'] ?? map['status']) == 200;
+    if (!ok) _throwApi(res.body);
+
+    // tuỳ version WoWonder, data có thể nằm ở data/media/messages
+    final list =
+        (map['data'] ?? map['media'] ?? map['messages'] ?? <dynamic>[]) as List;
+
+    final out = <Map<String, dynamic>>[];
+    for (final e in list) {
+      if (e is! Map) continue;
+      final m = Map<String, dynamic>.from(e as Map);
+
+      // Tái sử dụng logic hydrate để có media_url, is_image, is_video...
+      _hydrateWoWonderMessage(m);
+      out.add(m);
+    }
+    return out;
+  }
+
+
+Future<List> getMedia({
+    required String token,
+    required String peerId,
+    required String mediaType,
+  }) async {
+    final url =
+        Uri.parse('${AppConstants.socialBaseUrl}/api/chat?access_token=$token');
+
+    final req = http.MultipartRequest("POST", url)
+      ..fields["server_key"] = AppConstants.socialServerKey
+      ..fields["type"] = "get_media"
+      ..fields["user_id"] = peerId
+      ..fields["media_type"] = mediaType
+      ..fields["limit"] = "50"
+      ..fields["offset"] = "0";
+
+    final res = await req.send();
+    final body = await res.stream.bytesToString();
+
+    final map = jsonDecode(body);
+    if (map["api_status"] != 200) return [];
+
+    return List<Map<String, dynamic>>.from(map["data"] ?? []);
+  }
 
 
 }
