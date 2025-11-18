@@ -180,15 +180,23 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   if (Firebase.apps.isEmpty) {
-    if (Platform.isAndroid) {
-      await Firebase.initializeApp(
+    try {
+      if (Platform.isAndroid) {
+        await Firebase.initializeApp(
           options: const FirebaseOptions(
-              apiKey: AppConstants.fcmApiKey,
-              appId: AppConstants.fcmMobilesdkAppId,
-              messagingSenderId: AppConstants.fcmProjectNumber,
-              projectId: AppConstants.fcmProjectId)
-      );
+            apiKey: AppConstants.fcmApiKey,
+            appId: AppConstants.fcmMobilesdkAppId,
+            messagingSenderId: AppConstants.fcmProjectNumber,
+            projectId: AppConstants.fcmProjectId,
+          ),
+        );
+        print('✅ Firebase initialized successfully');
+      }
+    } catch (e) {
+      print('❌ Firebase init error: $e');
     }
+  } else {
+    print('⚠️ Firebase already initialized');
   }
 
   await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
