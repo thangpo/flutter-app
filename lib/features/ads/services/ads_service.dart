@@ -21,7 +21,7 @@ class AdsService {
       headers: {'Content-Type': 'application/x-www-form-urlencoded'},
       body: {
         'server_key': AppConstants.socialServerKey,
-        'type': 'fetch_ads',
+        'type': 'fetch_active_ads',
         'limit': limit.toString(),
         'offset': offset.toString(),
       },
@@ -30,11 +30,46 @@ class AdsService {
     final jsonResponse = jsonDecode(response.body);
 
     if (jsonResponse['api_status'] == "404") {
-      throw Exception("Server key sai: ${jsonResponse['errors']['error_text']}");
+      throw Exception(
+          "Server key sai: ${jsonResponse['errors']['error_text']}");
     }
 
     if (jsonResponse['api_status'] != 200) {
-      throw Exception("Lỗi API: ${jsonResponse['errors']?['error_text'] ?? 'Unknown error'}");
+      throw Exception(
+          "Lỗi API: ${jsonResponse['errors']?['error_text'] ?? 'Unknown error'}");
+    }
+
+    return List<Map<String, dynamic>>.from(jsonResponse['data']);
+  }
+
+  Future<List<Map<String, dynamic>>> fetchActiveAds({
+    required String accessToken,
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    final url = Uri.parse("$_baseUrl?access_token=$accessToken");
+
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: {
+        'server_key': AppConstants.socialServerKey,
+        'type': 'fetch_active_ads',
+        'limit': limit.toString(),
+        'offset': offset.toString(),
+      },
+    );
+
+    final jsonResponse = jsonDecode(response.body);
+
+    if (jsonResponse['api_status'] == "404") {
+      throw Exception(
+          "Server key sai: ${jsonResponse['errors']?['error_text'] ?? 'Unknown'}");
+    }
+
+    if (jsonResponse['api_status'] != 200) {
+      throw Exception(
+          "Lỗi API: ${jsonResponse['errors']?['error_text'] ?? 'Unknown error'}");
     }
 
     return List<Map<String, dynamic>>.from(jsonResponse['data']);
@@ -119,14 +154,16 @@ class AdsService {
     }
 
     try {
-      final streamedResponse = await request.send().timeout(const Duration(seconds: 90));
+      final streamedResponse =
+          await request.send().timeout(const Duration(seconds: 90));
       final response = await http.Response.fromStream(streamedResponse);
       final jsonResponse = jsonDecode(response.body);
 
       final apiStatus = jsonResponse['api_status']?.toString() ?? '0';
       if (apiStatus == "404") throw Exception("Server key sai");
       if (apiStatus != "200") {
-        final err = jsonResponse['errors']?['error_text'] ?? 'Please check your details';
+        final err = jsonResponse['errors']?['error_text'] ??
+            'Please check your details';
         throw Exception(err);
       }
       return jsonResponse;
@@ -160,7 +197,8 @@ class AdsService {
     }
 
     if (jsonRes['api_status'] != 200) {
-      throw Exception("API lỗi: ${jsonRes['errors']?['error_text'] ?? 'Unknown error'}");
+      throw Exception(
+          "API lỗi: ${jsonRes['errors']?['error_text'] ?? 'Unknown error'}");
     }
 
     return jsonRes;
@@ -200,7 +238,8 @@ class AdsService {
     request.files.add(await http.MultipartFile.fromPath('media', mediaPath));
 
     final countries = formData['countries'] as List<Country>? ?? [];
-    final audienceList = countries.map((c) => c.value).where((v) => v != "0").join(',');
+    final audienceList =
+        countries.map((c) => c.value).where((v) => v != "0").join(',');
     if (audienceList.isEmpty) throw Exception('Chưa chọn quốc gia');
 
     String genderValue() {
@@ -275,7 +314,8 @@ class AdsService {
     final jsonResponse = jsonDecode(response.body);
 
     if (jsonResponse['api_status'] == "404") {
-      throw Exception("Server key sai: ${jsonResponse['errors']['error_text']}");
+      throw Exception(
+          "Server key sai: ${jsonResponse['errors']['error_text']}");
     }
 
     if (jsonResponse['api_status'] != 200) {
@@ -288,4 +328,29 @@ class AdsService {
     return jsonResponse;
   }
 
+  Future<void> trackAdInteraction({
+    required String accessToken,
+    required int adId,
+    required String type,
+  }) async {
+    final String normalizedType = type.toLowerCase() == 'click' ? 'click' : 'view';
+    final Uri url = Uri.parse("$_baseUrl?access_token=$accessToken");
+    final http.Response response = await http.post(
+      url,
+      headers: const {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: {
+        'server_key': AppConstants.socialServerKey,
+        'type': normalizedType,
+        'ad_id': adId.toString(),
+      },
+    );
+
+    final Map<String, dynamic> jsonResponse = jsonDecode(response.body);
+    if (jsonResponse['api_status'] != 200) {
+      final String errorText = jsonResponse['errors']?['error_text']?.toString() ??
+          jsonResponse['message']?.toString() ??
+          'Failed to track ad $normalizedType';
+      throw Exception(errorText);
+    }
+  }
 }

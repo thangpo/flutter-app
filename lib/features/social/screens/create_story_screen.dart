@@ -907,13 +907,13 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _StoryCircleButton(
-          tooltip: getTranslated('stickers', context) ?? 'Stickers',
-          onTap: _showComingSoonSnack,
-          child: const Icon(Icons.emoji_emotions_outlined,
-              color: Colors.white, size: 20),
-        ),
-        const SizedBox(height: 14),
+        // _StoryCircleButton(
+        //   tooltip: getTranslated('stickers', context) ?? 'Stickers',
+        //   onTap: _showComingSoonSnack,
+        //   child: const Icon(Icons.emoji_emotions_outlined,
+        //       color: Colors.white, size: 20),
+        // ),
+        // const SizedBox(height: 14),
         _StoryCircleButton(
           tooltip: getTranslated('story_add_text', context) ?? 'Add text',
           onTap: _submitting ? null : _addNewTextBlock,
@@ -927,12 +927,12 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
           ),
         ),
         const SizedBox(height: 14),
-        _StoryCircleButton(
-          tooltip: getTranslated('music', context) ?? 'Music',
-          onTap: _showComingSoonSnack,
-          child: const Icon(Icons.music_note, color: Colors.white, size: 20),
-        ),
-        const SizedBox(height: 14),
+        // _StoryCircleButton(
+        //   tooltip: getTranslated('music', context) ?? 'Music',
+        //   onTap: _showComingSoonSnack,
+        //   child: const Icon(Icons.music_note, color: Colors.white, size: 20),
+        // ),
+        // const SizedBox(height: 14),
         _StoryCircleButton(
           tooltip: getTranslated('story_add_media', context) ?? 'Add media',
           onTap: _submitting ? null : _addCanvasMediaFromGallery,
@@ -940,13 +940,13 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
               color: Colors.white, size: 20),
         ),
         const SizedBox(height: 14),
-        _StoryCircleButton(
-          tooltip: '@',
-          onTap: _showComingSoonSnack,
-          child:
-              const Icon(Icons.alternate_email, color: Colors.white, size: 20),
-        ),
-        const SizedBox(height: 14),
+        // _StoryCircleButton(
+        //   tooltip: '@',
+        //   onTap: _showComingSoonSnack,
+        //   child:
+        //       const Icon(Icons.alternate_email, color: Colors.white, size: 20),
+        // ),
+        // const SizedBox(height: 14),
         _StoryCircleButton(
           tooltip: getTranslated('remove', context) ?? 'Remove',
           onTap: hasSelection && !_submitting ? _deleteSelectedElement : null,

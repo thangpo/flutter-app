@@ -1,7 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter_sixvalley_ecommerce/features/product_details/controllers/product_details_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
+import 'package:flutter/foundation.dart' as foundation;
 import 'package:flutter/material.dart';
+import 'package:flutter_sound/flutter_sound.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_sixvalley_ecommerce/di_container.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_comment.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
@@ -49,6 +56,24 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
   bool _hasMore = true;
   final int _pageSize = 10;
   final Set<String> _commentReactionLoading = <String>{};
+  bool _showEmojiKeyboard = false;
+  bool _showGifKeyboard = false;
+  final FlutterSoundRecorder _commentRecorder = FlutterSoundRecorder();
+  bool _commentRecorderReady = false;
+  bool _recordingComment = false;
+  String? _commentRecordingPath;
+  Timer? _recordingTimer;
+  Duration _recordingElapsed = Duration.zero;
+  Duration _lastRecordingDuration = Duration.zero;
+  final AudioPlayer _commentPreviewPlayer = AudioPlayer();
+  StreamSubscription<void>? _previewCompleteSub;
+  bool _previewPlaying = false;
+
+  bool get _hasCommentPayload =>
+      _commentController.text.trim().isNotEmpty ||
+      _commentImagePath != null ||
+      _commentImageUrl != null ||
+      _commentAudioPath != null;
   CommentSortOrder _sortOrder = CommentSortOrder.newest;
   bool _handledLiveNavigation = false;
 
@@ -63,6 +88,14 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
       } catch (_) {}
     });
     _loadMoreComments();
+    _previewCompleteSub =
+        _commentPreviewPlayer.onPlayerComplete.listen((event) {
+      if (mounted) {
+        setState(() => _previewPlaying = false);
+      } else {
+        _previewPlaying = false;
+      }
+    });
   }
 
   Future<void> _refreshAll() async {
@@ -296,69 +329,260 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
     }
   }
 
+  void _hideCustomKeyboards() {
+    if (!_showEmojiKeyboard && !_showGifKeyboard) return;
+    setState(() {
+      _showEmojiKeyboard = false;
+      _showGifKeyboard = false;
+    });
+  }
+
   Future<void> _handleImageAttachment() async {
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      builder: (sheetCtx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: Text(getTranslated('pick_from_gallery', sheetCtx) ??
-                  'Pick from gallery'),
-              onTap: () => Navigator.of(sheetCtx).pop('photo'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.gif_box_outlined),
-              title: Text(getTranslated('pick_gif_from_file', sheetCtx) ??
-                  'Pick GIF from file'),
-              onTap: () => Navigator.of(sheetCtx).pop('gif'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.link_outlined),
-              title: Text(
-                  getTranslated('paste_gif_url', sheetCtx) ?? 'Paste GIF URL'),
-              onTap: () => Navigator.of(sheetCtx).pop('url'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (!mounted || choice == null) return;
-    if (choice == 'photo') {
-      final img = await ImagePicker()
-          .pickImage(source: ImageSource.gallery, imageQuality: 80);
-      if (!mounted || img == null) return;
-      setState(() {
-        _commentImagePath = img.path;
-        _commentImageUrl = null;
-      });
+    _hideCustomKeyboards();
+    final img = await ImagePicker()
+        .pickImage(source: ImageSource.gallery, imageQuality: 80);
+    if (!mounted || img == null) return;
+    setState(() {
+      _commentImagePath = img.path;
+      _commentImageUrl = null;
+      _showGifKeyboard = false;
+      _showEmojiKeyboard = false;
+    });
+    FocusScope.of(context).requestFocus(_commentFocus);
+  }
+
+  Future<void> _toggleAudioRecording() async {
+    if (_recordingComment) {
+      try {
+        final recordedDuration = _recordingElapsed;
+        _stopRecordingTimer();
+        final stoppedPath = await _commentRecorder.stopRecorder();
+        final realPath = stoppedPath ?? _commentRecordingPath;
+        if (realPath == null) {
+          setState(() {
+            _recordingComment = false;
+            _commentRecordingPath = null;
+            _recordingElapsed = Duration.zero;
+          });
+          return;
+        }
+        setState(() {
+          _recordingComment = false;
+          _commentRecordingPath = null;
+          _commentImagePath = null;
+          _commentImageUrl = null;
+          _commentAudioPath = realPath;
+          _lastRecordingDuration = recordedDuration;
+          _recordingElapsed = Duration.zero;
+          _previewPlaying = false;
+        });
+        FocusScope.of(context).requestFocus(_commentFocus);
+      } catch (e) {
+        _stopRecordingTimer();
+        setState(() {
+          _recordingComment = false;
+          _commentRecordingPath = null;
+          _recordingElapsed = Duration.zero;
+        });
+        showCustomSnackBar(
+          getTranslated('recording_failed', context) ?? 'Recording failed',
+          context,
+          isError: true,
+        );
+      }
       return;
     }
-    if (choice == 'gif') {
-      final res = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: const ['gif', 'webp', 'GIF', 'WEBP'],
+
+    if (!_commentRecorderReady) {
+      await _initCommentRecorder();
+      if (!_commentRecorderReady) return;
+    }
+    _hideCustomKeyboards();
+    FocusScope.of(context).unfocus();
+    final dir = await getTemporaryDirectory();
+    final fileName = 'comment_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    final path = '${dir.path}/$fileName';
+    try {
+      if (_previewPlaying) {
+        await _commentPreviewPlayer.stop();
+        _previewPlaying = false;
+      }
+      _startRecordingTimer();
+      await _commentRecorder.startRecorder(
+        toFile: path,
+        codec: Codec.aacMP4,
+        bitRate: 64000,
+        sampleRate: 44100,
+        numChannels: 1,
       );
-      if (!mounted || res == null || res.files.isEmpty) return;
-      final file = res.files.first;
-      if (file.path == null) return;
       setState(() {
-        _commentImagePath = file.path;
+        _recordingComment = true;
+        _commentRecordingPath = path;
+        _clearCommentAudioAttachment();
+        _commentImagePath = null;
         _commentImageUrl = null;
       });
+    } catch (e) {
+      _stopRecordingTimer();
+      setState(() {
+        _recordingComment = false;
+        _commentRecordingPath = null;
+        _recordingElapsed = Duration.zero;
+      });
+      showCustomSnackBar(
+        getTranslated('recording_failed', context) ?? 'Recording failed',
+        context,
+        isError: true,
+      );
+    }
+  }
+
+  Future<void> _pickGifFromFile() async {
+    final res = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['gif', 'webp', 'GIF', 'WEBP'],
+    );
+    if (!mounted || res == null || res.files.isEmpty) return;
+    final file = res.files.first;
+    if (file.path == null) return;
+    setState(() {
+      _commentImagePath = file.path;
+      _commentImageUrl = null;
+      _showGifKeyboard = false;
+      _showEmojiKeyboard = false;
+    });
+    FocusScope.of(context).requestFocus(_commentFocus);
+  }
+
+  Future<void> _promptGifUrlSelection() async {
+    final url = await _askGifUrl();
+    if (!mounted || url == null || url.isEmpty) return;
+    setState(() {
+      _commentImageUrl = url;
+      _commentImagePath = null;
+      _showGifKeyboard = false;
+      _showEmojiKeyboard = false;
+    });
+    FocusScope.of(context).requestFocus(_commentFocus);
+  }
+
+  void _toggleGifKeyboard() {
+    final bool willShow = !_showGifKeyboard;
+    setState(() {
+      _showGifKeyboard = willShow;
+      if (willShow) {
+        _showEmojiKeyboard = false;
+      }
+    });
+    if (willShow) {
+      FocusScope.of(context).unfocus();
+    } else {
+      FocusScope.of(context).requestFocus(_commentFocus);
+    }
+  }
+
+  void _toggleEmojiKeyboard() {
+    final bool willShow = !_showEmojiKeyboard;
+    setState(() {
+      _showEmojiKeyboard = willShow;
+      if (willShow) {
+        _showGifKeyboard = false;
+      }
+    });
+    if (willShow) {
+      FocusScope.of(context).unfocus();
+    } else {
+      FocusScope.of(context).requestFocus(_commentFocus);
+    }
+  }
+
+  void _startRecordingTimer() {
+    _recordingElapsed = Duration.zero;
+    _recordingTimer?.cancel();
+    _recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() {
+        _recordingElapsed += const Duration(seconds: 1);
+      });
+    });
+  }
+
+  void _stopRecordingTimer() {
+    _recordingTimer?.cancel();
+    _recordingTimer = null;
+  }
+
+  String _formatDuration(Duration duration) {
+    final int minutes = duration.inMinutes.remainder(60);
+    final int seconds = duration.inSeconds.remainder(60);
+    final String mm = minutes.toString().padLeft(2, '0');
+    final String ss = seconds.toString().padLeft(2, '0');
+    return '$mm:$ss';
+  }
+
+  Future<void> _initCommentRecorder() async {
+    try {
+      final status = await Permission.microphone.request();
+      if (!status.isGranted) {
+        if (mounted) {
+          showCustomSnackBar(
+            getTranslated('microphone_permission_required', context) ??
+                'Microphone permission required',
+            context,
+            isError: true,
+          );
+        }
+        return;
+      }
+      await _commentRecorder.openRecorder();
+      await _commentRecorder
+          .setSubscriptionDuration(const Duration(milliseconds: 100));
+      _commentRecorderReady = true;
+    } catch (e) {
+      _commentRecorderReady = false;
+      if (mounted) {
+        showCustomSnackBar(
+          getTranslated('recording_failed', context) ?? 'Recording failed',
+          context,
+          isError: true,
+        );
+      }
+    }
+  }
+
+  Future<void> _togglePreviewPlayback() async {
+    if (_commentAudioPath == null) return;
+    if (_previewPlaying) {
+      await _commentPreviewPlayer.stop();
+      if (mounted)
+        setState(() => _previewPlaying = false);
+      else
+        _previewPlaying = false;
       return;
     }
-    if (choice == 'url') {
-      final url = await _askGifUrl();
-      if (!mounted || url == null || url.isEmpty) return;
-      setState(() {
-        _commentImageUrl = url;
-        _commentImagePath = null;
-      });
+    try {
+      await _commentPreviewPlayer.stop();
+      await _commentPreviewPlayer.play(DeviceFileSource(_commentAudioPath!));
+      if (mounted) {
+        setState(() => _previewPlaying = true);
+      } else {
+        _previewPlaying = true;
+      }
+    } catch (e) {
+      if (mounted) {
+        showCustomSnackBar(
+          getTranslated('playback_failed', context) ?? 'Playback failed',
+          context,
+          isError: true,
+        );
+      }
     }
+  }
+
+  void _clearCommentAudioAttachment() {
+    _commentAudioPath = null;
+    _lastRecordingDuration = Duration.zero;
+    _previewPlaying = false;
   }
 
   Future<String?> _askGifUrl() async {
@@ -525,7 +749,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                   behavior: HitTestBehavior.opaque,
                   onTap: () {
                     FocusScope.of(context).unfocus();
-                    setState(() => _showInput = false);
+                    _hideCustomKeyboards();
                   },
                   child: SingleChildScrollView(
                     // padding: const EdgeInsets.all(12),
@@ -1143,9 +1367,11 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                                           null;
                                                                       _commentImageUrl =
                                                                           null;
-                                                                      _commentAudioPath =
-                                                                          null;
+                                                                      _clearCommentAudioAttachment();
                                                                     });
+                                                                    unawaited(
+                                                                        _commentPreviewPlayer
+                                                                            .stop());
                                                                     FocusScope.of(
                                                                             context)
                                                                         .requestFocus(
@@ -1315,21 +1541,21 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                               null;
                                                           _commentImageUrl =
                                                               null;
-                                                          _commentAudioPath =
-                                                              null;
+                                                          _clearCommentAudioAttachment();
                                                         });
+                                                        unawaited(
+                                                            _commentPreviewPlayer
+                                                                .stop());
                                                         FocusScope.of(context)
                                                             .requestFocus(
                                                                 _commentFocus);
                                                       },
-                                                      onShowReactions:
-                                                          (target,
-                                                                  {bool
-                                                                      isReply =
-                                                                          false,
-                                                                  BuildContext?
-                                                                      context}) =>
-                                                              _openCommentReactionsSheet(
+                                                      onShowReactions: (target,
+                                                              {bool isReply =
+                                                                  false,
+                                                              BuildContext?
+                                                                  context}) =>
+                                                          _openCommentReactionsSheet(
                                                         target,
                                                         isReply: isReply,
                                                       ),
@@ -1432,107 +1658,137 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                           ),
                         Row(
                           children: [
-                            Expanded(
-                              child: TextField(
-                                controller: _commentController,
-                                focusNode: _commentFocus,
-                                decoration: InputDecoration(
-                                  hintText:
-                                      getTranslated('enter_comment', context) ??
-                                          'Enter comment',
-                                  border: const OutlineInputBorder(),
-                                  isDense: true,
-                                ),
-                                minLines: 1,
-                                maxLines: 3,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            IconButton(
+                            _buildCommentActionIcon(
+                              context,
+                              icon: Icons.camera_alt_outlined,
                               tooltip:
                                   getTranslated('image', context) ?? 'Image',
-                              onPressed: _handleImageAttachment,
-                              icon: const Icon(Icons.image_outlined),
+                              onTap: _handleImageAttachment,
                             ),
-                            IconButton(
-                              tooltip:
-                                  getTranslated('audio', context) ?? 'Audio',
-                              onPressed: () async {
-                                final res = await FilePicker.platform
-                                    .pickFiles(type: FileType.audio);
-                                if (res != null && res.files.isNotEmpty) {
-                                  setState(() =>
-                                      _commentAudioPath = res.files.first.path);
-                                }
-                              },
-                              icon: const Icon(Icons.audiotrack_outlined),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .surfaceVariant
+                                      .withOpacity(.65),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withOpacity(.1),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: TextField(
+                                        controller: _commentController,
+                                        focusNode: _commentFocus,
+                                        decoration: InputDecoration(
+                                          hintText: getTranslated(
+                                                  'enter_comment', context) ??
+                                              'Enter comment',
+                                          border: InputBorder.none,
+                                          isCollapsed: true,
+                                        ),
+                                        keyboardType: TextInputType.multiline,
+                                        minLines: 1,
+                                        maxLines: 3,
+                                        textInputAction:
+                                            TextInputAction.newline,
+                                        onTap: () {
+                                          if (_showGifKeyboard ||
+                                              _showEmojiKeyboard) {
+                                            setState(() {
+                                              _showGifKeyboard = false;
+                                              _showEmojiKeyboard = false;
+                                            });
+                                          }
+                                        },
+                                        onChanged: (_) => setState(() {}),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    _buildCommentActionIcon(
+                                      context,
+                                      icon: Icons.mic_none_outlined,
+                                      tooltip: _recordingComment
+                                          ? getTranslated(
+                                                  'stop_recording', context) ??
+                                              'Stop recording'
+                                          : getTranslated(
+                                                  'record_audio', context) ??
+                                              'Record audio',
+                                      onTap: _toggleAudioRecording,
+                                      highlighted: _recordingComment,
+                                    ),
+                                    const SizedBox(width: 2),
+                                    _buildCommentActionIcon(
+                                      context,
+                                      icon: Icons.gif_box_outlined,
+                                      tooltip: getTranslated('gif', context) ??
+                                          'GIF',
+                                      onTap: _toggleGifKeyboard,
+                                      highlighted: _showGifKeyboard,
+                                    ),
+                                    const SizedBox(width: 2),
+                                    _buildCommentActionIcon(
+                                      context,
+                                      icon: Icons.emoji_emotions_outlined,
+                                      tooltip:
+                                          getTranslated('emoji', context) ??
+                                              'Emoji',
+                                      onTap: _toggleEmojiKeyboard,
+                                      highlighted: _showEmojiKeyboard,
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                            IconButton(
-                              tooltip:
-                                  getTranslated('submit', context) ?? 'Submit',
-                              onPressed: _sendingComment
-                                  ? null
-                                  : () async {
-                                      final txt =
-                                          _commentController.text.trim();
-                                      if (txt.isEmpty &&
-                                          _commentImagePath == null &&
-                                          _commentImageUrl == null &&
-                                          _commentAudioPath == null) return;
-                                      setState(() => _sendingComment = true);
-                                      try {
-                                        final svc =
-                                            sl<SocialServiceInterface>();
-                                        if (_replyingTo == null) {
-                                          await svc.createComment(
-                                            postId: widget.post.id,
-                                            text: txt,
-                                            imagePath: _commentImagePath,
-                                            audioPath: _commentAudioPath,
-                                            imageUrl: _commentImageUrl,
-                                          );
-                                        } else {
-                                          await svc.createReply(
-                                            commentId: _replyingTo!.id,
-                                            text: txt,
-                                            imagePath: _commentImagePath,
-                                            audioPath: _commentAudioPath,
-                                            imageUrl: _commentImageUrl,
-                                          );
-                                        }
-                                        _commentController.clear();
-                                        setState(() {
-                                          _commentImagePath = null;
-                                          _commentImageUrl = null;
-                                          _commentAudioPath = null;
-                                          _replyingTo = null;
-                                        });
-                                        await _refreshAll();
-                                      } catch (e) {
-                                        showCustomSnackBar(
-                                            e.toString(), context,
-                                            isError: true);
-                                      } finally {
-                                        if (mounted) {
-                                          setState(
-                                              () => _sendingComment = false);
-                                        }
-                                      }
-                                    },
-                              icon: const Icon(Icons.send),
-                            ),
-                            IconButton(
-                              tooltip:
-                                  getTranslated('cancel', context) ?? 'Cancel',
-                              onPressed: () =>
-                                  setState(() => _showInput = false),
-                              icon: const Icon(Icons.close),
-                            ),
+                            if (_hasCommentPayload) ...[
+                              const SizedBox(width: 8),
+                              _buildCommentActionIcon(
+                                context,
+                                icon: Icons.send,
+                                tooltip: getTranslated('submit', context) ??
+                                    'Submit',
+                                onTap: _sendingComment ? null : _submitComment,
+                              ),
+                            ]
                           ],
                         ),
+                        if (_recordingComment)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.fiber_manual_record,
+                                  size: 16,
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '${getTranslated('recording', context) ?? 'Recording'} ${_formatDuration(_recordingElapsed)}',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color:
+                                            Theme.of(context).colorScheme.error,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
                         if (_commentImagePath != null ||
-                            _commentImageUrl != null ||
-                            _commentAudioPath != null)
+                            _commentImageUrl != null)
                           Padding(
                             padding: const EdgeInsets.only(top: 6),
                             child: Wrap(
@@ -1558,18 +1814,18 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                     onDeleted: () =>
                                         setState(() => _commentImageUrl = null),
                                   ),
-                                if (_commentAudioPath != null)
-                                  InputChip(
-                                    label: Text(
-                                      '${getTranslated('audio', context) ?? 'Audio'}: ${_basename(_commentAudioPath!)}',
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    onDeleted: () => setState(
-                                        () => _commentAudioPath = null),
-                                  ),
                               ],
                             ),
                           ),
+                        if (_commentAudioPath != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: _buildRecordedAudioPreview(context),
+                          ),
+                        if (_showGifKeyboard || _showEmojiKeyboard)
+                          const SizedBox(height: 6),
+                        if (_showGifKeyboard) _buildGifKeyboard(context),
+                        if (_showEmojiKeyboard) _buildEmojiKeyboard(context),
                       ],
                     ),
                   ),
@@ -1601,8 +1857,286 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
     );
   }
 
+  Future<void> _submitComment() async {
+    final txt = _commentController.text.trim();
+    if (txt.isEmpty &&
+        _commentImagePath == null &&
+        _commentImageUrl == null &&
+        _commentAudioPath == null) return;
+    if (_sendingComment) return;
+    setState(() => _sendingComment = true);
+    try {
+      final svc = sl<SocialServiceInterface>();
+      if (_replyingTo == null) {
+        await svc.createComment(
+          postId: widget.post.id,
+          text: txt,
+          imagePath: _commentImagePath,
+          audioPath: _commentAudioPath,
+          imageUrl: _commentImageUrl,
+        );
+      } else {
+        await svc.createReply(
+          commentId: _replyingTo!.id,
+          text: txt,
+          imagePath: _commentImagePath,
+          audioPath: _commentAudioPath,
+          imageUrl: _commentImageUrl,
+        );
+      }
+      _commentController.clear();
+      setState(() {
+        _commentImagePath = null;
+        _commentImageUrl = null;
+        _clearCommentAudioAttachment();
+        _replyingTo = null;
+        _showGifKeyboard = false;
+        _showEmojiKeyboard = false;
+      });
+      unawaited(_commentPreviewPlayer.stop());
+      await _refreshAll();
+    } catch (e) {
+      if (mounted) {
+        showCustomSnackBar(e.toString(), context, isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _sendingComment = false);
+      }
+    }
+  }
+
+  Widget _buildCommentActionIcon(
+    BuildContext context, {
+    required IconData icon,
+    VoidCallback? onTap,
+    String? tooltip,
+    bool highlighted = false,
+  }) {
+    final bool enabled = onTap != null;
+    final theme = Theme.of(context);
+    final Color color = theme.colorScheme.onSurfaceVariant.withOpacity(
+      enabled ? (highlighted ? 1 : .85) : .4,
+    );
+    final button = Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Container(
+          decoration: highlighted
+              ? BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: theme.colorScheme.primary.withOpacity(.12),
+                )
+              : null,
+          padding: const EdgeInsets.all(6),
+          child: Icon(
+            icon,
+            size: 20,
+            color: color,
+          ),
+        ),
+      ),
+    );
+    if (tooltip == null) {
+      return button;
+    }
+    return Tooltip(message: tooltip, child: button);
+  }
+
+  Widget _buildRecordedAudioPreview(BuildContext context) {
+    final theme = Theme.of(context);
+    final Color border = theme.colorScheme.onSurface.withOpacity(.08);
+    final String subtitle = _lastRecordingDuration > Duration.zero
+        ? _formatDuration(_lastRecordingDuration)
+        : (_commentAudioPath != null ? _basename(_commentAudioPath!) : '');
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceVariant.withOpacity(.6),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: border),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
+          IconButton(
+            iconSize: 30,
+            onPressed: _togglePreviewPlayback,
+            icon: Icon(
+              _previewPlaying
+                  ? Icons.pause_circle_filled
+                  : Icons.play_circle_filled,
+              color: theme.colorScheme.primary,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  getTranslated('audio_preview', context) ?? 'Audio preview',
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withOpacity(.7),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: getTranslated('remove', context) ?? 'Remove',
+            onPressed: () {
+              setState(() => _clearCommentAudioAttachment());
+              unawaited(_commentPreviewPlayer.stop());
+            },
+            icon: const Icon(Icons.close),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGifKeyboard(BuildContext context) {
+    final theme = Theme.of(context);
+    final Color divider = theme.colorScheme.onSurface.withOpacity(.08);
+    return Container(
+      height: 220,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(
+          top: BorderSide(color: divider),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              children: [
+                Text(
+                  getTranslated('gif', context) ?? 'GIF',
+                  style: theme.textTheme.titleMedium,
+                ),
+                const Spacer(),
+                IconButton(
+                  tooltip: getTranslated('hide_keyboard', context) ??
+                      'Hide keyboard',
+                  onPressed: () {
+                    setState(() => _showGifKeyboard = false);
+                    FocusScope.of(context).requestFocus(_commentFocus);
+                  },
+                  icon: const Icon(Icons.keyboard_hide_outlined),
+                ),
+              ],
+            ),
+          ),
+          Divider(color: divider, height: 1),
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.photo_library_outlined),
+                  title: Text(
+                    getTranslated('pick_gif_from_file', context) ??
+                        'Pick GIF from file',
+                  ),
+                  onTap: _pickGifFromFile,
+                ),
+                ListTile(
+                  leading: const Icon(Icons.link_outlined),
+                  title: Text(
+                    getTranslated('paste_gif_url', context) ?? 'Paste GIF URL',
+                  ),
+                  onTap: _promptGifUrlSelection,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmojiKeyboard(BuildContext context) {
+    final theme = Theme.of(context);
+    final Color divider = theme.colorScheme.onSurface.withOpacity(.08);
+    return Container(
+      height: 300,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(
+          top: BorderSide(color: divider),
+        ),
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              children: [
+                Text(
+                  getTranslated('emoji', context) ?? 'Emoji',
+                  style: theme.textTheme.titleMedium,
+                ),
+                const Spacer(),
+                IconButton(
+                  tooltip: getTranslated('hide_keyboard', context) ??
+                      'Hide keyboard',
+                  onPressed: () {
+                    setState(() => _showEmojiKeyboard = false);
+                    FocusScope.of(context).requestFocus(_commentFocus);
+                  },
+                  icon: const Icon(Icons.keyboard_hide_outlined),
+                ),
+              ],
+            ),
+          ),
+          Divider(color: divider, height: 1),
+          Expanded(
+            child: EmojiPicker(
+              onEmojiSelected: (_, __) => setState(() {}),
+              onBackspacePressed: () => setState(() {}),
+              textEditingController: _commentController,
+              config: Config(
+                height: 256,
+                checkPlatformCompatibility: true,
+                emojiViewConfig: EmojiViewConfig(
+                  emojiSizeMax: 28 *
+                      (foundation.defaultTargetPlatform == TargetPlatform.iOS
+                          ? 1.2
+                          : 1.0),
+                ),
+                skinToneConfig: const SkinToneConfig(),
+                categoryViewConfig: const CategoryViewConfig(),
+                bottomActionBarConfig: const BottomActionBarConfig(),
+                searchViewConfig: const SearchViewConfig(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   void dispose() {
+    if (_recordingComment) {
+      _commentRecorder.stopRecorder();
+    }
+    _commentRecorder.closeRecorder();
+    _recordingTimer?.cancel();
+    _previewCompleteSub?.cancel();
+    _commentPreviewPlayer.dispose();
     _commentController.dispose();
     _commentFocus.dispose();
     super.dispose();
@@ -2692,8 +3226,8 @@ class _RepliesLazy extends StatefulWidget {
   final SocialComment comment;
   final SocialServiceInterface service;
   final void Function(SocialComment) onRequestReply;
-  final void Function(SocialComment comment, {bool isReply, BuildContext? context})?
-      onShowReactions;
+  final void Function(SocialComment comment,
+      {bool isReply, BuildContext? context})? onShowReactions;
   const _RepliesLazy(
       {required this.comment,
       required this.service,
@@ -2937,16 +3471,14 @@ class _RepliesLazyState extends State<_RepliesLazy> {
                                           _reactionIcon('Like', size: 18),
                                           const SizedBox(width: 4),
                                           Text(
-                                            _formatSocialCount(
-                                                r.reactionCount),
+                                            _formatSocialCount(r.reactionCount),
                                             style: Theme.of(context)
                                                 .textTheme
                                                 .bodySmall
                                                 ?.copyWith(
-                                                  color: onSurface
-                                                      .withOpacity(.6),
-                                                  fontWeight:
-                                                      FontWeight.w600,
+                                                  color:
+                                                      onSurface.withOpacity(.6),
+                                                  fontWeight: FontWeight.w600,
                                                 ),
                                           ),
                                         ],
