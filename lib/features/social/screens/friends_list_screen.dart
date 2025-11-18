@@ -1,3 +1,4 @@
+// G:\flutter-app\lib\features\social\screens\friends_list_screen.dart
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -14,7 +15,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_ch
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_group_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/group_chats_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-
+import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
 
 class FriendsListScreen extends StatefulWidget {
   final String accessToken;
@@ -33,6 +34,9 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
   int chatBadgeCount = 1;
   bool notifDot = true;
 
+  // ✅ static: giữ lại dữ liệu ngay cả khi màn này bị dispose rồi tạo lại
+  static final Map<String, int> _localLastActivity = {};
+
   @override
   void initState() {
     super.initState();
@@ -43,44 +47,43 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
     await friendsCtrl.load(widget.accessToken, context: context);
   }
 
+  /// So sánh để sort theo thời gian tin nhắn/hoạt động cuối (mới nhất lên trên)
+  int _compareByLastMessage(SocialFriend a, SocialFriend b) {
+    // ✅ lấy timestamp local nếu có (chỉ set khi thực sự có tin mới)
+    final taLocal = _localLastActivity[a.id.toString()];
+    final tbLocal = _localLastActivity[b.id.toString()];
+
+    final ta = taLocal ?? a.lastMessageTime ?? 0;
+    final tb = tbLocal ?? b.lastMessageTime ?? 0;
+
+    if (ta == 0 && tb == 0) return 0;
+    return tb.compareTo(ta); // mới nhất lên trên
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text(getTranslated('chat_section', context)!),
         elevation: 0,
-        actions: [
-          IconButton(
-            tooltip: getTranslated('create_group_chat', context)!,
-            icon: const Icon(Icons.group_add),
-            onPressed: () async {
-              final success = await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      CreateGroupScreen(accessToken: widget.accessToken),
-                ),
-              );
-              if (success == true) {
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content:
-                        Text(getTranslated('group_created_success', context)!),
-                  ),
-                );
-
-              }
-            },
-          ),
-        ],
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        titleSpacing: 16,
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset(
+              Images.logoWithNameImage,
+              height: 35,
+            ),
+            // nếu muốn chừa MenuWidget cạnh logo thì bật đoạn dưới
+            // const SizedBox(width: 8),
+            // const MenuWidget(),
+          ],
+        ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {},
-        child: const Icon(Icons.edit),
-      ),
+      floatingActionButton: null,
       bottomNavigationBar: _MessengerFooter(
         currentIndex: _tabIndex,
         chatBadgeCount: chatBadgeCount,
@@ -99,42 +102,49 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
         },
       ),
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 🔍 ô tìm kiếm
+          // 🔍 ô tìm kiếm dạng pill
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
             child: TextField(
               controller: searchCtrl,
               onChanged: friendsCtrl.search,
               decoration: InputDecoration(
-                hintText: 'Hỏi Meta AI hoặc tìm kiếm',
+                hintText: 'Tìm kiếm',
                 prefixIcon: const Icon(Icons.search),
                 filled: true,
                 fillColor: cs.surfaceVariant.withOpacity(.5),
                 contentPadding: const EdgeInsets.symmetric(vertical: 10),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(999),
                   borderSide: BorderSide.none,
                 ),
               ),
             ),
           ),
 
-          // 👥 dải avatar ngang
+          // 👥 dải avatar ngang (story-style) + "Tạo tin" đầu tiên
           SizedBox(
-            height: 102,
+            height: 106,
             child: Obx(() {
-              final list = friendsCtrl.friends;
+              final list = List<SocialFriend>.from(friendsCtrl.friends);
+              list.sort(_compareByLastMessage);
+
               if (friendsCtrl.isLoading.value && list.isEmpty) {
                 return const _AvatarStripSkeleton();
               }
+
               return ListView.separated(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 10),
-                itemCount: list.length,
+                itemCount: list.length + 1, // +1 cho ô "Tạo tin"
                 separatorBuilder: (_, __) => const SizedBox(width: 10),
                 itemBuilder: (_, i) {
-                  final u = list[i];
+                  if (i == 0) {
+                    return const _CreateStoryTile();
+                  }
+                  final u = list[i - 1];
                   return _AvatarStoryTile(
                     name: u.name,
                     avatar: u.avatar,
@@ -146,22 +156,17 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
             }),
           ),
 
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Divider(
-              height: 1,
-              thickness: 0.5,
-              color: cs.outlineVariant.withOpacity(.6),
-            ),
-          ),
+          const SizedBox(height: 8),
 
-          // 📜 danh sách bạn bè (dọc)
+          // 📜 danh sách đoạn chat
           Expanded(
             child: Obx(() {
-              if (friendsCtrl.isLoading.value && friendsCtrl.filtered.isEmpty) {
+              final list = List<SocialFriend>.from(friendsCtrl.filtered);
+              list.sort(_compareByLastMessage);
+
+              if (friendsCtrl.isLoading.value && list.isEmpty) {
                 return const _MessengerSkeleton();
               }
-              final list = friendsCtrl.filtered;
               return RefreshIndicator(
                 onRefresh: _onRefresh,
                 child: list.isEmpty
@@ -170,33 +175,33 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                         children: [
                           const SizedBox(height: 36),
                           Center(
-                              child: Text(
-                                  getTranslated('no_friends_yet', context)!)),
+                            child: Text(
+                              getTranslated('no_friends_yet', context)!,
+                            ),
+                          ),
                         ],
                       )
-
-                    : ListView.separated(
+                    : ListView.builder(
                         physics: const AlwaysScrollableScrollPhysics(),
                         itemCount: list.length,
-                        separatorBuilder: (_, __) => Divider(
-                          height: 1,
-                          thickness: 0.5,
-                          color: cs.outlineVariant.withOpacity(.6),
-                          indent: 76,
-                        ),
                         itemBuilder: (_, i) {
                           final u = list[i];
+
+                          // preview: sau này có lastMessageText thì gắn vào đây
                           final preview = u.isOnline
                               ? getTranslated('active_now', context)!
                               : (u.lastSeen ?? '');
+
+                          // thời gian hiển thị bên phải (tạm thời dùng lastSeen)
+                          final timeLabel = (u.lastSeen ?? '').trim();
+
                           return InkWell(
                             onTap: () => _openChat(u),
-                            onLongPress:
-                                _openCreateGroupDialog, // ✨ thêm tùy chọn nhanh
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 8),
                               child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
                                   _ChatAvatar(
                                     url: u.avatar,
@@ -209,29 +214,50 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        Text(
-                                          u.name,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                            color: cs.onSurface,
-                                            fontSize: 16,
-                                          ),
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                u.name,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  color: cs.onSurface,
+                                                  fontSize: 15.5,
+                                                ),
+                                              ),
+                                            ),
+                                            // if (timeLabel.isNotEmpty)
+                                            //   Text(
+                                            //     timeLabel,
+                                            //     style: TextStyle(
+                                            //       color: cs.onSurface
+                                            //           .withOpacity(.5),
+                                            //       fontSize: 11.5,
+                                            //     ),
+                                            //   ),
+                                          ],
                                         ),
-                                        const SizedBox(height: 2),
+                                        const SizedBox(height: 3),
                                         Text(
                                           preview.isEmpty ? ' ' : preview,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
                                             color: cs.onSurface.withOpacity(.7),
-                                            fontSize: 13.5,
+                                            fontSize: 13,
                                           ),
                                         ),
                                       ],
                                     ),
                                   ),
+                                  // const SizedBox(width: 8),
+                                  // Icon(
+                                  //   Icons.volume_off,
+                                  //   size: 18,
+                                  //   color: cs.onSurface.withOpacity(.35),
+                                  // ),
                                 ],
                               ),
                             ),
@@ -246,145 +272,29 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
     );
   }
 
+  // ✅ chỉ update khi ChatScreen trả về true (thực sự có tin mới)
   void _openChat(SocialFriend u) {
-   Navigator.push(
+    Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (_) => ChatScreen(
           accessToken: widget.accessToken,
-          peerUserId: u.id.toString(), // hoặc receiverId nếu bạn dùng alias
-          peerName:
-              (u.name != null && u.name!.trim().isNotEmpty) ? u.name! : 'User #${u.id}', // 👈 thay title -> peerName
-          peerAvatar: u.avatar, // nếu có
+          peerUserId: u.id.toString(),
+          peerName: (u.name.isNotEmpty) ? u.name : 'User #${u.id}',
+          peerAvatar: u.avatar,
         ),
       ),
-    );
+    ).then((hasNewMessage) {
+      if (hasNewMessage == true) {
+        final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+        setState(() {
+          _localLastActivity[u.id.toString()] = now;
+        });
 
-  }
-
-  /// 🧩 Dialog tạo nhóm chat nhanh
-  void _openCreateGroupDialog() {
-    final nameCtrl = TextEditingController();
-    final partsCtrl = TextEditingController(); // nhập: 2,3,4
-    File? avatarFile;
-
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        final groupCtrl = context.watch<GroupChatController>();
-        return AlertDialog(
-          title: const Text('Tạo nhóm chat'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameCtrl,
-                  decoration: InputDecoration(
-                    labelText: getTranslated('group_name_msg', context),
-                    hintText: getTranslated('group_name_msg_hint', context),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: partsCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'ID thành viên (phân tách dấu phẩy)',
-                    hintText: 'VD: 2,3,4',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: () async {
-                        final picked = await FilePicker.platform.pickFiles(
-                          allowMultiple: false,
-                          type: FileType.image,
-                        );
-                        if (picked != null &&
-                            picked.files.single.path != null) {
-                          setState(() {
-                            avatarFile = File(picked.files.single.path!);
-                          });
-                        }
-                      },
-                      icon: const Icon(Icons.image),
-                      label: const Text('Chọn ảnh nhóm (tùy chọn)'),
-                    ),
-                    const SizedBox(width: 8),
-                    if (avatarFile != null)
-                      const Icon(Icons.check_circle,
-                          size: 18, color: Colors.green),
-                  ],
-                ),
-                if (groupCtrl.lastError != null) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    groupCtrl.lastError!,
-                    style: const TextStyle(color: Colors.red),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Hủy'),
-            ),
-            ElevatedButton(
-              onPressed: groupCtrl.creatingGroup
-                  ? null
-                  : () async {
-                      final name = nameCtrl.text.trim();
-                      final raw = partsCtrl.text.trim();
-                      if (name.isEmpty || raw.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content:
-                                Text('Nhập tên nhóm và ID thành viên hợp lệ'),
-                          ),
-                        );
-                        return;
-                      }
-                      final ids = raw
-                          .split(',')
-                          .map((e) => e.trim())
-                          .where((e) => e.isNotEmpty)
-                          .toList();
-
-                      final success =
-                          await context.read<GroupChatController>().createGroup(
-                                name: name,
-                                memberIds: ids,
-                                avatarFile: avatarFile,
-                              );
-
-                      if (!mounted) return;
-                      if (success) {
-                        Navigator.of(ctx).pop();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Tạo nhóm thành công!')),
-                        );
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Không thể tạo nhóm!')),
-                        );
-                      }
-                    },
-              child: groupCtrl.creatingGroup
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Tạo nhóm'),
-            ),
-          ],
-        );
-      },
-    );
+        // optional: reload từ server để preview/time chuẩn dữ liệu backend
+        friendsCtrl.load(widget.accessToken, context: context);
+      }
+    });
   }
 }
 
@@ -460,7 +370,9 @@ class _MessengerFooter extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: Theme.of(context).scaffoldBackgroundColor,
-          border: Border(top: BorderSide(color: cs.outlineVariant, width: .5)),
+          border: Border(
+            top: BorderSide(color: cs.outlineVariant, width: .5),
+          ),
         ),
         child: Row(
           children: [
@@ -487,7 +399,6 @@ class _MessengerFooter extends StatelessWidget {
               label: getTranslated('menu', context)!,
             ),
           ],
-
         ),
       ),
     );
@@ -508,7 +419,10 @@ class _Badge extends StatelessWidget {
       child: Text(
         text,
         style: const TextStyle(
-            color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
@@ -520,24 +434,61 @@ class _Dot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-        width: 8,
-        height: 8,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle));
+      width: 8,
+      height: 8,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
   }
 }
 
 /* ===== Avatar components & skeletons ===== */
+
+class _CreateStoryTile extends StatelessWidget {
+  const _CreateStoryTile();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: 74,
+      child: Column(
+        children: [
+          Stack(
+            children: [
+              CircleAvatar(
+                radius: 28,
+                backgroundColor: cs.surfaceVariant,
+                child: Icon(
+                  Icons.add,
+                  color: cs.onSurface.withOpacity(.8),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Tạo tin',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 12.5, color: cs.onSurface),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _AvatarStoryTile extends StatelessWidget {
   final String name;
   final String? avatar;
   final bool online;
   final VoidCallback? onTap;
-  const _AvatarStoryTile(
-      {required this.name,
-      required this.avatar,
-      required this.online,
-      this.onTap});
+  const _AvatarStoryTile({
+    required this.name,
+    required this.avatar,
+    required this.online,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -557,9 +508,13 @@ class _AvatarStoryTile extends StatelessWidget {
                       ? NetworkImage(avatar!)
                       : null,
                   child: (avatar == null || avatar!.isEmpty)
-                      ? Text(name.isNotEmpty ? name[0] : '?',
+                      ? Text(
+                          name.isNotEmpty ? name[0] : '?',
                           style: TextStyle(
-                              color: cs.onSurface, fontWeight: FontWeight.bold))
+                            color: cs.onSurface,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        )
                       : null,
                 ),
                 Positioned(
@@ -572,18 +527,21 @@ class _AvatarStoryTile extends StatelessWidget {
                       color: online ? Colors.green : cs.surfaceVariant,
                       shape: BoxShape.circle,
                       border: Border.all(
-                          color: Theme.of(context).scaffoldBackgroundColor,
-                          width: 2),
+                        color: Theme.of(context).scaffoldBackgroundColor,
+                        width: 2,
+                      ),
                     ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 6),
-            Text(name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12.5, color: cs.onSurface)),
+            Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12.5, color: cs.onSurface),
+            ),
           ],
         ),
       ),
@@ -595,8 +553,11 @@ class _ChatAvatar extends StatelessWidget {
   final String? url;
   final bool online;
   final String label;
-  const _ChatAvatar(
-      {required this.url, required this.online, required this.label});
+  const _ChatAvatar({
+    required this.url,
+    required this.online,
+    required this.label,
+  });
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -608,9 +569,13 @@ class _ChatAvatar extends StatelessWidget {
           backgroundImage:
               (url != null && url!.isNotEmpty) ? NetworkImage(url!) : null,
           child: (url == null || url!.isEmpty)
-              ? Text(label.isNotEmpty ? label[0] : '?',
+              ? Text(
+                  label.isNotEmpty ? label[0] : '?',
                   style: TextStyle(
-                      color: cs.onSurface, fontWeight: FontWeight.bold))
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.bold,
+                  ),
+                )
               : null,
         ),
         Positioned(
@@ -623,7 +588,9 @@ class _ChatAvatar extends StatelessWidget {
               color: online ? Colors.green : cs.surfaceVariant,
               shape: BoxShape.circle,
               border: Border.all(
-                  color: Theme.of(context).scaffoldBackgroundColor, width: 2),
+                color: Theme.of(context).scaffoldBackgroundColor,
+                width: 2,
+              ),
             ),
           ),
         ),
