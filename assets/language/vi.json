@@ -1433,7 +1433,17 @@
 
   "reactions": "Cảm xúc",
   "comment_reactions": "Cảm xúc trong bình luận",
-  "mutual_friends": "Bạn chung"
+  "mutual_friends": "Bạn chung",
+
+  "ad_default_title": "Quảng cáo",
+  "ad_sponsored": "Được tài trợ",
+  "ad_learn_more": "Tìm hiểu thêm",
+  "love": "Yêu thích",
+  "haha": "Haha",
+  "wow": "Wow",
+  "sad": "Buồn",
+  "angry": "Phẫn nộ"
+
 
 }
 

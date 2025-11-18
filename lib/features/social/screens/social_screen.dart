@@ -330,7 +330,7 @@ Future<void> _launchAdUrl(BuildContext context, String? url) async {
 
 void _showAdLaunchError(BuildContext context) {
   ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('KhÃ´ng thá»ƒ má»Ÿ quáº£ng cÃ¡o')),
+    const SnackBar(content: Text('Không thấy quảng cáo')),
   );
 }
 
@@ -387,15 +387,13 @@ class _FacebookHeader extends StatelessWidget {
                 iconColor: onAppBar,
                 bubbleColor: onAppBar.withOpacity(0.08),
                 onTap: () {
-                  final token = context.read<SocialController>().accessToken;
-                  if (token == null || token.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text(
-                              'Vui lÃ²ng káº¿t ná»‘i tÃ i khoáº£n WoWonder trÆ°á»›c.')),
-                    );
-                    return;
-                  }
+                  // final token = context.read<SocialController>().accessToken;
+                  // if (token == null || token.isEmpty) {
+                  //   ScaffoldMessenger.of(context).showSnackBar(
+                  //     const SnackBar(content: Text('Đăng nhập tai')),
+                  //   );
+                  //   return;
+                  // }
                   Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => FriendsScreen(),
@@ -411,11 +409,11 @@ class _FacebookHeader extends StatelessWidget {
                 onTap: () {
                   final token = context.read<SocialController>().accessToken;
                   if (token == null || token.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text(
-                              'Vui lÃ²ng k?t n?i tÃ i kho?n WoWonder tru?c.')),
-                    );
+                    // ScaffoldMessenger.of(context).showSnackBar(
+                    //   const SnackBar(
+                    //       content: Text(
+                    //           'Vui lÃ²ng k?t n?i tÃ i kho?n WoWonder tru?c.')),
+                    // );
                     return;
                   }
                   Navigator.of(context).push(
@@ -1702,10 +1700,19 @@ class _PostAdCard extends StatefulWidget {
 class _PostAdCardState extends State<_PostAdCard> {
   bool _viewLogged = false;
 
-  String _title() {
-    return (widget.ad.headline?.trim().isNotEmpty ?? false)
-        ? widget.ad.headline!.trim()
-        : (widget.ad.name ?? 'Qu���ng cA�o');
+  String _title(BuildContext context) {
+    final String defaultTitle =
+        getTranslated('ad_default_title', context) ?? 'Quảng cáo';
+
+    if (widget.ad.headline?.trim().isNotEmpty ?? false) {
+      return widget.ad.headline!.trim();
+    }
+
+    if (widget.ad.name?.trim().isNotEmpty ?? false) {
+      return widget.ad.name!.trim();
+    }
+
+    return defaultTitle;
   }
 
   String? _description() {
@@ -1751,6 +1758,12 @@ class _PostAdCardState extends State<_PostAdCard> {
     final ColorScheme cs = Theme.of(context).colorScheme;
     final String? media = widget.ad.mediaUrl;
     final String? description = _description();
+
+    final String sponsoredLabel =
+        getTranslated('ad_sponsored', context) ?? 'Được tài trợ';
+    final String learnMoreLabel =
+        getTranslated('ad_learn_more', context) ?? 'Tìm hiểu thêm';
+
     return Padding(
       padding: const EdgeInsets.only(top: 8),
       child: Material(
@@ -1763,11 +1776,8 @@ class _PostAdCardState extends State<_PostAdCard> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (media != null && media.isNotEmpty)
-                CachedNetworkImage(
-                  imageUrl: media,
-                  width: double.infinity,
-                  height: 220,
-                  fit: BoxFit.cover,
+                _AdResponsiveImage(
+                  url: media,
                 ),
               Padding(
                 padding: const EdgeInsets.all(16),
@@ -1775,7 +1785,7 @@ class _PostAdCardState extends State<_PostAdCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Được tài trợ',
+                      sponsoredLabel,
                       style: TextStyle(
                         color: cs.onSurface.withOpacity(.6),
                         fontSize: 12,
@@ -1784,7 +1794,7 @@ class _PostAdCardState extends State<_PostAdCard> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      _title(),
+                      _title(context),
                       style: TextStyle(
                         color: cs.onSurface,
                         fontSize: 16,
@@ -1809,9 +1819,9 @@ class _PostAdCardState extends State<_PostAdCard> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor:
                               Theme.of(context).colorScheme.primary,
-                          foregroundColor: Colors.white, // mA�u ch��_ + icon
+                          foregroundColor: Colors.white,
                         ),
-                        child: const Text('Tìm hiểu thêm'),
+                        child: Text(learnMoreLabel),
                       ),
                     ),
                   ],
@@ -1821,6 +1831,88 @@ class _PostAdCardState extends State<_PostAdCard> {
           ),
         ),
       ),
+    );
+  }
+}
+
+
+class _AdResponsiveImage extends StatefulWidget {
+  final String url;
+  final double maxHeightFactor;
+  final double maxHeightToWidthRatio;
+  const _AdResponsiveImage({
+    required this.url,
+    this.maxHeightFactor = 0.8,
+    this.maxHeightToWidthRatio = 1.5,
+  });
+
+  @override
+  State<_AdResponsiveImage> createState() => _AdResponsiveImageState();
+}
+
+class _AdResponsiveImageState extends State<_AdResponsiveImage> {
+  double? _ratio;
+
+  @override
+  void initState() {
+    super.initState();
+    final Image image = Image(image: CachedNetworkImageProvider(widget.url));
+    image.image.resolve(const ImageConfiguration()).addListener(
+      ImageStreamListener((ImageInfo info, bool _) {
+        if (!mounted) return;
+        if (info.image.height == 0) return;
+        setState(() {
+          _ratio = info.image.width / info.image.height;
+        });
+      }),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double fallbackRatio = 16 / 9;
+    final double ratio = _ratio ?? fallbackRatio;
+    return LayoutBuilder(
+      builder: (BuildContext ctx, BoxConstraints constraints) {
+        final double screenHeight =
+            MediaQuery.of(ctx).size.height * widget.maxHeightFactor;
+        final double resolvedWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.of(ctx).size.width;
+        final double naturalHeight = resolvedWidth / ratio;
+        final double ratioLimitedHeight =
+            resolvedWidth * widget.maxHeightToWidthRatio;
+        final double allowedHeight =
+            min(naturalHeight, min(screenHeight, ratioLimitedHeight));
+        final bool shouldClip = allowedHeight < naturalHeight;
+        final Widget image = CachedNetworkImage(
+          imageUrl: widget.url,
+          fit: BoxFit.cover,
+          width: resolvedWidth,
+          height: naturalHeight,
+        );
+        if (!shouldClip) {
+          return SizedBox(
+            width: resolvedWidth,
+            height: naturalHeight,
+            child: image,
+          );
+        }
+        return SizedBox(
+          width: resolvedWidth,
+          height: allowedHeight,
+          child: ClipRect(
+            child: Align(
+              alignment: Alignment.center,
+              child: SizedBox(
+                width: resolvedWidth,
+                height: naturalHeight,
+                child: image,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -2226,19 +2318,21 @@ String _formatSocialCount(int value) {
 }
 
 String _reactionActionLabel(BuildContext context, String reaction) {
-  final String defaultLabel = getTranslated('like', context) ?? 'Thích';
+  final String defaultLabel = getTranslated('like', context) ?? 'Like';
+
   if (reaction.isEmpty || reaction == 'Like') return defaultLabel;
+
   switch (reaction) {
     case 'Love':
-      return 'Yêu thích';
+      return getTranslated('love', context) ?? 'Love';
     case 'HaHa':
-      return 'Haha';
+      return getTranslated('haha', context) ?? 'Haha';
     case 'Wow':
-      return 'Wow';
+      return getTranslated('wow', context) ?? 'Wow';
     case 'Sad':
-      return 'Buồn';
+      return getTranslated('sad', context) ?? 'Buồn';
     case 'Angry':
-      return 'Phẫn nộ';
+      return getTranslated('angry', context) ?? 'Angry';
     default:
       return reaction;
   }

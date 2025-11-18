@@ -1438,5 +1438,16 @@
 
   "reactions": "Reactions",
   "comment_reactions": "Comment reactions",
-  "mutual_friends": "Mutual frends"
+  "mutual_friends": "Mutual frends",
+
+  "ad_default_title": "Sponsored ad",
+  "ad_sponsored": "Sponsored",
+  "ad_learn_more": "Learn more",
+  "love": "Love",
+  "haha": "Haha",
+  "wow": "Wow",
+  "sad": "Sad",
+  "angry": "Angry"
+
+
 }

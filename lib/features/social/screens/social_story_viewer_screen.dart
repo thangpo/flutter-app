@@ -325,17 +325,17 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
 
     try {
       await controller.initialize();
-      } catch (e) {
-        if (!mounted || _isExiting) {
-          controller.dispose();
-          return;
-        }
-        debugPrint('Failed to initialize story video: ${e.toString()}');
+    } catch (e) {
+      if (!mounted || _isExiting) {
         controller.dispose();
-        _progressController?.duration = const Duration(seconds: 6);
-        _handleMediaReady();
         return;
       }
+      debugPrint('Failed to initialize story video: ${e.toString()}');
+      controller.dispose();
+      _progressController?.duration = const Duration(seconds: 6);
+      _handleMediaReady();
+      return;
+    }
 
     if (!mounted || _isExiting) {
       controller.dispose();
@@ -1090,19 +1090,19 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
 
                           return Stack(
                             children: [
-                            Positioned.fill(
-                              child: _StoryMedia(
-                                story: story,
-                                item: pageItem,
-                                videoController:
-                                    isCurrent ? _videoController : null,
-                                isCurrent: isCurrent,
-                                onMediaReady: (isCurrent &&
-                                        (pageItem?.isVideo != true))
-                                    ? _handleMediaReady
-                                    : null,
+                              Positioned.fill(
+                                child: _StoryMedia(
+                                  story: story,
+                                  item: pageItem,
+                                  videoController:
+                                      isCurrent ? _videoController : null,
+                                  isCurrent: isCurrent,
+                                  onMediaReady:
+                                      (isCurrent && (pageItem?.isVideo != true))
+                                          ? _handleMediaReady
+                                          : null,
+                                ),
                               ),
-                            ),
                               if (isCurrent)
                                 Positioned.fill(
                                   child: GestureDetector(
@@ -1190,7 +1190,7 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
                         showReactions: allowReactions,
                         actionLabel:
                             (isAdStory && adUrl != null && adUrl.isNotEmpty)
-                                ? (getTranslated('learn_more', context) ??
+                                ? (getTranslated('ad_learn_more', context) ??
                                     'Learn more')
                                 : null,
                         onAction:
@@ -1256,7 +1256,10 @@ class _StoryMediaState extends State<_StoryMedia> {
   String? get _effectiveImageUrl {
     final SocialStoryItem? item = widget.item;
     return _resolveStoryMediaUrl(
-      item?.mediaUrl ?? item?.thumbUrl ?? widget.story.mediaUrl ?? widget.story.thumbUrl,
+      item?.mediaUrl ??
+          item?.thumbUrl ??
+          widget.story.mediaUrl ??
+          widget.story.thumbUrl,
     );
   }
 
@@ -1495,7 +1498,7 @@ class _StoryHeader extends StatelessWidget {
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
-                          getTranslated('sponsored', context) ?? 'Sponsored',
+                          getTranslated('ad_sponsored', context) ?? 'Sponsored',
                           style: theme.textTheme.labelSmall?.copyWith(
                             color: Colors.white,
                             fontWeight: FontWeight.w600,
