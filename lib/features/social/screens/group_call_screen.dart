@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 // dùng navigatorKey làm fallback pop
-import 'package:flutter_sixvalley_ecommerce/main.dart' show navigatorKey;
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart' show navigatorKey;
 
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_call_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_chat_controller.dart';
@@ -789,3 +789,4 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     return null;
   }
 }
+

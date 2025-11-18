@@ -16,7 +16,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/soci
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_service.dart';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_photo.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
@@ -3011,3 +3011,4 @@ bool _isProfileStale(String id) {
   if (dt == null) return true;
   return DateTime.now().difference(dt) > _profileTTL;
 }
+

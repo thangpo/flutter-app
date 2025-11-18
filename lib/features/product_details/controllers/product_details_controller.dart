@@ -10,7 +10,7 @@ import 'package:flutter_sixvalley_ecommerce/features/product_details/domain/serv
 import 'package:flutter_sixvalley_ecommerce/features/product_details/enums/preview_type.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 import 'package:open_file_manager/open_file_manager.dart';
 import 'package:path_provider/path_provider.dart';
@@ -378,3 +378,4 @@ class ProductDetailsController extends ChangeNotifier {
     notifyListeners();
   }
 }
+

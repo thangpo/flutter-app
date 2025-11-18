@@ -1,6 +1,6 @@
 import 'package:flutter_sixvalley_ecommerce/helper/phone_verification_helper.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 
 class ValidateCheck{
   static String? validateEmail(String? value) {
@@ -55,4 +55,5 @@ class ValidateCheck{
   }
 
 }
+
 

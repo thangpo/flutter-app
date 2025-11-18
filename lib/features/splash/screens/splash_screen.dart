@@ -8,7 +8,7 @@ import 'package:flutter_sixvalley_ecommerce/features/splash/domain/models/config
 import 'package:flutter_sixvalley_ecommerce/features/update/screen/update_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/wallet/screens/wallet_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/network_info.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 import 'package:flutter_sixvalley_ecommerce/push_notification/models/notification_body.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';

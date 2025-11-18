@@ -15,7 +15,7 @@ import 'package:flutter_sixvalley_ecommerce/features/wallet/widgets/wallet_bonus
 import 'package:flutter_sixvalley_ecommerce/features/wallet/widgets/wallet_card_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/features/wallet/widgets/wallet_filter_bottom_sheet_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/custom_themes.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/dimensions.dart';
@@ -198,6 +198,7 @@ class _WalletScreenState extends State<WalletScreen> {
     return nonNullFiltersCount + transactionTypesCount;
   }
 }
+
 
 
 

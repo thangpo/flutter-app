@@ -8,7 +8,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'package:provider/provider.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart' show navigatorKey;
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart' show navigatorKey;
 
 import '../screens/incoming_call_screen.dart';
 import '../controllers/call_controller.dart';
@@ -264,3 +264,4 @@ Future<void> socialCallFirebaseBgHandler(RemoteMessage message) async {
   // Không điều hướng ở background isolate → chỉ hiện full-screen notif
   await SocialCallPushHandler.I.showIncomingCallNotification(data);
 }
+

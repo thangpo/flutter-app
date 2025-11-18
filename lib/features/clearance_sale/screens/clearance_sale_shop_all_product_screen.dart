@@ -16,7 +16,7 @@ import 'package:flutter_sixvalley_ecommerce/features/search_product/controllers/
 import 'package:flutter_sixvalley_ecommerce/features/shop/controllers/shop_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/responsive_helper.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/custom_themes.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/dimensions.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
@@ -241,5 +241,6 @@ void onClick( BuildContext context, ShopController shopController, TextEditingCo
     shopController.disableSearch();
   }
 }
+
 
 

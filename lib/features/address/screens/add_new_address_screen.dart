@@ -12,7 +12,7 @@ import 'package:flutter_sixvalley_ecommerce/features/splash/domain/models/config
 import 'package:flutter_sixvalley_ecommerce/helper/country_code_helper.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/velidate_check.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/address/controllers/address_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/splash/controllers/splash_controller.dart';
@@ -1227,3 +1227,4 @@ class _AddNewAddressScreenState extends State<AddNewAddressScreen> {
 }
 
 enum Address { shipping, billing }
+

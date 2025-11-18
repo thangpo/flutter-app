@@ -4,7 +4,7 @@ import 'package:flutter_sixvalley_ecommerce/data/model/api_response.dart';
 import 'package:flutter_sixvalley_ecommerce/features/location/domain/models/place_details_model.dart';
 import 'package:flutter_sixvalley_ecommerce/features/location/domain/models/prediction_model.dart';
 import 'package:flutter_sixvalley_ecommerce/features/location/domain/services/location_service_interface.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -219,3 +219,4 @@ class LocationController with ChangeNotifier {
 
 
 }
+

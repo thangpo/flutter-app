@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 import 'package:intl/intl.dart';
 
 class DateConverter {
@@ -210,3 +210,4 @@ class DateConverter {
   static DateTime? convertDurationDateTimeFromString(String? dateTime) => DateFormat('MM/dd/yyyy hh:mm:ss a').tryParse(dateTime ?? '');
 
 }
+

@@ -11,7 +11,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:flutter_sixvalley_ecommerce/data/local/cache_response.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/facebook_login_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/google_login_controller.dart';
@@ -102,10 +102,6 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/soci
 final FirebaseAnalytics analytics = FirebaseAnalytics.instance;
 final FirebaseAnalyticsObserver observer = FirebaseAnalyticsObserver(analytics: analytics);
 
-final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-FlutterLocalNotificationsPlugin();
-final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
-final database = AppDatabase();
 
 // tránh mở màn nhận cuộc gọi trùng
 bool _incomingCallRouting = false;
@@ -266,43 +262,33 @@ void _handleGroupCallInviteOpen(Map<String, dynamic> data) {
 
   final nav = navigatorKey.currentState;
   if (nav == null) {
-  final ctx = nav.overlay?.context;
-  if (ctx != null) {
-    final cc = Provider.of<CallController>(ctx, listen: false);
-    cc.attachCall(callId: callId, mediaType: media);
-
-    // Log analytics cho cuộc gọi đến
-    analytics.logEvent(
-      name: 'incoming_call_received',
-      parameters: {
-        'call_id': callId.toString(),
-        'media_type': media,
-      },
-    );
-
-    nav
-        .push(
-      MaterialPageRoute(
-        builder: (_) => IncomingCallScreen(
-          callId: callId,
-          mediaType: media,
-          callerName: 'Cuộc gọi đến',
-        ),
-      ),
-    )
-        .whenComplete(() => _incomingCallRouting = false);
-  } else {
     _incomingCallRouting = false;
     return;
   }
 
   final callId = int.tryParse(data['call_id']?.toString() ?? '');
   final groupId = data['group_id']?.toString();
+  final groupName = data['group_name']?.toString();
   final media = (data['media']?.toString() == 'video') ? 'video' : 'audio';
 
   if (callId == null || groupId == null || groupId.isEmpty) {
     _incomingCallRouting = false;
     return;
+  }
+
+  final ctx = nav.overlay?.context ?? navigatorKey.currentContext;
+  if (ctx != null) {
+    final cc = Provider.of<CallController>(ctx, listen: false);
+    cc.attachCall(callId: callId, mediaType: media);
+
+    analytics.logEvent(
+      name: 'incoming_group_call_received',
+      parameters: {
+        'call_id': callId.toString(),
+        'media_type': media,
+        'group_id': groupId,
+      },
+    );
   }
 
   nav
@@ -312,13 +298,12 @@ void _handleGroupCallInviteOpen(Map<String, dynamic> data) {
             groupId: groupId,
             mediaType: media,
             callId: callId,
-            groupName: 'Cuộc gọi nhóm',
+            groupName: groupName ?? 'Cu?c g?i nh�m',
           ),
         ),
       )
       .whenComplete(() => _incomingCallRouting = false);
 }
-
 /// =========================
 /// Helpers: đảm bảo navigator sẵn sàng
 /// dùng cho getInitialMessage (terminated app)
@@ -351,17 +336,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
 
-  // =================== FIREBASE INITIALIZATION ===================
+    // =================== FIREBASE INITIALIZATION ===================
   if (Firebase.apps.isEmpty) {
-    if (Platform.isAndroid) {
-      await Firebase.initializeApp(
-        options: const FirebaseOptions(
-          apiKey: AppConstants.fcmApiKey,
-          appId: AppConstants.fcmMobilesdkAppId,
-          messagingSenderId: AppConstants.fcmProjectNumber,
-          projectId: AppConstants.fcmProjectId,
-        ),
-      );
     try {
       if (Platform.isAndroid) {
         await Firebase.initializeApp(
@@ -372,18 +348,19 @@ Future<void> main() async {
             projectId: AppConstants.fcmProjectId,
           ),
         );
-        print('✅ Firebase initialized successfully');
-
-        // Enable Firebase Analytics
-        await analytics.setAnalyticsCollectionEnabled(true);
-        print('✅ Firebase Analytics enabled');
+      } else {
+        await Firebase.initializeApp();
       }
+      print('Firebase initialized successfully');
+      await analytics.setAnalyticsCollectionEnabled(true);
+      print('Firebase Analytics enabled');
     } catch (e) {
-      print('❌ Firebase init error: $e');
+      print('Firebase init error: $e');
     }
   } else {
-    print('⚠️ Firebase already initialized');
+    print('Firebase already initialized');
   }
+
   FcmChatHandler.initialize();
 
   // =================== APP LIFECYCLE OBSERVER ===================
@@ -666,7 +643,6 @@ Future<void> main() async {
               final sp = await SharedPreferences.getInstance();
               return sp.getString(AppConstants.socialAccessToken);
             },
-            endpointPath: '/api/',
           );
           return GroupCallController(signaling: repo)..init();
         },
@@ -728,11 +704,6 @@ class MyApp extends StatelessWidget {
       );
     });
   }
-}
-
-class Get {
-  static BuildContext? get context => navigatorKey.currentContext;
-  static NavigatorState? get navigator => navigatorKey.currentState;
 }
 
 class MyHttpOverrides extends HttpOverrides {
