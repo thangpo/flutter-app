@@ -77,6 +77,13 @@ class AppConstants {
   static const String socialReportUser='/api/report_user';
   static const String socialGetAlbumUser='/api/get-user-albums/';
 
+  //lấy page
+  static const String socialFetchRecommendPage='/api/fetch-recommended';
+  static const String socialGetMyPage='/api/get-my-pages';
+  static const String socialGetCategory='/api/get_category';
+  static const String socialCreatePage='/api/create-page';
+  static const String socialUpdateDatePage='/api/update-page-data';
+  static const String socialLikePage='/api/like-page';
   //follow
   static const String socialFollowUser = '/api/follow-user';
   static const String socialUpdateDataUser = '/api/update-user-data';
