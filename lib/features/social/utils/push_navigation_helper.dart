@@ -10,6 +10,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_story_viewer_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_group_detail_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_groups_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/family_requests_screen.dart';
 
 /// ========================= CONFIG =========================
 
@@ -39,11 +40,13 @@ const Set<String> _profileTypes = {
   'following',
   'visited_profile',
   'accepted_request',
+  'poke',
 };
 const Set<String> _profileOpenActions = {
   'open_following',
   'open_profile',
   'open_visited_profile',
+  'open_poke',
 };
 
 // Mở story
@@ -98,8 +101,8 @@ Future<void> handlePushNavigationFromMap(Map<String, dynamic> data) async {
 /// ========================= CORE ROUTER =========================
 
 Future<void> _routeFromDataMap(Map<String, dynamic> data) async {
-  // 1️⃣ Gộp 'detail' vào top-level
-  final merged = _mergeWithDetail(data);
+  // 1️⃣ Gộp 'payload' vào top-level
+  final merged = _mergeWithPayload(data);
 
   // 2️⃣ Chuẩn hoá field
   final String type = _str(merged['type']);
@@ -128,7 +131,10 @@ Future<void> _routeFromDataMap(Map<String, dynamic> data) async {
   debugPrint(
     '✅ parsed: type=$type | action=$action | postId=$postId | userId=$userId | storyId=$storyId',
   );
-
+  if (type == 'added_u_as' || action == 'open_family_requests') {
+    await _openFamilyRequests();
+    return;
+  }
   // 3️⃣ Điều hướng theo loạic
   if (_shouldOpenStory(type: type, action: action, storyId: storyId)) {
     await _openStory(storyId, userId);
@@ -136,7 +142,7 @@ Future<void> _routeFromDataMap(Map<String, dynamic> data) async {
   }
 
   if (_shouldOpenPost(type: type, action: action, postId: postId)) {
-    await _openPostDetail(postId);
+    await _openPostPayload(postId);
     return;
   }
 
@@ -145,7 +151,7 @@ Future<void> _routeFromDataMap(Map<String, dynamic> data) async {
     return;
   }
   if (_shouldOpenGroup(type: type, action: action, groupId: groupId)) {
-    await _openGroupDetail(groupId);
+    await _openGroupPayload(groupId);
     return;
   }
 // 🟡 fallback riêng cho thông báo group_admin không có group_id
@@ -153,6 +159,7 @@ Future<void> _routeFromDataMap(Map<String, dynamic> data) async {
     await _openGroupList();
     return;
   }
+
   debugPrint('ℹ️ Không khớp route nào, bỏ qua.');
 }
 
@@ -196,7 +203,7 @@ bool _shouldOpenGroup({
 
 /// ========================= NAV HELPERS =========================
 
-Future<void> _openPostDetail(String postId) async {
+Future<void> _openPostPayload(String postId) async {
   await _pushOnce(() {
     return MaterialPageRoute(
       builder: (_) => SocialPostDetailScreen(
@@ -246,7 +253,7 @@ Future<void> _openStory(String storyId, String userId) async {
   });
 }
 
-Future<void> _openGroupDetail(String groupId) async {
+Future<void> _openGroupPayload(String groupId) async {
   await _pushOnce(() {
     return MaterialPageRoute(
       builder: (_) => SocialGroupDetailScreen(groupId: groupId),
@@ -258,6 +265,13 @@ Future<void> _openGroupList() async {
   await _pushOnce(() {
     return MaterialPageRoute(
       builder: (_) => const SocialGroupsScreen(),
+    );
+  });
+}
+Future<void> _openFamilyRequests() async {
+  await _pushOnce(() {
+    return MaterialPageRoute(
+      builder: (_) => const FamilyRequestsScreen(),
     );
   });
 }
@@ -291,15 +305,15 @@ void _cooldown() {
 
 /// ========================= MAP / STRING HELPERS =========================
 
-Map<String, dynamic> _mergeWithDetail(Map<String, dynamic> data) {
+Map<String, dynamic> _mergeWithPayload(Map<String, dynamic> data) {
   final base = data.map((k, v) => MapEntry(k.toString(), v));
-  final detail = _parseDetail(base['detail']);
+  final payload = _parsePayload(base['payload']);
   return <String, dynamic>{}
     ..addAll(base)
-    ..addAll(detail);
+    ..addAll(payload);
 }
 
-Map<String, dynamic> _parseDetail(dynamic raw) {
+Map<String, dynamic> _parsePayload(dynamic raw) {
   try {
     if (raw == null) return const {};
     if (raw is Map<String, dynamic>) return raw;

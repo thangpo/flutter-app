@@ -32,6 +32,10 @@ class SocialController with ChangeNotifier {
   final Set<String> _followBusy = {};
   bool _updatingProfile = false;
 
+  List<Map<String, dynamic>> pokes = [];
+  bool _loadingPokes = false;
+  bool get loadingPokes => _loadingPokes;
+
   bool isFollowBusy(String userId) => _followBusy.contains(userId);
   // ========== NEWS FEED STATE ==========
   bool _loading = false;
@@ -42,6 +46,12 @@ class SocialController with ChangeNotifier {
 
   bool _creatingStory = false;
   bool get creatingStory => _creatingStory;
+
+  bool _creatingPoke= false;
+  bool get creatingPoke => _creatingPoke;
+
+  bool _addingFamily = false;
+  bool get addingFamily => _addingFamily;
 
   bool _loadingUser = false;
   SocialUser? _currentUser;
@@ -1321,6 +1331,71 @@ class SocialController with ChangeNotifier {
       notifyListeners();
     }
   }
+  // ========== POKE CREATION ==========
+  Future<bool> createPoke(int userId) async {
+    if (_creatingPoke) return false;
+    _creatingPoke = true;
+    notifyListeners();
+
+    try {
+      final bool ok = await service.createPoke(userId);
+      if (ok) {
+        fetchPokes(); // ✔ reload danh sách
+      }
+      return ok;// ok = true hoặc false
+    } catch (e) {
+      showCustomSnackBar(e.toString(), Get.context!, isError: true);
+      return false;
+    } finally {
+      _creatingPoke = false;
+      notifyListeners();
+    }
+  }
+  Future<void> fetchPokes() async {
+    if (_loading) return;
+    _loading = true;
+    notifyListeners();
+    try {
+      pokes = await service.fetchPokes();
+    } catch (e) {
+      print("POKES ERROR: $e");
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+  Future<bool> removePoke(int pokeId) async {
+    try {
+      final ok = await service.removePoke(pokeId);
+      if (ok) {
+        pokes.removeWhere(
+              (e) => int.parse(e["id"].toString()) == pokeId,
+        );
+        notifyListeners();
+      }
+      return ok;
+    } catch (_) {
+      return false;
+    }
+  }
+  // ================= ADD TO FAMILY =================
+  Future<bool> addToFamily(int userId, String relationshipType) async {
+    if (_addingFamily) return false;
+    _addingFamily = true;
+    notifyListeners();
+
+    try {
+      final bool ok = await service.addToFamily(userId, relationshipType);
+      return ok;
+    } catch (e) {
+      showCustomSnackBar(e.toString(), Get.context!, isError: true);
+      return false;
+    } finally {
+      _addingFamily = false;
+      notifyListeners();
+    }
+  }
+
 
   void setAccessToken(String token) {
     _accessToken = token;

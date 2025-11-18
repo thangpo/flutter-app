@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_downloader/flutter_downloader.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -77,7 +78,6 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/firebase_token_updater.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/push_navigation_helper.dart';
 
-// 1-1 call
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/incoming_call_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/call_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/call_controller.dart';
@@ -90,18 +90,28 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/group_call_s
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/webrtc_group_signaling_repository.dart';
 
 import 'di_container.dart' as di;
+import 'package:flutter_sixvalley_ecommerce/features/notification/screens/notification_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_call_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/webrtc_group_signaling_repository.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_page_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_page_service_interface.dart';
+
+
+// =================== FIREBASE ANALYTICS INSTANCES ===================
+final FirebaseAnalytics analytics = FirebaseAnalytics.instance;
+final FirebaseAnalyticsObserver observer = FirebaseAnalyticsObserver(analytics: analytics);
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-    FlutterLocalNotificationsPlugin();
+FlutterLocalNotificationsPlugin();
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 final database = AppDatabase();
 
 // tránh mở màn nhận cuộc gọi trùng
 bool _incomingCallRouting = false;
 
-// Kênh heads-up cho lời mời cuộc gọi
 const AndroidNotificationChannel _callInviteChannel =
-    AndroidNotificationChannel(
+AndroidNotificationChannel(
   'call_invite_channel',
   'Call Invites',
   description: 'Heads-up notifications for incoming calls',
@@ -116,7 +126,103 @@ Future<void> myBackgroundMessageHandler(RemoteMessage message) async {
   
 }
 
-// ===== 1-1: open UI khi tap heads-up =====
+// =================== ANALYTICS HELPER ===================
+class AnalyticsHelper {
+  // Log khi app được mở
+  static Future<void> logAppOpen() async {
+    await analytics.logAppOpen();
+    await analytics.logEvent(
+      name: 'app_launch',
+      parameters: {
+        'timestamp': DateTime.now().toIso8601String(),
+        'platform': Platform.operatingSystem,
+      },
+    );
+    print('📊 Analytics: App opened');
+  }
+
+  // Log khi user active (vào foreground)
+  static Future<void> logUserActive() async {
+    await analytics.logEvent(
+      name: 'user_active',
+      parameters: {
+        'timestamp': DateTime.now().toIso8601String(),
+        'session_id': DateTime.now().millisecondsSinceEpoch.toString(),
+      },
+    );
+    print('📊 Analytics: User active');
+  }
+
+  // Log screen view
+  static Future<void> logScreenView(String screenName) async {
+    await analytics.logScreenView(screenName: screenName);
+    print('📊 Analytics: Screen viewed - $screenName');
+  }
+
+  // Log khi user login
+  static Future<void> logLogin(String method) async {
+    await analytics.logLogin(loginMethod: method);
+    print('📊 Analytics: User logged in - $method');
+  }
+
+  // Set user ID
+  static Future<void> setUserId(String userId) async {
+    await analytics.setUserId(id: userId);
+    print('📊 Analytics: User ID set - $userId');
+  }
+
+  // Set user properties
+  static Future<void> setUserProperty(String name, String value) async {
+    await analytics.setUserProperty(name: name, value: value);
+    print('📊 Analytics: User property set - $name: $value');
+  }
+}
+
+// =================== APP LIFECYCLE OBSERVER ===================
+class AppLifecycleObserver extends WidgetsBindingObserver {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // App vào foreground
+      AnalyticsHelper.logUserActive();
+    } else if (state == AppLifecycleState.paused) {
+      // App vào background
+      analytics.logEvent(
+        name: 'app_backgrounded',
+        parameters: {'timestamp': DateTime.now().toIso8601String()},
+      );
+    }
+  }
+}
+
+Future<void> _showIncomingCallNotification(Map<String, dynamic> data) async {
+  final isVideo = (data['media']?.toString() == 'video');
+  final title = isVideo ? 'Video call đến' : 'Cuộc gọi đến';
+  final body =
+      'Từ #${data['caller_id'] ?? ''} (Call ID ${data['call_id'] ?? ''})';
+
+  final androidDetails = AndroidNotificationDetails(
+    _callInviteChannel.id,
+    _callInviteChannel.name,
+    channelDescription: _callInviteChannel.description,
+    importance: Importance.max,
+    priority: Priority.high,
+    category: AndroidNotificationCategory.call,
+    fullScreenIntent: true,
+    ticker: 'incoming_call',
+    styleInformation: const DefaultStyleInformation(true, true),
+  );
+
+  await flutterLocalNotificationsPlugin.show(
+    DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    title,
+    body,
+    NotificationDetails(android: androidDetails),
+    payload: jsonEncode(data),
+  );
+}
+
+
 void _handleCallInviteOpen(Map<String, dynamic> data) {
   if (_incomingCallRouting) return;
   _incomingCallRouting = true;
@@ -160,6 +266,32 @@ void _handleGroupCallInviteOpen(Map<String, dynamic> data) {
 
   final nav = navigatorKey.currentState;
   if (nav == null) {
+  final ctx = nav.overlay?.context;
+  if (ctx != null) {
+    final cc = Provider.of<CallController>(ctx, listen: false);
+    cc.attachCall(callId: callId, mediaType: media);
+
+    // Log analytics cho cuộc gọi đến
+    analytics.logEvent(
+      name: 'incoming_call_received',
+      parameters: {
+        'call_id': callId.toString(),
+        'media_type': media,
+      },
+    );
+
+    nav
+        .push(
+      MaterialPageRoute(
+        builder: (_) => IncomingCallScreen(
+          callId: callId,
+          mediaType: media,
+          callerName: 'Cuộc gọi đến',
+        ),
+      ),
+    )
+        .whenComplete(() => _incomingCallRouting = false);
+  } else {
     _incomingCallRouting = false;
     return;
   }
@@ -219,6 +351,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
 
+  // =================== FIREBASE INITIALIZATION ===================
   if (Firebase.apps.isEmpty) {
     if (Platform.isAndroid) {
       await Firebase.initializeApp(
@@ -229,9 +362,32 @@ Future<void> main() async {
           projectId: AppConstants.fcmProjectId,
         ),
       );
+    try {
+      if (Platform.isAndroid) {
+        await Firebase.initializeApp(
+          options: const FirebaseOptions(
+            apiKey: AppConstants.fcmApiKey,
+            appId: AppConstants.fcmMobilesdkAppId,
+            messagingSenderId: AppConstants.fcmProjectNumber,
+            projectId: AppConstants.fcmProjectId,
+          ),
+        );
+        print('✅ Firebase initialized successfully');
+
+        // Enable Firebase Analytics
+        await analytics.setAnalyticsCollectionEnabled(true);
+        print('✅ Firebase Analytics enabled');
+      }
+    } catch (e) {
+      print('❌ Firebase init error: $e');
     }
+  } else {
+    print('⚠️ Firebase already initialized');
   }
   FcmChatHandler.initialize();
+
+  // =================== APP LIFECYCLE OBSERVER ===================
+  WidgetsBinding.instance.addObserver(AppLifecycleObserver());
 
   await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
     alert: false,
@@ -239,6 +395,8 @@ Future<void> main() async {
     sound: true,
   );
 
+
+  NotificationSettings settings =
   await FirebaseMessaging.instance.requestPermission(
     alert: true,
     announcement: false,
@@ -252,18 +410,19 @@ Future<void> main() async {
   await FlutterDownloader.initialize(debug: true, ignoreSsl: true);
   await di.init();
 
-  // gửi FCM token về server sau khi render frame đầu
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     await FirebaseTokenUpdater.update();
+
+    // =================== LOG APP OPEN ===================
+    await AnalyticsHelper.logAppOpen();
   });
 
   // tạo kênh heads-up
   await flutterLocalNotificationsPlugin
       .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
+      AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(_callInviteChannel);
 
-  // init local notifications
   const androidInit = AndroidInitializationSettings('notification_icon');
   const initSettings = InitializationSettings(android: androidInit);
 
@@ -277,19 +436,22 @@ Future<void> main() async {
         final Map<String, dynamic> map = (jsonDecode(payload) as Map)
             .map((k, v) => MapEntry(k.toString(), v));
 
-        // 1-1
         if ((map['type'] ?? '') == 'call_invite') {
           _handleCallInviteOpen(map);
           return;
         }
+
         // GROUP
         if ((map['type'] ?? '') == 'call_invite_group') {
           _handleGroupCallInviteOpen(map);
           return;
         }
 
-        // còn lại: điều hướng social
-        await handlePushNavigationFromMap(map);
+        //  điều hướng social
+        if ((map['type'] ?? '') == 'interact') {
+          await handlePushNavigationFromMap(map);
+          return;
+        }
       } catch (e) {
         debugPrint('parse payload error: $e');
       }
@@ -315,7 +477,7 @@ Future<void> main() async {
               initialMessage.data.containsKey('group_id'))) {
         await _scheduleGroupCallInviteOpen(initialMessage.data);
       } else if (initialMessage.data['api_status'] != null ||
-          initialMessage.data['detail'] != null) {
+          initialMessage.data['type'] != null) {
         await handlePushNavigation(initialMessage);
       } else {
         await handlePushNavigation(initialMessage);
@@ -344,7 +506,6 @@ Future<void> main() async {
       await handlePushNavigation(message);
     });
 
-    // app đang FOREGROUND: nhận FCM
     FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
       final data = message.data;
       debugPrint('🔥 onMessage(foreground) data= $data');
@@ -401,7 +562,6 @@ Future<void> main() async {
       );
     });
 
-    // kênh mặc định
     const AndroidNotificationChannel channel = AndroidNotificationChannel(
       'high_importance_channel',
       'Thông báo VNShop247',
@@ -410,7 +570,7 @@ Future<void> main() async {
     );
     await flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+        AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(channel);
   } catch (e, st) {
     debugPrint('❌ FCM wiring error in main(): $e');
@@ -473,8 +633,8 @@ Future<void> main() async {
       // Social
       ChangeNotifierProvider(
         create: (_) =>
-            SocialController(service: di.sl<SocialServiceInterface>())
-              ..refresh(),
+        SocialController(service: di.sl<SocialServiceInterface>())
+          ..refresh(),
       ),
       ChangeNotifierProvider(create: (_) => di.sl<SocialGroupController>()),
       ChangeNotifierProvider(
@@ -506,6 +666,7 @@ Future<void> main() async {
               final sp = await SharedPreferences.getInstance();
               return sp.getString(AppConstants.socialAccessToken);
             },
+            endpointPath: '/api/',
           );
           return GroupCallController(signaling: repo)..init();
         },
@@ -530,13 +691,17 @@ class MyApp extends StatelessWidget {
       return MaterialApp(
         title: AppConstants.appName,
         navigatorKey: navigatorKey,
+
+        // =================== THÊM ANALYTICS OBSERVER ===================
+        navigatorObservers: [observer],
+
         debugShowCheckedModeBanner: false,
         theme: themeController.darkTheme
             ? dark
             : light(
-                primaryColor: themeController.selectedPrimaryColor,
-                secondaryColor: themeController.selectedPrimaryColor,
-              ),
+          primaryColor: themeController.selectedPrimaryColor,
+          secondaryColor: themeController.selectedPrimaryColor,
+        ),
         locale: Provider.of<LocalizationController>(context).locale,
         // KHÔNG đặt const vì có delegate runtime
         localizationsDelegates: [
