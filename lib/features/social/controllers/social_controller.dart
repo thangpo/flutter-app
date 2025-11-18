@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter_sixvalley_ecommerce/features/ads/domain/models/ads_model.dart';
+import 'package:flutter_sixvalley_ecommerce/features/ads/services/ads_service.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
@@ -25,6 +28,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/
 
 class SocialController with ChangeNotifier {
   final SocialServiceInterface service;
+  final AdsService _adsService = AdsService();
   SocialController({required this.service}) {
     loadPostBackgrounds();
   }
@@ -36,6 +40,9 @@ class SocialController with ChangeNotifier {
   // ========== NEWS FEED STATE ==========
   bool _loading = false;
   bool get loading => _loading;
+
+  bool _loadingAds = false;
+  bool get loadingAds => _loadingAds;
 
   bool _creatingPost = false;
   bool get creatingPost => _creatingPost;
@@ -55,6 +62,19 @@ class SocialController with ChangeNotifier {
 
   final List<SocialPost> _posts = [];
   List<SocialPost> get posts => List.unmodifiable(_posts);
+
+  final Random _adsRandom = Random();
+  DateTime? _adsFetchedAt;
+  static const Duration _adsCacheDuration = Duration(minutes: 10);
+  List<AdsModel> _postAds = <AdsModel>[];
+  List<AdsModel> _storyAds = <AdsModel>[];
+  int _feedFetchCount = 0;
+  final Set<String> _adEligiblePostIds = <String>{};
+  final Set<int> _trackedAdViews = <int>{};
+
+  List<AdsModel> get postAds => List.unmodifiable(_postAds);
+  List<AdsModel> get storyAds => List.unmodifiable(_storyAds);
+  Set<String> get postAdEligibleIds => Set.unmodifiable(_adEligiblePostIds);
 
   final List<SocialPost> _savedPosts = <SocialPost>[];
   List<SocialPost> get savedPosts => List.unmodifiable(_savedPosts);
@@ -1060,14 +1080,16 @@ class SocialController with ChangeNotifier {
       filteredItems.sort((a, b) {
         final aTime = a.postedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
         final bTime = b.postedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        return bTime.compareTo(aTime);
+        return aTime.compareTo(bTime);
       });
 
-      final SocialStoryItem first = filteredItems.first;
+      final SocialStoryItem previewItem = filteredItems.last;
       final normalized = story.copyWith(
         items: filteredItems,
-        thumbUrl: first.thumbUrl ?? first.mediaUrl ?? story.thumbUrl,
-        mediaUrl: first.mediaUrl ?? first.thumbUrl ?? story.mediaUrl,
+        thumbUrl:
+            previewItem.thumbUrl ?? previewItem.mediaUrl ?? story.thumbUrl,
+        mediaUrl:
+            previewItem.mediaUrl ?? previewItem.thumbUrl ?? story.mediaUrl,
       );
       result[_storyKey(normalized)] = normalized;
     }
@@ -1543,17 +1565,178 @@ class SocialController with ChangeNotifier {
   }
 
   // ========== NEWS FEED OPERATIONS ==========
+  Future<void> fetchAdsForFeed({bool force = false}) async {
+    if (_loadingAds) return;
+    final DateTime? lastFetched = _adsFetchedAt;
+    final bool hasCachedAds = _postAds.isNotEmpty || _storyAds.isNotEmpty;
+    if (!force &&
+        lastFetched != null &&
+        DateTime.now().difference(lastFetched) < _adsCacheDuration &&
+        hasCachedAds) {
+      return;
+    }
+
+    final SharedPreferences sp = await SharedPreferences.getInstance();
+    _accessToken ??= sp.getString(AppConstants.socialAccessToken);
+    if (_accessToken == null || _accessToken!.isEmpty) {
+      if (hasCachedAds) {
+        _postAds = <AdsModel>[];
+        _storyAds = <AdsModel>[];
+        notifyListeners();
+      }
+      return;
+    }
+
+    _loadingAds = true;
+    notifyListeners();
+
+    try {
+      final List<Map<String, dynamic>> rawAds = await _adsService.fetchActiveAds(
+        accessToken: _accessToken!,
+        limit: 50,
+        offset: 0,
+      );
+
+      final List<AdsModel> ads = rawAds
+          .map((json) => AdsModel.fromJson(json))
+          .where((ad) => ad.appears != null)
+          .toList();
+
+      _applyAdsForFeed(ads);
+      _adsFetchedAt = DateTime.now();
+    } catch (e) {
+      debugPrint('Failed to fetch ads: $e');
+    } finally {
+      _loadingAds = false;
+      notifyListeners();
+    }
+  }
+
+  void _applyAdsForFeed(List<AdsModel> ads) {
+    final List<AdsModel> postAds = <AdsModel>[];
+    final List<AdsModel> storyAds = <AdsModel>[];
+
+    for (final AdsModel ad in ads) {
+      final String placement = (ad.appears ?? 'post').toLowerCase();
+      switch (placement) {
+        case 'story':
+          storyAds.add(ad);
+          break;
+        default:
+          postAds.add(ad);
+      }
+    }
+
+    List<AdsModel> shuffled(List<AdsModel> input) {
+      final List<AdsModel> copy = List<AdsModel>.from(input);
+      if (copy.length > 1) {
+        copy.shuffle(_adsRandom);
+      }
+      return copy;
+    }
+
+    _postAds = shuffled(postAds);
+    _storyAds = shuffled(storyAds);
+    _postAds = shuffled(postAds);
+    _storyAds = shuffled(storyAds);
+  }
+
+  void trackAdView({AdsModel? ad, Map<String, dynamic>? payload, int? adId}) {
+    _trackAdMetric(
+      type: 'view',
+      ad: ad,
+      payload: payload,
+      adId: adId,
+      dedupeViews: true,
+    );
+  }
+
+  void trackAdClick({AdsModel? ad, Map<String, dynamic>? payload, int? adId}) {
+    _trackAdMetric(
+      type: 'click',
+      ad: ad,
+      payload: payload,
+      adId: adId,
+      dedupeViews: false,
+    );
+  }
+
+  void _trackAdMetric({
+    required String type,
+    AdsModel? ad,
+    Map<String, dynamic>? payload,
+    int? adId,
+    required bool dedupeViews,
+  }) {
+    final int? resolvedId = _resolveAdId(ad: ad, payload: payload, adId: adId);
+    if (resolvedId == null) return;
+    if (dedupeViews && !_trackedAdViews.add(resolvedId)) return;
+    unawaited(_sendAdMetric(resolvedId, type));
+  }
+
+  int? _resolveAdId({
+    AdsModel? ad,
+    Map<String, dynamic>? payload,
+    int? adId,
+  }) {
+    if (adId != null && adId > 0) return adId;
+    if (ad?.id != null && ad!.id! > 0) return ad.id;
+    final dynamic raw = payload?['id'] ?? payload?['ad_id'];
+    if (raw == null) return null;
+    if (raw is int) return raw;
+    if (raw is num) return raw.toInt();
+    if (raw is String) {
+      return int.tryParse(raw);
+    }
+    return null;
+  }
+
+  Future<void> _sendAdMetric(int adId, String type) async {
+    final String? token = await _ensureAccessToken();
+    if (token == null || token.isEmpty) return;
+    try {
+      await _adsService.trackAdInteraction(
+        accessToken: token,
+        adId: adId,
+        type: type,
+      );
+    } catch (e) {
+      debugPrint('Failed to report ad $type for $adId: $e');
+    }
+  }
+
+  Future<String?> _ensureAccessToken() async {
+    if (_accessToken != null && _accessToken!.isNotEmpty) {
+      return _accessToken;
+    }
+    final SharedPreferences sp = await SharedPreferences.getInstance();
+    final String? stored = sp.getString(AppConstants.socialAccessToken);
+    if (stored != null && stored.isNotEmpty) {
+      _accessToken = stored;
+      return stored;
+    }
+    return null;
+  }
+
   Future<void> refresh() async {
     if (_loading) return;
     _loading = true;
     notifyListeners();
     try {
+      _feedFetchCount = 0;
+      _adEligiblePostIds.clear();
       final list = await service.getNewsFeed(limit: 10);
       _posts
         ..clear()
         ..addAll(list);
       _afterId = list.isNotEmpty ? list.last.id : null;
       _prefetchBackgroundsForPosts(list);
+      if (list.isNotEmpty) {
+        _feedFetchCount = 1;
+        _applyAdEligibility(list, fetchIndex: _feedFetchCount);
+      } else {
+        _feedFetchCount = 0;
+      }
 
       final userStories = await service.getMyStories(limit: 10, offset: 0);
       _replaceStories(userStories);
@@ -1584,11 +1767,14 @@ class SocialController with ChangeNotifier {
     _loading = true;
     notifyListeners();
     try {
+      final int nextFetchIndex = _feedFetchCount + 1;
       final list = await service.getNewsFeed(limit: 10, afterPostId: _afterId);
       if (list.isNotEmpty) {
         _posts.addAll(list);
         _afterId = list.last.id;
         _prefetchBackgroundsForPosts(list);
+        _feedFetchCount = nextFetchIndex;
+        _applyAdEligibility(list, fetchIndex: _feedFetchCount);
       }
     } catch (e) {
       showCustomSnackBar(e.toString(), Get.context!);
@@ -1596,6 +1782,21 @@ class SocialController with ChangeNotifier {
       _loading = false;
       notifyListeners();
     }
+  }
+
+  void _applyAdEligibility(List<SocialPost> newPosts, {required int fetchIndex}) {
+    if (!_shouldInsertAdsForFetch(fetchIndex)) return;
+    for (final SocialPost post in newPosts) {
+      final String? id = post.id;
+      if (id != null && id.isNotEmpty) {
+        _adEligiblePostIds.add(id);
+      }
+    }
+  }
+
+  bool _shouldInsertAdsForFetch(int fetchIndex) {
+    if (fetchIndex <= 0) return false;
+    return fetchIndex % 2 == 1;
   }
 
   // ========== STORY REACTIONS ==========

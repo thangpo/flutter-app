@@ -9,9 +9,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import 'package:flutter_sixvalley_ecommerce/features/ads/domain/models/ads_model.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/story_ads_helper.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 
@@ -36,6 +39,7 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
     with TickerProviderStateMixin {
   late List<SocialStory> _stories;
   late PageController _storyController;
+  bool _storyControllerReady = false;
   int _currentStoryIndex = 0;
   int _currentItemIndex = 0;
   AnimationController? _progressController;
@@ -48,11 +52,19 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
   String? _reactionOverride;
   final Queue<String> _reactionQueue = Queue<String>();
   bool _pausedForReaction = false;
+  bool _holdingToPause = false;
+  bool _mediaReady = false;
   bool _reactionRequestInFlight = false;
   final BaseCacheManager _videoCacheManager = DefaultCacheManager();
   VideoPlayerController? _nextVideoController;
   String? _nextVideoUrl;
   VoidCallback? _videoListener;
+  final Random _adRandom = Random();
+  bool _adsInjected = false;
+  double _verticalDragOffset = 0;
+  bool _draggingToDismiss = false;
+  AnimationController? _dragAnimationController;
+  Animation<double>? _dragAnimation;
 
   SocialStory get _currentStory => _stories[_currentStoryIndex];
 
@@ -73,7 +85,12 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
     _currentStoryIndex = widget.initialStoryIndex
         .clamp(0, _stories.isEmpty ? 0 : _stories.length - 1);
     _currentItemIndex = widget.initialItemIndex;
+    final SocialController controller = context.read<SocialController>();
+    _socialController = controller;
+    _socialController?.addListener(_onControllerUpdated);
+    _injectStoryAds(controller.storyAds, notify: false);
     _storyController = PageController(initialPage: _currentStoryIndex);
+    _storyControllerReady = true;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _startCurrentItem(autoPlay: true);
@@ -89,6 +106,11 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
       _socialController?.removeListener(_onControllerUpdated);
       _socialController = controller;
       _socialController?.addListener(_onControllerUpdated);
+      if (!_adsInjected) {
+        _injectStoryAds(controller.storyAds, notify: true);
+      }
+    } else if (!_adsInjected) {
+      _injectStoryAds(controller.storyAds, notify: true);
     }
     _syncStoriesFromController();
   }
@@ -101,14 +123,23 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
     _videoController?.pause();
     _progressController?.dispose();
     _disposeVideo(disposePrefetched: true);
+    _storyControllerReady = false;
     _storyController.dispose();
     _reactionDebounceTimer?.cancel();
     _restoreStatusBar();
+    _dragAnimationController?.dispose();
     super.dispose();
   }
 
   void _onControllerUpdated() {
     if (!mounted) return;
+    if (!_adsInjected) {
+      final List<AdsModel> ads =
+          _socialController?.storyAds ?? const <AdsModel>[];
+      if (ads.isNotEmpty) {
+        _injectStoryAds(ads);
+      }
+    }
     _syncStoriesFromController();
   }
 
@@ -132,6 +163,63 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
     if (changed && mounted) {
       setState(() {});
     }
+  }
+
+  void _injectStoryAds(List<AdsModel> ads, {bool notify = true}) {
+    if (_adsInjected) return;
+    if (ads.isEmpty) return;
+    if (_stories.length < 2) return;
+    final List<SocialStory> adStories = StoryAdsHelper.buildStories(ads);
+    if (adStories.isEmpty) return;
+    final List<int> breaks =
+        _generateAdBreaks(_stories.length, adStories.length);
+    if (breaks.isEmpty) return;
+
+    final String? initialKey =
+        _stories.isNotEmpty ? _storyKey(_stories[_currentStoryIndex]) : null;
+
+    final List<SocialStory> merged = <SocialStory>[];
+    int storyCursor = 0;
+    int adCursor = 0;
+
+    while (storyCursor < _stories.length) {
+      merged.add(_stories[storyCursor]);
+      storyCursor++;
+      while (adCursor < breaks.length && breaks[adCursor] == storyCursor) {
+        final SocialStory adStory = adStories[adCursor % adStories.length];
+        merged.add(adStory);
+        adCursor++;
+      }
+    }
+
+    _stories = merged;
+    if (initialKey != null) {
+      final int newIndex =
+          _stories.indexWhere((story) => _storyKey(story) == initialKey);
+      if (newIndex != -1) {
+        _currentStoryIndex = newIndex;
+        if (_storyControllerReady && _storyController.hasClients) {
+          _storyController.jumpToPage(newIndex);
+        }
+      }
+    }
+    _adsInjected = true;
+    if (notify && mounted) {
+      setState(() {});
+    }
+  }
+
+  List<int> _generateAdBreaks(int storyCount, int adCount) {
+    if (storyCount < 2 || adCount <= 0) return <int>[];
+    final int availableSlots = storyCount - 1;
+    final int insertCount = min(adCount, availableSlots);
+    if (insertCount <= 0) return <int>[];
+    final Set<int> breaks = <int>{};
+    while (breaks.length < insertCount) {
+      breaks.add(1 + _adRandom.nextInt(storyCount - 1));
+    }
+    final List<int> sorted = breaks.toList()..sort();
+    return sorted;
   }
 
   String _storyKey(SocialStory story) {
@@ -170,17 +258,25 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
     _disposeVideo();
 
     if (_storyItems.isEmpty) {
+      _resetMediaProgress();
+      _handleMediaReady();
       return;
     }
 
     final SocialStoryItem? item = _currentItem;
     if (item == null) {
-      _progressController?.forward();
+      _resetMediaProgress();
+      _handleMediaReady();
       _prefetchOwnStoryViewers();
       return;
     }
 
+    _resetMediaProgress();
+
     final SocialStory storySnapshot = _currentStory;
+    if (storySnapshot.isAd) {
+      _socialController?.trackAdView(payload: storySnapshot.adPayload);
+    }
     unawaited(_socialController?.markStoryItemViewed(
       story: storySnapshot,
       item: item,
@@ -200,9 +296,6 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
       }
     } else {
       _progressController?.duration = const Duration(seconds: 6);
-      if (autoPlay) {
-        _progressController?.forward(from: 0);
-      }
     }
 
     _precacheNextImage();
@@ -232,19 +325,17 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
 
     try {
       await controller.initialize();
-    } catch (e) {
-      if (!mounted || _isExiting) {
+      } catch (e) {
+        if (!mounted || _isExiting) {
+          controller.dispose();
+          return;
+        }
+        debugPrint('Failed to initialize story video: ${e.toString()}');
         controller.dispose();
+        _progressController?.duration = const Duration(seconds: 6);
+        _handleMediaReady();
         return;
       }
-      debugPrint('Failed to initialize story video: ${e.toString()}');
-      controller.dispose();
-      _progressController?.duration = const Duration(seconds: 6);
-      if (autoPlay) {
-        _progressController?.forward(from: 0);
-      }
-      return;
-    }
 
     if (!mounted || _isExiting) {
       controller.dispose();
@@ -284,8 +375,8 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
 
     if (autoPlay) {
       controller.play();
-      _progressController?.forward(from: 0);
     }
+    _handleMediaReady();
 
     _videoListener = () {
       if (!mounted || _isExiting) return;
@@ -312,6 +403,110 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
     if (_viewerSheetOpen) return;
     _pausedForReaction = false;
     _resume();
+  }
+
+  void _handleHoldStart(LongPressStartDetails details) {
+    if (_isExiting || _viewerSheetOpen) return;
+    if (_holdingToPause) return;
+    _holdingToPause = true;
+    _pause();
+  }
+
+  void _handleHoldEnd(LongPressEndDetails details) {
+    _completeHoldPause();
+  }
+
+  void _handleHoldCancel() {
+    _completeHoldPause();
+  }
+
+  void _completeHoldPause() {
+    if (!_holdingToPause) return;
+    _holdingToPause = false;
+    if (_isExiting || _viewerSheetOpen) return;
+    if (_pausedForReaction) return;
+    _resume();
+  }
+
+  void _onVerticalDragStart(DragStartDetails details) {
+    if (_viewerSheetOpen || _isExiting) return;
+    _draggingToDismiss = true;
+    _dragAnimationController?.stop();
+    _dragAnimationController?.dispose();
+    _dragAnimationController = null;
+    _pause();
+  }
+
+  void _onVerticalDragUpdate(DragUpdateDetails details) {
+    if (!_draggingToDismiss || _isExiting) return;
+    final double nextOffset = max(0, _verticalDragOffset + details.delta.dy);
+    if (nextOffset != _verticalDragOffset) {
+      setState(() {
+        _verticalDragOffset = nextOffset;
+      });
+    }
+  }
+
+  void _onVerticalDragEnd(DragEndDetails details) {
+    if (!_draggingToDismiss || _isExiting) return;
+    _draggingToDismiss = false;
+    final double velocity = details.primaryVelocity ?? 0;
+    final bool shouldDismiss = velocity > 900 || _verticalDragOffset > 120;
+    if (shouldDismiss) {
+      _dismissWithSlideDown();
+    } else {
+      if (_verticalDragOffset <= 0.5) {
+        setState(() {
+          _verticalDragOffset = 0;
+        });
+        if (!_isExiting &&
+            !_pausedForReaction &&
+            !_holdingToPause &&
+            !_viewerSheetOpen) {
+          _resume();
+        }
+      } else {
+        _animateVerticalOffset(
+          from: _verticalDragOffset,
+          to: 0,
+          onCompleted: () {
+            if (!_isExiting &&
+                !_pausedForReaction &&
+                !_holdingToPause &&
+                !_viewerSheetOpen) {
+              _resume();
+            }
+          },
+        );
+      }
+    }
+  }
+
+  void _onVerticalDragCancel() {
+    if (!_draggingToDismiss || _isExiting) return;
+    _draggingToDismiss = false;
+    if (_verticalDragOffset <= 0.5) {
+      setState(() => _verticalDragOffset = 0);
+      if (!_isExiting &&
+          !_pausedForReaction &&
+          !_holdingToPause &&
+          !_viewerSheetOpen) {
+        _resume();
+      }
+    } else {
+      _animateVerticalOffset(
+        from: _verticalDragOffset,
+        to: 0,
+        onCompleted: () {
+          if (!_isExiting &&
+              !_pausedForReaction &&
+              !_holdingToPause &&
+              !_viewerSheetOpen) {
+            _resume();
+          }
+        },
+      );
+    }
   }
 
   void _dispatchPendingReaction() {
@@ -505,10 +700,103 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
   }
 
   void _resume() {
+    if (!_mediaReady) return;
+    _startMediaPlayback();
+  }
+
+  void _resetMediaProgress() {
+    _mediaReady = false;
+    _progressController?.stop();
+    if (_progressController != null) {
+      _progressController!.value = 0;
+    }
+  }
+
+  bool get _canAutoResumePlayback =>
+      !_isExiting &&
+      !_viewerSheetOpen &&
+      !_pausedForReaction &&
+      !_holdingToPause &&
+      !_draggingToDismiss;
+
+  void _handleMediaReady() {
+    if (_mediaReady) return;
+    _mediaReady = true;
+    if (_canAutoResumePlayback) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_canAutoResumePlayback || !_mediaReady || _isExiting) return;
+        _startMediaPlayback();
+      });
+    }
+  }
+
+  void _startMediaPlayback() {
     if (_videoController != null) {
       _videoController?.play();
     }
-    _progressController?.forward();
+    final AnimationController? controller = _progressController;
+    if (controller == null) return;
+    if (controller.isDismissed || controller.value == 0) {
+      controller.forward(from: 0);
+    } else {
+      controller.forward();
+    }
+  }
+
+  String? _composeAdCaption(
+    String? headline,
+    String? description,
+    String? fallback,
+  ) {
+    final List<String> parts = <String>[];
+    if (headline != null && headline.trim().isNotEmpty) {
+      parts.add(headline.trim());
+    }
+    if (description != null && description.trim().isNotEmpty) {
+      parts.add(description.trim());
+    }
+    if (parts.isEmpty && fallback != null && fallback.trim().isNotEmpty) {
+      parts.add(fallback.trim());
+    }
+    if (parts.isEmpty) return null;
+    return parts.join('\n');
+  }
+
+  Future<void> _handleStoryAdClick(
+    Map<String, dynamic>? payload,
+    String url,
+  ) async {
+    _socialController?.trackAdClick(payload: payload);
+    await _openAdUrl(url);
+  }
+
+  Future<void> _openAdUrl(String url) async {
+    final Uri? uri = Uri.tryParse(url);
+    if (uri == null) {
+      _showAdLaunchError();
+      return;
+    }
+    try {
+      final bool launched =
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched) {
+        _showAdLaunchError();
+      }
+    } catch (_) {
+      _showAdLaunchError();
+    }
+  }
+
+  void _showAdLaunchError() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          getTranslated('unable_to_open_link', context) ??
+              'Unable to open link',
+        ),
+      ),
+    );
   }
 
   void _onNext() {
@@ -566,6 +854,7 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
   }
 
   void _handleReaction(SocialStoryItem item, String reaction) {
+    if (_currentStory.isAd) return;
     if (_isExiting) return;
     final String tapped = normalizeSocialReaction(reaction);
     if (tapped.isEmpty) return;
@@ -581,16 +870,66 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
         Timer(const Duration(milliseconds: 600), _dispatchPendingReaction);
   }
 
-  void _handleClose() {
-    if (!mounted || _isExiting) return;
+  bool _prepareForExit() {
+    if (!mounted || _isExiting) return false;
     _isExiting = true;
     _progressController?.stop();
     _videoController?.pause();
     _reactionDebounceTimer?.cancel();
     _reactionDebounceTimer = null;
     _reactionQueue.clear();
+    return true;
+  }
+
+  void _completeExit() {
+    if (!mounted) return;
     _restoreStatusBar();
     Navigator.of(context).pop();
+  }
+
+  void _handleClose() {
+    if (!_prepareForExit()) return;
+    _completeExit();
+  }
+
+  void _dismissWithSlideDown() {
+    if (!_prepareForExit()) return;
+    final double start = _verticalDragOffset;
+    final double screenHeight = MediaQuery.of(context).size.height;
+    _animateVerticalOffset(
+      from: start,
+      to: screenHeight,
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeIn,
+      onCompleted: _completeExit,
+    );
+  }
+
+  void _animateVerticalOffset({
+    required double from,
+    required double to,
+    Duration duration = const Duration(milliseconds: 200),
+    Curve curve = Curves.easeOut,
+    VoidCallback? onCompleted,
+  }) {
+    _dragAnimationController?.dispose();
+    _dragAnimationController =
+        AnimationController(vsync: this, duration: duration);
+    _dragAnimation = Tween<double>(begin: from, end: to).animate(
+      CurvedAnimation(parent: _dragAnimationController!, curve: curve),
+    )
+      ..addListener(() {
+        if (!mounted) return;
+        setState(() {
+          _verticalDragOffset = _dragAnimation!.value;
+        });
+      })
+      ..addStatusListener((status) {
+        if (status == AnimationStatus.completed && onCompleted != null) {
+          onCompleted();
+        }
+      });
+    _dragAnimationController!.forward();
   }
 
   void _restoreStatusBar() {
@@ -673,8 +1012,20 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
     final StoryViewersState? viewersState = (controller != null && item != null)
         ? controller.storyViewersState(item.id)
         : null;
+
     final int viewersCount = viewersState?.total ?? item?.viewCount ?? 0;
     final bool viewersLoading = viewersState?.loading ?? false;
+    final bool isAdStory = story.isAd;
+
+    final Map<String, dynamic>? adPayload = story.adPayload;
+    final String? adUrl = adPayload?['url']?.toString().trim();
+    final String? adHeadline = adPayload?['headline']?.toString();
+    final String? adDescription = adPayload?['description']?.toString();
+    final String? adCaption =
+        _composeAdCaption(adHeadline, adDescription, item?.description);
+
+    final String? captionText = isAdStory ? adCaption : null;
+    final bool allowReactions = !isAdStory;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark.copyWith(
@@ -685,50 +1036,60 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
       child: Scaffold(
         backgroundColor: Colors.black,
         body: SafeArea(
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOut,
-            margin: _viewerSheetOpen
-                ? const EdgeInsets.symmetric(horizontal: 12, vertical: 24)
-                : EdgeInsets.zero,
-            decoration: BoxDecoration(
-              color: Colors.black,
-              borderRadius: _viewerSheetOpen
-                  ? BorderRadius.circular(24)
-                  : BorderRadius.zero,
-              boxShadow: _viewerSheetOpen
-                  ? const [
-                      BoxShadow(
-                        color: Colors.black54,
-                        blurRadius: 24,
-                        offset: Offset(0, 12),
-                      ),
-                    ]
-                  : null,
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: AnimatedScale(
-              scale: _viewerSheetOpen ? 0.92 : 1.0,
+          child: Transform.translate(
+            offset: Offset(0, _verticalDragOffset),
+            child: AnimatedContainer(
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOut,
-              child: Column(
-                children: [
-                  Expanded(
-                    child: PageView.builder(
-                      controller: _storyController,
-                      onPageChanged: _onStoryPageChanged,
-                      itemCount: _stories.length,
-                      itemBuilder: (context, index) {
-                        final SocialStory story = _stories[index];
-                        final bool isCurrent = index == _currentStoryIndex;
-                        final SocialStoryItem? pageItem = isCurrent
-                            ? _currentItem
-                            : (story.items.isNotEmpty
-                                ? story.items.first
-                                : null);
+              margin: _viewerSheetOpen
+                  ? const EdgeInsets.symmetric(horizontal: 12, vertical: 24)
+                  : EdgeInsets.zero,
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: _viewerSheetOpen
+                    ? BorderRadius.circular(24)
+                    : BorderRadius.zero,
+                boxShadow: _viewerSheetOpen
+                    ? const [
+                        BoxShadow(
+                          color: Colors.black54,
+                          blurRadius: 24,
+                          offset: Offset(0, 12),
+                        ),
+                      ]
+                    : null,
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: AnimatedScale(
+                scale: _viewerSheetOpen ? 0.92 : 1.0,
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOut,
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: PageView.builder(
+                        controller: _storyController,
+                        onPageChanged: _onStoryPageChanged,
+                        itemCount: _stories.length,
+                        itemBuilder: (context, index) {
+                          final SocialStory story = _stories[index];
+                          final bool isCurrent = index == _currentStoryIndex;
 
-                        return Stack(
-                          children: [
+                          final SocialStoryItem? pageItem = isCurrent
+                              ? _currentItem
+                              : (story.items.isNotEmpty
+                                  ? story.items.first
+                                  : null);
+
+                          final bool storyBelongsToUser =
+                              controller?.currentUser?.id != null &&
+                                  story.userId != null &&
+                                  controller!.currentUser!.id == story.userId;
+
+                          final bool pageIsAdStory = story.isAd;
+
+                          return Stack(
+                            children: [
                             Positioned.fill(
                               child: _StoryMedia(
                                 story: story,
@@ -736,76 +1097,110 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
                                 videoController:
                                     isCurrent ? _videoController : null,
                                 isCurrent: isCurrent,
+                                onMediaReady: (isCurrent &&
+                                        (pageItem?.isVideo != true))
+                                    ? _handleMediaReady
+                                    : null,
                               ),
                             ),
-                            if (isCurrent)
-                              Positioned.fill(
-                                child: GestureDetector(
-                                  behavior: HitTestBehavior.translucent,
-                                  onTapUp: (details) {
-                                    if (_isExiting) return;
-                                    final double width =
-                                        MediaQuery.of(context).size.width;
-                                    if (details.localPosition.dx <
-                                        width * 0.4) {
-                                      _onPrevious();
-                                    } else {
-                                      _onNext();
-                                    }
-                                  },
-                                  onLongPressStart: (_) => _pause(),
-                                  onLongPressEnd: (_) => _resume(),
+                              if (isCurrent)
+                                Positioned.fill(
+                                  child: GestureDetector(
+                                    behavior: HitTestBehavior.translucent,
+                                    onTapUp: (details) {
+                                      if (_isExiting) return;
+                                      final double width =
+                                          MediaQuery.of(context).size.width;
+
+                                      if (details.localPosition.dx <
+                                          width * 0.4) {
+                                        _onPrevious();
+                                      } else {
+                                        _onNext();
+                                      }
+                                    },
+                                    onLongPressStart: _handleHoldStart,
+                                    onLongPressEnd: _handleHoldEnd,
+                                    onLongPressCancel: _handleHoldCancel,
+                                    onVerticalDragStart: _onVerticalDragStart,
+                                    onVerticalDragUpdate: _onVerticalDragUpdate,
+                                    onVerticalDragEnd: _onVerticalDragEnd,
+                                    onVerticalDragCancel: _onVerticalDragCancel,
+                                  ),
                                 ),
-                              ),
-                            if (isCurrent)
-                              Positioned(
-                                left: 0,
-                                right: 0,
-                                top: 0,
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    _StoryProgressIndicators(
-                                      itemCount: _storyItems.length,
-                                      currentIndex: _currentItemIndex,
-                                      progress: _progressController?.value ?? 0,
-                                    ),
-                                    const SizedBox(height: 12),
-                                    _StoryHeader(
-                                      story: story,
-                                      currentItem: pageItem,
-                                      onClose: _handleClose,
-                                      viewCount: viewersCount,
-                                      onViewers: (isOwnStory &&
-                                              pageItem != null)
-                                          ? () =>
-                                              _openStoryViewers(story, pageItem)
-                                          : null,
-                                      showViewersButton:
-                                          isOwnStory && pageItem != null,
-                                      viewersLoading: viewersLoading,
-                                    ),
-                                  ],
+                              if (isCurrent)
+                                Positioned(
+                                  left: 0,
+                                  right: 0,
+                                  top: 0,
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      _StoryProgressIndicators(
+                                        itemCount: _storyItems.length,
+                                        currentIndex: _currentItemIndex,
+                                        progress:
+                                            _progressController?.value ?? 0,
+                                      ),
+                                      const SizedBox(height: 12),
+                                      _StoryHeader(
+                                        story: story,
+                                        currentItem: pageItem,
+                                        onClose: _handleClose,
+                                        viewCount:
+                                            isCurrent ? viewersCount : null,
+                                        onViewers: (storyBelongsToUser &&
+                                                !pageIsAdStory &&
+                                                isCurrent &&
+                                                pageItem != null)
+                                            ? () => _openStoryViewers(
+                                                story, pageItem)
+                                            : null,
+                                        showViewersButton: storyBelongsToUser &&
+                                            !pageIsAdStory &&
+                                            isCurrent &&
+                                            pageItem != null,
+                                        viewersLoading:
+                                            isCurrent ? viewersLoading : false,
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                          ],
-                        );
-                      },
+                            ],
+                          );
+                        },
+                      ),
                     ),
-                  ),
-                  SafeArea(
-                    top: false,
-                    child: _StoryFooter(
-                      caption: item?.description,
-                      reaction: _footerReactionFor(item),
-                      onReaction: (reaction) {
-                        final SocialStoryItem? current = _currentItem;
-                        if (current == null) return;
-                        _handleReaction(current, reaction);
-                      },
+                    SafeArea(
+                      top: false,
+                      child: _StoryFooter(
+                        caption: captionText,
+                        showCaption: isAdStory,
+                        singleLineCaption: isAdStory,
+                        captionExpandable: isAdStory,
+                        reaction:
+                            allowReactions ? _footerReactionFor(item) : null,
+                        onReaction: allowReactions
+                            ? (reaction) {
+                                final SocialStoryItem? current = _currentItem;
+                                if (current == null) return;
+                                _handleReaction(current, reaction);
+                              }
+                            : null,
+                        showReactions: allowReactions,
+                        actionLabel:
+                            (isAdStory && adUrl != null && adUrl.isNotEmpty)
+                                ? (getTranslated('learn_more', context) ??
+                                    'Learn more')
+                                : null,
+                        onAction:
+                            (isAdStory && adUrl != null && adUrl.isNotEmpty)
+                                ? () => _handleStoryAdClick(adPayload, adUrl!)
+                                : null,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -815,22 +1210,106 @@ class _SocialStoryViewerScreenState extends State<SocialStoryViewerScreen>
   }
 }
 
-class _StoryMedia extends StatelessWidget {
+class _StoryMedia extends StatefulWidget {
   final SocialStory story;
   final SocialStoryItem? item;
   final VideoPlayerController? videoController;
   final bool isCurrent;
+  final VoidCallback? onMediaReady;
 
   const _StoryMedia({
     required this.story,
     required this.item,
     required this.videoController,
     required this.isCurrent,
+    this.onMediaReady,
   });
 
   @override
+  State<_StoryMedia> createState() => _StoryMediaState();
+}
+
+class _StoryMediaState extends State<_StoryMedia> {
+  static final BaseCacheManager _imageCacheManager = DefaultCacheManager();
+  String? _cachedUrl;
+  bool _imageCached = false;
+  bool _imageReady = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _cachedUrl = _effectiveImageUrl;
+    _checkImageCache();
+  }
+
+  @override
+  void didUpdateWidget(covariant _StoryMedia oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final String? url = _effectiveImageUrl;
+    if (url != _cachedUrl) {
+      _cachedUrl = url;
+      _imageReady = false;
+      _checkImageCache();
+    }
+  }
+
+  String? get _effectiveImageUrl {
+    final SocialStoryItem? item = widget.item;
+    return _resolveStoryMediaUrl(
+      item?.mediaUrl ?? item?.thumbUrl ?? widget.story.mediaUrl ?? widget.story.thumbUrl,
+    );
+  }
+
+  Future<void> _checkImageCache() async {
+    final String? url = _cachedUrl;
+    if (url == null || url.isEmpty) {
+      if (_imageCached || _imageReady) {
+        if (mounted) {
+          setState(() {
+            _imageCached = false;
+            _imageReady = false;
+          });
+        }
+      }
+      return;
+    }
+    try {
+      final FileInfo? info = await _imageCacheManager.getFileFromCache(url);
+      if (!mounted || _cachedUrl != url) return;
+      final bool cached = info != null;
+      if (_imageCached != cached) {
+        setState(() {
+          _imageCached = cached;
+        });
+      }
+    } catch (_) {
+      if (!mounted || _cachedUrl != url) return;
+      if (_imageCached) {
+        setState(() {
+          _imageCached = false;
+        });
+      }
+    }
+  }
+
+  void _notifyImageReady() {
+    if (_imageReady) {
+      widget.onMediaReady?.call();
+      return;
+    }
+    _imageReady = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {});
+    });
+    widget.onMediaReady?.call();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final SocialStoryItem? item = widget.item;
     if (item == null) {
+      widget.onMediaReady?.call();
       return Center(
         child: Text(
           getTranslated('story_unavailable', context) ?? 'Story unavailable',
@@ -839,8 +1318,8 @@ class _StoryMedia extends StatelessWidget {
       );
     }
 
-    if (isCurrent && item!.isVideo) {
-      final VideoPlayerController? controller = videoController;
+    if (widget.isCurrent && item.isVideo) {
+      final VideoPlayerController? controller = widget.videoController;
       if (controller != null && controller.value.isInitialized) {
         return Center(
           child: AspectRatio(
@@ -856,23 +1335,46 @@ class _StoryMedia extends StatelessWidget {
       );
     }
 
-    final String? url = _resolveStoryMediaUrl(
-      item!.mediaUrl ?? item!.thumbUrl ?? story.mediaUrl ?? story.thumbUrl,
-    );
+    final String? url = _effectiveImageUrl;
     if (url == null || url.isEmpty) {
+      widget.onMediaReady?.call();
       return const SizedBox();
     }
-    return CachedNetworkImage(
-      imageUrl: url,
-      fit: BoxFit.cover,
-      width: double.infinity,
-      height: double.infinity,
-      placeholder: (context, _) => const Center(
-        child: CircularProgressIndicator(color: Colors.white),
-      ),
-      errorWidget: (context, _, __) => const Center(
-        child: Icon(Icons.broken_image, color: Colors.white),
-      ),
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        CachedNetworkImage(
+          imageUrl: url,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          fadeInDuration:
+              _imageCached ? Duration.zero : const Duration(milliseconds: 250),
+          fadeOutDuration: Duration.zero,
+          useOldImageOnUrlChange: true,
+          imageBuilder: (context, imageProvider) {
+            _notifyImageReady();
+            return Image(
+              image: imageProvider,
+              fit: BoxFit.cover,
+              width: double.infinity,
+              height: double.infinity,
+            );
+          },
+          placeholder: (_, __) => const SizedBox(),
+          errorWidget: (context, _, __) {
+            _notifyImageReady();
+            return const Center(
+              child: Icon(Icons.broken_image, color: Colors.white),
+            );
+          },
+        ),
+        if (!_imageReady)
+          const Center(
+            child: CircularProgressIndicator(color: Colors.white),
+          ),
+      ],
     );
   }
 }
@@ -947,6 +1449,8 @@ class _StoryHeader extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
     final String? timeText = _relativeTimeText(context, currentItem?.postedAt);
     final int watchers = viewCount ?? 0;
+    final bool isAd = story.isAd;
+    final String? sponsorName = story.adPayload?['name']?.toString();
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -968,18 +1472,50 @@ class _StoryHeader extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  story.userName?.isNotEmpty == true
-                      ? story.userName!
-                      : (getTranslated('story', context) ?? 'Story'),
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        story.userName?.isNotEmpty == true
+                            ? story.userName!
+                            : (getTranslated('story', context) ?? 'Story'),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    if (isAd)
+                      Container(
+                        margin: const EdgeInsets.only(left: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(.2),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          getTranslated('sponsored', context) ?? 'Sponsored',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-                if (timeText != null)
+                if (!isAd && timeText != null)
                   Text(
                     timeText,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: Colors.white70,
+                    ),
+                  ),
+                if (isAd &&
+                    sponsorName != null &&
+                    sponsorName.trim().isNotEmpty)
+                  Text(
+                    sponsorName,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: Colors.white70,
                     ),
@@ -1037,12 +1573,24 @@ class _StoryHeader extends StatelessWidget {
 class _StoryFooter extends StatefulWidget {
   final String? caption;
   final SocialStoryReaction? reaction;
-  final ValueChanged<String> onReaction;
+  final ValueChanged<String>? onReaction;
+  final bool showReactions;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+  final bool showCaption;
+  final bool singleLineCaption;
+  final bool captionExpandable;
 
   const _StoryFooter({
     this.caption,
-    required this.reaction,
-    required this.onReaction,
+    this.reaction,
+    this.onReaction,
+    this.showReactions = true,
+    this.actionLabel,
+    this.onAction,
+    this.showCaption = true,
+    this.singleLineCaption = false,
+    this.captionExpandable = false,
   });
 
   @override
@@ -1072,6 +1620,15 @@ class _StoryFooterState extends State<_StoryFooter>
   final GlobalKey _effectsStackKey = GlobalKey();
   final List<_FlyingReaction> _flyingReactions = <_FlyingReaction>[];
   final Random _random = Random();
+  bool _captionExpanded = false;
+
+  @override
+  void didUpdateWidget(covariant _StoryFooter oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.caption != oldWidget.caption) {
+      _captionExpanded = false;
+    }
+  }
 
   @override
   void dispose() {
@@ -1082,7 +1639,9 @@ class _StoryFooterState extends State<_StoryFooter>
   }
 
   void _handleTap(String reactionLabel) {
-    widget.onReaction(reactionLabel);
+    final onReaction = widget.onReaction;
+    if (onReaction == null) return;
+    onReaction(reactionLabel);
     _spawnFlyingReaction(reactionLabel);
   }
 
@@ -1136,173 +1695,255 @@ class _StoryFooterState extends State<_StoryFooter>
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final String selected = normalizeSocialReaction(widget.reaction?.type);
+    final bool hasCaption =
+        widget.caption != null && widget.caption!.trim().isNotEmpty;
+    final bool showCaption = widget.showCaption && hasCaption;
+    final bool showReactionRow =
+        widget.showReactions && widget.onReaction != null;
+    final bool showActionButton =
+        widget.actionLabel != null && widget.onAction != null;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // if (widget.caption != null && widget.caption!.trim().isNotEmpty)
-          //   Padding(
-          //     padding: const EdgeInsets.only(bottom: 12),
-          //     child: Text(
-          //       widget.caption!.replaceAll(
-          //           RegExp(r'<br\s*/?>', caseSensitive: false), '\n'),
-          //       style: theme.textTheme.bodyLarge?.copyWith(
-          //         color: Colors.white,
-          //         height: 1.4,
-          //       ),
-          //     ),
-          //   ),
-          SizedBox(
-            height: 104,
-            child: Stack(
-              key: _effectsStackKey,
-              clipBehavior: Clip.none,
-              children: [
-                Align(
-                  alignment: Alignment.bottomCenter,
-                  child: SizedBox(
-                    height: 56,
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final double width = constraints.maxWidth;
-                        final double placeholderMin = width * .35;
-                        final double placeholderMax = width * .65;
-
-                        return ScrollConfiguration(
-                          behavior: ScrollConfiguration.of(context).copyWith(
-                            scrollbars: false,
-                            overscroll: false,
-                          ),
-                          child: ListView.separated(
-                            physics: const BouncingScrollPhysics(),
+          if (showCaption)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final String normalizedCaption = widget.caption!
+                      .replaceAll(
+                          RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
+                      .trim();
+                  final TextStyle captionStyle =
+                      theme.textTheme.bodyLarge?.copyWith(
+                            color: Colors.white,
+                            height: 1.4,
+                          ) ??
+                          const TextStyle(
+                            color: Colors.white,
+                            height: 1.4,
+                          );
+                  final bool limitSingleLine =
+                      widget.singleLineCaption && !_captionExpanded;
+                  bool showSeeMore = false;
+                  if (widget.captionExpandable &&
+                      !_captionExpanded &&
+                      limitSingleLine) {
+                    final TextPainter painter = TextPainter(
+                      text: TextSpan(
+                        text: normalizedCaption,
+                        style: captionStyle,
+                      ),
+                      maxLines: 1,
+                      textDirection: Directionality.of(context),
+                    )..layout(maxWidth: constraints.maxWidth);
+                    showSeeMore = painter.didExceedMaxLines;
+                  }
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        normalizedCaption,
+                        maxLines: limitSingleLine ? 1 : null,
+                        overflow: limitSingleLine
+                            ? TextOverflow.ellipsis
+                            : TextOverflow.visible,
+                        style: captionStyle,
+                      ),
+                      if (showSeeMore)
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _captionExpanded = true;
+                            });
+                          },
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.white,
                             padding: EdgeInsets.zero,
-                            scrollDirection: Axis.horizontal,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(width: 12),
-                            itemCount: _reactionOrder.length + 1,
-                            itemBuilder: (BuildContext context, int index) {
-                              if (index == 0) {
-                                return ConstrainedBox(
-                                  constraints: BoxConstraints(
-                                    minWidth:
-                                        placeholderMin.clamp(140.0, width),
-                                    maxWidth:
-                                        placeholderMax.clamp(180.0, width),
-                                  ),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 16, vertical: 12),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black45,
-                                      borderRadius: BorderRadius.circular(999),
-                                      border: Border.all(
-                                        color: Colors.white24,
-                                        width: 1,
-                                      ),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: Text(
+                            getTranslated('see_more', context) ?? 'See more',
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          if (showActionButton)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: widget.onAction,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black87,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                  child: Text(widget.actionLabel!),
+                ),
+              ),
+            ),
+          if (showReactionRow)
+            SizedBox(
+              height: 104,
+              child: Stack(
+                key: _effectsStackKey,
+                clipBehavior: Clip.none,
+                children: [
+                  Align(
+                    alignment: Alignment.bottomCenter,
+                    child: SizedBox(
+                      height: 56,
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final double width = constraints.maxWidth;
+                          final double placeholderMin = width * .35;
+                          final double placeholderMax = width * .65;
+
+                          return ScrollConfiguration(
+                            behavior: ScrollConfiguration.of(context).copyWith(
+                              scrollbars: false,
+                              overscroll: false,
+                            ),
+                            child: ListView.separated(
+                              physics: const BouncingScrollPhysics(),
+                              padding: EdgeInsets.zero,
+                              scrollDirection: Axis.horizontal,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(width: 12),
+                              itemCount: _reactionOrder.length + 1,
+                              itemBuilder: (BuildContext context, int index) {
+                                if (index == 0) {
+                                  return ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      minWidth:
+                                          placeholderMin.clamp(140.0, width),
+                                      maxWidth:
+                                          placeholderMax.clamp(180.0, width),
                                     ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            getTranslated(
-                                                    'send_message_placeholder',
-                                                    context) ??
-                                                'Send a message...',
-                                            overflow: TextOverflow.ellipsis,
-                                            style: theme.textTheme.bodyMedium
-                                                ?.copyWith(
-                                              color: Colors.white70,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 16, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black45,
+                                        borderRadius:
+                                            BorderRadius.circular(999),
+                                        border: Border.all(
+                                          color: Colors.white24,
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              getTranslated(
+                                                      'send_message_placeholder',
+                                                      context) ??
+                                                  'Send a message...',
+                                              overflow: TextOverflow.ellipsis,
+                                              style: theme.textTheme.bodyMedium
+                                                  ?.copyWith(
+                                                color: Colors.white70,
+                                              ),
                                             ),
                                           ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        const Icon(Icons.send,
-                                            color: Colors.white70, size: 20),
-                                      ],
+                                          const SizedBox(width: 8),
+                                          const Icon(Icons.send,
+                                              color: Colors.white70, size: 20),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                }
+
+                                final String reactionLabel =
+                                    _reactionOrder[index - 1];
+                                final bool isSelected =
+                                    selected == reactionLabel;
+                                return GestureDetector(
+                                  onTap: () => _handleTap(reactionLabel),
+                                  child: Container(
+                                    key: _iconKeys[reactionLabel],
+                                    width: 48,
+                                    decoration: BoxDecoration(
+                                      color: isSelected
+                                          ? Colors.white
+                                          : Colors.black54,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: isSelected
+                                            ? Colors.white
+                                            : Colors.white24,
+                                        width: 1,
+                                      ),
+                                      boxShadow: isSelected
+                                          ? [
+                                              BoxShadow(
+                                                color: Colors.white
+                                                    .withOpacity(.35),
+                                                blurRadius: 14,
+                                                spreadRadius: 2,
+                                              ),
+                                            ]
+                                          : null,
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: _StoryReactionIcon(
+                                      reaction: reactionLabel,
+                                      size: isSelected ? 28 : 24,
                                     ),
                                   ),
                                 );
-                              }
-
-                              final String reactionLabel =
-                                  _reactionOrder[index - 1];
-                              final bool isSelected = selected == reactionLabel;
-                              return GestureDetector(
-                                onTap: () => _handleTap(reactionLabel),
-                                child: Container(
-                                  key: _iconKeys[reactionLabel],
-                                  width: 48,
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? Colors.white
-                                        : Colors.black54,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: isSelected
-                                          ? Colors.white
-                                          : Colors.white24,
-                                      width: 1,
-                                    ),
-                                    boxShadow: isSelected
-                                        ? [
-                                            BoxShadow(
-                                              color: Colors.white
-                                                  .withValues(alpha: .35),
-                                              blurRadius: 14,
-                                              spreadRadius: 2,
-                                            ),
-                                          ]
-                                        : null,
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: _StoryReactionIcon(
-                                    reaction: reactionLabel,
-                                    size: isSelected ? 28 : 24,
-                                  ),
-                                ),
-                              );
-                            },
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  ..._flyingReactions.map((flying) {
+                    return AnimatedBuilder(
+                      animation: flying.animation,
+                      builder: (context, child) {
+                        final double t = flying.animation.value;
+                        final double dy =
+                            flying.startOffset.dy - (flying.verticalTravel * t);
+                        final double dx =
+                            flying.startOffset.dx + flying.horizontalShift * t;
+                        return Positioned(
+                          left: dx,
+                          top: dy,
+                          child: Opacity(
+                            opacity: 1 - t,
+                            child: Transform.scale(
+                              scale: 1 + (.5 * t),
+                              child: _StoryReactionIcon(
+                                reaction: flying.reaction,
+                                size: 20,
+                              ),
+                            ),
                           ),
                         );
                       },
-                    ),
-                  ),
-                ),
-                ..._flyingReactions.map((flying) {
-                  return AnimatedBuilder(
-                    animation: flying.animation,
-                    builder: (context, child) {
-                      final double t = flying.animation.value;
-                      final double dy =
-                          flying.startOffset.dy - (flying.verticalTravel * t);
-                      final double dx =
-                          flying.startOffset.dx + (flying.horizontalShift * t);
-                      final double opacity = (1 - t).clamp(0, 1);
-                      final double scale = 1 + (0.25 * t);
-
-                      return Positioned(
-                        left: dx - 20,
-                        top: dy - 20,
-                        child: Opacity(
-                          opacity: opacity,
-                          child: Transform.scale(
-                            scale: scale,
-                            child: _StoryReactionIcon(
-                              reaction: flying.reaction,
-                              size: 32,
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                }),
-              ],
+                    );
+                  }),
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );

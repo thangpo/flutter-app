@@ -4,6 +4,8 @@ class SocialStory {
   final String? userName;
   final String? userAvatar;
   final List<SocialStoryItem> items;
+  final bool isAd;
+  final Map<String, dynamic>? adPayload;
 
   /// Convenience preview thumbnail (falls back to media when needed).
   final String? thumbUrl;
@@ -19,6 +21,8 @@ class SocialStory {
     this.thumbUrl,
     this.mediaUrl,
     this.items = const <SocialStoryItem>[],
+    this.isAd = false,
+    this.adPayload,
   });
 
   bool get hasItems => items.isNotEmpty;
@@ -32,6 +36,8 @@ class SocialStory {
     List<SocialStoryItem>? items,
     String? thumbUrl,
     String? mediaUrl,
+    bool? isAd,
+    Map<String, dynamic>? adPayload,
   }) {
     return SocialStory(
       id: id ?? this.id,
@@ -41,6 +47,8 @@ class SocialStory {
       items: items ?? this.items,
       thumbUrl: thumbUrl ?? this.thumbUrl,
       mediaUrl: mediaUrl ?? this.mediaUrl,
+      isAd: isAd ?? this.isAd,
+      adPayload: adPayload ?? this.adPayload,
     );
   }
 
@@ -109,6 +117,10 @@ class SocialStory {
       thumbUrl: first?.thumbUrl,
       mediaUrl: first?.mediaUrl,
       items: parsedItems,
+      isAd: _parseBool(json['is_ad']),
+      adPayload: json['ad_payload'] is Map<String, dynamic>
+          ? Map<String, dynamic>.from(json['ad_payload'])
+          : null,
     );
   }
 }

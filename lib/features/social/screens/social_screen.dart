@@ -1,4 +1,7 @@
+﻿import 'dart:math';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_sixvalley_ecommerce/features/ads/domain/models/ads_model.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
@@ -24,6 +27,24 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_scre
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/social_post_text_block.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/social_feeling_helper.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_post_full_with_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+bool _listsEqual<T>(List<T> a, List<T> b) {
+  if (identical(a, b)) return true;
+  if (a.length != b.length) return false;
+  for (int i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
+
+bool _isPrefix<T>(List<T> prefix, List<T> complete) {
+  if (prefix.length > complete.length) return false;
+  for (int i = 0; i < prefix.length; i++) {
+    if (prefix[i] != complete[i]) return false;
+  }
+  return true;
+}
 
 class SocialFeedScreen extends StatefulWidget {
   const SocialFeedScreen({super.key});
@@ -37,6 +58,10 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
   final ScrollController _scrollController = ScrollController();
   final GlobalKey<RefreshIndicatorState> _refreshKey =
       GlobalKey<RefreshIndicatorState>();
+  final Random _adsRandom = Random();
+  List<int> _postAdSlots = <int>[];
+  List<String> _eligiblePostSnapshot = <String>[];
+  List<int?> _postAdIdSnapshot = <int?>[];
 
   @override
   bool get wantKeepAlive => true;
@@ -48,6 +73,7 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
       final sc = context.read<SocialController>();
       sc.loadCurrentUser();
       sc.loadPostBackgrounds();
+      sc.fetchAdsForFeed();
       if (sc.posts.isEmpty) {
         sc.refresh();
       }
@@ -68,9 +94,90 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
     );
   }
 
+  void _ensurePostAdSlots(
+    List<SocialPost> posts,
+    List<AdsModel> ads,
+    Set<String> eligiblePostIds,
+  ) {
+    final List<_EligiblePostEntry> eligibleEntries = <_EligiblePostEntry>[];
+    for (int i = 0; i < posts.length; i++) {
+      final String? id = posts[i].id;
+      if (id != null && id.isNotEmpty && eligiblePostIds.contains(id)) {
+        eligibleEntries.add(_EligiblePostEntry(index: i, id: id));
+      }
+    }
+
+    final int eligibleCount = eligibleEntries.length;
+    final int adCount = ads.length;
+    final List<int?> adIds =
+        List<int?>.generate(adCount, (index) => ads[index].id);
+
+    final List<String> newEligibleKeys =
+        eligibleEntries.map((entry) => entry.id).toList();
+    final List<String> previousKeys = List<String>.from(_eligiblePostSnapshot);
+    final bool adsChanged = !_listsEqual(adIds, _postAdIdSnapshot);
+    final bool eligibleExtended = _isPrefix(previousKeys, newEligibleKeys) &&
+        newEligibleKeys.length >= previousKeys.length;
+
+    _eligiblePostSnapshot = newEligibleKeys;
+    _postAdIdSnapshot = adIds;
+
+    if (eligibleCount <= 0 || adCount <= 0) {
+      _postAdSlots = <int>[];
+      return;
+    }
+
+    final int targetSlots = min(adCount, max(1, (eligibleCount / 2).ceil()));
+
+    final bool requireFullReset =
+        _postAdSlots.isEmpty || adsChanged || !eligibleExtended;
+
+    final List<int> eligibleIndexes =
+        eligibleEntries.map((entry) => entry.index).toList();
+
+    if (requireFullReset) {
+      eligibleIndexes.shuffle(_adsRandom);
+      _postAdSlots = eligibleIndexes.take(targetSlots).toList()..sort();
+      return;
+    }
+
+    if (_postAdSlots.length > targetSlots) {
+      _postAdSlots = _postAdSlots.take(targetSlots).toList()..sort();
+      return;
+    }
+
+    if (_postAdSlots.length >= targetSlots) return;
+
+    final int previousCount = previousKeys.length;
+    final Set<int> existing = _postAdSlots.toSet();
+    final List<int> newEligibleIndexes = eligibleEntries
+        .skip(previousCount)
+        .map((entry) => entry.index)
+        .where((index) => !existing.contains(index))
+        .toList();
+    final List<int> available =
+        eligibleIndexes.where((index) => !existing.contains(index)).toList();
+    final List<int> candidate =
+        newEligibleIndexes.isNotEmpty ? newEligibleIndexes : available;
+    candidate.shuffle(_adsRandom);
+    final int needed = targetSlots - _postAdSlots.length;
+    _postAdSlots.addAll(candidate.take(needed));
+    _postAdSlots.sort();
+  }
+
+  AdsModel? _postAdForIndex(int postIndex, List<AdsModel> ads) {
+    if (ads.isEmpty || postIndex < 0) return null;
+    final int slotIdx = _postAdSlots.indexOf(postIndex);
+    if (slotIdx != -1) {
+      return ads[slotIdx % ads.length];
+    }
+    return null;
+  }
+
   Future<void> refreshFeed() async {
     if (!mounted) return;
     _refreshKey.currentState?.show();
+    _resetPostAdSlots();
     await context.read<SocialController>().refresh();
   }
 
@@ -87,6 +194,12 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
   void dispose() {
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _resetPostAdSlots() {
+    _postAdSlots = <int>[];
+    _eligiblePostSnapshot = <String>[];
+    _postAdIdSnapshot = <int?>[];
   }
 
   @override
@@ -106,9 +219,20 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
                   if (sc.loading && sc.posts.isEmpty) {
                     return const Center(child: CircularProgressIndicator());
                   }
+                  const int headerCount = 2;
+                  final List<AdsModel> postAds = sc.postAds;
+                  final List<SocialPost> posts = sc.posts;
+                  final Set<String> eligibleIds = sc.postAdEligibleIds;
+                  _ensurePostAdSlots(posts, postAds, eligibleIds);
                   return RefreshIndicator(
                     key: _refreshKey,
-                    onRefresh: () => sc.refresh(),
+                    onRefresh: () async {
+                      _resetPostAdSlots();
+                      await Future.wait([
+                        sc.refresh(),
+                        sc.fetchAdsForFeed(force: true),
+                      ]);
+                    },
                     child: NotificationListener<ScrollNotification>(
                       // onNotification: (n) {
                       //   if (n.metrics.pixels >=
@@ -120,15 +244,14 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
                       child: ListView.builder(
                         controller: _scrollController,
                         padding: EdgeInsets.zero,
-                        itemCount: sc.posts.length +
-                            2, // +1: What'sOnYourMind, +1: Stories
+                        itemCount: posts.length + headerCount,
                         itemBuilder: (ctx, i) {
                           if (i == 0) {
-                            // Block "B?n dang nghi gì?"
+                            // Block "B?n dang nghi gÃ¬?"
                             return Column(
                               children: [
                                 _WhatsOnYourMind(),
-                                const _SectionSeparator(), // tách v?i Stories
+                                const _SectionSeparator(), // tÃ¡ch v?i Stories
                               ],
                             );
                           }
@@ -139,27 +262,37 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
                                 return Column(
                                   children: [
                                     _StoriesSectionFromApi(
-                                        stories: sc2.stories),
+                                      stories: sc2.stories,
+                                    ),
                                   ],
                                 );
                               },
                             );
                           }
 
-                          // Các post: b?t d?u t? i=2
-                          final SocialPost p = sc.posts[i - 2];
-                          // Prefetch: khi người dùng chạm tới “nửa sau” của lô hiện tại thì nạp thêm
-                          const int pageSize = 10; // lô hiện tại đang là 10
-                          const int prefetchAt = pageSize ~/
-                              2; // 5  (tức là tới bài 5–6 sẽ gọi nạp)
-                          final int itemIndex = i - 2; // index trong mảng posts
+                          final int postIndex = i - headerCount;
+                          if (postIndex < 0 || postIndex >= posts.length) {
+                            return const SizedBox.shrink();
+                          }
+
+                          final SocialPost p = posts[postIndex];
+                          const int pageSize = 10;
+                          const int prefetchAt = pageSize ~/ 2;
 
                           if (!sc.loading &&
-                              itemIndex >= sc.posts.length - prefetchAt) {
+                              postIndex >= posts.length - prefetchAt) {
                             sc.loadMore();
                           }
 
-                          return SocialPostCard(post: p);
+                          final AdsModel? inlineAd =
+                              _postAdForIndex(postIndex, postAds);
+
+                          return Column(
+                            children: [
+                              SocialPostCard(post: p),
+                              if (inlineAd != null) _PostAdCard(ad: inlineAd),
+                            ],
+                          );
                         },
                       ),
                     ),
@@ -174,14 +307,41 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
   }
 }
 
+Future<void> _launchAdUrl(BuildContext context, String? url) async {
+  if (url == null || url.trim().isEmpty) {
+    _showAdLaunchError(context);
+    return;
+  }
+  final Uri? uri = Uri.tryParse(url.trim());
+  if (uri == null) {
+    _showAdLaunchError(context);
+    return;
+  }
+  try {
+    final bool launched =
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched) {
+      _showAdLaunchError(context);
+    }
+  } catch (_) {
+    _showAdLaunchError(context);
+  }
+}
+
+void _showAdLaunchError(BuildContext context) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text('KhÃ´ng thá»ƒ má»Ÿ quáº£ng cÃ¡o')),
+  );
+}
+
 class _FacebookHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // uu tiên appBarTheme.backgroundColor; fallback sang highlightColor (Home cung dang dùng highlightColor)
+    // uu tiÃªn appBarTheme.backgroundColor; fallback sang highlightColor (Home cung dang dÃ¹ng highlightColor)
     final Color appBarColor =
         theme.appBarTheme.backgroundColor ?? theme.highlightColor;
-    // Ch?n màu ch?/icon tuong ph?n trên n?n appBarColor
+    // Ch?n mÃ u ch?/icon tuong ph?n trÃªn n?n appBarColor
     final bool isDark =
         ThemeData.estimateBrightnessForColor(appBarColor) == Brightness.dark;
     final Color onAppBar = isDark ? Colors.white : Colors.black87;
@@ -223,7 +383,7 @@ class _FacebookHeader extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               _HeaderIcon(
-                icon: Icons.people_outline, // biểu tượng bạn bè
+                icon: Icons.people_outline, // biá»ƒu tÆ°á»£ng báº¡n bÃ¨
                 iconColor: onAppBar,
                 bubbleColor: onAppBar.withOpacity(0.08),
                 onTap: () {
@@ -232,7 +392,7 @@ class _FacebookHeader extends StatelessWidget {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                           content: Text(
-                              'Vui lòng kết nối tài khoản WoWonder trước.')),
+                              'Vui lÃ²ng káº¿t ná»‘i tÃ i khoáº£n WoWonder trÆ°á»›c.')),
                     );
                     return;
                   }
@@ -254,7 +414,7 @@ class _FacebookHeader extends StatelessWidget {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                           content: Text(
-                              'Vui lòng k?t n?i tài kho?n WoWonder tru?c.')),
+                              'Vui lÃ²ng k?t n?i tÃ i kho?n WoWonder tru?c.')),
                     );
                     return;
                   }
@@ -319,7 +479,7 @@ class _WhatsOnYourMind extends StatelessWidget {
     final profileCtrl = context.watch<ProfileController>();
     final fallbackProfile = profileCtrl.userInfoModel;
 
-    // ⚠️ Đổi .path -> .toString() để NetworkImage nhận URL đầy đủ
+    // âš ï¸ Äá»•i .path -> .toString() Ä‘á»ƒ NetworkImage nháº­n URL Ä‘áº§y Ä‘á»§
     final String? avatarUrl = () {
       final candidates = [
         user?.avatarUrl?.trim(),
@@ -338,7 +498,7 @@ class _WhatsOnYourMind extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
-            // ===== Avatar: bấm -> ProfileScreen =====
+            // ===== Avatar: báº¥m -> ProfileScreen =====
             InkWell(
               onTap: () {
                 Navigator.of(context).push(
@@ -359,10 +519,10 @@ class _WhatsOnYourMind extends StatelessWidget {
             ),
             const SizedBox(width: 12),
 
-            // ===== Ô “Bạn đang nghĩ gì?”: bấm -> tạo post =====
+            // ===== Ã” â€œBáº¡n Ä‘ang nghÄ© gÃ¬?â€: báº¥m -> táº¡o post =====
             Expanded(
               child: Material(
-                // đảm bảo có Material ancestor cho InkWell
+                // Ä‘áº£m báº£o cÃ³ Material ancestor cho InkWell
                 color: Colors.transparent,
                 child: InkWell(
                   onTap: () {
@@ -377,7 +537,7 @@ class _WhatsOnYourMind extends StatelessWidget {
                   child: Builder(
                     builder: (context) {
                       final cs =
-                          Theme.of(context).colorScheme; // <-- thêm dòng này
+                          Theme.of(context).colorScheme; // <-- thÃªm dÃ²ng nÃ y
                       return Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 10),
@@ -386,8 +546,8 @@ class _WhatsOnYourMind extends StatelessWidget {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          getTranslated(
-                                  'whats_on_your_mind', context) // <-- sửa key
+                          getTranslated('whats_on_your_mind',
+                                  context) // <-- sá»­a key
                               ??
                               "What's on your mind?",
                           style: TextStyle(
@@ -404,9 +564,9 @@ class _WhatsOnYourMind extends StatelessWidget {
 
             const SizedBox(width: 12),
 
-            // (tuỳ chọn) nút +
+            // (tuá»³ chá»n) nÃºt +
             InkWell(
-              onTap: () {/* TODO: action khác (ví dụ tạo story) */},
+              onTap: () {/* TODO: action khÃ¡c (vÃ­ dá»¥ táº¡o story) */},
               customBorder: const CircleBorder(),
               child: Container(
                 padding: const EdgeInsets.all(8),
@@ -436,10 +596,17 @@ class _SectionSeparator extends StatelessWidget {
   }
 }
 
-class _StoriesSectionFromApi extends StatelessWidget {
+class _StoriesSectionFromApi extends StatefulWidget {
   final List<SocialStory> stories;
-  const _StoriesSectionFromApi({required this.stories});
+  const _StoriesSectionFromApi({
+    required this.stories,
+  });
 
+  @override
+  State<_StoriesSectionFromApi> createState() => _StoriesSectionFromApiState();
+}
+
+class _StoriesSectionFromApiState extends State<_StoriesSectionFromApi> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -448,63 +615,17 @@ class _StoriesSectionFromApi extends StatelessWidget {
     final SocialStory? myStory = context
         .select<SocialController, SocialStory?>((c) => c.currentUserStory);
 
-    String storyKey(SocialStory story) {
-      final userId = story.userId;
-      if (userId != null && userId.isNotEmpty) {
-        return 'user:$userId';
-      }
-      return 'story:${story.id}';
-    }
-
-    bool isCurrentUserStory(SocialStory story) {
-      if (currentUser == null) return false;
-      if (story.userId != null && story.userId == currentUser.id) {
-        return true;
-      }
-      final storyName =
-          story.userName != null ? story.userName!.trim().toLowerCase() : '';
-      if (storyName.isEmpty) return false;
-      final firstName = (currentUser.firstName ?? '').trim();
-      final lastName = (currentUser.lastName ?? '').trim();
-      final possibleNames = <String>{
-        (currentUser.displayName ?? '').trim().toLowerCase(),
-        (currentUser.userName ?? '').trim().toLowerCase(),
-        ('$firstName $lastName').trim().toLowerCase(),
-      }..removeWhere((value) => value.isEmpty);
-      return possibleNames.contains(storyName);
-    }
-
-    final seenKeys = <String>{};
-    final dedupedStories = <SocialStory>[];
-    for (final story in stories) {
-      final key = storyKey(story);
-      if (seenKeys.add(key)) {
-        dedupedStories.add(story);
-      }
-    }
-
-    dedupedStories.removeWhere((story) => !story.hasItems);
-
-    final List<SocialStory> orderedStories = <SocialStory>[];
-    if (myStory != null) {
-      final key = storyKey(myStory);
-      dedupedStories.removeWhere((story) => storyKey(story) == key);
-      orderedStories.add(myStory);
-    } else if (currentUser != null) {
-      final idx = dedupedStories.indexWhere(isCurrentUserStory);
-      if (idx >= 0) {
-        orderedStories.add(dedupedStories.removeAt(idx));
-      }
-    }
-
-    orderedStories.addAll(dedupedStories);
+    final List<SocialStory> orderedStories = _orderedStories(
+      widget.stories,
+      currentUser,
+      myStory,
+    );
 
     return Container(
       height: 200,
       color: cs.surface,
       child: NotificationListener<ScrollNotification>(
         onNotification: (notification) {
-          // intercept horizontal scroll events
           if (notification.metrics.axis == Axis.horizontal &&
               notification.metrics.pixels >=
                   notification.metrics.maxScrollExtent - 100) {
@@ -521,18 +642,20 @@ class _StoriesSectionFromApi extends StatelessWidget {
             if (index == 0) {
               return const _CreateStoryCard();
             }
-            final storyIndex = index - 1;
-            final story = orderedStories[storyIndex];
+            final int entryIndex = index - 1;
+            final SocialStory story = orderedStories[entryIndex];
             return _StoryCardFromApi(
               story: story,
               onTap: story.items.isEmpty
                   ? null
                   : () {
+                      final int initialItem = _firstUnviewedItemIndex(story);
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => SocialStoryViewerScreen(
                             stories: List<SocialStory>.from(orderedStories),
-                            initialStoryIndex: storyIndex,
+                            initialStoryIndex: entryIndex,
+                            initialItemIndex: initialItem,
                           ),
                         ),
                       );
@@ -542,6 +665,72 @@ class _StoriesSectionFromApi extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  int _firstUnviewedItemIndex(SocialStory story) {
+    if (story.items.isEmpty) return 0;
+    final int index = story.items.indexWhere((item) => item.isViewed == false);
+    if (index >= 0) return index;
+    return 0;
+  }
+
+  List<SocialStory> _orderedStories(
+    List<SocialStory> stories,
+    SocialUser? currentUser,
+    SocialStory? myStory,
+  ) {
+    final seenKeys = <String>{};
+    final dedupedStories = <SocialStory>[];
+    for (final story in stories) {
+      final key = _storyKey(story);
+      if (seenKeys.add(key)) {
+        dedupedStories.add(story);
+      }
+    }
+
+    dedupedStories.removeWhere((story) => !story.hasItems);
+
+    final List<SocialStory> orderedStories = <SocialStory>[];
+    if (myStory != null) {
+      final key = _storyKey(myStory);
+      dedupedStories.removeWhere((story) => _storyKey(story) == key);
+      orderedStories.add(myStory);
+    } else if (currentUser != null) {
+      final idx = dedupedStories.indexWhere(
+        (story) => _isCurrentUserStory(story, currentUser),
+      );
+      if (idx >= 0) {
+        orderedStories.add(dedupedStories.removeAt(idx));
+      }
+    }
+
+    orderedStories.addAll(dedupedStories);
+    return orderedStories;
+  }
+
+  String _storyKey(SocialStory story) {
+    final userId = story.userId;
+    if (userId != null && userId.isNotEmpty) {
+      return 'user:$userId';
+    }
+    return 'story:${story.id}';
+  }
+
+  bool _isCurrentUserStory(SocialStory story, SocialUser currentUser) {
+    if (story.userId != null && story.userId == currentUser.id) {
+      return true;
+    }
+    final storyName =
+        story.userName != null ? story.userName!.trim().toLowerCase() : '';
+    if (storyName.isEmpty) return false;
+    final firstName = (currentUser.firstName ?? '').trim();
+    final lastName = (currentUser.lastName ?? '').trim();
+    final possibleNames = <String>{
+      (currentUser.displayName ?? '').trim().toLowerCase(),
+      (currentUser.userName ?? '').trim().toLowerCase(),
+      ('$firstName $lastName').trim().toLowerCase(),
+    }..removeWhere((value) => value.isEmpty);
+    return possibleNames.contains(storyName);
   }
 }
 
@@ -555,6 +744,9 @@ class _StoryCardFromApi extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final onSurface = cs.onSurface;
     final thumb = story.thumbUrl ?? story.mediaUrl;
+    final bool hasUnviewed = story.items.any((item) => item.isViewed == false);
+    final Color activeRingColor = cs.primary;
+    final double ringBorderWidth = hasUnviewed ? 3 : 1.5;
 
     return GestureDetector(
       onTap: onTap,
@@ -577,15 +769,41 @@ class _StoryCardFromApi extends StatelessWidget {
                   fit: BoxFit.cover,
                 ),
               ),
+            if (story.isAd)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(.6),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    'Ads',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
             Positioned(
               top: 8,
               left: 8,
               child: Container(
                 padding: const EdgeInsets.all(2),
                 decoration: BoxDecoration(
-                  color: cs.primary,
+                  color: hasUnviewed ? activeRingColor : Colors.transparent,
                   shape: BoxShape.circle,
-                  border: Border.all(color: cs.surface, width: 3),
+                  border: Border.all(
+                    color: hasUnviewed
+                        ? cs.surface
+                        : Colors.white.withOpacity(0.4),
+                    width: ringBorderWidth,
+                  ),
                 ),
                 child: CircleAvatar(
                   radius: 18,
@@ -622,6 +840,12 @@ class _StoryCardFromApi extends StatelessWidget {
       ),
     );
   }
+}
+
+class _EligiblePostEntry {
+  final int index;
+  final String id;
+  const _EligiblePostEntry({required this.index, required this.id});
 }
 
 class _CreateStoryCard extends StatelessWidget {
@@ -851,7 +1075,7 @@ class SocialPostCard extends StatelessWidget {
 
     final int reactionCount = post.reactionCount;
     final int commentCount = post.commentCount;
-    // shareCount đã có ở trên
+    // shareCount Ä‘Ã£ cÃ³ á»Ÿ trÃªn
 
     final bool showReactions = reactionCount > 0;
     final bool showComments = commentCount > 0;
@@ -869,435 +1093,278 @@ class SocialPostCard extends StatelessWidget {
 
     return Container(
       margin: const EdgeInsets.only(top: 8),
-      color: baseColor,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                // ==== Avatar (bấm để mở ProfileScreen) ====
-                InkWell(
-                  borderRadius: BorderRadius.circular(40),
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            ProfileScreen(targetUserId: post.publisherId),
-                        // targetUserId: post.publisherId,
-                      ),
-                    );
-                  },
-                  child: CircleAvatar(
-                    radius: 20,
-                    backgroundColor: cs.surfaceVariant,
-                    backgroundImage:
-                        (post.userAvatar != null && post.userAvatar!.isNotEmpty)
-                            ? CachedNetworkImageProvider(post.userAvatar!)
-                            : null,
-                    child: (post.userAvatar == null || post.userAvatar!.isEmpty)
-                        ? Text(
-                            (post.userName?.isNotEmpty ?? false)
-                                ? post.userName![0].toUpperCase()
-                                : '?',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: onSurface,
-                            ),
-                          )
-                        : null,
-                  ),
-                ),
-
-                const SizedBox(width: 10),
-
-                // ==== Cột tên + time (bấm để mở ProfileScreen) ====
-                Expanded(
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(6),
+      child: Material(
+        color: baseColor,
+        elevation: 1,
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  // ==== Avatar (báº¥m Ä‘á»ƒ má»Ÿ ProfileScreen) ====
+                  InkWell(
+                    borderRadius: BorderRadius.circular(40),
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) =>
                               ProfileScreen(targetUserId: post.publisherId),
-                          // targetUserId: post.publisherId,
                         ),
                       );
                     },
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // userName + postType cùng 1 dòng
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                post.userName ?? '',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: onSurface,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (post.isGroupPost &&
-                                ((post.groupTitle ?? post.groupName)
-                                        ?.isNotEmpty ??
-                                    false)) ...[
-                              const SizedBox(width: 6),
-                              Icon(
-                                Icons.chevron_right,
-                                size: 16,
-                                color: onSurface.withOpacity(.6),
-                              ),
-                              const SizedBox(width: 4),
+                    child: CircleAvatar(
+                      radius: 20,
+                      backgroundColor: cs.surfaceVariant,
+                      backgroundImage: (post.userAvatar != null &&
+                              post.userAvatar!.isNotEmpty)
+                          ? CachedNetworkImageProvider(post.userAvatar!)
+                          : null,
+                      child:
+                          (post.userAvatar == null || post.userAvatar!.isEmpty)
+                              ? Text(
+                                  (post.userName?.isNotEmpty ?? false)
+                                      ? post.userName![0].toUpperCase()
+                                      : '?',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: onSurface,
+                                  ),
+                                )
+                              : null,
+                    ),
+                  ),
+
+                  const SizedBox(width: 10),
+
+                  // ==== Cá»™t tÃªn + time (báº¥m Ä‘á»ƒ má»Ÿ ProfileScreen) ====
+                  Expanded(
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(6),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                ProfileScreen(targetUserId: post.publisherId),
+                          ),
+                        );
+                      },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // userName + postType cÃ¹ng 1 dÃ²ng
+                          Row(
+                            children: [
                               Flexible(
-                                child: GestureDetector(
-                                  onTap: (post.groupId?.isNotEmpty ?? false)
-                                      ? () => _openGroupDetailFromPost(
-                                          context, post)
-                                      : null,
+                                child: Text(
+                                  post.userName ?? '',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: onSurface,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (post.isGroupPost &&
+                                  ((post.groupTitle ?? post.groupName)
+                                          ?.isNotEmpty ??
+                                      false)) ...[
+                                const SizedBox(width: 6),
+                                Icon(
+                                  Icons.chevron_right,
+                                  size: 16,
+                                  color: onSurface.withOpacity(.6),
+                                ),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: GestureDetector(
+                                    onTap: (post.groupId?.isNotEmpty ?? false)
+                                        ? () => _openGroupDetailFromPost(
+                                            context, post)
+                                        : null,
+                                    child: Text(
+                                      post.groupTitle ?? post.groupName ?? '',
+                                      style: TextStyle(
+                                        color: onSurface.withOpacity(.75),
+                                        fontWeight: FontWeight.w600,
+                                        decoration:
+                                            (post.groupId?.isNotEmpty ?? false)
+                                                ? TextDecoration.underline
+                                                : TextDecoration.none,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              if (feelingLabel != null &&
+                                  feelingLabel.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                if (feelingEmoji != null)
+                                  Text(
+                                    feelingEmoji,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontSize: 18),
+                                  )
+                                else
+                                  Icon(
+                                    SocialFeelingHelper.iconForPost(post),
+                                    size: 16,
+                                    color: onSurface.withOpacity(.7),
+                                  ),
+                                const SizedBox(width: 4),
+                                Flexible(
                                   child: Text(
-                                    post.groupTitle ?? post.groupName ?? '',
+                                    feelingLabel,
                                     style: TextStyle(
                                       color: onSurface.withOpacity(.75),
-                                      fontWeight: FontWeight.w600,
-                                      decoration:
-                                          (post.groupId?.isNotEmpty ?? false)
-                                              ? TextDecoration.underline
-                                              : TextDecoration.none,
+                                      fontStyle: FontStyle.italic,
                                     ),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                              ),
-                            ],
-                            if (feelingLabel != null &&
-                                feelingLabel.isNotEmpty) ...[
-                              const SizedBox(width: 6),
-                              if (feelingEmoji != null)
-                                Text(
-                                  feelingEmoji,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleMedium
-                                      ?.copyWith(fontSize: 18),
-                                )
-                              else
+                              ] else if ((post.postType ?? '').isNotEmpty) ...[
+                                const SizedBox(width: 6),
                                 Icon(
-                                  SocialFeelingHelper.iconForPost(post),
-                                  size: 16,
-                                  color: onSurface.withOpacity(.7),
-                                ),
-                              const SizedBox(width: 4),
-                              Flexible(
-                                child: Text(
-                                  feelingLabel,
-                                  style: TextStyle(
-                                    color: onSurface.withOpacity(.75),
-                                    fontStyle: FontStyle.italic,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ] else if ((post.postType ?? '').isNotEmpty) ...[
-                              const SizedBox(width: 6),
-                              Icon(
-                                post.postType == 'profile_picture'
-                                    ? Icons.person_outline
-                                    : post.postType == 'profile_cover_picture'
-                                        ? Icons.collections
-                                        : Icons.article_outlined,
-                                size: 16,
-                                color: onSurface.withOpacity(.6),
-                              ),
-                              const SizedBox(width: 4),
-                              Flexible(
-                                child: Text(
                                   post.postType == 'profile_picture'
-                                      ? (getTranslated(
-                                              'updated_profile_picture',
-                                              context) ??
-                                          'updated profile picture')
+                                      ? Icons.person_outline
                                       : post.postType == 'profile_cover_picture'
-                                          ? (getTranslated(
-                                                  'updated_cover_photo',
-                                                  context) ??
-                                              'updated cover photo')
-                                          : post.postType!,
-                                  style: TextStyle(
-                                    color: onSurface.withOpacity(.7),
-                                    fontStyle: FontStyle.italic,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                        Text(
-                          post.timeText ?? '',
-                          style: TextStyle(
-                            color: onSurface.withOpacity(.6),
-                            fontSize: 13,
-                          ),
-                        ),
-                        if (hasLocation)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.place_outlined,
-                                  size: 14,
-                                  color: onSurface.withOpacity(.65),
+                                          ? Icons.collections
+                                          : Icons.article_outlined,
+                                  size: 16,
+                                  color: onSurface.withOpacity(.6),
                                 ),
                                 const SizedBox(width: 4),
-                                Expanded(
+                                Flexible(
                                   child: Text(
-                                    postLocation!,
+                                    post.postType == 'profile_picture'
+                                        ? (getTranslated(
+                                                'updated_profile_picture',
+                                                context) ??
+                                            'updated profile picture')
+                                        : post.postType ==
+                                                'profile_cover_picture'
+                                            ? (getTranslated(
+                                                    'updated_cover_photo',
+                                                    context) ??
+                                                'updated cover photo')
+                                            : post.postType!,
                                     style: TextStyle(
                                       color: onSurface.withOpacity(.7),
-                                      fontSize: 13,
+                                      fontStyle: FontStyle.italic,
                                     ),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                               ],
+                            ],
+                          ),
+                          Text(
+                            post.timeText ?? '',
+                            style: TextStyle(
+                              color: onSurface.withOpacity(.6),
+                              fontSize: 13,
                             ),
                           ),
-                        // if (hasSharedPost)
-                        //   Padding(
-                        //     padding: const EdgeInsets.only(top: 2),
-                        //     child: Text(
-                        //       _sharedSubtitleText(context, post),
-                        //       style: TextStyle(
-                        //         color: onSurface.withOpacity(.7),
-                        //         fontSize: 13,
-                        //       ),
-                        //     ),
-                        //   ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                IconButton(
-                  icon: postActionBusy
-                      ? SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color?>(
-                              onSurface.withOpacity(.7),
+                          if (hasLocation)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.place_outlined,
+                                    size: 14,
+                                    color: onSurface.withOpacity(.65),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      postLocation!,
+                                      style: TextStyle(
+                                        color: onSurface.withOpacity(.7),
+                                        fontSize: 13,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        )
-                      : Icon(
-                          Icons.more_horiz,
-                          color: onSurface.withOpacity(.7),
-                        ),
-                  onPressed: postActionBusy
-                      ? null
-                      : () => _showPostOptions(context, post),
-                ),
-              ],
-            ),
-          ),
-
-          // Text
-          SocialPostTextBlock(post: post),
-
-          // Poll
-          if (post.pollOptions != null && post.pollOptions!.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (final opt in post.pollOptions!) ...[
-                    Text(opt['text']?.toString() ?? ''),
-                    const SizedBox(height: 6),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: LinearProgressIndicator(
-                        value: (((double.tryParse((opt['percentage_num'] ?? '0')
-                                        .toString()) ??
-                                    0.0) /
-                                100.0))
-                            .clamp(0, 1),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 10),
-                  ],
+                  ),
+
+                  IconButton(
+                    icon: postActionBusy
+                        ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color?>(
+                                onSurface.withOpacity(.7),
+                              ),
+                            ),
+                          )
+                        : Icon(
+                            Icons.more_horiz,
+                            color: onSurface.withOpacity(.7),
+                          ),
+                    onPressed: postActionBusy
+                        ? null
+                        : () => _showPostOptions(context, post),
+                  ),
                 ],
               ),
             ),
 
-          if (mediaContent != null) ...[
-            SizedBox(height: mediaTopSpacing),
-            mediaContent,
-            const SizedBox(height: 8),
-          ],
+            // Text
+            SocialPostTextBlock(post: post),
 
-          if (showStats)
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => SocialPostDetailScreen(post: post),
-                    ),
-                  );
-                },
+            // Poll
+            if (post.pollOptions != null && post.pollOptions!.isNotEmpty)
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      child: Row(
-                        children: [
-                          if (showReactions)
-                            Expanded(
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (topReactions.isNotEmpty)
-                                    _ReactionIconStack(labels: topReactions),
-                                  if (topReactions.isNotEmpty)
-                                    const SizedBox(width: 6),
-                                  Text(
-                                    _formatSocialCount(reactionCount),
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall
-                                        ?.copyWith(
-                                          color: onSurface.withOpacity(.85),
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                  ),
-                                ],
-                              ),
-                            )
-                          else
-                            const Expanded(child: SizedBox.shrink()),
-                          const SizedBox(width: 12),
-                          Flexible(
-                            child: Align(
-                              alignment: Alignment.centerRight,
-                              child: Wrap(
-                                spacing: 12,
-                                children: [
-                                  if (showComments)
-                                    Text(
-                                      '${_formatSocialCount(commentCount)} ${getTranslated("comments", context) ?? "comments"}',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                            color: onSurface.withOpacity(.7),
-                                          ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  if (showShares)
-                                    Text(
-                                      '${_formatSocialCount(shareCount)} ${getTranslated("share_plural", context) ?? "shares"}',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                            color: onSurface.withOpacity(.7),
-                                          ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
+                    for (final opt in post.pollOptions!) ...[
+                      Text(opt['text']?.toString() ?? ''),
+                      const SizedBox(height: 6),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: LinearProgressIndicator(
+                          value: (((double.tryParse(
+                                          (opt['percentage_num'] ?? '0')
+                                              .toString()) ??
+                                      0.0) /
+                                  100.0))
+                              .clamp(0, 1),
+                        ),
                       ),
-                    ),
-                    Divider(
-                      height: 1,
-                      thickness: .6,
-                      color: cs.surfaceVariant.withOpacity(.6),
-                    ),
+                      const SizedBox(height: 10),
+                    ],
                   ],
                 ),
               ),
-            ),
 
-          // Actions
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                // Nút Reaction: tap = Like/UnLike; long-press = ch?n reaction
-                Expanded(
-                  child: Builder(
-                    builder: (itemCtx) => InkWell(
-                      onTap: () {
-                        final now = (post.myReaction == 'Like') ? '' : 'Like';
-                        itemCtx
-                            .read<SocialController>()
-                            .reactOnPost(post, now)
-                            .then((updated) {
-                          if (onPostUpdated != null) {
-                            onPostUpdated!(updated);
-                          }
-                        });
-                      },
-                      onLongPress: () {
-                        // Tính t?a d? trung tâm nút Like d? hi?n popup ngay trên nút
-                        final overlayBox = Overlay.of(itemCtx)
-                            .context
-                            .findRenderObject() as RenderBox;
-                        final box = itemCtx.findRenderObject() as RenderBox?;
-                        final Offset centerGlobal = (box != null)
-                            ? box.localToGlobal(box.size.center(Offset.zero),
-                                ancestor: overlayBox)
-                            : overlayBox.size.center(Offset.zero);
+            if (mediaContent != null) ...[
+              SizedBox(height: mediaTopSpacing),
+              mediaContent,
+              const SizedBox(height: 8),
+            ],
 
-                        _showReactionsOverlay(
-                          itemCtx,
-                          centerGlobal,
-                          onSelect: (val) {
-                            itemCtx
-                                .read<SocialController>()
-                                .reactOnPost(post, val)
-                                .then((updated) {
-                              if (onPostUpdated != null) {
-                                onPostUpdated!(updated);
-                              }
-                            });
-                          },
-                        );
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _reactionIcon(post.myReaction),
-                            const SizedBox(width: 6),
-                            Text(
-                              _reactionActionLabel(context, post.myReaction),
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                _PostAction(
-                  icon: Icons.mode_comment_outlined,
-                  label: (getTranslated('comment', context) ?? 'Comment'),
+            if (showStats)
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -1305,26 +1372,178 @@ class SocialPostCard extends StatelessWidget {
                       ),
                     );
                   },
-                ),
-                _PostAction(
-                  icon: Icons.share_outlined,
-                  label: (getTranslated('share', context) ?? 'Share'),
-                  loading: isSharing,
-                  onTap: isSharing
-                      ? null
-                      : () async {
-                          await Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => SharePostScreen(post: post),
-                              fullscreenDialog: true,
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        child: Row(
+                          children: [
+                            if (showReactions)
+                              Expanded(
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (topReactions.isNotEmpty)
+                                      _ReactionIconStack(labels: topReactions),
+                                    if (topReactions.isNotEmpty)
+                                      const SizedBox(width: 6),
+                                    Text(
+                                      _formatSocialCount(reactionCount),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: onSurface.withOpacity(.85),
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else
+                              const Expanded(child: SizedBox.shrink()),
+                            const SizedBox(width: 12),
+                            Flexible(
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: Wrap(
+                                  spacing: 12,
+                                  children: [
+                                    if (showComments)
+                                      Text(
+                                        '${_formatSocialCount(commentCount)} ${getTranslated("comments", context) ?? "comments"}',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: onSurface.withOpacity(.7),
+                                            ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    if (showShares)
+                                      Text(
+                                        '${_formatSocialCount(shareCount)} ${getTranslated("share_plural", context) ?? "shares"}',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: onSurface.withOpacity(.7),
+                                            ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                  ],
+                                ),
+                              ),
                             ),
+                          ],
+                        ),
+                      ),
+                      Divider(
+                        height: 1,
+                        thickness: .6,
+                        color: cs.surfaceVariant.withOpacity(.6),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+            // Actions
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  Expanded(
+                    child: Builder(
+                      builder: (itemCtx) => InkWell(
+                        onTap: () {
+                          final now = (post.myReaction == 'Like') ? '' : 'Like';
+                          itemCtx
+                              .read<SocialController>()
+                              .reactOnPost(post, now)
+                              .then((updated) {
+                            if (onPostUpdated != null) {
+                              onPostUpdated!(updated);
+                            }
+                          });
+                        },
+                        onLongPress: () {
+                          final overlayBox = Overlay.of(itemCtx)
+                              .context
+                              .findRenderObject() as RenderBox;
+                          final box = itemCtx.findRenderObject() as RenderBox?;
+                          final Offset centerGlobal = (box != null)
+                              ? box.localToGlobal(
+                                  box.size.center(Offset.zero),
+                                  ancestor: overlayBox,
+                                )
+                              : overlayBox.size.center(Offset.zero);
+
+                          _showReactionsOverlay(
+                            itemCtx,
+                            centerGlobal,
+                            onSelect: (val) {
+                              itemCtx
+                                  .read<SocialController>()
+                                  .reactOnPost(post, val)
+                                  .then((updated) {
+                                if (onPostUpdated != null) {
+                                  onPostUpdated!(updated);
+                                }
+                              });
+                            },
                           );
                         },
-                ),
-              ],
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _reactionIcon(post.myReaction),
+                              const SizedBox(width: 6),
+                              Text(
+                                _reactionActionLabel(context, post.myReaction),
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  _PostAction(
+                    icon: Icons.mode_comment_outlined,
+                    label: (getTranslated('comment', context) ?? 'Comment'),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => SocialPostDetailScreen(post: post),
+                        ),
+                      );
+                    },
+                  ),
+                  _PostAction(
+                    icon: Icons.share_outlined,
+                    label: (getTranslated('share', context) ?? 'Share'),
+                    loading: isSharing,
+                    onTap: isSharing
+                        ? null
+                        : () async {
+                            await Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => SharePostScreen(post: post),
+                                fullscreenDialog: true,
+                              ),
+                            );
+                          },
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1467,6 +1686,140 @@ class SocialPostCard extends StatelessWidget {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => SocialPostDetailScreen(post: shared),
+      ),
+    );
+  }
+}
+
+class _PostAdCard extends StatefulWidget {
+  final AdsModel ad;
+  const _PostAdCard({required this.ad});
+
+  @override
+  State<_PostAdCard> createState() => _PostAdCardState();
+}
+
+class _PostAdCardState extends State<_PostAdCard> {
+  bool _viewLogged = false;
+
+  String _title() {
+    return (widget.ad.headline?.trim().isNotEmpty ?? false)
+        ? widget.ad.headline!.trim()
+        : (widget.ad.name ?? 'Qu���ng cA�o');
+  }
+
+  String? _description() {
+    final String? desc = widget.ad.description?.trim();
+    if (desc == null || desc.isEmpty) return null;
+    return desc;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scheduleViewLog();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PostAdCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.ad.id != widget.ad.id) {
+      _viewLogged = false;
+      _scheduleViewLog();
+    }
+  }
+
+  void _scheduleViewLog() {
+    if (_viewLogged) return;
+    if (widget.ad.id == null) return;
+    _viewLogged = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final SocialController controller = context.read<SocialController>();
+      controller.trackAdView(ad: widget.ad);
+    });
+  }
+
+  Future<void> _handleAdClick() async {
+    final SocialController controller = context.read<SocialController>();
+    controller.trackAdClick(ad: widget.ad);
+    await _launchAdUrl(context, widget.ad.website);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme cs = Theme.of(context).colorScheme;
+    final String? media = widget.ad.mediaUrl;
+    final String? description = _description();
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Material(
+        color: cs.surface,
+        elevation: 1,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: _handleAdClick,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (media != null && media.isNotEmpty)
+                CachedNetworkImage(
+                  imageUrl: media,
+                  width: double.infinity,
+                  height: 220,
+                  fit: BoxFit.cover,
+                ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Được tài trợ',
+                      style: TextStyle(
+                        color: cs.onSurface.withOpacity(.6),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      _title(),
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (description != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        description,
+                        style: TextStyle(
+                          color: cs.onSurface.withOpacity(.85),
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: ElevatedButton(
+                        onPressed: _handleAdClick,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              Theme.of(context).colorScheme.primary,
+                          foregroundColor: Colors.white, // mA�u ch��_ + icon
+                        ),
+                        child: const Text('Tìm hiểu thêm'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1710,7 +2063,7 @@ class _ImageGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ép kích thu?c t?ng th? con bám trong c?t/ràng bu?c
+    // Ã©p kÃ­ch thu?c t?ng th? con bÃ¡m trong c?t/rÃ ng bu?c
     final double aspect = urls.length == 1 ? (16 / 9) : (16 / 9);
     return AspectRatio(
       aspectRatio: aspect,
@@ -1797,7 +2150,7 @@ class _ImageGrid extends StatelessWidget {
     }
   }
 
-  // ?nh vuông dùng bên trong grid
+  // ?nh vuÃ´ng dÃ¹ng bÃªn trong grid
   Widget _square(String u) => AspectRatio(
         aspectRatio: 1,
         child: _tile(u),
@@ -1999,13 +2352,13 @@ void _showReactionsOverlay(
         overlay.context.findRenderObject() as RenderBox;
     final Offset local = overlayBox.globalToLocal(globalPos);
 
-    // Kích thu?c khung popup, canh n?m ngay trên nút
+    // KÃ­ch thu?c khung popup, canh n?m ngay trÃªn nÃºt
     const double popupWidth = 300;
     const double popupHeight = 56;
 
     return Stack(
       children: [
-        // Tap ra ngoài d? t?t
+        // Tap ra ngoÃ i d? t?t
         Positioned.fill(
           child: GestureDetector(onTap: () => entry.remove()),
         ),
