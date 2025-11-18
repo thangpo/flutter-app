@@ -48,7 +48,10 @@ class SocialController with ChangeNotifier {
   bool get creatingStory => _creatingStory;
 
   bool _creatingPoke= false;
+  bool get creatingPoke => _creatingPoke;
 
+  bool _addingFamily = false;
+  bool get addingFamily => _addingFamily;
 
   bool _loadingUser = false;
   SocialUser? _currentUser;
@@ -1373,6 +1376,23 @@ class SocialController with ChangeNotifier {
       return ok;
     } catch (_) {
       return false;
+    }
+  }
+  // ================= ADD TO FAMILY =================
+  Future<bool> addToFamily(int userId, String relationshipType) async {
+    if (_addingFamily) return false;
+    _addingFamily = true;
+    notifyListeners();
+
+    try {
+      final bool ok = await service.addToFamily(userId, relationshipType);
+      return ok;
+    } catch (e) {
+      showCustomSnackBar(e.toString(), Get.context!, isError: true);
+      return false;
+    } finally {
+      _addingFamily = false;
+      notifyListeners();
     }
   }
 

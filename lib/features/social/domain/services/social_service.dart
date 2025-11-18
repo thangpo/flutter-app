@@ -685,6 +685,31 @@ class SocialService implements SocialServiceInterface {
     }
     return false;
   }
+  // ================= ADD TO FAMILY =================
+  @override
+  Future<bool> addToFamily(int userId, String relationshipType) async {
+    final resp =
+    await socialRepository.addToFamily(userId, relationshipType);
+    if (resp.isSuccess && resp.response != null) {
+      final raw = resp.response!.data;
+      final Map<String, dynamic> data =
+      raw is Map<String, dynamic> ? raw : jsonDecode(raw.toString());
+      final int status = int.tryParse('${data['api_status'] ?? 0}') ?? 0;
+
+      if (status == 200) return true; // request gửi OK
+      if (status == 400) return false; // ví dụ: đã gửi trước đó
+
+      final String message = (data['errors']?['error_text'] ??
+          data['message'] ??
+          '')
+          .toString();
+      throw Exception(
+          message.isNotEmpty ? message : 'Add to family failed');
+    }
+
+    ApiChecker.checkApi(resp);
+    throw Exception('Add to family failed');
+  }
 
   @override
   Future<SocialStoryViewersPage> getStoryViews(

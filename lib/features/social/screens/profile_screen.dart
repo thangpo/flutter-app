@@ -25,6 +25,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/member_list_
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/wallet_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/pokes_screen.dart';
 import 'package:video_player/video_player.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/widgets/add_to_family_sheet.dart';
 
 /// Tab hiện tại
 enum _ProfileTab { posts, about, reels, photos }
@@ -1360,125 +1361,187 @@ void _showOtherProfileMenu(BuildContext context, SocialUserProfile user) {
   final theme = Theme.of(context);
   final sc = context.read<SocialController>();
   final bool isBlocked = sc.profileHeaderUser?.isBlocked ?? user.isBlocked;
+
   showModalBottomSheet(
     context: context,
     useRootNavigator: true,
-    isScrollControlled: false,
+    isScrollControlled: true, // ✅ cho phép sheet cao & cuộn
     backgroundColor: Colors.transparent,
-    builder: (_) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(2),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-                decoration: BoxDecoration(
-                  color: theme.cardColor,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
+    builder: (_) {
+      final media = MediaQuery.of(context);
+
+      return SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: 2,
+            right: 2,
+            bottom: media.viewInsets.bottom + 2,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ✅ phần menu chính được bọc Flexible để nếu cao quá sẽ co lại + scroll
+              Flexible(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: theme.cardColor,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
                         color: Colors.black.withOpacity(0.08),
                         blurRadius: 12,
-                        offset: const Offset(0, 6))
-                  ],
-                ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Padding(
+                        offset: const Offset(0, 6),
+                      )
+                    ],
+                  ),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Padding(
                           padding: const EdgeInsets.symmetric(vertical: 2),
                           child: Container(
-                              width: 40,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                  color: theme.dividerColor,
-                                  borderRadius: BorderRadius.circular(2)))),
-                      ListTile(
-                        leading: CircleAvatar(
+                            width: 40,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: theme.dividerColor,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                        ),
+                        ListTile(
+                          leading: CircleAvatar(
                             radius: 20,
                             backgroundImage:
-                                (user.avatarUrl?.isNotEmpty ?? false)
-                                    ? NetworkImage(user.avatarUrl!)
-                                    : null,
+                            (user.avatarUrl?.isNotEmpty ?? false)
+                                ? NetworkImage(user.avatarUrl!)
+                                : null,
                             child: (user.avatarUrl?.isEmpty ?? true)
                                 ? const Icon(Icons.person)
-                                : null),
-                        title: Text(
+                                : null,
+                          ),
+                          title: Text(
                             user.displayName?.isNotEmpty == true
                                 ? user.displayName!
                                 : (user.userName ??
-                                    getTranslated('user', context) ??
-                                    'Người dùng'),
-                            style:
-                                const TextStyle(fontWeight: FontWeight.w700)),
-                        subtitle: Text('@${user.userName ?? user.id}'),
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        leading:
-                            const Icon(Icons.flag_outlined, color: Colors.red),
-                        title:
-                            Text(getTranslated('report', context) ?? 'Báo cáo'),
-                        subtitle: Text(
+                                getTranslated('user', context) ??
+                                'Người dùng'),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          subtitle: Text('@${user.userName ?? user.id}'),
+                        ),
+                        const Divider(height: 1),
+                        ListTile(
+                          leading: const Icon(
+                            Icons.flag_outlined,
+                            color: Colors.red,
+                          ),
+                          title: Text(
+                            getTranslated('report', context) ?? 'Báo cáo',
+                          ),
+                          subtitle: Text(
                             getTranslated('report_this_profile', context) ??
-                                'Báo cáo trang cá nhân này'),
-                        onTap: () {
-                          Navigator.pop(context);
-                          Future.microtask(() => _showReportUserDialog(context,
-                              targetUserId: user.id));
-                        },
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        leading: const Icon(Icons.block, color: Colors.red),
-                        title: Text(isBlocked
-                            ? (getTranslated('unblock', context) ?? 'Bỏ chặn')
-                            : (getTranslated('block', context) ?? 'Chặn')),
-                        subtitle: Text(isBlocked
-                            ? (getTranslated('allow_interaction', context) ??
+                                'Báo cáo trang cá nhân này',
+                          ),
+                          onTap: () {
+                            Navigator.pop(context);
+                            Future.microtask(
+                                  () => _showReportUserDialog(
+                                context,
+                                targetUserId: user.id,
+                              ),
+                            );
+                          },
+                        ),
+                        const Divider(height: 1),
+                        ListTile(
+                          leading:
+                          const Icon(Icons.block, color: Colors.red),
+                          title: Text(
+                            isBlocked
+                                ? (getTranslated('unblock', context) ??
+                                'Bỏ chặn')
+                                : (getTranslated('block', context) ??
+                                'Chặn'),
+                          ),
+                          subtitle: Text(
+                            isBlocked
+                                ? (getTranslated(
+                                'allow_interaction', context) ??
                                 'Cho phép xem & tương tác lại')
-                            : (getTranslated('block_interaction', context) ??
-                                'Không thấy nội dung và tương tác')),
-                        onTap: () async {
-                          Navigator.pop(context);
-                          await _confirmBlock(context, user,
-                              unblock: isBlocked);
-                        },
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        leading: const Icon(Icons.share_outlined),
-                        title: Text(getTranslated('share_profile', context) ??
-                            'Chia sẻ trang cá nhân'),
-                        onTap: () => Navigator.pop(context),
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        leading: const Icon(Icons.touch_app_rounded),
-                        title: Text(getTranslated('poke', context) ?? 'Chọc'),
-                        onTap: () async {
-                          Navigator.pop(context);
-                          await createPoke(context, user);
-                        },
-                      ),
-                    ],
+                                : (getTranslated(
+                                'block_interaction', context) ??
+                                'Không thấy nội dung và tương tác'),
+                          ),
+                          onTap: () async {
+                            Navigator.pop(context);
+                            await _confirmBlock(
+                              context,
+                              user,
+                              unblock: isBlocked,
+                            );
+                          },
+                        ),
+                        const Divider(height: 1),
+                        ListTile(
+                          leading: const Icon(Icons.share_outlined),
+                          title: Text(
+                            getTranslated('share_profile', context) ??
+                                'Chia sẻ trang cá nhân',
+                          ),
+                          onTap: () => Navigator.pop(context),
+                        ),
+                        const Divider(height: 1),
+                        ListTile(
+                          leading: const Icon(Icons.touch_app_rounded),
+                          title: Text(
+                            getTranslated('poke', context) ?? 'Chọc',
+                          ),
+                          onTap: () async {
+                            Navigator.pop(context);
+                            await createPoke(context, user);
+                          },
+                        ),
+                        const Divider(height: 1),
+                        ListTile(
+                          leading: const Icon(Icons.family_restroom),
+                          title: Text(
+                            getTranslated('add_to_family', context) ??
+                                'Thêm vào gia đình',
+                          ),
+                          onTap: () async {
+                            Navigator.pop(context);
+                            await showAddToFamilySheet(context, user);
+                          },
+                        ),
+                      ],
+                    ),
                   ),
-                )),
-            const SizedBox(height: 8),
-            Container(
-              decoration: BoxDecoration(
+                ),
+              ),
+              const SizedBox(height: 8),
+              // nút Cancel luôn thấy được ở dưới
+              Container(
+                decoration: BoxDecoration(
                   color: theme.cardColor,
-                  borderRadius: BorderRadius.circular(16)),
-              child: ListTile(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: ListTile(
                   title: Center(
-                      child: Text(getTranslated('cancel', context) ?? 'Hủy')),
-                  onTap: () => Navigator.pop(context)),
-            ),
-          ],
+                    child: Text(
+                      getTranslated('cancel', context) ?? 'Hủy',
+                    ),
+                  ),
+                  onTap: () => Navigator.pop(context),
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
-    ),
+      );
+    },
   );
 }
 
@@ -1664,7 +1727,7 @@ Future<void> createPoke(BuildContext context, SocialUserProfile user) async {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Đã chọc ${user.displayName}')),
     );
-  }else {
+  } else {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Bạn đã chọc người này rồi!')),
     );
