@@ -1,4 +1,4 @@
-package com.vnshop247
+package com.vnsshop.ecommerce
 
 import io.flutter.embedding.android.FlutterActivity
 

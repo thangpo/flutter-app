@@ -68,7 +68,7 @@ class SocialPost {
   // Location / check-in
   final String? postMap;
   final String? backgroundColorId;
-
+  bool get isPagePost => pageId != null && pageId != '0';
   const SocialPost({
     required this.id,
     this.publisherId, // <-- NEW
