@@ -1,3 +1,4 @@
+// G:\flutter-app\lib\features\social\domain\models\social_friend.dart
 class SocialFriend {
   final String id;
   final String name;
@@ -5,12 +6,17 @@ class SocialFriend {
   final bool isOnline;
   final String? lastSeen;
 
+  /// Thời gian tin nhắn cuối cùng (timestamp, ví dụ: seconds hoặc milliseconds)
+  /// Dùng để sort đoạn chat mới nhất lên trên. Có thể null nếu backend chưa trả.
+  final int? lastMessageTime;
+
   SocialFriend({
     required this.id,
     required this.name,
     this.avatar,
     this.isOnline = false,
     this.lastSeen,
+    this.lastMessageTime,
   });
 
   /// Parse theo cấu trúc trả về phổ biến của WoWonder
@@ -29,12 +35,26 @@ class SocialFriend {
     final lastSeenText =
         (j['lastseen_time_text'] ?? j['last_seen_text'])?.toString();
 
+    // 👇 cố gắng đọc thời gian tin nhắn cuối nếu backend có trả
+    // (không có thì sẽ là null, app vẫn chạy bình thường)
+    dynamic lastMsgTimeRaw = j['last_message_time'] ??
+        j['last_msg_time'] ??
+        j['last_message']?['time'];
+
+    int? lastMessageTime;
+    if (lastMsgTimeRaw is num) {
+      lastMessageTime = lastMsgTimeRaw.toInt();
+    } else if (lastMsgTimeRaw is String) {
+      lastMessageTime = int.tryParse(lastMsgTimeRaw);
+    }
+
     return SocialFriend(
       id: id,
       name: name,
       avatar: avatar,
       isOnline: isOnline,
       lastSeen: lastSeenText,
+      lastMessageTime: lastMessageTime,
     );
   }
 }

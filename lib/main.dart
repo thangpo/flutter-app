@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
@@ -7,7 +8,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_downloader/flutter_downloader.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:flutter_sixvalley_ecommerce/data/local/cache_response.dart';
+
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/facebook_login_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/google_login_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/banner/controllers/banner_controller.dart';
@@ -54,23 +59,37 @@ import 'package:flutter_sixvalley_ecommerce/theme/light_theme.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/screens/login_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/booking_confirm_screen.dart';
-import 'package:provider/provider.dart';
-import 'di_container.dart' as di;
+
+// Localization
+import 'helper/custom_delegate.dart';
+import 'localization/app_localization.dart';
+
+// Notification screen
+import 'package:flutter_sixvalley_ecommerce/features/notification/screens/notification_screen.dart';
+
+// Social modules
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_group_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_service_interface.dart';
-import 'helper/custom_delegate.dart';
-import 'localization/app_localization.dart';
 import 'features/social/controllers/group_chat_controller.dart';
 import 'features/social/domain/repositories/group_chat_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_notifications_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_notifications_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/firebase_token_updater.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/push_navigation_helper.dart';
+
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/incoming_call_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/call_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/call_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/webrtc_signaling_repository.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/fcm/fcm_chat_handler.dart';
+
+// Group call
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_call_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/group_call_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/webrtc_group_signaling_repository.dart';
+
+import 'di_container.dart' as di;
 import 'package:flutter_sixvalley_ecommerce/features/notification/screens/notification_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_call_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/webrtc_group_signaling_repository.dart';
@@ -86,9 +105,9 @@ final FirebaseAnalyticsObserver observer = FirebaseAnalyticsObserver(analytics: 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 FlutterLocalNotificationsPlugin();
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
-
 final database = AppDatabase();
 
+// tránh mở màn nhận cuộc gọi trùng
 bool _incomingCallRouting = false;
 
 const AndroidNotificationChannel _callInviteChannel =
@@ -101,9 +120,10 @@ AndroidNotificationChannel(
   enableVibration: true,
 );
 
-// Background handler
+// Background FCM
 Future<void> myBackgroundMessageHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
+  
 }
 
 // =================== ANALYTICS HELPER ===================
@@ -202,6 +222,7 @@ Future<void> _showIncomingCallNotification(Map<String, dynamic> data) async {
   );
 }
 
+
 void _handleCallInviteOpen(Map<String, dynamic> data) {
   if (_incomingCallRouting) return;
   _incomingCallRouting = true;
@@ -213,13 +234,38 @@ void _handleCallInviteOpen(Map<String, dynamic> data) {
   }
 
   final callIdStr = data['call_id']?.toString();
-  final media = (data['media']?.toString() == 'video') ? 'video' : 'audio';
   final callId = int.tryParse(callIdStr ?? '');
+  final media = (data['media']?.toString() == 'video') ? 'video' : 'audio';
+
   if (callId == null) {
     _incomingCallRouting = false;
     return;
   }
 
+  final callerName = data['caller_name']?.toString();
+  final callerAvatar = data['caller_avatar']?.toString();
+
+  nav
+      .push(
+        MaterialPageRoute(
+          builder: (_) => IncomingCallScreen(
+            callId: callId,
+            mediaType: media,
+            callerName: callerName ?? 'Cuộc gọi đến',
+            callerAvatar: callerAvatar,
+          ),
+        ),
+      )
+      .whenComplete(() => _incomingCallRouting = false);
+}
+
+// ===== GROUP: open UI khi có lời mời nhóm =====
+void _handleGroupCallInviteOpen(Map<String, dynamic> data) {
+  if (_incomingCallRouting) return;
+  _incomingCallRouting = true;
+
+  final nav = navigatorKey.currentState;
+  if (nav == null) {
   final ctx = nav.overlay?.context;
   if (ctx != null) {
     final cc = Provider.of<CallController>(ctx, listen: false);
@@ -247,15 +293,75 @@ void _handleCallInviteOpen(Map<String, dynamic> data) {
         .whenComplete(() => _incomingCallRouting = false);
   } else {
     _incomingCallRouting = false;
+    return;
   }
+
+  final callId = int.tryParse(data['call_id']?.toString() ?? '');
+  final groupId = data['group_id']?.toString();
+  final media = (data['media']?.toString() == 'video') ? 'video' : 'audio';
+
+  if (callId == null || groupId == null || groupId.isEmpty) {
+    _incomingCallRouting = false;
+    return;
+  }
+
+  nav
+      .push(
+        MaterialPageRoute(
+          builder: (_) => GroupCallScreen(
+            groupId: groupId,
+            mediaType: media,
+            callId: callId,
+            groupName: 'Cuộc gọi nhóm',
+          ),
+        ),
+      )
+      .whenComplete(() => _incomingCallRouting = false);
+}
+
+/// =========================
+/// Helpers: đảm bảo navigator sẵn sàng
+/// dùng cho getInitialMessage (terminated app)
+/// =========================
+Future<void> _waitNavigatorAndOpen(void Function() openFn) async {
+  for (int i = 0; i < 20; i++) {
+    final nav = navigatorKey.currentState;
+    if (nav != null) {
+      openFn();
+      return;
+    }
+    await Future.delayed(const Duration(milliseconds: 100));
+  }
+}
+
+Future<void> _scheduleCallInviteOpen(Map<String, dynamic> data) async {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    _waitNavigatorAndOpen(() => _handleCallInviteOpen(data));
+  });
+}
+
+Future<void> _scheduleGroupCallInviteOpen(Map<String, dynamic> data) async {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    _waitNavigatorAndOpen(() => _handleGroupCallInviteOpen(data));
+  });
 }
 
 Future<void> main() async {
   HttpOverrides.global = MyHttpOverrides();
   WidgetsFlutterBinding.ensureInitialized();
+  
 
   // =================== FIREBASE INITIALIZATION ===================
   if (Firebase.apps.isEmpty) {
+    if (Platform.isAndroid) {
+      await Firebase.initializeApp(
+        options: const FirebaseOptions(
+          apiKey: AppConstants.fcmApiKey,
+          appId: AppConstants.fcmMobilesdkAppId,
+          messagingSenderId: AppConstants.fcmProjectNumber,
+          projectId: AppConstants.fcmProjectId,
+        ),
+      );
     try {
       if (Platform.isAndroid) {
         await Firebase.initializeApp(
@@ -278,6 +384,7 @@ Future<void> main() async {
   } else {
     print('⚠️ Firebase already initialized');
   }
+  FcmChatHandler.initialize();
 
   // =================== APP LIFECYCLE OBSERVER ===================
   WidgetsBinding.instance.addObserver(AppLifecycleObserver());
@@ -287,6 +394,7 @@ Future<void> main() async {
     badge: true,
     sound: true,
   );
+
 
   NotificationSettings settings =
   await FirebaseMessaging.instance.requestPermission(
@@ -302,7 +410,6 @@ Future<void> main() async {
   await FlutterDownloader.initialize(debug: true, ignoreSsl: true);
   await di.init();
 
-  // Gửi FCM token và log analytics sau khi app render
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     await FirebaseTokenUpdater.update();
 
@@ -310,13 +417,14 @@ Future<void> main() async {
     await AnalyticsHelper.logAppOpen();
   });
 
+  // tạo kênh heads-up
   await flutterLocalNotificationsPlugin
       .resolvePlatformSpecificImplementation<
       AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(_callInviteChannel);
 
   const androidInit = AndroidInitializationSettings('notification_icon');
-  final initSettings = const InitializationSettings(android: androidInit);
+  const initSettings = InitializationSettings(android: androidInit);
 
   await flutterLocalNotificationsPlugin.initialize(
     initSettings,
@@ -332,6 +440,13 @@ Future<void> main() async {
           _handleCallInviteOpen(map);
           return;
         }
+
+        // GROUP
+        if ((map['type'] ?? '') == 'call_invite_group') {
+          _handleGroupCallInviteOpen(map);
+          return;
+        }
+
         //  điều hướng social
         if ((map['type'] ?? '') == 'interact') {
           await handlePushNavigationFromMap(map);
@@ -346,13 +461,21 @@ Future<void> main() async {
   FirebaseMessaging.onBackgroundMessage(myBackgroundMessageHandler);
 
   NotificationBody? body;
-  try {
-    final RemoteMessage? initialMessage =
-    await FirebaseMessaging.instance.getInitialMessage();
 
+  try {
+    // app mở từ TERMINATED
+    final RemoteMessage? initialMessage =
+        await FirebaseMessaging.instance.getInitialMessage();
     if (initialMessage != null) {
-      if ((initialMessage.data['type'] ?? '') == 'call_invite') {
-        _handleCallInviteOpen(initialMessage.data);
+      print('🔥 getInitialMessage: ${initialMessage.data}');
+      final t = (initialMessage.data['type'] ?? '').toString();
+
+      if (t == 'call_invite') {
+        await _scheduleCallInviteOpen(initialMessage.data);
+      } else if (t == 'call_invite_group' ||
+          (initialMessage.data.containsKey('call_id') &&
+              initialMessage.data.containsKey('group_id'))) {
+        await _scheduleGroupCallInviteOpen(initialMessage.data);
       } else if (initialMessage.data['api_status'] != null ||
           initialMessage.data['type'] != null) {
         await handlePushNavigation(initialMessage);
@@ -361,17 +484,26 @@ Future<void> main() async {
       }
     }
 
+    // NotificationHelper
     await NotificationHelper.initialize(flutterLocalNotificationsPlugin);
 
+    // user click notification khi BACKGROUND
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
-      if ((message.data['type'] ?? '') == 'call_invite') {
+      print('🔥 onMessageOpenedApp (main): ${message.data}');
+      final t = (message.data['type'] ?? '').toString();
+
+      if (t == 'call_invite') {
         _handleCallInviteOpen(message.data);
         return;
       }
-      if ((message.data['type'] ?? '') == 'interact') {
-        await handlePushNavigation(message);
+      if (t == 'call_invite_group' ||
+          (message.data.containsKey('call_id') &&
+              message.data.containsKey('group_id'))) {
+        _handleGroupCallInviteOpen(message.data);
         return;
       }
+
+      await handlePushNavigation(message);
     });
 
     FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
@@ -379,22 +511,34 @@ Future<void> main() async {
       debugPrint('🔥 onMessage(foreground) data= $data');
 
       final type = (data['type'] ?? '').toString();
+
+      // ưu tiên cuộc gọi: mở UI ngay
+      // 1-1
       if (type == 'call_invite' ||
-          (data.containsKey('call_id') && data.containsKey('media'))) {
+          (data.containsKey('call_id') &&
+              data.containsKey('media') &&
+              !data.containsKey('group_id'))) {
         _handleCallInviteOpen(data);
         return;
       }
 
+      // GROUP
+      if (type == 'call_invite_group' ||
+          (data.containsKey('call_id') && data.containsKey('group_id'))) {
+        _handleGroupCallInviteOpen(data);
+        return;
+      }
+
+      // social notif mặc định
       String? title = message.notification?.title;
       String? bodyText = message.notification?.body;
-
       title ??= (data['title'] ?? data['notification_title'] ?? 'VNShop247')
           .toString();
       bodyText ??=
           (data['body'] ?? data['notification_body'] ?? 'Bạn có thông báo mới')
               .toString();
 
-      if ((title?.isEmpty ?? true) && (bodyText?.isEmpty ?? true)) {
+      if (title.isEmpty && bodyText.isEmpty) {
         debugPrint('ℹ️ No displayable title/body. Skip showing local notif.');
         return;
       }
@@ -485,21 +629,23 @@ Future<void> main() async {
       ChangeNotifierProvider(
           create: (context) => di.sl<SellerProductController>()),
       ChangeNotifierProvider(create: (context) => di.sl<RestockController>()),
+
+      // Social
       ChangeNotifierProvider(
         create: (_) =>
         SocialController(service: di.sl<SocialServiceInterface>())
           ..refresh(),
       ),
+      ChangeNotifierProvider(create: (_) => di.sl<SocialGroupController>()),
       ChangeNotifierProvider(
-        create: (_) => di.sl<SocialGroupController>(),
-      ),
+          create: (_) => GroupChatController(GroupChatRepository())),
       ChangeNotifierProvider(
-        create: (_) => di.sl<SocialPageController>(),
+        create: (_) => SocialNotificationsController(
+          repo: SocialNotificationsRepository(),
+        ),
       ),
 
-      ChangeNotifierProvider(
-        create: (_) => GroupChatController(GroupChatRepository()),
-      ),
+      // 1-1 call
       ChangeNotifierProvider(
         create: (_) => CallController(
           signaling: WebRTCSignalingRepository(
@@ -509,11 +655,8 @@ Future<void> main() async {
           ),
         )..init(),
       ),
-      ChangeNotifierProvider(
-        create: (_) => SocialNotificationsController(
-          repo: SocialNotificationsRepository(),
-        ),
-      ),
+
+      // Group call
       ChangeNotifierProvider(
         create: (_) {
           final repo = WebRTCGroupSignalingRepositoryImpl(
@@ -525,7 +668,6 @@ Future<void> main() async {
             },
             endpointPath: '/api/',
           );
-
           return GroupCallController(signaling: repo)..init();
         },
       ),
@@ -540,10 +682,11 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    List<Locale> locals = [];
-    for (var language in AppConstants.languages) {
-      locals.add(Locale(language.languageCode!, language.countryCode));
-    }
+    final locals = [
+      for (var language in AppConstants.languages)
+        Locale(language.languageCode!, language.countryCode)
+    ];
+
     return Consumer<ThemeController>(builder: (context, themeController, _) {
       return MaterialApp(
         title: AppConstants.appName,
@@ -560,23 +703,23 @@ class MyApp extends StatelessWidget {
           secondaryColor: themeController.selectedPrimaryColor,
         ),
         locale: Provider.of<LocalizationController>(context).locale,
+        // KHÔNG đặt const vì có delegate runtime
         localizationsDelegates: [
           AppLocalization.delegate,
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
-          FallbackLocalizationDelegate()
+          FallbackLocalizationDelegate(),
         ],
         builder: (context, child) {
           return MediaQuery(
-              data: MediaQuery.of(context)
-                  .copyWith(textScaler: TextScaler.noScaling),
-              child: SafeArea(top: false, child: child!));
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.noScaling),
+            child: SafeArea(top: false, child: child!),
+          );
         },
         supportedLocales: locals,
-        home: SplashScreen(
-          body: body,
-        ),
+        home: SplashScreen(body: body),
         routes: {
           '/login': (context) => const LoginScreen(),
           '/booking-confirm': (context) => const BookingConfirmScreen(),

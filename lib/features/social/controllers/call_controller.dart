@@ -1,41 +1,36 @@
-import 'dart:convert';
+// lib/features/social/controllers/call_controller.dart
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../domain/models/ice_candidate_lite.dart';
 import '../domain/repositories/webrtc_signaling_repository.dart';
 
-/// CallController quản lý state & signaling cho 1-1 call (WebRTC).
-/// Tương thích với code cũ:
-/// - getter: ready, activeCallId, activeMediaType
-/// - methods: init(), startCall({calleeId, mediaType}), endCall(),
-///            attachIncoming({callId, mediaType})
-/// Đồng thời cung cấp: sendOffer/Answer/Candidate, action(), attachCall().
 class CallController extends ChangeNotifier {
-  CallController({WebRTCSignalingRepository? signaling})
-      : signaling = signaling ?? WebRTCSignalingRepository();
+  CallController({required this.signaling});
 
-  // ====== deps ======
+  // ===== DEPENDENCY =====
   final WebRTCSignalingRepository signaling;
 
-  // ====== state ======
+  // ===== STATE =====
   bool _ready = false;
+
   int? _callId;
-  String _mediaType = 'audio'; // 'audio' | 'video'
-  String _callStatus = 'ringing'; // ringing | answered | declined | ended
+  String _mediaType = "audio"; // audio | video
+  String _callStatus = "ringing"; // ringing | answered | declined | ended
+
   String? _sdpOffer;
   String? _sdpAnswer;
 
   final List<IceCandidateLite> _iceCandidates = [];
-  final Set<String> _seenOtherCandidates = {}; // de-dup theo candidate string
+  final Set<String> _seen = {}; // dedup ICE
 
   Timer? _pollTimer;
-  bool _isPolling = false;
+  bool _polling = false;
   bool _disposed = false;
 
-  String? lastError; // tiện debug
+  String? lastError;
 
-  // ====== getters (compat + extra) ======
+  // ===== GETTERS =====
   bool get ready => _ready;
   int? get activeCallId => _callId;
   String get activeMediaType => _mediaType;
@@ -44,127 +39,100 @@ class CallController extends ChangeNotifier {
   String? get sdpAnswer => _sdpAnswer;
   List<IceCandidateLite> get iceCandidates => List.unmodifiable(_iceCandidates);
 
-  // ====== lifecycle ======
+  // ===== INIT =====
   Future<void> init() async {
-    // Nếu cần preload gì thêm thì thêm ở đây.
     _ready = true;
     notifyListeners();
   }
 
-  // ====== public high-level APIs (compat với chat_screen cũ) ======
+  // =====================================================================
+  // PUBLIC APIs (để ChatScreen / IncomingCallScreen / CallScreen gọi tới)
+  // =====================================================================
 
-  /// Caller bắt đầu cuộc gọi.
+  /// Caller bắt đầu gọi
   Future<int> startCall({
     required int calleeId,
     required String mediaType,
   }) async {
     try {
-      final created = await signaling.create(
+      final res = await signaling.create(
         recipientId: calleeId,
         mediaType: mediaType,
       );
-      _attachCall(
-        callId: created.callId,
-        mediaType: created.mediaType,
-        initialStatus: created.status,
+
+      _attach(
+        res.callId,
+        res.mediaType,
+        res.status,
       );
-      return created.callId; // <<< quan trọng
+
+      return res.callId;
     } catch (e) {
-      lastError = '$e';
+      lastError = "$e";
       rethrow;
     }
   }
 
-  /// Callee/caller gắn vào call có sẵn (ví dụ từ tin nhắn invite).
+  /// Từ FCM hoặc chỗ khác → gắn cuộc gọi có sẵn
+  void attachCall({
+    required int callId,
+    required String mediaType,
+    String initialStatus = "ringing",
+  }) {
+    _attach(callId, mediaType, initialStatus);
+  }
+
+  /// ✅ Giữ lại cho code cũ: attachIncoming() = alias của attachCall()
   Future<void> attachIncoming({
     required int callId,
     required String mediaType,
   }) async {
-    _attachCall(callId: callId, mediaType: mediaType, initialStatus: 'ringing');
+    attachCall(callId: callId, mediaType: mediaType, initialStatus: "ringing");
   }
 
-  /// Kết thúc cuộc gọi (cả 2 phía có thể gọi).
-  Future<void> endCall() async {
-    final id = _callId;
-    if (id != null) {
-      try {
-        await signaling.action(callId: id, action: 'end');
-      } catch (e) {
-        lastError = '$e';
-      }
-    }
-    await detachCall();
-  }
-
-  // ====== lower-level (để IncomingCallScreen/CallScreen dùng) ======
-
-  /// Dùng khi caller muốn explicit "create" để lấy callId.
-  Future<int> createCall({
-    required int recipientId,
-    required String mediaType,
-  }) async {
-    final res =
-        await signaling.create(recipientId: recipientId, mediaType: mediaType);
-    _attachCall(
-      callId: res.callId,
-      mediaType: res.mediaType,
-      initialStatus: res.status,
-    );
-    return res.callId;
-  }
-
-  /// Cho phép gắn call khi đã có callId (ví dụ FCM call_invite).
-  void attachCall({
-    required int callId,
-    required String mediaType,
-    String initialStatus = 'ringing',
-  }) {
-    _attachCall(
-      callId: callId,
-      mediaType: mediaType,
-      initialStatus: initialStatus,
-    );
-  }
-
+  /// Khi nhấn từ chối / peer từ chối / peer end
   Future<void> detachCall() async {
     _stopPolling();
     _resetState(ended: true);
     notifyListeners();
   }
 
+  /// Caller/Callee → gửi OFFER
   Future<void> sendOffer(String sdp) async {
     final id = _callId;
     if (id == null) return;
+
     try {
       await signaling.offer(callId: id, sdp: sdp);
-      // chờ answer qua poll
     } catch (e) {
-      lastError = '$e';
+      lastError = "$e";
       rethrow;
     }
   }
 
+  /// Gửi ANSWER
   Future<void> sendAnswer(String sdp) async {
     final id = _callId;
     if (id == null) return;
+
     try {
       await signaling.answer(callId: id, sdp: sdp);
-      // server set status='answered' trong 'answer'
-      _callStatus = 'answered';
+      _callStatus = "answered";
       notifyListeners();
 
-      // gọi action('answer') để chắc trạng thái đồng bộ (idempotent)
+      // idempotent, update server status
       try {
-        final st = await signaling.action(callId: id, action: 'answer');
-        _callStatus = st.isNotEmpty ? st : 'answered';
+        final st = await signaling.action(callId: id, action: "answer");
+        if (st.isNotEmpty) _callStatus = st;
         notifyListeners();
       } catch (_) {}
     } catch (e) {
-      lastError = '$e';
+      lastError = "$e";
       rethrow;
     }
   }
 
+  /// gửi ICE
   Future<void> sendCandidate({
     required String candidate,
     String? sdpMid,
@@ -172,6 +140,7 @@ class CallController extends ChangeNotifier {
   }) async {
     final id = _callId;
     if (id == null) return;
+
     try {
       await signaling.candidate(
         callId: id,
@@ -180,110 +149,126 @@ class CallController extends ChangeNotifier {
         sdpMLineIndex: sdpMLineIndex,
       );
     } catch (e) {
-      lastError = '$e';
-      // không rethrow để không cản luồng ICE gửi tiếp
+      lastError = "$e";
     }
   }
 
-  /// action: 'answer' | 'decline' | 'end'
+  /// action: answer | decline | end
   Future<void> action(String action) async {
     final id = _callId;
     if (id == null) return;
+
     try {
       final st = await signaling.action(callId: id, action: action);
-      _callStatus = st; // answered / declined / ended
-      if (st == 'declined' || st == 'ended') {
+      _callStatus = st;
+
+      if (st == "declined" || st == "ended") {
         _stopPolling();
       }
       notifyListeners();
     } catch (e) {
-      lastError = '$e';
+      lastError = "$e";
       rethrow;
     }
   }
 
-  // ====== internal ======
-  void _attachCall({
-    required int callId,
-    required String mediaType,
-    String initialStatus = 'ringing',
-  }) {
+  /// Caller nhấn "Hủy" khi đang gọi → end
+  Future<void> endCall() async {
+    final id = _callId;
+    if (id != null) {
+      try {
+        await signaling.action(callId: id, action: "end");
+      } catch (_) {}
+    }
+    await detachCall();
+  }
+
+  // =====================================================================
+  // INTERNAL
+  // =====================================================================
+
+  void _attach(
+    int callId,
+    String mediaType,
+    String initialStatus,
+  ) {
     _callId = callId;
-    _mediaType = (mediaType == 'video') ? 'video' : 'audio';
+    _mediaType = (mediaType == "video") ? "video" : "audio";
     _callStatus = initialStatus;
+
     _sdpOffer = null;
     _sdpAnswer = null;
     _iceCandidates.clear();
-    _seenOtherCandidates.clear();
+    _seen.clear();
+
     _startPolling();
     notifyListeners();
   }
 
   void _startPolling() {
-    if (_isPolling) return;
-    _isPolling = true;
+    if (_polling) return;
 
-    // Hủy timer cũ nếu lỡ còn
+    _polling = true;
     _pollTimer?.cancel();
-    _pollTimer = null;
 
-    _pollOnce(); // poll ngay 1 nhịp
-    _pollTimer = Timer.periodic(const Duration(milliseconds: 1200), (_) {
-      _pollOnce();
-    });
+    _pollOnce(); // chạy ngay 1 nhịp
+
+    _pollTimer = Timer.periodic(
+      const Duration(milliseconds: 900),
+      (_) => _pollOnce(),
+    );
   }
 
   void _stopPolling() {
-    _isPolling = false;
+    _polling = false;
     _pollTimer?.cancel();
     _pollTimer = null;
   }
 
   Future<void> _pollOnce() async {
     if (_disposed) return;
+
     final id = _callId;
     if (id == null) return;
 
     try {
-      final p = await signaling.poll(callId: id);
+      final pkt = await signaling.poll(callId: id);
 
       // status
-      if (p.callStatus != null && p.callStatus!.isNotEmpty) {
-        _callStatus = p.callStatus!;
+      if (pkt.callStatus != null && pkt.callStatus!.isNotEmpty) {
+        _callStatus = pkt.callStatus!;
       }
 
-      // media type (phòng server đổi)
-      if (p.mediaType != null && p.mediaType!.isNotEmpty) {
-        _mediaType = (p.mediaType == 'video') ? 'video' : 'audio';
+      // type
+      if (pkt.mediaType != null && pkt.mediaType!.isNotEmpty) {
+        _mediaType = pkt.mediaType!;
       }
 
-      // SDP từ phía đối diện
-      if (p.sdpOffer != null && p.sdpOffer!.isNotEmpty) {
-        _sdpOffer = p.sdpOffer!;
+      // SDP
+      if (pkt.sdpOffer != null && pkt.sdpOffer!.isNotEmpty) {
+        _sdpOffer = pkt.sdpOffer!;
       }
-      if (p.sdpAnswer != null && p.sdpAnswer!.isNotEmpty) {
-        _sdpAnswer = p.sdpAnswer!;
+      if (pkt.sdpAnswer != null && pkt.sdpAnswer!.isNotEmpty) {
+        _sdpAnswer = pkt.sdpAnswer!;
       }
 
-      // ICE candidates của phía đối diện
-      if (p.iceCandidates.isNotEmpty) {
-        for (final c in p.iceCandidates) {
-          // de-dup đơn giản theo candidate string
-          if (_seenOtherCandidates.add(c.candidate)) {
+      // ICE
+      if (pkt.iceCandidates.isNotEmpty) {
+        for (final c in pkt.iceCandidates) {
+          if (_seen.add(c.candidate)) {
             _iceCandidates.add(c);
           }
         }
       }
 
-      // Nếu đã kết thúc -> dừng poll
-      if (_callStatus == 'declined' || _callStatus == 'ended') {
+      // if ended → stop
+      if (_callStatus == "declined" || _callStatus == "ended") {
         _stopPolling();
       }
 
       notifyListeners();
     } catch (e) {
-      // im lặng 1 nhịp, tiếp tục poll; lưu lastError để debug
-      lastError = '$e';
+      lastError = "$e";
     }
   }
 
@@ -292,8 +277,8 @@ class CallController extends ChangeNotifier {
     _sdpOffer = null;
     _sdpAnswer = null;
     _iceCandidates.clear();
-    _seenOtherCandidates.clear();
-    _callStatus = ended ? 'ended' : 'ringing';
+    _seen.clear();
+    _callStatus = ended ? "ended" : "ringing";
   }
 
   @override

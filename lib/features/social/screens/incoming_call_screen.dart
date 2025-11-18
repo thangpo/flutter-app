@@ -1,3 +1,4 @@
+// lib/features/social/screens/incoming_call_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -6,20 +7,21 @@ import 'call_screen.dart';
 
 class IncomingCallScreen extends StatefulWidget {
   final int callId;
-  final String mediaType; // 'audio' | 'video'
+  final String mediaType; // audio | video
+
   final String? callerName;
-  final String? peerName; // nếu có tên phía bên kia
-  final String? peerAvatar; // nếu có avatar phía bên kia
-  final String? callerAvatar; // legacy
+  final String? callerAvatar; // ✅ giữ lại cho code cũ
+  final String? peerName; // dùng trong ChatScreen
+  final String? peerAvatar; // avatar general
 
   const IncomingCallScreen({
     super.key,
     required this.callId,
     required this.mediaType,
     this.callerName,
+    this.callerAvatar,
     this.peerName,
     this.peerAvatar,
-    this.callerAvatar,
   });
 
   @override
@@ -28,36 +30,23 @@ class IncomingCallScreen extends StatefulWidget {
 
 class _IncomingCallScreenState extends State<IncomingCallScreen> {
   late CallController _cc;
-  late VoidCallback _ccListener;
+  late VoidCallback _listener;
 
   bool _handling = false;
-  bool _attached = false;
-  bool _viewAlive = false;
+  bool _viewAlive = true;
 
   @override
   void initState() {
     super.initState();
-    _viewAlive = true;
 
     _cc = context.read<CallController>();
-    _ccListener = _onControllerChanged;
-    _cc.addListener(_ccListener);
+    _listener = _onControllerChanged;
+    _cc.addListener(_listener);
 
-    // Đảm bảo controller biết call hiện tại (nếu màn này mở từ push/Firebase)
-    _ensureAttach();
+    _attachIfNeeded();
   }
 
-  void _onControllerChanged() {
-    if (!_viewAlive) return;
-
-    final st = _cc.callStatus;
-    if (st == 'declined' || st == 'ended') {
-      // Peer đã kết thúc / từ chối trong khi đang hiện màn "Cuộc gọi đến"
-      if (mounted) Navigator.of(context).maybePop();
-    }
-  }
-
-  void _ensureAttach() {
+  void _attachIfNeeded() {
     if (_cc.activeCallId != widget.callId) {
       _cc.attachCall(
         callId: widget.callId,
@@ -65,33 +54,59 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
         initialStatus: 'ringing',
       );
     }
-    _attached = true;
+  }
+
+  void _onControllerChanged() async {
+    if (!_viewAlive) return;
+
+    final st = _cc.callStatus;
+
+    // ❌ KHÔNG tự đẩy sang CallScreen khi 'answered' nữa
+    // -> chỉ xử lý trường hợp đối phương cúp trước
+    if (st == 'declined' || st == 'ended') {
+      await _safeDetachAndPop();
+    }
+  }
+
+  Future<void> _safeDetachAndPop() async {
+    try {
+      await _cc.detachCall();
+    } catch (_) {}
+
+    if (mounted) {
+      Navigator.of(context).maybePop();
+    }
   }
 
   Future<void> _onAccept() async {
     if (_handling) return;
     setState(() => _handling = true);
 
-    // Gắn call lần nữa để chắc (idempotent)
-    if (!_attached || _cc.activeCallId != widget.callId) {
-      _ensureAttach();
-    }
-
-    // Đánh dấu answered trên server (idempotent, có thể fail im lặng)
+    // Chuẩn Messenger: bấm "Nghe" là vào luôn màn call,
+    // không cần chờ server confirm 'answered'
     try {
       await _cc.action('answer');
-    } catch (_) {}
+    } catch (_) {
+      // Nếu lỗi mạng nhẹ thì vẫn cho user vào màn CallScreen,
+      // WebRTC layer + polling sẽ tự xử lý tiếp.
+    }
 
     if (!mounted) return;
+    _goToCallScreen();
+  }
+
+  void _goToCallScreen() {
+    if (!mounted) return;
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
         builder: (_) => CallScreen(
-          isCaller: false, // callee
+          isCaller: false,
           callId: widget.callId,
           mediaType: widget.mediaType,
           peerName: widget.callerName ?? widget.peerName,
-          peerAvatar: widget.callerAvatar ?? widget.peerAvatar,
+          peerAvatar: widget.peerAvatar ?? widget.callerAvatar,
         ),
       ),
     );
@@ -101,22 +116,17 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     if (_handling) return;
     setState(() => _handling = true);
 
-    // Nếu chưa attach, attach để gọi action được
-    if (!_attached || _cc.activeCallId != widget.callId) {
-      _ensureAttach();
-    }
     try {
       await _cc.action('decline');
     } catch (_) {}
 
-    if (!mounted) return;
-    Navigator.of(context).maybePop();
+    await _safeDetachAndPop();
   }
 
   @override
   void dispose() {
     _viewAlive = false;
-    _cc.removeListener(_ccListener);
+    _cc.removeListener(_listener);
     super.dispose();
   }
 
@@ -124,13 +134,12 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   Widget build(BuildContext context) {
     final isVideo = widget.mediaType == 'video';
     final name = widget.callerName ?? widget.peerName ?? 'Cuộc gọi đến';
+    final avatar = widget.peerAvatar ?? widget.callerAvatar;
 
     return WillPopScope(
       onWillPop: () async {
-        // Back = từ chối
-        if (!_handling) {
-          _onDecline();
-        }
+        // Bấm back = từ chối cuộc gọi (giống Messenger)
+        if (!_handling) _onDecline();
         return false;
       },
       child: Scaffold(
@@ -147,11 +156,16 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
                   CircleAvatar(
                     radius: 56,
                     backgroundColor: Colors.white12,
-                    child: Icon(
-                      isVideo ? Icons.videocam : Icons.call,
-                      size: 48,
-                      color: Colors.white,
-                    ),
+                    backgroundImage: (avatar != null && avatar.isNotEmpty)
+                        ? NetworkImage(avatar)
+                        : null,
+                    child: (avatar == null || avatar.isEmpty)
+                        ? Icon(
+                            isVideo ? Icons.videocam : Icons.call,
+                            size: 48,
+                            color: Colors.white,
+                          )
+                        : null,
                   ),
                   const SizedBox(height: 16),
                   Text(

@@ -6,7 +6,6 @@ import 'create_group_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_list_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 
-
 class GroupChatsScreen extends StatefulWidget {
   final String accessToken;
   const GroupChatsScreen({super.key, required this.accessToken});
@@ -67,16 +66,17 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
         type == 'file';
     String tag = '';
     if (isMedia) {
-      if (type == 'image')
+      if (type == 'image') {
         tag = '[Ảnh]';
-      else if (type == 'video')
+      } else if (type == 'video') {
         tag = '[Video]';
-      else if (type == 'voice' || type == 'audio')
+      } else if (type == 'voice' || type == 'audio') {
         tag = '[Voice]';
-      else if (type == 'file')
+      } else if (type == 'file') {
         tag = '[Tệp]';
-      else
+      } else {
         tag = '[Ảnh/Video]';
+      }
     }
     if (isMedia) return '${sender.isNotEmpty ? "$sender: " : ""}$tag';
     if (text is String && text.isNotEmpty) {
@@ -144,31 +144,22 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
       // === BODY ===
       body: Column(
         children: [
-          // Search
+          // 🔍 Search – cho giống FriendsListScreen
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
             child: TextField(
               controller: _searchCtrl,
               onChanged: (v) =>
                   setState(() => _keyword = v.trim().toLowerCase()),
               decoration: InputDecoration(
-                 hintText: getTranslated('search_group', context),
+                hintText: getTranslated('search_group', context),
                 prefixIcon: const Icon(Icons.search),
                 filled: true,
-                fillColor: cs.surfaceVariant.withOpacity(.35),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                fillColor: cs.surfaceVariant.withOpacity(.5),
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
                 border: OutlineInputBorder(
-                  borderSide: BorderSide(color: cs.outlineVariant),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: cs.outlineVariant),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: cs.primary, width: 1.5),
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(999),
+                  borderSide: BorderSide.none,
                 ),
               ),
             ),
@@ -198,17 +189,11 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
                   );
                 }
 
-
                 return RefreshIndicator(
                   onRefresh: _reloadGroups,
-                  child: ListView.separated(
+                  child: ListView.builder(
                     physics: const AlwaysScrollableScrollPhysics(),
                     itemCount: groups.length,
-                    separatorBuilder: (_, __) => Divider(
-                      height: 1,
-                      indent: 84, // lùi giống Messenger (avatar 56 + padding)
-                      color: cs.outlineVariant.withOpacity(.3),
-                    ),
                     itemBuilder: (_, i) {
                       final g = groups[i];
                       final groupId =
@@ -218,9 +203,9 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
                               .toString();
                       final avatar =
                           (g['avatar'] ?? g['image'] ?? '').toString();
-                      final time = _formatTime(g['last_time'] ??
-                          g['time'] ??
-                          g['last_message_time']);
+                      final time = _formatTime(
+                        g['last_time'] ?? g['time'] ?? g['last_message_time'],
+                      );
                       final preview = _previewText(g);
                       final unread = _unread(g);
                       final muted = _isMuted(g);
@@ -264,14 +249,13 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
 
           return _FooterNav(
             currentIndex: 2, // Màn hình Nhóm Chat
-            chatBadgeCount:
-                0, // nếu có tổng unread của “Đoạn chat” thì set ở đây
+            chatBadgeCount: 0, // có thể map từ màn Đoạn chat nếu cần
             showNotifDot: totalGroupUnread > 0,
             onTap: (i) {
               if (i == 2) return; // đang ở Nhóm Chat rồi
 
               if (i == 0) {
-                // Điều hướng về màn “Đoạn chat” (FriendsList)
+                // Điều hướng về màn “Đoạn chat”
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -282,7 +266,7 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
                 return;
               }
 
-              // TODO: gắn màn “Tin” (i == 1) và “Menu” (i == 3) theo router của bạn
+              // TODO: gắn màn “Tin” (i == 1) và “Menu” (i == 3)
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('Chưa gắn điều hướng cho tab $i')),
               );
@@ -290,13 +274,12 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
           );
         },
       ),
-
     );
   }
 }
 
 /// =====================
-/// Messenger-like tile
+/// Group list item – đồng style với FriendsListScreen
 /// =====================
 class _GroupTile extends StatelessWidget {
   final ColorScheme cs;
@@ -305,8 +288,8 @@ class _GroupTile extends StatelessWidget {
   final String subtitle;
   final String timeText;
   final int unread;
-  final bool muted;
-  final bool online;
+  final bool muted; // hiện tại không vẽ icon nữa, chỉ để dành nếu cần
+  final bool online; // cũng không vẽ icon, giữ nếu sau này xài
   final VoidCallback onTap;
 
   const _GroupTile({
@@ -324,22 +307,52 @@ class _GroupTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasUnread = unread > 0;
+    final initial =
+        title.isNotEmpty ? title.characters.first.toUpperCase() : '?';
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Avatar with gradient ring & online dot
-            _AvatarRing(
-              size: 56,
-              avatarUrl: avatarUrl,
-              placeholderChar: title.isNotEmpty ? title[0].toUpperCase() : '?',
-              showRing: hasUnread,
-              online: online,
-              cs: cs,
+            // Avatar giống _ChatAvatar
+            Stack(
+              children: [
+                CircleAvatar(
+                  radius: 26,
+                  backgroundColor: cs.surfaceVariant,
+                  backgroundImage:
+                      avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+                  child: avatarUrl.isEmpty
+                      ? Text(
+                          initial,
+                          style: TextStyle(
+                            color: cs.onSurface,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        )
+                      : null,
+                ),
+                // Nếu sau này muốn dot online cho group thì bật lên
+                // Positioned(
+                //   right: 0,
+                //   bottom: 0,
+                //   child: Container(
+                //     width: 16,
+                //     height: 16,
+                //     decoration: BoxDecoration(
+                //       color: online ? Colors.green : cs.surfaceVariant,
+                //       shape: BoxShape.circle,
+                //       border: Border.all(
+                //         color: Theme.of(context).scaffoldBackgroundColor,
+                //         width: 2,
+                //       ),
+                //     ),
+                //   ),
+                // ),
+              ],
             ),
             const SizedBox(width: 12),
 
@@ -348,7 +361,7 @@ class _GroupTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // name + time + mute
+                  // name + time
                   Row(
                     children: [
                       Expanded(
@@ -359,7 +372,8 @@ class _GroupTile extends StatelessWidget {
                           style: TextStyle(
                             fontWeight:
                                 hasUnread ? FontWeight.w800 : FontWeight.w700,
-                            fontSize: 16,
+                            color: cs.onSurface,
+                            fontSize: 15.5,
                           ),
                         ),
                       ),
@@ -367,72 +381,28 @@ class _GroupTile extends StatelessWidget {
                         Text(
                           timeText,
                           style: TextStyle(
-                            fontSize: 12.5,
-                            color: cs.onSurface.withOpacity(.6),
-                            fontWeight: FontWeight.w500,
+                            color: cs.onSurface.withOpacity(.5),
+                            fontSize: 11.5,
                           ),
                         ),
-                      if (muted) ...[
-                        const SizedBox(width: 6),
-                        Icon(Icons.notifications_off_rounded,
-                            size: 16, color: cs.onSurface.withOpacity(.5)),
-                      ],
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  // preview + unread dot
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 13.5,
-                            color: hasUnread
-                                ? cs.onSurface
-                                : cs.onSurface.withOpacity(.7),
-                            fontWeight:
-                                hasUnread ? FontWeight.w600 : FontWeight.w400,
-                          ),
-                        ),
-                      ),
-                      if (hasUnread)
-                        Container(
-                          width: 8,
-                          height: 8,
-                          margin: const EdgeInsets.only(left: 8),
-                          decoration: BoxDecoration(
-                            color: cs.primary,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                    ],
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle.isEmpty ? ' ' : subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: hasUnread
+                          ? cs.onSurface
+                          : cs.onSurface.withOpacity(.7),
+                      fontSize: 13,
+                      fontWeight: hasUnread ? FontWeight.w600 : FontWeight.w400,
+                    ),
                   ),
                 ],
               ),
             ),
-
-            const SizedBox(width: 8),
-
-            // Unread badge (giống Messenger)
-            if (hasUnread)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: cs.primary,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Text(
-                  unread > 99 ? '99+' : '$unread',
-                  style: TextStyle(
-                    color: cs.onPrimary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
           ],
         ),
       ),
@@ -440,97 +410,8 @@ class _GroupTile extends StatelessWidget {
   }
 }
 
-class _AvatarRing extends StatelessWidget {
-  final double size;
-  final String avatarUrl;
-  final String placeholderChar;
-  final bool showRing;
-  final bool online;
-  final ColorScheme cs;
-
-  const _AvatarRing({
-    required this.size,
-    required this.avatarUrl,
-    required this.placeholderChar,
-    required this.showRing,
-    required this.online,
-    required this.cs,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final avatar = CircleAvatar(
-      radius: size / 2 - (showRing ? 2 : 0),
-      backgroundImage: avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
-      backgroundColor: cs.surfaceVariant,
-      child: avatarUrl.isEmpty
-          ? Text(
-              placeholderChar,
-              style: TextStyle(
-                color: cs.onSurface,
-                fontWeight: FontWeight.bold,
-                fontSize: size * 0.38,
-              ),
-            )
-          : null,
-    );
-
-    final avatarWithRing = showRing
-        ? Container(
-            width: size,
-            height: size,
-            padding: const EdgeInsets.all(2),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  cs.primary,
-                  cs.tertiary,
-                ],
-              ),
-            ),
-            child: Container(
-              decoration: const BoxDecoration(
-                  shape: BoxShape.circle, color: Colors.white),
-              child: avatar,
-            ),
-          )
-        : SizedBox(width: size, height: size, child: avatar);
-
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        avatarWithRing,
-        if (online)
-          Positioned(
-            right: -1,
-            bottom: -1,
-            child: Container(
-              width: size * 0.28,
-              height: size * 0.28,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2),
-              ),
-              child: Container(
-                margin: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  color: Colors.green,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
 /// =====================
-/// Footer Nav (custom)
+/// Footer Nav (custom, gần giống _MessengerFooter)
 /// =====================
 class _FooterNav extends StatelessWidget {
   final int currentIndex;
@@ -557,15 +438,15 @@ class _FooterNav extends StatelessWidget {
       bool dot = false,
     }) {
       final active = currentIndex == index;
-      final color = active ? cs.primary : cs.onSurface.withOpacity(.7);
+      final color = active ? Colors.blue : Colors.grey.shade700;
 
       return Expanded(
         child: InkWell(
           onTap: () => onTap(index),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+          child: SizedBox(
+            height: 56,
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Stack(
                   clipBehavior: Clip.none,
@@ -579,15 +460,15 @@ class _FooterNav extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: cs.primary,
+                            color: Colors.red,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
                             badge > 99 ? '99+' : '$badge',
-                            style: TextStyle(
-                              color: cs.onPrimary,
+                            style: const TextStyle(
+                              color: Colors.white,
                               fontSize: 10,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
@@ -599,8 +480,10 @@ class _FooterNav extends StatelessWidget {
                         child: Container(
                           width: 8,
                           height: 8,
-                          decoration: BoxDecoration(
-                              color: cs.primary, shape: BoxShape.circle),
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
                         ),
                       ),
                   ],
@@ -628,23 +511,34 @@ class _FooterNav extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             color: Theme.of(context).scaffoldBackgroundColor,
-            border:
-                Border(top: BorderSide(color: cs.outlineVariant, width: .5)),
+            border: Border(
+              top: BorderSide(color: cs.outlineVariant, width: .5),
+            ),
           ),
           child: Row(
             children: [
               item(
-                  index: 0,
-                  icon: Icons.chat_bubble,
-                  label: 'Đoạn chat',
-                  badge: chatBadgeCount),
-              item(index: 1, icon: Icons.video_collection, label: 'Tin'),
+                index: 0,
+                icon: Icons.chat_bubble,
+                label: getTranslated('chat_section', context)!,
+                badge: chatBadgeCount,
+              ),
               item(
-                  index: 2,
-                  icon: Icons.groups,
-                  label: 'Nhóm Chat',
-                  dot: showNotifDot),
-              item(index: 3, icon: Icons.menu, label: 'Menu'),
+                index: 1,
+                icon: Icons.video_collection,
+                label: getTranslated('stories', context)!,
+              ),
+              item(
+                index: 2,
+                icon: Icons.groups,
+                label: getTranslated('group_chat', context)!,
+                dot: showNotifDot,
+              ),
+              item(
+                index: 3,
+                icon: Icons.menu,
+                label: getTranslated('menu', context)!,
+              ),
             ],
           ),
         ),
