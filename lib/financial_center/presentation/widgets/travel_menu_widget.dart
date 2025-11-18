@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:ui'; // Thêm import này cho BackdropFilter
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/dimensions.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/styles.dart';
@@ -135,78 +136,117 @@ class _TravelMenuWidgetState extends State<TravelMenuWidget>
     final themeController = Provider.of<ThemeController>(context, listen: false);
     final bool darkTheme = themeController.darkTheme;
 
-    final Color bgColor = darkTheme ? Colors.grey[850]! : Colors.white;
-
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: bgColor,
+        // Liquid Glass Effect cho container chính
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: darkTheme
+              ? [
+            Colors.grey[850]!.withOpacity(0.8),
+            Colors.grey[900]!.withOpacity(0.6),
+          ]
+              : [
+            Colors.white.withOpacity(0.8),
+            Colors.white.withOpacity(0.5),
+          ],
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
+            color: Colors.black.withOpacity(darkTheme ? 0.3 : 0.08),
+            blurRadius: 24,
+            offset: const Offset(0, -4),
+            spreadRadius: -8,
+          ),
+          BoxShadow(
+            color: (darkTheme ? Colors.white : Colors.white).withOpacity(0.3),
+            blurRadius: 12,
             offset: const Offset(0, -2),
           ),
         ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildAnimatedItem(
-            context: context,
-            index: 0,
-            icon: Icons.flight_takeoff,
-            title: getTranslated('flight', context) ?? 'Đặt vé máy bay',
-            gradient: const LinearGradient(
-              colors: [Color(0xFFFF6B9D), Color(0xFFFFC371)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+      child: ClipRRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: darkTheme
+                    ? [
+                  Colors.white.withOpacity(0.05),
+                  Colors.white.withOpacity(0.02),
+                ]
+                    : [
+                  Colors.white.withOpacity(0.3),
+                  Colors.white.withOpacity(0.1),
+                ],
+              ),
             ),
-            onTap: (position) {
-              Navigator.push(
-                context,
-                IOSAppLaunchPageRoute(
-                  page: const FlightBookingScreen(),
-                  startPosition: position,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildAnimatedItem(
+                  context: context,
+                  index: 0,
+                  icon: Icons.flight_takeoff,
+                  title: getTranslated('flight', context) ?? 'Đặt vé máy bay',
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFF6B9D), Color(0xFFFFC371)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  onTap: (position) {
+                    Navigator.push(
+                      context,
+                      IOSAppLaunchPageRoute(
+                        page: const FlightBookingScreen(),
+                        startPosition: position,
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
-          ),
-          _buildAnimatedItem(
-            context: context,
-            index: 1,
-            icon: Icons.hotel,
-            title: getTranslated('hotel', context) ?? 'Đặt khách sạn',
-            gradient: const LinearGradient(
-              colors: [Color(0xFFFF9A56), Color(0xFFFFD15C)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            onTap: (position) {
-              // TODO: chuyển sang trang khách sạn với hiệu ứng iOS
-            },
-          ),
-          _buildAnimatedItem(
-            context: context,
-            index: 2,
-            icon: Icons.tour,
-            title: getTranslated('tour', context) ?? 'Tour du lịch',
-            gradient: const LinearGradient(
-              colors: [Color(0xFF4FC3F7), Color(0xFF29B6F6)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            onTap: (position) {
-              Navigator.push(
-                context,
-                IOSAppLaunchPageRoute(
-                  page: const TourListScreen(),
-                  startPosition: position,
+                _buildAnimatedItem(
+                  context: context,
+                  index: 1,
+                  icon: Icons.hotel,
+                  title: getTranslated('hotel', context) ?? 'Đặt khách sạn',
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFF9A56), Color(0xFFFFD15C)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  onTap: (position) {
+                    // TODO: chuyển sang trang khách sạn với hiệu ứng iOS
+                  },
                 ),
-              );
-            },
+                _buildAnimatedItem(
+                  context: context,
+                  index: 2,
+                  icon: Icons.tour,
+                  title: getTranslated('tour', context) ?? 'Tour du lịch',
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF4FC3F7), Color(0xFF29B6F6)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  onTap: (position) {
+                    Navigator.push(
+                      context,
+                      IOSAppLaunchPageRoute(
+                        page: const TourListScreen(),
+                        startPosition: position,
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -310,43 +350,75 @@ class _TravelItemState extends State<_TravelItem>
             Stack(
               clipBehavior: Clip.none,
               children: [
+                // Liquid Glass Effect cho icon container
                 Container(
                   height: 70,
                   width: 70,
                   decoration: BoxDecoration(
                     gradient: widget.gradient,
                     borderRadius: BorderRadius.circular(22),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.3),
+                      width: 1.5,
+                    ),
                     boxShadow: [
                       BoxShadow(
-                        color: widget.gradient.colors.first.withOpacity(0.3),
-                        blurRadius: 12,
-                        offset: const Offset(0, 6),
+                        color: widget.gradient.colors.first.withOpacity(0.4),
+                        blurRadius: 16,
+                        offset: const Offset(0, 8),
+                        spreadRadius: -4,
+                      ),
+                      BoxShadow(
+                        color: Colors.white.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(-2, -2),
                       ),
                     ],
                   ),
-                  child: Center(
-                    child: Icon(
-                      widget.icon,
-                      color: Colors.white,
-                      size: 34,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(22),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              Colors.white.withOpacity(0.25),
+                              Colors.white.withOpacity(0.05),
+                            ],
+                          ),
+                        ),
+                        child: Center(
+                          child: Icon(
+                            widget.icon,
+                            color: Colors.white,
+                            size: 34,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
+                // Enhanced glossy highlight
                 Positioned(
-                  top: 8,
-                  left: 12,
-                  right: 12,
+                  top: 6,
+                  left: 10,
+                  right: 10,
                   child: Container(
-                    height: 20,
+                    height: 24,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(20),
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          Colors.white.withOpacity(0.4),
+                          Colors.white.withOpacity(0.5),
+                          Colors.white.withOpacity(0.1),
                           Colors.transparent,
                         ],
+                        stops: const [0.0, 0.5, 1.0],
                       ),
                     ),
                   ),

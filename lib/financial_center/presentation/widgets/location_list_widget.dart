@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui'; // THÊM import này cho BackdropFilter
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/services/location_service.dart';
@@ -236,6 +237,7 @@ class _LocationListWidgetState extends State<LocationListWidget>
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
                 child: Row(
                   children: [
+                    // Liquid Glass Effect cho indicator bar
                     Container(
                       width: 4,
                       height: 24,
@@ -249,6 +251,13 @@ class _LocationListWidgetState extends State<LocationListWidget>
                           ],
                         ),
                         borderRadius: BorderRadius.circular(2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Theme.of(context).primaryColor.withOpacity(0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -263,17 +272,17 @@ class _LocationListWidgetState extends State<LocationListWidget>
                         ),
                       ),
                     ),
+                    // Glass navigation buttons
                     Row(
                       children: [
-                        IconButton(
-                          icon: Icon(Icons.arrow_back_ios, size: 18),
+                        _GlassNavigationButton(
+                          icon: Icons.arrow_back_ios,
                           onPressed: isAnimating ? null : _previousLocations,
-                          color: Theme.of(context).primaryColor,
                         ),
-                        IconButton(
-                          icon: Icon(Icons.arrow_forward_ios, size: 18),
+                        const SizedBox(width: 8),
+                        _GlassNavigationButton(
+                          icon: Icons.arrow_forward_ios,
                           onPressed: isAnimating ? null : _nextLocations,
-                          color: Theme.of(context).primaryColor,
                         ),
                       ],
                     ),
@@ -328,31 +337,134 @@ class _LocationListWidgetState extends State<LocationListWidget>
 
               const SizedBox(height: 12),
 
+              // Glass pagination indicators
               Center(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: List.generate(
-                    (allLocations.length / 3).ceil(),
-                        (index) {
-                      final isActive = (currentIndex ~/ 3) == index;
-                      return AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        margin: const EdgeInsets.symmetric(horizontal: 3),
-                        width: isActive ? 24 : 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: isActive
-                              ? Theme.of(context).primaryColor
-                              : Theme.of(context).primaryColor.withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(4),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.white.withOpacity(0.2),
+                            Colors.white.withOpacity(0.1),
+                          ],
                         ),
-                      );
-                    },
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: List.generate(
+                          (allLocations.length / 3).ceil(),
+                              (index) {
+                            final isActive = (currentIndex ~/ 3) == index;
+                            return AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              margin: const EdgeInsets.symmetric(horizontal: 3),
+                              width: isActive ? 24 : 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                gradient: isActive
+                                    ? LinearGradient(
+                                  colors: [
+                                    Theme.of(context).primaryColor,
+                                    Theme.of(context).primaryColor.withOpacity(0.7),
+                                  ],
+                                )
+                                    : null,
+                                color: !isActive
+                                    ? Theme.of(context).primaryColor.withOpacity(0.3)
+                                    : null,
+                                borderRadius: BorderRadius.circular(4),
+                                boxShadow: isActive
+                                    ? [
+                                  BoxShadow(
+                                    color: Theme.of(context).primaryColor.withOpacity(0.4),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ]
+                                    : null,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
               const SizedBox(height: 16),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Glass Navigation Button Widget
+class _GlassNavigationButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  const _GlassNavigationButton({
+    required this.icon,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white.withOpacity(0.25),
+                Colors.white.withOpacity(0.15),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.3),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onPressed,
+              borderRadius: BorderRadius.circular(12),
+              child: Center(
+                child: Icon(
+                  icon,
+                  size: 18,
+                  color: onPressed != null
+                      ? Theme.of(context).primaryColor
+                      : Theme.of(context).primaryColor.withOpacity(0.3),
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -410,25 +522,34 @@ class _LocationCardState extends State<_LocationCard> with SingleTickerProviderS
           child: Container(
             height: 110,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(18),
+              // Liquid Glass Effect - Outer shadow
               boxShadow: [
                 BoxShadow(
-                  color: Theme.of(context).primaryColor.withOpacity(0.15),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
+                  color: Theme.of(context).primaryColor.withOpacity(0.2),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                  spreadRadius: -4,
+                ),
+                BoxShadow(
+                  color: Colors.white.withOpacity(0.3),
+                  blurRadius: 10,
+                  offset: const Offset(-2, -2),
                 ),
               ],
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(18),
               child: Stack(
                 children: [
+                  // Background placeholder
                   AnimatedOpacity(
                     opacity: _imageLoaded ? 0 : 1,
                     duration: const Duration(milliseconds: 300),
                     child: Container(color: Colors.grey[300]),
                   ),
 
+                  // Background Image
                   AnimatedOpacity(
                     opacity: _imageLoaded ? 1 : 0,
                     duration: const Duration(milliseconds: 600),
@@ -457,81 +578,145 @@ class _LocationCardState extends State<_LocationCard> with SingleTickerProviderS
                     ),
                   ),
 
+                  // Enhanced gradient overlay
                   Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.centerLeft,
                         end: Alignment.centerRight,
                         colors: [
-                          Colors.black.withOpacity(0.3),
+                          Colors.black.withOpacity(0.4),
+                          Colors.black.withOpacity(0.1),
                           Colors.transparent,
                         ],
+                        stops: const [0.0, 0.5, 1.0],
                       ),
                     ),
                   ),
 
+                  // Content with Liquid Glass Effect
                   Row(
                     children: [
                       const SizedBox(width: 180),
                       Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                widget.location.name,
-                                style: TextStyle(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                  letterSpacing: 0.3,
-                                  shadows: [Shadow(blurRadius: 8, color: Colors.black54)],
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.9),
-                                  borderRadius: BorderRadius.circular(20),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black26,
-                                      blurRadius: 4,
-                                      offset: Offset(0, 1),
-                                    )
+                        child: ClipRRect(
+                          borderRadius: const BorderRadius.only(
+                            topRight: Radius.circular(18),
+                            bottomRight: Radius.circular(18),
+                          ),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    Colors.white.withOpacity(0.25),
+                                    Colors.white.withOpacity(0.1),
                                   ],
                                 ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.tour, size: 14, color: Theme.of(context).primaryColor),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      '${widget.location.toursCount} ${getTranslated('tours', context) ?? 'Tours'}',
-                                      style: TextStyle(
-                                        color: Theme.of(context).primaryColor,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
+                                border: Border(
+                                  left: BorderSide(
+                                    color: Colors.white.withOpacity(0.3),
+                                    width: 1.5,
+                                  ),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    widget.location.name,
+                                    style: const TextStyle(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                      letterSpacing: 0.3,
+                                      shadows: [
+                                        Shadow(blurRadius: 8, color: Colors.black54),
+                                      ],
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  // Glass badge
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(20),
+                                    child: BackdropFilter(
+                                      filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            colors: [
+                                              Colors.white.withOpacity(0.9),
+                                              Colors.white.withOpacity(0.7),
+                                            ],
+                                          ),
+                                          borderRadius: BorderRadius.circular(20),
+                                          border: Border.all(
+                                            color: Colors.white.withOpacity(0.5),
+                                            width: 1,
+                                          ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(0.1),
+                                              blurRadius: 6,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.tour,
+                                              size: 14,
+                                              color: Theme.of(context).primaryColor,
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              '${widget.location.toursCount} ${getTranslated('tours', context) ?? 'Tours'}',
+                                              style: TextStyle(
+                                                color: Theme.of(context).primaryColor,
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
                         ),
                       ),
+                      // Glass arrow indicator
                       Padding(
                         padding: const EdgeInsets.only(right: 12),
-                        child: Icon(
-                          Icons.arrow_forward_ios,
-                          size: 16,
-                          color: Colors.white.withOpacity(0.7),
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.white.withOpacity(0.3),
+                                Colors.white.withOpacity(0.1),
+                              ],
+                            ),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.arrow_forward_ios,
+                            size: 14,
+                            color: Colors.white.withOpacity(0.9),
+                          ),
                         ),
                       ),
                     ],
@@ -557,11 +742,36 @@ class _SkeletonLocationList extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 16),
+          // Glass skeleton header
           Row(
             children: [
-              Container(width: 4, height: 24, color: Colors.grey[400]),
+              Container(
+                width: 4,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: Colors.grey[400],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
               const SizedBox(width: 12),
-              Container(width: 180, height: 24, color: Colors.grey[400]),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+                  child: Container(
+                    width: 180,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[400]?.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -581,32 +791,77 @@ class _SkeletonCard extends StatelessWidget {
       height: 110,
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.grey[300],
-        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.grey[300]!.withOpacity(0.8),
+            Colors.grey[200]!.withOpacity(0.6),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.5),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+            spreadRadius: -4,
+          ),
+        ],
       ),
-      child: Stack(
-        children: [
-          _Shimmer(),
-          Row(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+          child: Stack(
             children: [
-              Container(width: 180, height: 110, color: Colors.grey[400]),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(height: 20, width: 140, color: Colors.grey[400]),
-                      const SizedBox(height: 12),
-                      Container(height: 28, width: 100, color: Colors.grey[400]),
-                    ],
+              _Shimmer(),
+              Row(
+                children: [
+                  Container(
+                    width: 180,
+                    height: 110,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[400]?.withOpacity(0.5),
+                    ),
                   ),
-                ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            height: 20,
+                            width: 140,
+                            decoration: BoxDecoration(
+                              color: Colors.grey[400],
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Container(
+                            height: 28,
+                            width: 100,
+                            decoration: BoxDecoration(
+                              color: Colors.grey[400],
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -649,7 +904,7 @@ class _ShimmerState extends State<_Shimmer> with SingleTickerProviderStateMixin 
               end: Alignment(1.0 + _controller.value * 2, 0),
               colors: [
                 Colors.transparent,
-                Colors.white.withOpacity(0.3),
+                Colors.white.withOpacity(0.4),
                 Colors.transparent,
               ],
             ),
@@ -666,17 +921,55 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.location_off, size: 60, color: Colors.grey[400]),
-          const SizedBox(height: 16),
-          Text(
-            'Không có địa điểm nào',
-            style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-          ),
-        ],
-      ),
+        child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Container(
+                  padding: const EdgeInsets.all(32),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.white.withOpacity(0.2),
+                        Colors.white.withOpacity(0.1),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.3),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                  Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.grey[400]!.withOpacity(0.3),
+                        Colors.grey[300]!.withOpacity(0.2),
+                      ],
+                    ),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.location_off, size: 48, color: Colors.grey[400]),
+                ),
+                    const SizedBox(height: 16),
+                        Text(
+                          getTranslated('no_locations', context) ?? 'Không có địa điểm nào',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                  ),
+                ),
+            ),
+        ),
     );
   }
 }
