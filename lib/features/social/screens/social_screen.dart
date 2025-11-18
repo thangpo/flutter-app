@@ -508,7 +508,7 @@ class _WhatsOnYourMind extends StatelessWidget {
                 radius: 20,
                 backgroundColor: cs.surfaceVariant,
                 backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
-                    ? NetworkImage(avatarUrl)
+                    ? CachedNetworkImageProvider(avatarUrl)
                     : null,
                 child: (avatarUrl == null || avatarUrl.isEmpty)
                     ? Icon(Icons.person, color: cs.onSurface.withOpacity(.6))
@@ -1834,7 +1834,6 @@ class _PostAdCardState extends State<_PostAdCard> {
     );
   }
 }
-
 
 class _AdResponsiveImage extends StatefulWidget {
   final String url;
