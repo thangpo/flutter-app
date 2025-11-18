@@ -7,7 +7,7 @@ import 'package:flutter_sixvalley_ecommerce/data/datasource/remote/exception/api
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/review/domain/models/review_body.dart';
 import 'package:flutter_sixvalley_ecommerce/features/review/domain/repositories/review_repository_interface.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';

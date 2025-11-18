@@ -9,7 +9,7 @@ import 'package:flutter_sixvalley_ecommerce/data/local/cache_response.dart';
 import 'package:flutter_sixvalley_ecommerce/data/model/api_response.dart';
 import 'package:flutter_sixvalley_ecommerce/data/reposotories/data_sync_repo_interface.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/db_helper.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -121,3 +121,4 @@ class DataSyncRepo implements DataSyncRepoInterface{
 
 
 }
+

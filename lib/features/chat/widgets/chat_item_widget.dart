@@ -4,7 +4,7 @@ import 'package:flutter_sixvalley_ecommerce/features/chat/domain/models/chat_mod
 import 'package:flutter_sixvalley_ecommerce/helper/date_converter.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/shop_helper.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 import 'package:flutter_sixvalley_ecommerce/features/chat/controllers/chat_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/splash/controllers/splash_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/custom_themes.dart';
@@ -228,3 +228,4 @@ class _ChatItemWidgetState extends State<ChatItemWidget> {
 
   bool isShopTemporaryClose(SplashController splashController) => widget.chat?.sellerInfo?.shops?[0].temporaryClose ?? false || ((widget.chat?.adminId == 0) && (splashController.configModel?.inhouseTemporaryClose?.status ?? false));
 }
+

@@ -8,7 +8,7 @@ import 'package:flutter_sixvalley_ecommerce/features/review/domain/models/review
 import 'package:flutter_sixvalley_ecommerce/features/review/domain/services/review_service_interface.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';

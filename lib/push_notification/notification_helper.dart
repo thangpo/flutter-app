@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:developer';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -19,23 +18,20 @@ import 'package:flutter_sixvalley_ecommerce/features/splash/controllers/splash_c
 import 'package:flutter_sixvalley_ecommerce/features/splash/domain/models/config_model.dart';
 import 'package:flutter_sixvalley_ecommerce/features/wallet/controllers/wallet_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/wallet/screens/wallet_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart'; // navigatorKey, flutterLocalNotificationsPlugin, Get
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart'; // navigatorKey, flutterLocalNotificationsPlugin, Get
 import 'package:flutter_sixvalley_ecommerce/push_notification/models/notification_body.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/chat/screens/inbox_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/notification/screens/notification_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/push_navigation_helper.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/utils/push_navigation_helper.dart';
 
 // gọi đến: auto navigate + attach controller
-import 'package:flutter_sixvalley_ecommerce/features/social/controllers/call_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/incoming_call_screen.dart';
 
 class NotificationHelper {
   // tránh double navigate nếu FCM bắn liên tiếp
-  static bool _callRouting = false;
 
   static Future<void> initialize(
       FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin) async {
@@ -63,39 +59,6 @@ class NotificationHelper {
             AndroidFlutterLocalNotificationsPlugin>()
         ?.requestNotificationsPermission();
 
-    // (Giữ helper này nếu sau này muốn dùng lại,
-    //  hiện tại main.dart đã xử lý call_invite nên không gọi tới)
-    Future<void> _openIncomingCallUI(Map<String, dynamic> data) async {
-      final nav = navigatorKey.currentState;
-      final ctx = nav?.overlay?.context ?? navigatorKey.currentContext;
-      if (ctx == null) return;
-
-      final callId = int.tryParse('${data['call_id'] ?? ''}');
-      final media = (data['media']?.toString() == 'video') ? 'video' : 'audio';
-      if (callId == null) return;
-
-      try {
-        final cc = Provider.of<CallController>(ctx, listen: false);
-        cc.attachCall(callId: callId, mediaType: media);
-      } catch (_) {}
-
-      if (_callRouting) return;
-      _callRouting = true;
-      try {
-        await nav!.push(
-          MaterialPageRoute(
-            builder: (_) => IncomingCallScreen(
-              callId: callId,
-              mediaType: media,
-              callerName: (data['caller_name'] ?? 'Cuộc gọi đến').toString(),
-              callerAvatar: data['caller_avatar']?.toString(),
-            ),
-          ),
-        );
-      } finally {
-        _callRouting = false;
-      }
-    }
 
     // ===== FOREGROUND =====
     FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
@@ -205,43 +168,27 @@ class NotificationHelper {
     // ===== User TAP notification (BACKGROUND → FOREGROUND) =====
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
       final data = message.data;
-      final type = (data['type'] ?? '').toString();
 
       //  SOCIAL notifications (WoWonder)
       if ((data['api_status'] != null) || (data['detail'] != null)) {
-        debugPrint('📬 [SOCIAL] User tapped social notification');
-        await handlePushNavigation(message);
-        return;
-      // SOCIAL notifications (WoWonder)
-      if (data['api_status'] != null) {
-        //thông báo đẩy cho tương tác user
-        if(data['type'] == 'interact') {
+        final socialType = (data['type'] ?? '').toString();
+        if (socialType == 'interact') {
           debugPrint('interact');
           await handlePushNavigation(message);
-          return;
-        }
-        //thông báo đẩy chat 1-1
-        if(data['type'] == 'chat_message') {
+        } else if (socialType == 'chat_message') {
           debugPrint('Xử lý chat 1-1');
-          return;
-        }
-        //thông báo đẩy chat nhóm
-        if(data['type'] == 'group_message') {
+        } else if (socialType == 'group_message') {
           debugPrint('Xử lý chat nhóm');
-          return;
+        } else {
+          debugPrint('dY"� [SOCIAL] User tapped social notification');
+          await handlePushNavigation(message);
         }
-      }
-
-      // CUỘC GỌI TỚI: để main.dart.onMessageOpenedApp xử lý
-      if (type == 'call_invite' ||
-          type == 'call_invite_group' ||
-          (data.containsKey('call_id') && data.containsKey('media'))) {
         return;
       }
 
       if (kDebugMode) {
         print(
-            "onOpenApp: ${message.notification?.title}/${data}/${message.notification?.titleLocKey}");
+            "onOpenApp: ${message.notification?.title}//${message.notification?.titleLocKey}");
       }
 
       if (data['type'] == 'demo_reset') {
@@ -345,6 +292,19 @@ class NotificationHelper {
         }
       }
     });
+
+    await flutterLocalNotificationsPlugin.initialize(
+      initializationsSettings,
+      onDidReceiveNotificationResponse: (response) {
+        final payload = response.payload;
+        if (payload == null || payload.isEmpty) return;
+        try {
+          final Map<String, dynamic> data =
+              Map<String, dynamic>.from(jsonDecode(payload) as Map);
+          handlePushNavigationFromMap(data);
+        } catch (_) {}
+      },
+    );
   }
 
   static Future<void> showNotification(RemoteMessage message,
@@ -543,3 +503,6 @@ Future<dynamic> myBackgroundMessageHandler(RemoteMessage message) async {
         "onBackground: ${message.notification?.title}/${message.notification?.body}/${message.notification?.titleLocKey}");
   }
 }
+
+
+

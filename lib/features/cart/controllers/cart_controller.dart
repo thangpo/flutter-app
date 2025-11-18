@@ -7,7 +7,7 @@ import 'package:flutter_sixvalley_ecommerce/features/product/domain/models/produ
 import 'package:flutter_sixvalley_ecommerce/features/product_details/controllers/product_details_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/shipping/controllers/shipping_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 import 'package:provider/provider.dart';
 
@@ -195,3 +195,4 @@ class CartController extends ChangeNotifier {
 
 
 }
+

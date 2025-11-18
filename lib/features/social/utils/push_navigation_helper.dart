@@ -2,7 +2,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart' show navigatorKey;
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart' show navigatorKey;
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_post_detail_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
@@ -338,3 +338,4 @@ String _pickFirstNonEmpty(List<String> list) {
   }
   return '';
 }
+

@@ -12,7 +12,7 @@ import 'package:flutter_sixvalley_ecommerce/features/splash/domain/models/busine
 import 'package:flutter_sixvalley_ecommerce/features/splash/domain/models/config_model.dart';
 import 'package:flutter_sixvalley_ecommerce/features/splash/domain/services/splash_service_interface.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
@@ -275,3 +275,4 @@ class SplashController extends ChangeNotifier {
 
 
 }
+

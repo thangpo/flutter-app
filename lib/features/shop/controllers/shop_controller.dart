@@ -12,7 +12,7 @@ import 'package:flutter_sixvalley_ecommerce/features/shop/domain/models/seller_m
 import 'package:flutter_sixvalley_ecommerce/features/shop/domain/services/shop_service_interface.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/data_sync_helper.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 
 class ShopController extends ChangeNotifier {
@@ -349,3 +349,4 @@ class ShopController extends ChangeNotifier {
 
 
 }
+
