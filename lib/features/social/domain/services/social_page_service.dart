@@ -9,11 +9,14 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/
 import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_page_service_interface.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
+
 class SocialPageService implements SocialPageServiceInterface {
   final SocialPageRepository socialPageRepository;
   final SocialController socialController;
 
-  SocialPageService({required this.socialPageRepository,required this.socialController});
+  SocialPageService(
+      {required this.socialPageRepository, required this.socialController});
 
   // ───────────────── GET RECOMMENDED PAGES ─────────────────
   @override
@@ -92,7 +95,8 @@ class SocialPageService implements SocialPageServiceInterface {
       final dynamic data = resp.response!.data;
       print('DEBUG LIKED PAGES RESPONSE: ${data.toString()}');
       final int status =
-          int.tryParse('${data?['api_status'] ?? data?['status'] ?? 200}') ?? 200;
+          int.tryParse('${data?['api_status'] ?? data?['status'] ?? 200}') ??
+              200;
 
       if (status == 200) {
         return socialPageRepository.parseMyPages(resp.response!);
@@ -107,6 +111,43 @@ class SocialPageService implements SocialPageServiceInterface {
 
     ApiChecker.checkApi(resp);
     return <SocialGetPage>[];
+  }
+
+  //───────────────── Like page ─────────────────
+  @override
+  Future<bool> toggleLikePage({required String pageId}) async {
+    final ApiResponseModel<Response> resp =
+    await socialPageRepository.likePage(pageId: pageId);
+
+    if (resp.isSuccess && resp.response != null) {
+      final dynamic data = resp.response!.data;
+      // In log xem backend trả gì
+      print('DEBUG LIKE PAGE RESPONSE: $data');
+
+      final int status =
+          int.tryParse('${data?['api_status'] ?? data?['status'] ?? 400}') ??
+              400;
+
+      if (status == 200) {
+        // Tùy backend:
+        // WoWonder thường trả: { "like_status": "liked" } hoặc "unliked"
+        final String likeStatus =
+        (data?['like_status'] ?? data?['code'] ?? '').toString();
+
+        // true = sau call xong đang ở trạng thái "đã thích"
+        return likeStatus == 'liked';
+      }
+
+      final String message = (data?['errors']?['error_text'] ??
+          data?['message'] ??
+          'Failed to like/unlike page')
+          .toString();
+      throw Exception(message);
+    }
+
+    ApiChecker.checkApi(resp);
+    // Nếu thất bại coi như không thay đổi gì
+    return false;
   }
 
   // ───────────────── GET ARTICLE CATEGORIES ─────────────────
@@ -238,8 +279,7 @@ class SocialPageService implements SocialPageServiceInterface {
   // ───────────────── UPDATE PAGE (dùng payload từ EditPageScreen) ─────────────────
   @override
   Future<SocialGetPage?> updatePageFromPayload(
-      Map<String, dynamic> payload,
-      ) async {
+      Map<String, dynamic> payload,) async {
     final ApiResponseModel<Response> resp =
     await socialPageRepository.updatePageFromPayload(payload);
 
@@ -336,5 +376,131 @@ class SocialPageService implements SocialPageServiceInterface {
     // parse lỗi → coi là success nhưng không có page
     return page;
   }
-}
 
+  @override
+  Future<List<SocialPost>> getPagePosts({
+    required int pageId,
+    int limit = 10,
+    int? afterPostId,
+  }) async {
+    final ApiResponseModel<Response> resp =
+    await socialPageRepository.getPagePosts(
+      pageId: pageId,
+      afterPostId: afterPostId,
+      limit: limit,
+    );
+
+    if (resp.isSuccess && resp.response != null) {
+      dynamic data = resp.response!.data;
+
+      // Nếu backend trả string thì decode JSON
+      if (data is String) {
+        try {
+          data = jsonDecode(data);
+        } catch (_) {
+          throw Exception('Invalid page posts response');
+        }
+      }
+
+      if (data is! Map) {
+        throw Exception('Invalid page posts response');
+      }
+      final Map<String, dynamic> map = data as Map<String, dynamic>;
+
+      final int status =
+          int.tryParse('${map['api_status'] ?? map['status'] ?? 200}') ?? 200;
+
+      if (status == 200) {
+        // tuỳ backend: thường là 'data' hoặc 'posts'
+        final List<dynamic> list =
+        (map['data'] ?? map['posts'] ?? const <dynamic>[])
+        as List<dynamic>;
+
+        final List<SocialPost> posts = <SocialPost>[];
+
+        for (final dynamic item in list) {
+          if (item is! Map) continue;
+          try {
+            // 👉 DÙNG HÀM MAP RIÊNG, KHÔNG GỌI fromJson NỮA
+            posts.add(
+              _mapJsonToSocialPost(
+                Map<String, dynamic>.from(item as Map),
+              ),
+            );
+          } catch (e, st) {
+            // optional: log nếu cần debug
+            // print('PARSE PAGE POST ERROR: $e\n$st');
+          }
+        }
+
+        return posts;
+      }
+
+      final String message = (map['errors']?['error_text'] ??
+          map['message'] ??
+          'Failed to load page posts')
+          .toString();
+      throw Exception(message);
+    }
+
+    ApiChecker.checkApi(resp);
+    return <SocialPost>[];
+  }
+
+
+  SocialPost _mapJsonToSocialPost(Map<String, dynamic> j) {
+    final Map pub =
+    (j['publisher'] is Map) ? j['publisher'] as Map : const {};
+
+    // Lấy list ảnh
+    final List<String> imageUrls = <String>[];
+    if (j['photo_multi'] is List) {
+      for (final dynamic item in (j['photo_multi'] as List)) {
+        if (item is Map && item['image'] != null) {
+          final String url = item['image'].toString();
+          if (url.isNotEmpty) imageUrls.add(url);
+        }
+      }
+    } else if (j['postFile'] != null &&
+        j['postFile']
+            .toString()
+            .isNotEmpty &&
+        (j['postFile_full'] ?? j['postFile']) != null) {
+      // tuỳ backend trả; cái này chỉ là ví dụ
+      imageUrls.add(j['postFile'].toString());
+    }
+
+    // Reactions
+    final int reactionCount =
+        int.tryParse('${j['reaction_count'] ?? j['reactors'] ?? 0}') ?? 0;
+    final String myReaction = j['reaction']?.toString() ?? '';
+
+    // Comments / shares
+    final int commentCount =
+        int.tryParse('${j['post_comments'] ?? j['comments'] ?? 0}') ?? 0;
+    final int shareCount =
+        int.tryParse('${j['post_shares'] ?? j['shares'] ?? 0}') ?? 0;
+
+    return SocialPost(
+      id: (j['post_id'] ?? j['id'] ?? '').toString(),
+      publisherId: (pub['user_id'] ?? pub['id'] ?? '').toString(),
+      text: j['postText']?.toString(),
+      rawText: j['Orginaltext']?.toString() ?? j['postText']?.toString(),
+      userName: (pub['name'] ?? pub['username'] ?? '').toString(),
+      userAvatar: pub['avatar']?.toString(),
+      timeText: j['time_text']?.toString(),
+      pageId: j['page_id']?.toString(),
+      postType: j['postType']?.toString(),
+      imageUrls: imageUrls,
+      imageUrl: imageUrls.isNotEmpty ? imageUrls.first : null,
+      fileUrl: j['postFile']?.toString(),
+      reactionCount: reactionCount,
+      myReaction: myReaction,
+      commentCount: commentCount,
+      shareCount: shareCount,
+      // Các field khác để default theo constructor
+      reactionBreakdown: const <String, int>{},
+      hasProduct: false,
+    );
+  }
+}

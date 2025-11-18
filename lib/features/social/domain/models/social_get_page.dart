@@ -151,6 +151,60 @@ class SocialGetPage {
       'youtube': youtube,
     };
   }
+  SocialGetPage copyWith({
+    int? pageId,
+    int? ownerUserId,
+    String? username,
+    String? name,
+    String? pageName,
+    String? description,
+    String? avatarUrl,
+    String? coverUrl,
+    String? url,
+    String? category,
+    String? subCategory,
+    int? usersPost,
+    int? likesCount,
+    double? rating,
+    bool? isVerified,
+    bool? isPageOwner,
+    bool? isLiked,
+    bool? isReported,
+    String? registered,
+    String? type,
+    String? website,
+    String? facebook,
+    String? instagram,
+    String? youtube,
+  }) {
+    return SocialGetPage(
+      pageId: pageId ?? this.pageId,
+      ownerUserId: ownerUserId ?? this.ownerUserId,
+      username: username ?? this.username,
+      name: name ?? this.name,
+      pageName: pageName ?? this.pageName,
+      description: description ?? this.description,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+      coverUrl: coverUrl ?? this.coverUrl,
+      url: url ?? this.url,
+      category: category ?? this.category,
+      subCategory: subCategory ?? this.subCategory,
+      usersPost: usersPost ?? this.usersPost,
+      likesCount: likesCount ?? this.likesCount,
+      rating: rating ?? this.rating,
+      isVerified: isVerified ?? this.isVerified,
+      isPageOwner: isPageOwner ?? this.isPageOwner,
+      isLiked: isLiked ?? this.isLiked,
+      isReported: isReported ?? this.isReported,
+      registered: registered ?? this.registered,
+      type: type ?? this.type,
+      website: website ?? this.website,
+      facebook: facebook ?? this.facebook,
+      instagram: instagram ?? this.instagram,
+      youtube: youtube ?? this.youtube,
+    );
+  }
+
 
   static List<SocialGetPage> listFromJson(List<dynamic> data) {
     return data

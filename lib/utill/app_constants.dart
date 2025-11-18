@@ -83,7 +83,7 @@ class AppConstants {
   static const String socialGetCategory='/api/get_category';
   static const String socialCreatePage='/api/create-page';
   static const String socialUpdateDatePage='/api/update-page-data';
-  // static const String socialGetLikePage='/api/get-my-pages';
+  static const String socialLikePage='/api/like-page';
   //follow
   static const String socialFollowUser = '/api/follow-user';
   static const String socialUpdateDataUser = '/api/update-user-data';

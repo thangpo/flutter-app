@@ -247,6 +247,39 @@ class SocialPageRepository {
     }
   }
 
+  Future<ApiResponseModel<Response>> likePage({
+    required String pageId,
+  }) async {
+    try {
+      final String? token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError(
+          'Please log in to your social network account',
+        );
+      }
+
+      // https://social.vnshop247.com/api/like-page?access_token=...
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialLikePage}?access_token=$token';
+
+      final formData = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'page_id': pageId,
+      });
+
+      final Response res = await dioClient.post(
+        url,
+        data: formData,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+
   /// Parse Response -> List<SocialArticleCategory>
   List<SocialArticleCategory> parseArticleCategories(Response res) {
     final List<SocialArticleCategory> result = <SocialArticleCategory>[];
@@ -443,5 +476,45 @@ class SocialPageRepository {
 
     return _parseGetPageMap(rawPage);
   }
+  Future<ApiResponseModel<Response>> getPagePosts({
+    required int pageId,
+    int? afterPostId,
+    int limit = 10,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError(
+          'Please log in to your social network account',
+        );
+      }
+
+      // https://social.vnshop247.com/api/posts?access_token=...
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialPostsUri}?access_token=$token';
+
+      final Map<String, dynamic> formMap = <String, dynamic>{
+        'server_key': AppConstants.socialServerKey,
+        'type': 'get_page_posts',        // <-- đúng như Postman
+        'id': pageId.toString(),         // id của page
+        'limit': limit.toString(),
+      };
+
+      if (afterPostId != null && afterPostId > 0) {
+        formMap['after_post_id'] = afterPostId.toString();
+      }
+
+      final Response res = await dioClient.post(
+        url,
+        data: FormData.fromMap(formMap),
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
 
 }

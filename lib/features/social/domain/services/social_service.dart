@@ -1004,6 +1004,11 @@ class SocialService implements SocialServiceInterface {
     throw Exception('Block failed');
   }
 
+
+  //======= Post Page =========
+
+
+
   // ========== EDIT PROFILE (SOCIAL) + SYNC E-COM ==========
   @override
   Future<SocialUserProfile> updateDataUser({
@@ -1348,6 +1353,8 @@ class SocialService implements SocialServiceInterface {
 
     return SocialFeedPage(posts: postsResult, lastId: lastId);
   }
+  //======post page =======
+
 
   // ========== POSTS ==========
   @override

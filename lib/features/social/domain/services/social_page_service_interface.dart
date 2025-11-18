@@ -1,4 +1,5 @@
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_get_page.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'dart:io';
 
 abstract class SocialPageServiceInterface {
@@ -17,7 +18,7 @@ abstract class SocialPageServiceInterface {
     String? description,
   });
   Future<List<SocialGetPage>> getLikedPages({int limit = 20, required String userId});
-
+  Future<bool> toggleLikePage({required String pageId});
 
   /// Update page dùng luôn payload (map) từ EditPageScreen pop ra
   ///
@@ -47,4 +48,9 @@ abstract class SocialPageServiceInterface {
   Future<SocialGetPage?> updatePageFromPayload(
       Map<String, dynamic> payload,
       );
+  Future<List<SocialPost>> getPagePosts({
+    required int pageId,
+    int limit = 10,
+    int? afterPostId,
+  });
 }
