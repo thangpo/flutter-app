@@ -109,6 +109,7 @@ dependencies:
   flutter_sound: ^9.2.13
   flutter_webrtc: ^1.2.0
   html_unescape: ^2.0.0
+  liquid_glass_renderer: ^0.2.0-dev.4
 
 #dependency_overrides:
 #  firebase_core_platform_interface: ^5.4.0
@@ -118,8 +119,6 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   drift_dev: ^2.28.1
   build_runner: ^2.6.0
-  video_thumbnail: ^0.5.3
-
   flutter_test:
     sdk: flutter
 
