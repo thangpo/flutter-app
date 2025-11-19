@@ -1,4 +1,5 @@
-﻿import 'dart:math';
+import 'dart:math';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_sixvalley_ecommerce/features/ads/domain/models/ads_model.dart';
@@ -205,14 +206,16 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final cs = Theme.of(context).colorScheme;
+    final Color pageBg = Theme.of(context).brightness == Brightness.dark
+        ? Colors.black
+        : Colors.white;
 
     return Scaffold(
-      backgroundColor: cs.background,
+      backgroundColor: pageBg,
       body: SafeArea(
         child: Column(
           children: [
-            _FacebookHeader(),
+            const _FacebookHeader(),
             Expanded(
               child: Consumer<SocialController>(
                 builder: (context, sc, _) {
@@ -226,6 +229,9 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
                   _ensurePostAdSlots(posts, postAds, eligibleIds);
                   return RefreshIndicator(
                     key: _refreshKey,
+                    color: Theme.of(context).colorScheme.onPrimary,
+                    backgroundColor:
+                        Theme.of(context).colorScheme.primaryContainer,
                     onRefresh: () async {
                       _resetPostAdSlots();
                       await Future.wait([
@@ -234,29 +240,20 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
                       ]);
                     },
                     child: NotificationListener<ScrollNotification>(
-                      // onNotification: (n) {
-                      //   if (n.metrics.pixels >=
-                      //       n.metrics.maxScrollExtent - 200) {
-                      //     sc.loadMore();
-                      //   }
-                      //   return false;
-                      // },
                       child: ListView.builder(
                         controller: _scrollController,
-                        padding: EdgeInsets.zero,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
                         itemCount: posts.length + headerCount,
                         itemBuilder: (ctx, i) {
                           if (i == 0) {
-                            // Block "B?n dang nghi gÃ¬?"
                             return Column(
                               children: [
-                                _WhatsOnYourMind(),
-                                const _SectionSeparator(), // tÃ¡ch v?i Stories
+                                const _WhatsOnYourMind(),
+                                const _SectionSeparator(),
                               ],
                             );
                           }
                           if (i == 1) {
-                            // Block Stories + separator
                             return Consumer<SocialController>(
                               builder: (context, sc2, __) {
                                 return Column(
@@ -307,6 +304,95 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
   }
 }
 
+class _GlassTheme {
+  static BoxDecoration get backgroundDecoration => const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Color(0xFF0A0F1E),
+            Color(0xFF0E1324),
+            Color(0xFF0A0F1A),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      );
+
+  static LinearGradient get cardGradient => LinearGradient(
+        colors: [
+          Colors.white.withOpacity(.16),
+          Colors.white.withOpacity(.07),
+        ],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
+
+  static LinearGradient get controlGradient => LinearGradient(
+        colors: [
+          Colors.white.withOpacity(.26),
+          Colors.white.withOpacity(.12),
+        ],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
+
+  static LinearGradient get inputGradient => LinearGradient(
+        colors: [
+          Colors.white.withOpacity(.10),
+          Colors.white.withOpacity(.05),
+        ],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
+
+  static List<BoxShadow> get shadow => [
+        BoxShadow(
+          color: Colors.black.withOpacity(.18),
+          blurRadius: 24,
+          offset: const Offset(0, 12),
+        ),
+      ];
+}
+
+class _GlassContainer extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+  final EdgeInsetsGeometry? margin;
+  final BorderRadius borderRadius;
+  final double blur;
+  const _GlassContainer({
+    required this.child,
+    this.padding,
+    this.margin,
+    this.borderRadius = const BorderRadius.all(Radius.circular(16)),
+    this.blur = 18,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: margin,
+      child: ClipRRect(
+        borderRadius: borderRadius,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: borderRadius,
+              gradient: _GlassTheme.cardGradient,
+              border: Border.all(color: Colors.white.withOpacity(.16)),
+              boxShadow: _GlassTheme.shadow,
+            ),
+            child: Padding(
+              padding: padding ?? EdgeInsets.zero,
+              child: child,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 Future<void> _launchAdUrl(BuildContext context, String? url) async {
   if (url == null || url.trim().isEmpty) {
     _showAdLaunchError(context);
@@ -330,102 +416,81 @@ Future<void> _launchAdUrl(BuildContext context, String? url) async {
 
 void _showAdLaunchError(BuildContext context) {
   ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Không thấy quảng cáo')),
+    const SnackBar(content: Text('KhÃƒÂ´ng thÃ¡ÂºÂ¥y quÃ¡ÂºÂ£ng cÃƒÂ¡o')),
   );
 }
 
 class _FacebookHeader extends StatelessWidget {
+  const _FacebookHeader();
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // uu tiÃªn appBarTheme.backgroundColor; fallback sang highlightColor (Home cung dang dÃ¹ng highlightColor)
-    final Color appBarColor =
-        theme.appBarTheme.backgroundColor ?? theme.highlightColor;
-    // Ch?n mÃ u ch?/icon tuong ph?n trÃªn n?n appBarColor
-    final bool isDark =
-        ThemeData.estimateBrightnessForColor(appBarColor) == Brightness.dark;
-    final Color onAppBar = isDark ? Colors.white : Colors.black87;
+    final Color onAppBar = theme.colorScheme.onSurface.withOpacity(.92);
 
     final sc = context.read<SocialController>();
     final token = sc.accessToken;
 
-    return Container(
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 8,
-        left: 16,
-        right: 16,
-        bottom: 8,
-      ),
-      color: appBarColor,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Image.asset(
-            Theme.of(context).brightness == Brightness.dark
-                ? Images.logoWithNameSocialImageWhite
-                : Images.logoWithNameSocialImage,
-            height: 35,
-            fit: BoxFit.contain,
-          ),
-          Row(
-            children: [
-              _HeaderIcon(
-                icon: Icons.search,
-                iconColor: onAppBar,
-                bubbleColor: onAppBar.withOpacity(0.08),
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const SocialSearchScreen(),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(width: 12),
-              _HeaderIcon(
-                icon: Icons.people_outline, // biá»ƒu tÆ°á»£ng báº¡n bÃ¨
-                iconColor: onAppBar,
-                bubbleColor: onAppBar.withOpacity(0.08),
-                onTap: () {
-                  // final token = context.read<SocialController>().accessToken;
-                  // if (token == null || token.isEmpty) {
-                  //   ScaffoldMessenger.of(context).showSnackBar(
-                  //     const SnackBar(content: Text('Đăng nhập tai')),
-                  //   );
-                  //   return;
-                  // }
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => FriendsScreen(),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(width: 12),
-              _HeaderIcon(
-                icon: Icons.messenger_outline,
-                iconColor: onAppBar,
-                bubbleColor: onAppBar.withOpacity(0.08),
-                onTap: () {
-                  final token = context.read<SocialController>().accessToken;
-                  if (token == null || token.isEmpty) {
-                    // ScaffoldMessenger.of(context).showSnackBar(
-                    //   const SnackBar(
-                    //       content: Text(
-                    //           'Vui lÃ²ng k?t n?i tÃ i kho?n WoWonder tru?c.')),
-                    // );
-                    return;
-                  }
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => FriendsListScreen(accessToken: token),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-        ],
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      child: _GlassContainer(
+        borderRadius: BorderRadius.circular(24),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Image.asset(
+              Theme.of(context).brightness == Brightness.dark
+                  ? Images.logoWithNameSocialImageWhite
+                  : Images.logoWithNameSocialImage,
+              height: 32,
+              fit: BoxFit.contain,
+            ),
+            Row(
+              children: [
+                _HeaderIcon(
+                  icon: Icons.search,
+                  iconColor: onAppBar,
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const SocialSearchScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(width: 10),
+                _HeaderIcon(
+                  icon: Icons.people_outline,
+                  iconColor: onAppBar,
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => FriendsScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(width: 10),
+                _HeaderIcon(
+                  icon: Icons.messenger_outline,
+                  iconColor: onAppBar,
+                  onTap: () {
+                    final token = context.read<SocialController>().accessToken;
+                    if (token == null || token.isEmpty) {
+                      return;
+                    }
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => FriendsListScreen(accessToken: token),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -434,12 +499,10 @@ class _FacebookHeader extends StatelessWidget {
 class _HeaderIcon extends StatelessWidget {
   final IconData icon;
   final Color? iconColor;
-  final Color? bubbleColor;
   final VoidCallback? onTap;
   const _HeaderIcon({
     required this.icon,
     this.iconColor,
-    this.bubbleColor,
     this.onTap,
   });
 
@@ -448,14 +511,21 @@ class _HeaderIcon extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final onSurface = cs.onSurface;
 
-    final child = Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: bubbleColor ?? cs.surfaceVariant,
-        shape: BoxShape.circle,
+    final child = ClipOval(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: Container(
+          padding: const EdgeInsets.all(9),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: _GlassTheme.controlGradient,
+            border: Border.all(color: Colors.white.withOpacity(.16)),
+            boxShadow: _GlassTheme.shadow,
+          ),
+          child: Icon(icon,
+              color: iconColor ?? onSurface.withOpacity(.92), size: 22),
+        ),
       ),
-      child:
-          Icon(icon, color: iconColor ?? onSurface.withOpacity(.9), size: 24),
     );
 
     return onTap == null
@@ -468,6 +538,8 @@ class _HeaderIcon extends StatelessWidget {
 }
 
 class _WhatsOnYourMind extends StatelessWidget {
+  const _WhatsOnYourMind();
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -477,7 +549,6 @@ class _WhatsOnYourMind extends StatelessWidget {
     final profileCtrl = context.watch<ProfileController>();
     final fallbackProfile = profileCtrl.userInfoModel;
 
-    // âš ï¸ Äá»•i .path -> .toString() Ä‘á»ƒ NetworkImage nháº­n URL Ä‘áº§y Ä‘á»§
     final String? avatarUrl = () {
       final candidates = [
         user?.avatarUrl?.trim(),
@@ -490,13 +561,13 @@ class _WhatsOnYourMind extends StatelessWidget {
       return null;
     }();
 
-    return Material(
-      color: cs.surface,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+      child: _GlassContainer(
+        borderRadius: BorderRadius.circular(22),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(
           children: [
-            // ===== Avatar: báº¥m -> ProfileScreen =====
             InkWell(
               onTap: () {
                 Navigator.of(context).push(
@@ -506,7 +577,7 @@ class _WhatsOnYourMind extends StatelessWidget {
               borderRadius: BorderRadius.circular(999),
               child: CircleAvatar(
                 radius: 20,
-                backgroundColor: cs.surfaceVariant,
+                backgroundColor: Colors.white.withOpacity(.08),
                 backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
                     ? CachedNetworkImageProvider(avatarUrl)
                     : null,
@@ -516,12 +587,9 @@ class _WhatsOnYourMind extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-
-            // ===== Ã” â€œBáº¡n Ä‘ang nghÄ© gÃ¬?â€: báº¥m -> táº¡o post =====
             Expanded(
               child: Material(
-                // Ä‘áº£m báº£o cÃ³ Material ancestor cho InkWell
-                color: Colors.transparent,
+                type: MaterialType.transparency,
                 child: InkWell(
                   onTap: () {
                     Navigator.of(context).push(
@@ -531,47 +599,49 @@ class _WhatsOnYourMind extends StatelessWidget {
                       ),
                     );
                   },
-                  borderRadius: BorderRadius.circular(12),
-                  child: Builder(
-                    builder: (context) {
-                      final cs =
-                          Theme.of(context).colorScheme; // <-- thÃªm dÃ²ng nÃ y
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: cs.surfaceVariant.withOpacity(.5),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          getTranslated('whats_on_your_mind',
-                                  context) // <-- sá»­a key
-                              ??
-                              "What's on your mind?",
-                          style: TextStyle(
-                            color: cs.onSurface.withOpacity(.7),
-                            fontSize: 16,
-                          ),
-                        ),
-                      );
-                    },
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      gradient: _GlassTheme.inputGradient,
+                      border: Border.all(color: Colors.white.withOpacity(.16)),
+                    ),
+                    child: Text(
+                      getTranslated('whats_on_your_mind', context) ??
+                          "What's on your mind?",
+                      style: TextStyle(
+                        color: cs.onSurface.withOpacity(.82),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
-
-            const SizedBox(width: 12),
-
-            // (tuá»³ chá»n) nÃºt +
-            InkWell(
-              onTap: () {/* TODO: action khÃ¡c (vÃ­ dá»¥ táº¡o story) */},
-              customBorder: const CircleBorder(),
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
+            const SizedBox(width: 10),
+            ClipOval(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                child: Material(
+                  color: Colors.white.withOpacity(.08),
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const SocialCreateStoryScreen(),
+                        ),
+                      );
+                    },
+                    customBorder: const CircleBorder(),
+                    child: Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: Icon(Icons.add, color: cs.onSurface, size: 20),
+                    ),
+                  ),
                 ),
-                child: Icon(Icons.add, color: cs.onSurface, size: 20),
               ),
             ),
           ],
@@ -619,47 +689,54 @@ class _StoriesSectionFromApiState extends State<_StoriesSectionFromApi> {
       myStory,
     );
 
-    return Container(
-      height: 200,
-      color: cs.surface,
-      child: NotificationListener<ScrollNotification>(
-        onNotification: (notification) {
-          if (notification.metrics.axis == Axis.horizontal &&
-              notification.metrics.pixels >=
-                  notification.metrics.maxScrollExtent - 100) {
-            final sc = context.read<SocialController>();
-            if (!sc.loading) sc.loadMoreStories();
-          }
-          return false;
-        },
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-          itemCount: orderedStories.length + 1,
-          itemBuilder: (context, index) {
-            if (index == 0) {
-              return const _CreateStoryCard();
-            }
-            final int entryIndex = index - 1;
-            final SocialStory story = orderedStories[entryIndex];
-            return _StoryCardFromApi(
-              story: story,
-              onTap: story.items.isEmpty
-                  ? null
-                  : () {
-                      final int initialItem = _firstUnviewedItemIndex(story);
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => SocialStoryViewerScreen(
-                            stories: List<SocialStory>.from(orderedStories),
-                            initialStoryIndex: entryIndex,
-                            initialItemIndex: initialItem,
-                          ),
-                        ),
-                      );
-                    },
-            );
-          },
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: _GlassContainer(
+        borderRadius: BorderRadius.circular(26),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: SizedBox(
+          height: 190,
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              if (notification.metrics.axis == Axis.horizontal &&
+                  notification.metrics.pixels >=
+                      notification.metrics.maxScrollExtent - 100) {
+                final sc = context.read<SocialController>();
+                if (!sc.loading) sc.loadMoreStories();
+              }
+              return false;
+            },
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              itemCount: orderedStories.length + 1,
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  return const _CreateStoryCard();
+                }
+                final int entryIndex = index - 1;
+                final SocialStory story = orderedStories[entryIndex];
+                return _StoryCardFromApi(
+                  story: story,
+                  onTap: story.items.isEmpty
+                      ? null
+                      : () {
+                          final int initialItem =
+                              _firstUnviewedItemIndex(story);
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => SocialStoryViewerScreen(
+                                stories: List<SocialStory>.from(orderedStories),
+                                initialStoryIndex: entryIndex,
+                                initialItemIndex: initialItem,
+                              ),
+                            ),
+                          );
+                        },
+                );
+              },
+            ),
+          ),
         ),
       ),
     );
@@ -748,92 +825,108 @@ class _StoryCardFromApi extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
-      child: Container(
+      child: SizedBox(
         width: 110,
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          color: cs.surfaceVariant,
-        ),
-        child: Stack(
-          children: [
-            if (thumb != null && thumb.isNotEmpty)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image(
-                  image: CachedNetworkImageProvider(thumb),
-                  width: 110,
-                  height: double.infinity,
-                  fit: BoxFit.cover,
-                ),
-              ),
-            if (story.isAd)
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(.6),
-                    borderRadius: BorderRadius.circular(12),
+        child: _GlassContainer(
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          borderRadius: BorderRadius.circular(16),
+          padding: EdgeInsets.zero,
+          child: Stack(
+            children: [
+              if (thumb != null && thumb.isNotEmpty)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Image(
+                    image: CachedNetworkImageProvider(thumb),
+                    width: 110,
+                    height: double.infinity,
+                    fit: BoxFit.cover,
                   ),
-                  child: const Text(
-                    'Ads',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
+                ),
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.black.withOpacity(.35),
+                        Colors.black.withOpacity(.10),
+                      ],
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
                     ),
                   ),
                 ),
               ),
-            Positioned(
-              top: 8,
-              left: 8,
-              child: Container(
-                padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  color: hasUnviewed ? activeRingColor : Colors.transparent,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: hasUnviewed
-                        ? cs.surface
-                        : Colors.white.withOpacity(0.4),
-                    width: ringBorderWidth,
+              if (story.isAd)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(.12),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white.withOpacity(.2)),
+                    ),
+                    child: const Text(
+                      'Ads',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
-                child: CircleAvatar(
-                  radius: 18,
-                  backgroundColor: cs.surfaceVariant,
-                  backgroundImage:
-                      (story.userAvatar != null && story.userAvatar!.isNotEmpty)
-                          ? CachedNetworkImageProvider(story.userAvatar!)
-                          : null,
-                  child: (story.userAvatar == null || story.userAvatar!.isEmpty)
-                      ? Icon(Icons.person,
-                          color: onSurface.withOpacity(.6), size: 20)
-                      : null,
+              Positioned(
+                top: 8,
+                left: 8,
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: hasUnviewed ? activeRingColor : Colors.transparent,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: hasUnviewed
+                          ? cs.surface
+                          : Colors.white.withOpacity(0.35),
+                      width: ringBorderWidth,
+                    ),
+                  ),
+                  child: CircleAvatar(
+                    radius: 18,
+                    backgroundColor: cs.surfaceVariant.withOpacity(.4),
+                    backgroundImage: (story.userAvatar != null &&
+                            story.userAvatar!.isNotEmpty)
+                        ? CachedNetworkImageProvider(story.userAvatar!)
+                        : null,
+                    child:
+                        (story.userAvatar == null || story.userAvatar!.isEmpty)
+                            ? Icon(Icons.person,
+                                color: onSurface.withOpacity(.6), size: 20)
+                            : null,
+                  ),
                 ),
               ),
-            ),
-            Positioned(
-              bottom: 8,
-              left: 8,
-              right: 8,
-              child: Text(
-                story.userName ?? '',
-                style: TextStyle(
-                  color: onSurface,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  shadows: const [Shadow(color: Colors.black54, blurRadius: 4)],
+              Positioned(
+                bottom: 8,
+                left: 8,
+                right: 8,
+                child: Text(
+                  story.userName ?? '',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    shadows: [Shadow(color: Colors.black54, blurRadius: 6)],
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -879,65 +972,91 @@ class _CreateStoryCard extends StatelessWidget {
       );
     }
 
-    return Container(
+    return SizedBox(
       width: 110,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: openCreateStory,
-            child: Stack(
-              children: [
-                if (avatar != null && avatar.isNotEmpty)
-                  CachedNetworkImage(
-                    imageUrl: avatar,
-                    width: double.infinity,
-                    height: double.infinity,
-                    fit: BoxFit.cover,
-                  )
-                else
-                  Container(color: cs.surfaceVariant),
-                Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.black.withOpacity(0.45),
-                          Colors.black.withOpacity(0.05),
-                        ],
-                        begin: Alignment.bottomCenter,
-                        end: Alignment.topCenter,
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  bottom: 12,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: Container(
-                      width: 36,
-                      height: 36,
+      child: _GlassContainer(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        borderRadius: BorderRadius.circular(16),
+        padding: EdgeInsets.zero,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: openCreateStory,
+              child: Stack(
+                children: [
+                  if (avatar != null && avatar.isNotEmpty)
+                    CachedNetworkImage(
+                      imageUrl: avatar,
+                      width: double.infinity,
+                      height: double.infinity,
+                      fit: BoxFit.cover,
+                    )
+                  else
+                    Container(color: cs.surfaceVariant.withOpacity(.4)),
+                  Positioned.fill(
+                    child: DecoratedBox(
                       decoration: BoxDecoration(
-                        color: cs.primary,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                        boxShadow: [
-                          BoxShadow(color: Colors.black26, blurRadius: 6)
-                        ],
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.black.withOpacity(0.55),
+                            Colors.black.withOpacity(0.08),
+                          ],
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                        ),
                       ),
-                      child:
-                          const Icon(Icons.add, size: 18, color: Colors.white),
                     ),
                   ),
-                ),
-              ],
+                  Positioned(
+                    bottom: 12,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          gradient: _GlassTheme.controlGradient,
+                          shape: BoxShape.circle,
+                          border:
+                              Border.all(color: Colors.white.withOpacity(.16)),
+                        ),
+                        child: Icon(
+                          Icons.add,
+                          color: cs.onSurface,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 52,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.16),
+                          borderRadius: BorderRadius.circular(12),
+                          border:
+                              Border.all(color: Colors.white.withOpacity(.24)),
+                        ),
+                        child: Text(
+                          getTranslated('create_story', context) ??
+                              'Create story',
+                          style: TextStyle(
+                            color: cs.onSurface,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -955,76 +1074,87 @@ class _StoryCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final onSurface = cs.onSurface;
 
-    return Container(
+    return SizedBox(
       width: 110,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: cs.surfaceVariant,
-      ),
-      child: Stack(
-        children: [
-          if (!story.isCreateStory && story.imageUrl != null)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: CachedNetworkImage(
-                imageUrl: story.imageUrl!,
-                width: 110,
-                height: 200,
-                fit: BoxFit.cover,
+      child: _GlassContainer(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        borderRadius: BorderRadius.circular(15),
+        padding: EdgeInsets.zero,
+        child: Stack(
+          children: [
+            if (!story.isCreateStory && story.imageUrl != null)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(15),
+                child: CachedNetworkImage(
+                  imageUrl: story.imageUrl!,
+                  width: 110,
+                  height: 200,
+                  fit: BoxFit.cover,
+                ),
               ),
-            ),
-          if (story.isCreateStory)
-            Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: cs.primary,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.add, color: Colors.white, size: 28),
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.black.withOpacity(.35),
+                      Colors.black.withOpacity(.08),
+                    ],
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
                   ),
-                ],
+                ),
               ),
             ),
-          Positioned(
-            top: 8,
-            left: 8,
-            child: Container(
-              padding: const EdgeInsets.all(2),
-              decoration: BoxDecoration(
-                color: cs.primary,
-                shape: BoxShape.circle,
-                border: Border.all(color: cs.surface, width: 3),
+            if (story.isCreateStory)
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: _GlassTheme.controlGradient,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white.withOpacity(.2)),
+                  ),
+                  child: const Icon(Icons.add, color: Colors.white, size: 28),
+                ),
               ),
-              child: CircleAvatar(
-                radius: 18,
-                backgroundColor: cs.surfaceVariant,
-                child: Icon(Icons.person,
-                    color: onSurface.withOpacity(.6), size: 20),
+            Positioned(
+              top: 8,
+              left: 8,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: cs.primary,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                      color: Colors.white.withOpacity(.24), width: 3),
+                ),
+                child: CircleAvatar(
+                  radius: 18,
+                  backgroundColor: cs.surfaceVariant.withOpacity(.45),
+                  child: Icon(Icons.person,
+                      color: onSurface.withOpacity(.6), size: 20),
+                ),
               ),
             ),
-          ),
-          Positioned(
-            bottom: 8,
-            left: 8,
-            right: 8,
-            child: Text(
-              story.name,
-              style: TextStyle(
-                color: onSurface,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                shadows: const [Shadow(color: Colors.black54, blurRadius: 4)],
+            Positioned(
+              bottom: 8,
+              left: 8,
+              right: 8,
+              child: Text(
+                story.name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  shadows: [Shadow(color: Colors.black54, blurRadius: 4)],
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1043,7 +1173,6 @@ class SocialPostCard extends StatelessWidget {
         this.post;
     final cs = Theme.of(context).colorScheme;
     final onSurface = cs.onSurface;
-    final Color baseColor = Theme.of(context).scaffoldBackgroundColor;
     final SocialPost? sharedPost = post.sharedPost;
     final bool hasSharedPost = sharedPost != null;
     final bool hasFeeling = SocialFeelingHelper.hasFeeling(post);
@@ -1073,7 +1202,6 @@ class SocialPostCard extends StatelessWidget {
 
     final int reactionCount = post.reactionCount;
     final int commentCount = post.commentCount;
-    // shareCount Ä‘Ã£ cÃ³ á»Ÿ trÃªn
 
     final bool showReactions = reactionCount > 0;
     final bool showComments = commentCount > 0;
@@ -1089,59 +1217,23 @@ class SocialPostCard extends StatelessWidget {
     final bool backgroundWithMedia = hasBackgroundText && hasInlineImages;
     final double mediaTopSpacing = backgroundWithMedia ? 4 : 12;
 
-    return Container(
-      margin: const EdgeInsets.only(top: 8),
-      child: Material(
-        color: baseColor,
-        elevation: 1,
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  // ==== Avatar (báº¥m Ä‘á»ƒ má»Ÿ ProfileScreen) ====
-                  InkWell(
-                    borderRadius: BorderRadius.circular(40),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              ProfileScreen(targetUserId: post.publisherId),
-                        ),
-                      );
-                    },
-                    child: CircleAvatar(
-                      radius: 20,
-                      backgroundColor: cs.surfaceVariant,
-                      backgroundImage: (post.userAvatar != null &&
-                              post.userAvatar!.isNotEmpty)
-                          ? CachedNetworkImageProvider(post.userAvatar!)
-                          : null,
-                      child:
-                          (post.userAvatar == null || post.userAvatar!.isEmpty)
-                              ? Text(
-                                  (post.userName?.isNotEmpty ?? false)
-                                      ? post.userName![0].toUpperCase()
-                                      : '?',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: onSurface,
-                                  ),
-                                )
-                              : null,
-                    ),
-                  ),
-
-                  const SizedBox(width: 10),
-
-                  // ==== Cá»™t tÃªn + time (báº¥m Ä‘á»ƒ má»Ÿ ProfileScreen) ====
-                  Expanded(
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(6),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      child: _GlassContainer(
+        borderRadius: BorderRadius.circular(24),
+        padding: EdgeInsets.zero,
+        child: Material(
+          type: MaterialType.transparency,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    InkWell(
+                      borderRadius: BorderRadius.circular(40),
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
@@ -1150,370 +1242,253 @@ class SocialPostCard extends StatelessWidget {
                           ),
                         );
                       },
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // userName + postType cÃ¹ng 1 dÃ²ng
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  post.userName ?? '',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    color: onSurface,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
+                      child: CircleAvatar(
+                        radius: 20,
+                        backgroundColor: Colors.white.withOpacity(.12),
+                        backgroundImage: (post.userAvatar != null &&
+                                post.userAvatar!.isNotEmpty)
+                            ? CachedNetworkImageProvider(post.userAvatar!)
+                            : null,
+                        child: (post.userAvatar == null ||
+                                post.userAvatar!.isEmpty)
+                            ? Text(
+                                (post.userName?.isNotEmpty ?? false)
+                                    ? post.userName![0].toUpperCase()
+                                    : '?',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: onSurface,
                                 ),
-                              ),
-                              if (post.isGroupPost &&
-                                  ((post.groupTitle ?? post.groupName)
-                                          ?.isNotEmpty ??
-                                      false)) ...[
-                                const SizedBox(width: 6),
-                                Icon(
-                                  Icons.chevron_right,
-                                  size: 16,
-                                  color: onSurface.withOpacity(.6),
-                                ),
-                                const SizedBox(width: 4),
+                              )
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(6),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  ProfileScreen(targetUserId: post.publisherId),
+                            ),
+                          );
+                        },
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
                                 Flexible(
-                                  child: GestureDetector(
-                                    onTap: (post.groupId?.isNotEmpty ?? false)
-                                        ? () => _openGroupDetailFromPost(
-                                            context, post)
-                                        : null,
+                                  child: Text(
+                                    post.userName ?? '',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: onSurface,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (post.isGroupPost &&
+                                    ((post.groupTitle ?? post.groupName)
+                                            ?.isNotEmpty ??
+                                        false)) ...[
+                                  const SizedBox(width: 6),
+                                  Icon(
+                                    Icons.chevron_right,
+                                    size: 16,
+                                    color: onSurface.withOpacity(.6),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Flexible(
+                                    child: GestureDetector(
+                                      onTap: (post.groupId?.isNotEmpty ?? false)
+                                          ? () => _openGroupDetailFromPost(
+                                              context, post)
+                                          : null,
+                                      child: Text(
+                                        post.groupTitle ?? post.groupName ?? '',
+                                        style: TextStyle(
+                                          color: onSurface.withOpacity(.75),
+                                          fontWeight: FontWeight.w600,
+                                          decoration:
+                                              (post.groupId?.isNotEmpty ??
+                                                      false)
+                                                  ? TextDecoration.underline
+                                                  : TextDecoration.none,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                if (feelingLabel != null &&
+                                    feelingLabel.isNotEmpty) ...[
+                                  const SizedBox(width: 6),
+                                  if (feelingEmoji != null)
+                                    Text(
+                                      feelingEmoji,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(fontSize: 18),
+                                    )
+                                  else
+                                    Icon(
+                                      SocialFeelingHelper.iconForPost(post),
+                                      size: 16,
+                                      color: onSurface.withOpacity(.7),
+                                    ),
+                                  const SizedBox(width: 4),
+                                  Flexible(
                                     child: Text(
-                                      post.groupTitle ?? post.groupName ?? '',
+                                      feelingLabel,
                                       style: TextStyle(
                                         color: onSurface.withOpacity(.75),
-                                        fontWeight: FontWeight.w600,
-                                        decoration:
-                                            (post.groupId?.isNotEmpty ?? false)
-                                                ? TextDecoration.underline
-                                                : TextDecoration.none,
+                                        fontStyle: FontStyle.italic,
                                       ),
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                ),
-                              ],
-                              if (feelingLabel != null &&
-                                  feelingLabel.isNotEmpty) ...[
-                                const SizedBox(width: 6),
-                                if (feelingEmoji != null)
-                                  Text(
-                                    feelingEmoji,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(fontSize: 18),
-                                  )
-                                else
+                                ] else if ((post.postType ?? '')
+                                    .isNotEmpty) ...[
+                                  const SizedBox(width: 6),
                                   Icon(
-                                    SocialFeelingHelper.iconForPost(post),
-                                    size: 16,
-                                    color: onSurface.withOpacity(.7),
-                                  ),
-                                const SizedBox(width: 4),
-                                Flexible(
-                                  child: Text(
-                                    feelingLabel,
-                                    style: TextStyle(
-                                      color: onSurface.withOpacity(.75),
-                                      fontStyle: FontStyle.italic,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ] else if ((post.postType ?? '').isNotEmpty) ...[
-                                const SizedBox(width: 6),
-                                Icon(
-                                  post.postType == 'profile_picture'
-                                      ? Icons.person_outline
-                                      : post.postType == 'profile_cover_picture'
-                                          ? Icons.collections
-                                          : Icons.article_outlined,
-                                  size: 16,
-                                  color: onSurface.withOpacity(.6),
-                                ),
-                                const SizedBox(width: 4),
-                                Flexible(
-                                  child: Text(
                                     post.postType == 'profile_picture'
-                                        ? (getTranslated(
-                                                'updated_profile_picture',
-                                                context) ??
-                                            'updated profile picture')
+                                        ? Icons.person_outline
                                         : post.postType ==
                                                 'profile_cover_picture'
-                                            ? (getTranslated(
-                                                    'updated_cover_photo',
-                                                    context) ??
-                                                'updated cover photo')
-                                            : post.postType!,
-                                    style: TextStyle(
-                                      color: onSurface.withOpacity(.7),
-                                      fontStyle: FontStyle.italic,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                          Text(
-                            post.timeText ?? '',
-                            style: TextStyle(
-                              color: onSurface.withOpacity(.6),
-                              fontSize: 13,
-                            ),
-                          ),
-                          if (hasLocation)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 2),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.place_outlined,
-                                    size: 14,
-                                    color: onSurface.withOpacity(.65),
+                                            ? Icons.collections
+                                            : Icons.article_outlined,
+                                    size: 16,
+                                    color: onSurface.withOpacity(.6),
                                   ),
                                   const SizedBox(width: 4),
-                                  Expanded(
+                                  Flexible(
                                     child: Text(
-                                      postLocation!,
+                                      post.postType == 'profile_picture'
+                                          ? (getTranslated(
+                                                  'updated_profile_picture',
+                                                  context) ??
+                                              'updated profile picture')
+                                          : post.postType ==
+                                                  'profile_cover_picture'
+                                              ? (getTranslated(
+                                                      'updated_cover_photo',
+                                                      context) ??
+                                                  'updated cover photo')
+                                              : post.postType!,
                                       style: TextStyle(
                                         color: onSurface.withOpacity(.7),
-                                        fontSize: 13,
+                                        fontStyle: FontStyle.italic,
                                       ),
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ],
+                              ],
+                            ),
+                            Text(
+                              post.timeText ?? '',
+                              style: TextStyle(
+                                color: onSurface.withOpacity(.6),
+                                fontSize: 13,
                               ),
                             ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  IconButton(
-                    icon: postActionBusy
-                        ? SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color?>(
-                                onSurface.withOpacity(.7),
+                            if (hasLocation)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.place_outlined,
+                                      size: 14,
+                                      color: onSurface.withOpacity(.65),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Expanded(
+                                      child: Text(
+                                        postLocation!,
+                                        style: TextStyle(
+                                          color: onSurface.withOpacity(.7),
+                                          fontSize: 13,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          )
-                        : Icon(
-                            Icons.more_horiz,
-                            color: onSurface.withOpacity(.7),
-                          ),
-                    onPressed: postActionBusy
-                        ? null
-                        : () => _showPostOptions(context, post),
-                  ),
-                ],
-              ),
-            ),
-
-            // Text
-            SocialPostTextBlock(post: post),
-
-            // Poll
-            if (post.pollOptions != null && post.pollOptions!.isNotEmpty)
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (final opt in post.pollOptions!) ...[
-                      Text(opt['text']?.toString() ?? ''),
-                      const SizedBox(height: 6),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: LinearProgressIndicator(
-                          value: (((double.tryParse(
-                                          (opt['percentage_num'] ?? '0')
-                                              .toString()) ??
-                                      0.0) /
-                                  100.0))
-                              .clamp(0, 1),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 10),
-                    ],
+                    ),
+                    IconButton(
+                      icon: postActionBusy
+                          ? SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color?>(
+                                  onSurface.withOpacity(.7),
+                                ),
+                              ),
+                            )
+                          : Icon(
+                              Icons.more_horiz,
+                              color: onSurface.withOpacity(.7),
+                            ),
+                      onPressed: postActionBusy
+                          ? null
+                          : () => _showPostOptions(context, post),
+                    ),
                   ],
                 ),
               ),
 
-            if (mediaContent != null) ...[
-              SizedBox(height: mediaTopSpacing),
-              mediaContent,
-              const SizedBox(height: 8),
-            ],
+              // Text
+              SocialPostTextBlock(post: post),
 
-            if (showStats)
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => SocialPostDetailScreen(post: post),
-                      ),
-                    );
-                  },
+              // Poll
+              if (post.pollOptions != null && post.pollOptions!.isNotEmpty)
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        child: Row(
-                          children: [
-                            if (showReactions)
-                              Expanded(
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (topReactions.isNotEmpty)
-                                      _ReactionIconStack(labels: topReactions),
-                                    if (topReactions.isNotEmpty)
-                                      const SizedBox(width: 6),
-                                    Text(
-                                      _formatSocialCount(reactionCount),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                            color: onSurface.withOpacity(.85),
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                              )
-                            else
-                              const Expanded(child: SizedBox.shrink()),
-                            const SizedBox(width: 12),
-                            Flexible(
-                              child: Align(
-                                alignment: Alignment.centerRight,
-                                child: Wrap(
-                                  spacing: 12,
-                                  children: [
-                                    if (showComments)
-                                      Text(
-                                        '${_formatSocialCount(commentCount)} ${getTranslated("comments", context) ?? "comments"}',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall
-                                            ?.copyWith(
-                                              color: onSurface.withOpacity(.7),
-                                            ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    if (showShares)
-                                      Text(
-                                        '${_formatSocialCount(shareCount)} ${getTranslated("share_plural", context) ?? "shares"}',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall
-                                            ?.copyWith(
-                                              color: onSurface.withOpacity(.7),
-                                            ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
+                      for (final opt in post.pollOptions!) ...[
+                        Text(opt['text']?.toString() ?? ''),
+                        const SizedBox(height: 6),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: LinearProgressIndicator(
+                            value: (((double.tryParse(
+                                            (opt['percentage_num'] ?? '0')
+                                                .toString()) ??
+                                        0.0) /
+                                    100.0))
+                                .clamp(0, 1),
+                          ),
                         ),
-                      ),
-                      Divider(
-                        height: 1,
-                        thickness: .6,
-                        color: cs.surfaceVariant.withOpacity(.6),
-                      ),
+                        const SizedBox(height: 10),
+                      ],
                     ],
                   ),
                 ),
-              ),
 
-            // Actions
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  Expanded(
-                    child: Builder(
-                      builder: (itemCtx) => InkWell(
-                        onTap: () {
-                          final now = (post.myReaction == 'Like') ? '' : 'Like';
-                          itemCtx
-                              .read<SocialController>()
-                              .reactOnPost(post, now)
-                              .then((updated) {
-                            if (onPostUpdated != null) {
-                              onPostUpdated!(updated);
-                            }
-                          });
-                        },
-                        onLongPress: () {
-                          final overlayBox = Overlay.of(itemCtx)
-                              .context
-                              .findRenderObject() as RenderBox;
-                          final box = itemCtx.findRenderObject() as RenderBox?;
-                          final Offset centerGlobal = (box != null)
-                              ? box.localToGlobal(
-                                  box.size.center(Offset.zero),
-                                  ancestor: overlayBox,
-                                )
-                              : overlayBox.size.center(Offset.zero);
+              if (mediaContent != null) ...[
+                SizedBox(height: mediaTopSpacing),
+                mediaContent,
+                const SizedBox(height: 8),
+              ],
 
-                          _showReactionsOverlay(
-                            itemCtx,
-                            centerGlobal,
-                            onSelect: (val) {
-                              itemCtx
-                                  .read<SocialController>()
-                                  .reactOnPost(post, val)
-                                  .then((updated) {
-                                if (onPostUpdated != null) {
-                                  onPostUpdated!(updated);
-                                }
-                              });
-                            },
-                          );
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              _reactionIcon(post.myReaction),
-                              const SizedBox(width: 6),
-                              Text(
-                                _reactionActionLabel(context, post.myReaction),
-                                style: Theme.of(context).textTheme.bodyMedium,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  _PostAction(
-                    icon: Icons.mode_comment_outlined,
-                    label: (getTranslated('comment', context) ?? 'Comment'),
+              if (showStats)
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
@@ -1521,26 +1496,184 @@ class SocialPostCard extends StatelessWidget {
                         ),
                       );
                     },
-                  ),
-                  _PostAction(
-                    icon: Icons.share_outlined,
-                    label: (getTranslated('share', context) ?? 'Share'),
-                    loading: isSharing,
-                    onTap: isSharing
-                        ? null
-                        : () async {
-                            await Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => SharePostScreen(post: post),
-                                fullscreenDialog: true,
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          child: Row(
+                            children: [
+                              if (showReactions)
+                                Expanded(
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (topReactions.isNotEmpty)
+                                        _ReactionIconStack(
+                                            labels: topReactions),
+                                      if (topReactions.isNotEmpty)
+                                        const SizedBox(width: 6),
+                                      Text(
+                                        _formatSocialCount(reactionCount),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: onSurface.withOpacity(.85),
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              else
+                                const Expanded(child: SizedBox.shrink()),
+                              const SizedBox(width: 12),
+                              Flexible(
+                                child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: Wrap(
+                                    spacing: 12,
+                                    children: [
+                                      if (showComments)
+                                        Text(
+                                          '${_formatSocialCount(commentCount)} ${getTranslated("comments", context) ?? "comments"}',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall
+                                              ?.copyWith(
+                                                color:
+                                                    onSurface.withOpacity(.7),
+                                              ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      if (showShares)
+                                        Text(
+                                          '${_formatSocialCount(shareCount)} ${getTranslated("share_plural", context) ?? "shares"}',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall
+                                              ?.copyWith(
+                                                color:
+                                                    onSurface.withOpacity(.7),
+                                              ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                    ],
+                                  ),
+                                ),
                               ),
+                            ],
+                          ),
+                        ),
+                        Divider(
+                          height: 1,
+                          thickness: .6,
+                          color: Colors.white.withOpacity(.12),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+              // Actions
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    Expanded(
+                      child: Builder(
+                        builder: (itemCtx) => InkWell(
+                          onTap: () {
+                            final now =
+                                (post.myReaction == 'Like') ? '' : 'Like';
+                            itemCtx
+                                .read<SocialController>()
+                                .reactOnPost(post, now)
+                                .then((updated) {
+                              if (onPostUpdated != null) {
+                                onPostUpdated!(updated);
+                              }
+                            });
+                          },
+                          onLongPress: () {
+                            final overlayBox = Overlay.of(itemCtx)
+                                .context
+                                .findRenderObject() as RenderBox;
+                            final box =
+                                itemCtx.findRenderObject() as RenderBox?;
+                            final Offset centerGlobal = (box != null)
+                                ? box.localToGlobal(
+                                    box.size.center(Offset.zero),
+                                    ancestor: overlayBox,
+                                  )
+                                : overlayBox.size.center(Offset.zero);
+
+                            _showReactionsOverlay(
+                              itemCtx,
+                              centerGlobal,
+                              onSelect: (val) {
+                                itemCtx
+                                    .read<SocialController>()
+                                    .reactOnPost(post, val)
+                                    .then((updated) {
+                                  if (onPostUpdated != null) {
+                                    onPostUpdated!(updated);
+                                  }
+                                });
+                              },
                             );
                           },
-                  ),
-                ],
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _reactionIcon(post.myReaction),
+                                const SizedBox(width: 6),
+                                Text(
+                                  _reactionActionLabel(
+                                      context, post.myReaction),
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    _PostAction(
+                      icon: Icons.mode_comment_outlined,
+                      label: (getTranslated('comment', context) ?? 'Comment'),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => SocialPostDetailScreen(post: post),
+                          ),
+                        );
+                      },
+                    ),
+                    _PostAction(
+                      icon: Icons.share_outlined,
+                      label: (getTranslated('share', context) ?? 'Share'),
+                      loading: isSharing,
+                      onTap: isSharing
+                          ? null
+                          : () async {
+                              await Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => SharePostScreen(post: post),
+                                  fullscreenDialog: true,
+                                ),
+                              );
+                            },
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1702,7 +1835,7 @@ class _PostAdCardState extends State<_PostAdCard> {
 
   String _title(BuildContext context) {
     final String defaultTitle =
-        getTranslated('ad_default_title', context) ?? 'Quảng cáo';
+        getTranslated('ad_default_title', context) ?? 'QuÃ¡ÂºÂ£ng cÃƒÂ¡o';
 
     if (widget.ad.headline?.trim().isNotEmpty ?? false) {
       return widget.ad.headline!.trim();
@@ -1759,75 +1892,89 @@ class _PostAdCardState extends State<_PostAdCard> {
     final String? media = widget.ad.mediaUrl;
     final String? description = _description();
 
-    final String sponsoredLabel =
-        getTranslated('ad_sponsored', context) ?? 'Được tài trợ';
+    final String sponsoredLabel = getTranslated('ad_sponsored', context) ??
+        'Ã„ÂÃ†Â°Ã¡Â»Â£c tÃƒÂ i trÃ¡Â»Â£';
     final String learnMoreLabel =
-        getTranslated('ad_learn_more', context) ?? 'Tìm hiểu thêm';
+        getTranslated('ad_learn_more', context) ?? 'TÃƒÂ¬m hiÃ¡Â»Æ’u thÃƒÂªm';
 
     return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Material(
-        color: cs.surface,
-        elevation: 1,
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: _handleAdClick,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (media != null && media.isNotEmpty)
-                _AdResponsiveImage(
-                  url: media,
-                ),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      sponsoredLabel,
-                      style: TextStyle(
-                        color: cs.onSurface.withOpacity(.6),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      child: _GlassContainer(
+        borderRadius: BorderRadius.circular(22),
+        padding: EdgeInsets.zero,
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTap: _handleAdClick,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (media != null && media.isNotEmpty)
+                  _AdResponsiveImage(
+                    url: media,
+                  ),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        sponsoredLabel,
+                        style: TextStyle(
+                          color: cs.onSurface.withOpacity(.7),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _title(context),
-                      style: TextStyle(
-                        color: cs.onSurface,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    if (description != null) ...[
                       const SizedBox(height: 6),
                       Text(
-                        description,
+                        _title(context),
                         style: TextStyle(
-                          color: cs.onSurface.withOpacity(.85),
-                          fontSize: 14,
+                          color: cs.onSurface,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (description != null) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          description,
+                          style: TextStyle(
+                            color: cs.onSurface.withOpacity(.85),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: _GlassTheme.controlGradient,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                                color: Colors.white.withOpacity(.18)),
+                          ),
+                          child: TextButton(
+                            onPressed: _handleAdClick,
+                            style: TextButton.styleFrom(
+                              foregroundColor: cs.onSurface,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 10),
+                            ),
+                            child: Text(
+                              learnMoreLabel,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                          ),
                         ),
                       ),
                     ],
-                    const SizedBox(height: 12),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: ElevatedButton(
-                        onPressed: _handleAdClick,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              Theme.of(context).colorScheme.primary,
-                          foregroundColor: Colors.white,
-                        ),
-                        child: Text(learnMoreLabel),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -2154,7 +2301,7 @@ class _ImageGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Ã©p kÃ­ch thu?c t?ng th? con bÃ¡m trong c?t/rÃ ng bu?c
+    // ÃƒÆ’Ã‚Â©p kÃƒÆ’Ã‚Â­ch thu?c t?ng th? con bÃƒÆ’Ã‚Â¡m trong c?t/rÃƒÆ’Ã‚Â ng bu?c
     final double aspect = urls.length == 1 ? (16 / 9) : (16 / 9);
     return AspectRatio(
       aspectRatio: aspect,
@@ -2241,7 +2388,7 @@ class _ImageGrid extends StatelessWidget {
     }
   }
 
-  // ?nh vuÃ´ng dÃ¹ng bÃªn trong grid
+  // ?nh vuÃƒÆ’Ã‚Â´ng dÃƒÆ’Ã‚Â¹ng bÃƒÆ’Ã‚Âªn trong grid
   Widget _square(String u) => AspectRatio(
         aspectRatio: 1,
         child: _tile(u),
@@ -2329,7 +2476,7 @@ String _reactionActionLabel(BuildContext context, String reaction) {
     case 'Wow':
       return getTranslated('wow', context) ?? 'Wow';
     case 'Sad':
-      return getTranslated('sad', context) ?? 'Buồn';
+      return getTranslated('sad', context) ?? 'BuÃ¡Â»â€œn';
     case 'Angry':
       return getTranslated('angry', context) ?? 'Angry';
     default:
@@ -2445,13 +2592,13 @@ void _showReactionsOverlay(
         overlay.context.findRenderObject() as RenderBox;
     final Offset local = overlayBox.globalToLocal(globalPos);
 
-    // KÃ­ch thu?c khung popup, canh n?m ngay trÃªn nÃºt
+    // KÃƒÆ’Ã‚Â­ch thu?c khung popup, canh n?m ngay trÃƒÆ’Ã‚Âªn nÃƒÆ’Ã‚Âºt
     const double popupWidth = 300;
     const double popupHeight = 56;
 
     return Stack(
       children: [
-        // Tap ra ngoÃ i d? t?t
+        // Tap ra ngoÃƒÆ’Ã‚Â i d? t?t
         Positioned.fill(
           child: GestureDetector(onTap: () => entry.remove()),
         ),
