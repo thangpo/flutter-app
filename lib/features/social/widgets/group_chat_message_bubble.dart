@@ -13,6 +13,19 @@ import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
 import 'package:encrypt/encrypt.dart' as enc;
 
+/// Đối tượng hiển thị reaction gọn gàng
+class _ReactionView {
+  final String keyName;
+  final String emoji;
+  final int count;
+
+  const _ReactionView({
+    required this.keyName,
+    required this.emoji,
+    required this.count,
+  });
+}
+
 class ChatMessageBubble extends StatefulWidget {
   final Map<String, dynamic> message;
   final bool isMe;
@@ -39,8 +52,9 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
 
   String _resolveMediaUrl(String s) {
     if (s.isEmpty) return s;
-    if (s.startsWith('http') || s.startsWith('file://') || s.startsWith('/'))
+    if (s.startsWith('http') || s.startsWith('file://') || s.startsWith('/')) {
       return s;
+    }
     if (s.startsWith('upload/')) return kBaseUrl + s;
     return s;
   }
@@ -87,7 +101,9 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
   Uint8List _keyBytes16(String keyStr) {
     final src = utf8.encode(keyStr);
     final out = Uint8List(16);
-    for (int i = 0; i < src.length && i < 16; i++) out[i] = src[i];
+    for (int i = 0; i < src.length && i < 16; i++) {
+      out[i] = src[i];
+    }
     return out;
   }
 
@@ -133,7 +149,6 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
   VideoPlayerController? _vp;
   bool _videoReady = false;
   bool _initializingVideo = false;
-  bool _userStarted = false;
 
   Future<void> _initVideo() async {
     if (_initializingVideo || _videoReady || _media.isEmpty) return;
@@ -164,14 +179,12 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
     _vp = null;
     _videoReady = false;
     _initializingVideo = false;
-    _userStarted = false;
   }
 
   Future<void> _playOnTap() async {
     if (!_videoReady) await _initVideo();
     if (_vp == null) return;
     try {
-      _userStarted = true;
       await _vp!.setVolume(1.0);
       await _vp!.play();
       setState(() {});
@@ -242,17 +255,21 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
         ? Image.file(File(_toLocalPath(src)), fit: BoxFit.contain)
         : CachedNetworkImage(imageUrl: src, fit: BoxFit.contain);
     Navigator.of(context).push(PageRouteBuilder(
-        opaque: false,
-        barrierColor: Colors.black.withOpacity(0.95),
-        pageBuilder: (_, __, ___) => GestureDetector(
-              onTap: () => Navigator.of(context).pop(),
-              child: Scaffold(
-                backgroundColor: Colors.black,
-                body: Center(
-                    child: Hero(
-                        tag: src, child: InteractiveViewer(child: imgWidget))),
-              ),
-            )));
+      opaque: false,
+      barrierColor: Colors.black.withOpacity(0.95),
+      pageBuilder: (_, __, ___) => GestureDetector(
+        onTap: () => Navigator.of(context).pop(),
+        child: Scaffold(
+          backgroundColor: Colors.black,
+          body: Center(
+            child: Hero(
+              tag: src,
+              child: InteractiveViewer(child: imgWidget),
+            ),
+          ),
+        ),
+      ),
+    ));
   }
 
   @override
@@ -268,9 +285,222 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
     super.dispose();
   }
 
+  // =============== REPLY META (dùng để hiển thị giống Messenger) ===============
+
+  /// Cố gắng lấy ra message mà tin nhắn này đang reply tới.
+  /// Ưu tiên field kiểu object (Map) để có đủ dữ liệu.
+  Map<String, dynamic>? _extractReplyMessage() {
+    final raw = message['reply_to'] ??
+        message['reply_message'] ??
+        message['reply'] ??
+        message['replied_message'];
+    if (raw is Map) {
+      return Map<String, dynamic>.from(raw);
+    }
+    // Nếu server chỉ trả về id thì thôi, không render UI
+    return null;
+  }
+
+  Widget _buildReplyInBubble(Map<String, dynamic> replied) {
+    final userData = (replied['user_data'] ?? {}) as Map? ?? {};
+    final name =
+        '${userData['name'] ?? userData['username'] ?? (replied['from_id'] ?? '')}';
+
+    final isImage = replied['is_image'] == true;
+    final isVideo = replied['is_video'] == true;
+    final isAudio = replied['is_audio'] == true ||
+        replied['type_two']?.toString() == 'voice';
+    final isFile = replied['is_file'] == true;
+
+    String label;
+    if (isImage) {
+      label = '[Ảnh]';
+    } else if (isVideo) {
+      label = '[Video]';
+    } else if (isAudio) {
+      label = '[Âm thanh]';
+    } else if (isFile) {
+      label = '[Tệp đính kèm]';
+    } else {
+      label = (replied['display_text'] ?? replied['text'] ?? '').toString();
+    }
+    if (label.length > 80) {
+      label = '${label.substring(0, 80)}…';
+    }
+
+    // màu nền reply nhỏ bên trong bubble
+    final bg = isMe
+        ? Colors.white.withOpacity(0.12)
+        : const Color(0xFFE4E6EB); // giống Messenger một chút
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 3,
+            height: 32,
+            decoration: BoxDecoration(
+              color: isMe ? Colors.white70 : Colors.blue.shade400,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name.isEmpty ? 'Tin nhắn' : name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color:
+                        isMe ? Colors.white.withOpacity(0.9) : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  label.isEmpty ? 'Tin nhắn' : label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isMe
+                        ? Colors.white.withOpacity(0.95)
+                        : const Color(0xFF050505),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =============== REACTIONS UI ===============
+
+  String? _emojiForReactionKey(String key) {
+    switch (key.toLowerCase()) {
+      case 'like':
+        return '👍';
+      case 'love':
+        return '❤️';
+      case 'haha':
+        return '😂';
+      case 'wow':
+        return '😮';
+      case 'sad':
+        return '😢';
+      case 'angry':
+        return '😡';
+      default:
+        return null;
+    }
+  }
+
+  List<_ReactionView> _extractReactions() {
+    final result = <_ReactionView>[];
+
+    dynamic raw = message['reaction'] ?? message['reactions'];
+    if (raw == null) return result;
+
+    // Case 1: Map kiểu Wo_GetPostReactionsTypes
+    if (raw is Map) {
+      raw.forEach((k, v) {
+        final key = k.toString();
+        if (key == 'all' || key == 'wondered' || key == 'is_reacted') return;
+        int count = 0;
+        if (v is Map && v['count'] != null) {
+          count = int.tryParse('${v['count']}') ?? 0;
+        } else if (v is int) {
+          count = v;
+        } else if (v is String) {
+          count = int.tryParse(v) ?? 0;
+        }
+        if (count <= 0) return;
+        final emoji = _emojiForReactionKey(key);
+        if (emoji == null) return;
+        result.add(_ReactionView(keyName: key, emoji: emoji, count: count));
+      });
+    }
+
+    // Case 2: List các object {reaction: 'Like', count: X}
+    else if (raw is List) {
+      for (final item in raw) {
+        if (item is! Map) continue;
+        final key = (item['reaction'] ?? item['type'] ?? '').toString();
+        if (key.isEmpty) continue;
+        int count = 0;
+        if (item['count'] != null) {
+          count = int.tryParse('${item['count']}') ?? 0;
+        }
+        if (count <= 0) continue;
+        final emoji = _emojiForReactionKey(key);
+        if (emoji == null) continue;
+        result.add(_ReactionView(keyName: key, emoji: emoji, count: count));
+      }
+    }
+
+    return result;
+  }
+
+  Widget _buildReactionsStrip() {
+    final items = _extractReactions();
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(top: 2, left: 4, right: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.12),
+              blurRadius: 4,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (int i = 0; i < items.length && i < 3; i++) ...[
+              Text(items[i].emoji, style: const TextStyle(fontSize: 13)),
+              if (i < items.length - 1 && i < 2) const SizedBox(width: 2),
+            ],
+            const SizedBox(width: 4),
+            Text(
+              items.fold<int>(0, (sum, e) => sum + e.count).toString(),
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // =============== BUILD UI ===============
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
+
     final isMediaBubble = _isImage || _isVideo;
     final bubbleColor = (_isAudio || _isFile || isMediaBubble)
         ? Colors.transparent
@@ -291,24 +521,41 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
           child: Text(
             message['display_text'] ?? '',
             style: const TextStyle(
-                fontSize: 11, color: Colors.grey, fontStyle: FontStyle.italic),
+              fontSize: 11,
+              color: Colors.grey,
+              fontStyle: FontStyle.italic,
+            ),
             textAlign: TextAlign.center,
           ),
         ),
       );
     }
 
-    Widget content;
+    // Nội dung chính của bubble
+    Widget baseContent;
     if (_isVideo) {
-      content = _buildVideo();
+      baseContent = _buildVideo();
     } else if (_isImage) {
-      content = _buildImage();
+      baseContent = _buildImage();
     } else if (_isAudio) {
-      content = _buildVoice();
+      baseContent = _buildVoice();
     } else if (_isFile) {
-      content = _buildFile();
+      baseContent = _buildFile();
     } else {
-      content = _buildText();
+      baseContent = _buildText();
+    }
+
+    // Nếu có reply -> chèn khối reply phía trên baseContent, bên trong bubble
+    final replied = _extractReplyMessage();
+    if (replied != null) {
+      baseContent = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildReplyInBubble(replied),
+          baseContent,
+        ],
+      );
     }
 
     return Column(
@@ -318,27 +565,34 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
         Container(
           padding: EdgeInsets.all(isMediaBubble ? 0 : 10),
           decoration: BoxDecoration(color: bubbleColor, borderRadius: radius),
-          child: content,
+          child: baseContent,
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 2),
+        _buildReactionsStrip(),
+        const SizedBox(height: 2),
         if (message['is_local'] == true && _uploading)
-          Text('Đang gửi…',
-              style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+          Text(
+            'Đang gửi…',
+            style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+          ),
         if (_failed)
-          const Text('Gửi thất bại',
-              style: TextStyle(fontSize: 11, color: Colors.red)),
+          const Text(
+            'Gửi thất bại',
+            style: TextStyle(fontSize: 11, color: Colors.red),
+          ),
       ],
     );
   }
 
   Widget _buildText() {
     final text = _resolvedText();
-    return SelectableText(
+    return Text(
       text.isEmpty ? ' ' : text,
       style: TextStyle(
-          fontSize: 15,
-          height: 1.35,
-          color: isMe ? Colors.white : const Color(0xFF050505)),
+        fontSize: 15,
+        height: 1.35,
+        color: isMe ? Colors.white : const Color(0xFF050505),
+      ),
     );
   }
 
@@ -353,7 +607,10 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
         tag: src,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(10),
-          child: AspectRatio(aspectRatio: 4 / 3, child: child),
+          child: AspectRatio(
+            aspectRatio: 4 / 3,
+            child: child,
+          ),
         ),
       ),
     );
@@ -365,7 +622,7 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
     return ClipRRect(
       borderRadius: BorderRadius.circular(10),
       child: SizedBox(
-        width: 260,
+        width: 240,
         child: AspectRatio(
           aspectRatio: ready ? _vp!.value.aspectRatio : 16 / 9,
           child: Stack(
@@ -379,10 +636,15 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
                     onTap: _playOnTap,
                     child: Container(
                       decoration: const BoxDecoration(
-                          color: Colors.black54, shape: BoxShape.circle),
+                        color: Colors.black54,
+                        shape: BoxShape.circle,
+                      ),
                       padding: const EdgeInsets.all(10),
-                      child: const Icon(Icons.play_arrow,
-                          color: Colors.white, size: 48),
+                      child: const Icon(
+                        Icons.play_arrow,
+                        color: Colors.white,
+                        size: 48,
+                      ),
                     ),
                   ),
                 ),
@@ -390,16 +652,64 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
                 const Center(child: CircularProgressIndicator()),
               if (ready)
                 Positioned(
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    child: VideoProgressIndicator(_vp!, allowScrubbing: true)),
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: VideoProgressIndicator(
+                    _vp!,
+                    allowScrubbing: true,
+                  ),
+                ),
               if (_uploading)
                 Positioned.fill(
+                  child: Container(
+                    color: Colors.black26,
+                    child: const Center(child: CircularProgressIndicator()),
+                  ),
+                ),
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withOpacity(0.05),
+                          Colors.black.withOpacity(0.2),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              if (ready)
+                Center(
+                  child: GestureDetector(
+                    onTap: () async {
+                      if (_vp == null) return;
+                      if (_vp!.value.isPlaying) {
+                        await _vp!.pause();
+                      } else {
+                        await _vp!.play();
+                      }
+                      setState(() {});
+                    },
                     child: Container(
-                        color: Colors.black26,
-                        child:
-                            const Center(child: CircularProgressIndicator()))),
+                      decoration: BoxDecoration(
+                        color: Colors.black45,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white70, width: 1.2),
+                      ),
+                      padding: const EdgeInsets.all(10),
+                      child: Icon(
+                        _vp!.value.isPlaying ? Icons.pause : Icons.play_arrow,
+                        color: Colors.white,
+                        size: 40,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -409,68 +719,99 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
 
   Widget _buildVoice() {
     final bg = isMe ? const Color(0xFF0084FF) : const Color(0xFFE4E6EB);
+    final textColor = isMe ? Colors.white : Colors.black87;
+
     return Container(
-      decoration:
-          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(18)),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      width: 280,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        if (_vLoading)
-          const LinearProgressIndicator(minHeight: 2, color: Colors.white),
-        Row(children: [
-          InkWell(
-            onTap: _ap == null
-                ? null
-                : () async {
-                    if (_vPlaying) {
-                      await _ap!.pause();
-                    } else {
-                      if (_ap!.audioSource == null) await _initVoice();
-                      await _ap!.play();
-                    }
-                  },
-            child: Container(
-              width: 36,
-              height: 36,
-              decoration: const BoxDecoration(
-                  color: Colors.white, shape: BoxShape.circle),
-              child:
-                  Icon(_vPlaying ? Icons.pause : Icons.play_arrow, color: bg),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                trackHeight: 4,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
-                overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
-                activeTrackColor: Colors.white,
-                inactiveTrackColor: Colors.white24,
-                thumbColor: Colors.white,
-                overlayColor: Colors.white30,
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      width: 230,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_vLoading)
+            LinearProgressIndicator(
+              minHeight: 2,
+              backgroundColor: bg.withOpacity(0.4),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                isMe ? Colors.white : Colors.black87,
               ),
-              child: Slider(
-                value: _pos.inMilliseconds
-                    .clamp(0, _dur.inMilliseconds)
-                    .toDouble(),
-                max: (_dur.inMilliseconds == 0 ? 1 : _dur.inMilliseconds)
-                    .toDouble(),
-                onChanged: _ap == null
+            ),
+          Row(
+            children: [
+              InkWell(
+                onTap: _ap == null
                     ? null
-                    : (v) async {
-                        await _ap!.seek(Duration(milliseconds: v.toInt()));
+                    : () async {
+                        if (_vPlaying) {
+                          await _ap!.pause();
+                        } else {
+                          if (_ap!.audioSource == null) await _initVoice();
+                          await _ap!.play();
+                        }
                       },
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    _vPlaying ? Icons.pause : Icons.play_arrow,
+                    color: bg,
+                    size: 20,
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: SizedBox(
+                  height: 26,
+                  child: SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      trackHeight: 3,
+                      thumbShape:
+                          const RoundSliderThumbShape(enabledThumbRadius: 7),
+                      overlayShape:
+                          const RoundSliderOverlayShape(overlayRadius: 12),
+                      activeTrackColor: Colors.white,
+                      inactiveTrackColor: Colors.white24,
+                      thumbColor: Colors.white,
+                      overlayColor: Colors.white30,
+                    ),
+                    child: Slider(
+                      value: _pos.inMilliseconds
+                          .clamp(0, _dur.inMilliseconds)
+                          .toDouble(),
+                      max: (_dur.inMilliseconds == 0 ? 1 : _dur.inMilliseconds)
+                          .toDouble(),
+                      onChanged: _ap == null
+                          ? null
+                          : (v) async {
+                              await _ap!
+                                  .seek(Duration(milliseconds: v.toInt()));
+                            },
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                _fmt(_dur),
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 10),
-          Text(_fmt(_dur),
-              style: TextStyle(
-                  color: isMe ? Colors.white : Colors.black87,
-                  fontWeight: FontWeight.w500)),
-        ])
-      ]),
+        ],
+      ),
     );
   }
 
@@ -488,40 +829,60 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
         (sizeAny is int) ? _readableSize(sizeAny) : (sizeAny?.toString() ?? '');
     return Container(
       decoration: BoxDecoration(
-          color: isMe ? const Color(0xFFDCEAFF) : const Color(0xFFF0F2F5),
-          borderRadius: BorderRadius.circular(18)),
+        color: isMe ? const Color(0xFFDCEAFF) : const Color(0xFFF0F2F5),
+        borderRadius: BorderRadius.circular(18),
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       width: 300,
       child: InkWell(
         onTap: _openFileAttachment,
         borderRadius: BorderRadius.circular(18),
-        child: Row(children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: const BoxDecoration(
-                color: Color(0xFFE0E3EB), shape: BoxShape.circle),
-            child:
-                const Icon(Icons.insert_drive_file, color: Color(0xFF6B7280)),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: const BoxDecoration(
+                color: Color(0xFFE0E3EB),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.insert_drive_file,
+                color: Color(0xFF6B7280),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
               child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                Text(name.isEmpty ? 'Tệp đính kèm' : name,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name.isEmpty ? 'Tệp đính kèm' : name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 14)),
-                if (sizeStr.isNotEmpty)
-                  Text(sizeStr,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                  if (sizeStr.isNotEmpty)
+                    Text(
+                      sizeStr,
                       style: const TextStyle(
-                          color: Color(0xFF6B7280), fontSize: 12)),
-              ])),
-          const SizedBox(width: 8),
-          const Icon(Icons.download_rounded, color: Color(0xFF6B7280)),
-        ]),
+                        color: Color(0xFF6B7280),
+                        fontSize: 12,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(
+              Icons.download_rounded,
+              color: Color(0xFF6B7280),
+            ),
+          ],
+        ),
       ),
     );
   }

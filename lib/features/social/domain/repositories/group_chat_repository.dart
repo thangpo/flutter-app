@@ -68,11 +68,13 @@ class GroupChatRepository {
 
   // -------------------- Decrypt helpers --------------------
   static final RegExp _maybeBase64 = RegExp(r'^[A-Za-z0-9+/=]+$');
+
   String _cleanB64(String s) => s
       .replaceAll('-', '+')
       .replaceAll('_', '/')
       .replaceAll(' ', '+')
       .replaceAll('\n', '');
+
   Uint8List _keyBytes16(String keyStr) {
     final src = utf8.encode(keyStr);
     final out = Uint8List(16);
@@ -143,6 +145,38 @@ class GroupChatRepository {
     final rawText = (m['text'] ?? '').toString();
     final timeVal = m['time'];
     m['display_text'] = _decryptIfNeeded(rawText, timeVal);
+
+    // 🔁 Chuẩn hoá reply (nếu server trả về)
+    if (m['reply'] is Map) {
+      final r = Map<String, dynamic>.from(m['reply']);
+      final rawReplyText = (r['text'] ?? '').toString();
+      final replyTime = r['time'] ?? m['time'];
+      r['display_text'] = _decryptIfNeeded(rawReplyText, replyTime);
+      m['reply'] = r;
+    }
+
+    // 🔁 Chuẩn hoá reaction (nếu server trả về)
+    final rawReaction = m['reaction'];
+    if (rawReaction is Map) {
+      final rx = Map<String, dynamic>.from(rawReaction);
+      String? myReaction;
+      int total = 0;
+
+      rx.forEach((key, value) {
+        if (value is Map) {
+          final v = Map<String, dynamic>.from(value);
+          final c = int.tryParse('${v['count'] ?? 0}') ?? 0;
+          total += c;
+          if (v['is_reacted'] == true && myReaction == null) {
+            myReaction = key;
+          }
+        }
+      });
+
+      m['reaction'] = rx; // full summary từ WoWonder
+      m['my_reaction'] = myReaction; // reaction hiện tại của mình (vd: "Like")
+      m['reactions_count'] = total; // tổng số reaction
+    }
 
     return m;
   }
@@ -297,6 +331,35 @@ class GroupChatRepository {
         .toList();
   }
 
+  /// Lấy 1 message cụ thể trong group (dùng sau khi react / delete / v.v.)
+  Future<Map<String, dynamic>?> fetchMessageById(
+    String groupId,
+    String messageId,
+  ) async {
+    final token = await _getAccessTokenOrThrow();
+    final uri = Uri.parse('${_groupChatEndpoint()}?access_token=$token');
+
+    final res = await http.post(uri, body: {
+      'server_key': AppConstants.socialServerKey,
+      'type': 'get_message_by_id',
+      'group_id': groupId,
+      'message_id': messageId,
+    }).timeout(const Duration(seconds: 25));
+
+    if (res.statusCode != 200) {
+      throw Exception('Không lấy được tin nhắn (HTTP ${res.statusCode})');
+    }
+    final json = jsonDecode(res.body);
+    if (!(_isOk(json))) {
+      throw Exception('Không lấy được tin nhắn: ${json['errors'] ?? res.body}');
+    }
+
+    final list = (json['data'] ?? []) as List;
+    if (list.isEmpty) return null;
+    final raw = Map<String, dynamic>.from(list.first as Map);
+    return _normalizeMsg(raw);
+  }
+
   // -------------------- Send --------------------
   Future<Map<String, dynamic>?> sendMessage({
     required String groupId,
@@ -304,12 +367,14 @@ class GroupChatRepository {
     File? file,
     String? type,
     String? messageHashId,
+    String? replyToMessageId,
   }) async {
     final token = await _getAccessTokenOrThrow();
     final uri = Uri.parse('${_groupChatEndpoint()}?access_token=$token');
 
+    // Text-only
     if (file == null) {
-      final body = {
+      final body = <String, String>{
         'server_key': AppConstants.socialServerKey,
         'type': 'send',
         'id': groupId,
@@ -317,6 +382,9 @@ class GroupChatRepository {
       };
       if (messageHashId != null && messageHashId.isNotEmpty) {
         body['message_hash_id'] = messageHashId;
+      }
+      if (replyToMessageId != null && replyToMessageId.isNotEmpty) {
+        body['reply_id'] = replyToMessageId;
       }
 
       final res =
@@ -333,7 +401,7 @@ class GroupChatRepository {
       return m == null ? null : _normalizeMsg(m);
     }
 
-    // multipart
+    // multipart (file)
     final req = http.MultipartRequest('POST', uri);
     req.fields['server_key'] = AppConstants.socialServerKey;
     req.fields['type'] = 'send';
@@ -341,6 +409,9 @@ class GroupChatRepository {
     req.fields['text'] = text.isEmpty ? ' ' : text;
     if (messageHashId != null && messageHashId.isNotEmpty) {
       req.fields['message_hash_id'] = messageHashId;
+    }
+    if (replyToMessageId != null && replyToMessageId.isNotEmpty) {
+      req.fields['reply_id'] = replyToMessageId;
     }
 
     final ct = _contentTypeFor(file.path);
@@ -364,6 +435,89 @@ class GroupChatRepository {
     }
     final m = _extractMessageMap(json);
     return m == null ? null : _normalizeMsg(m);
+  }
+
+  /// 🔥 Reaction cho message trong group
+  ///
+  /// [reactionKey] là key WoWonder: vd "Like", "Love", "Angry"...
+  Future<Map<String, dynamic>> reactToMessage({
+    required String groupId,
+    required String messageId,
+    required String reactionKey,
+  }) async {
+    final token = await _getAccessTokenOrThrow();
+    final uri = Uri.parse('${_groupChatEndpoint()}?access_token=$token');
+
+    final res = await http.post(uri, body: {
+      'server_key': AppConstants.socialServerKey,
+      'type': 'reaction',
+      'id': messageId,
+      'reaction': reactionKey,
+    }).timeout(const Duration(seconds: 25));
+
+    if (res.statusCode != 200) {
+      throw Exception('Reaction thất bại (HTTP ${res.statusCode})');
+    }
+    final json = jsonDecode(res.body);
+    if (!_isOk(json)) {
+      throw Exception('Reaction thất bại: ${json['errors'] ?? res.body}');
+    }
+
+    final rawReaction = json['reaction'];
+    Map<String, dynamic>? reactionSummary;
+    String? myReaction;
+    int total = 0;
+
+    if (rawReaction is Map) {
+      final rx = Map<String, dynamic>.from(rawReaction);
+      rx.forEach((key, value) {
+        if (value is Map) {
+          final v = Map<String, dynamic>.from(value);
+          final c = int.tryParse('${v['count'] ?? 0}') ?? 0;
+          total += c;
+          if (v['is_reacted'] == true && myReaction == null) {
+            myReaction = key;
+          }
+        }
+      });
+      reactionSummary = rx;
+    }
+
+    return {
+      'message_id': json['message_id']?.toString() ?? messageId,
+      'group_id': json['group_id']?.toString() ?? groupId,
+      'reaction_key': json['reaction_key'] ?? reactionKey,
+      'reaction': reactionSummary,
+      'my_reaction': myReaction,
+      'reactions_count': total,
+      'active': json['active'] == 1 || json['active'] == '1',
+    };
+  }
+
+  // -------------------- Delete message --------------------
+  Future<bool> deleteMessage(String messageId) async {
+    final token = await _getAccessTokenOrThrow();
+    final uri = Uri.parse(
+      '${AppConstants.socialBaseUrl}/api/delete_message?access_token=$token',
+    );
+
+    final resp = await http.post(
+      uri,
+      body: {
+        'server_key': AppConstants.socialServerKey,
+        'message_id': messageId,
+      },
+    ).timeout(const Duration(seconds: 20));
+
+    if (resp.statusCode != 200) {
+      return false;
+    }
+
+    dynamic data = jsonDecode(resp.body);
+    if (data is! Map<String, dynamic>) return false;
+
+    final status = data['api_status'] ?? data['status'] ?? data['code'];
+    return '$status' == '200';
   }
 
   // -------------------- Edit Group --------------------
@@ -445,8 +599,6 @@ class GroupChatRepository {
     final members = (data['data']?['members'] ?? []) as List;
     return members.map((e) => Map<String, dynamic>.from(e)).toList();
   }
-
-
 
   Future<bool> removeGroupUsers(String groupId, List<String> userIds) async {
     final token = await _getAccessTokenOrThrow();
