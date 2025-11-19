@@ -100,6 +100,14 @@ class GroupChatController extends ChangeNotifier {
     final fileName = (m['mediaFileName'] ?? '').toString();
     final text = (m['text'] ?? '').toString();
 
+    // đảm bảo reply có display_text (phục vụ UI quote)
+    if (m['reply'] is Map) {
+      final r = Map<String, dynamic>.from(m['reply']);
+      final replyText = (r['display_text'] ?? r['text'] ?? '').toString();
+      r['display_text'] = replyText;
+      m['reply'] = r;
+    }
+
     final isImage = (m['is_image'] == true) ||
         media.endsWith('.jpg') ||
         media.endsWith('.jpeg') ||
@@ -125,9 +133,9 @@ class GroupChatController extends ChangeNotifier {
       'is_video': isVideo,
       'is_audio': isAudio,
       'is_file': isFile,
-      'is_local': false,
-      'uploading': false,
-      'failed': false,
+      'is_local': m['is_local'] == true,
+      'uploading': m['uploading'] == true,
+      'failed': m['failed'] == true,
     };
   }
 
@@ -138,6 +146,7 @@ class GroupChatController extends ChangeNotifier {
     try {
       final serverList = await repo.fetchMessages(groupId);
 
+      // giữ lại local messages (optimistic) nếu có
       final localList = (_messagesByGroup[groupId] ?? [])
           .where((m) => m['is_local'] == true)
           .toList();
@@ -173,6 +182,43 @@ class GroupChatController extends ChangeNotifier {
     }
   }
 
+  /// 🔄 Lấy thêm tin mới (phục vụ realtime) dựa trên id server cuối cùng
+  Future<void> fetchNewMessages(String groupId) async {
+    try {
+      final list = messagesOf(groupId);
+      // tìm message cuối cùng từ server (bỏ qua local_xxx)
+      Map<String, dynamic>? lastServer;
+      for (var i = list.length - 1; i >= 0; i--) {
+        final m = list[i];
+        final idStr = '${m['id'] ?? ''}';
+        final isLocal = m['is_local'] == true;
+        if (!isLocal && idStr.isNotEmpty && int.tryParse(idStr) != null) {
+          lastServer = m;
+          break;
+        }
+      }
+
+      final afterId = lastServer == null ? '' : '${lastServer['id']}';
+      if (afterId.isEmpty) return;
+
+      final newer = await repo.fetchNewerMessages(
+        groupId,
+        afterMessageId: afterId,
+      );
+      if (newer.isEmpty) return;
+
+      final normalized = newer.map(_normalizeServerMessage).toList();
+      final merged = [...list, ...normalized];
+      _setMessages(groupId, merged);
+      notifyListeners();
+    } catch (e) {
+      // lỗi realtime thì bỏ qua, không làm vỡ UI
+      if (kDebugMode) {
+        debugPrint('fetchNewMessages error: $e');
+      }
+    }
+  }
+
   // ---------- Send message (text / image / video / voice / file) ----------
   final _rng = Random();
   String _tempId() =>
@@ -186,6 +232,7 @@ class GroupChatController extends ChangeNotifier {
     File? file,
     String? type,
     required String msgHash,
+    Map<String, dynamic>? replyTo,
   }) {
     final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final isImage = type == 'image';
@@ -196,6 +243,16 @@ class GroupChatController extends ChangeNotifier {
     final mediaUri = file == null
         ? ''
         : (file.path.startsWith('file://') ? file.path : 'file://${file.path}');
+
+    Map<String, dynamic>? reply;
+    String? replyId;
+    if (replyTo != null) {
+      replyId = '${replyTo['id'] ?? replyTo['message_id'] ?? ''}';
+      if (replyId.isEmpty) replyId = null;
+      reply = Map<String, dynamic>.from(replyTo);
+      final rText = (reply['display_text'] ?? reply['text'] ?? '').toString();
+      reply['display_text'] = rText;
+    }
 
     return {
       'id': _tempId(),
@@ -216,6 +273,12 @@ class GroupChatController extends ChangeNotifier {
       'time': nowSec,
       'message_hash_id': msgHash,
       'user_data': {'user_id': currentUserId},
+      // reaction mặc định
+      'my_reaction': null,
+      'reactions_count': 0,
+      'reaction': null,
+      if (reply != null) 'reply': reply,
+      if (replyId != null) 'reply_id': replyId,
     };
   }
 
@@ -224,6 +287,7 @@ class GroupChatController extends ChangeNotifier {
     String text, {
     File? file,
     String? type,
+    Map<String, dynamic>? replyTo,
   }) async {
     lastError = null;
     final msgHash = _tempHash();
@@ -235,18 +299,28 @@ class GroupChatController extends ChangeNotifier {
       file: file,
       type: type,
       msgHash: msgHash,
+      replyTo: replyTo,
     );
     final cur = [...messagesOf(groupId), local];
     _setMessages(groupId, cur);
     notifyListeners();
 
     try {
+      String? replyId;
+      if (replyTo != null) {
+        final rawId = replyTo['id'] ?? replyTo['message_id'];
+        if (rawId != null && '$rawId'.isNotEmpty) {
+          replyId = '$rawId';
+        }
+      }
+
       final serverMsg = await repo.sendMessage(
         groupId: groupId,
         text: text,
         file: file,
         type: type,
         messageHashId: msgHash,
+        replyToMessageId: replyId,
       );
 
       final list = _messagesByGroup[groupId];
@@ -293,6 +367,8 @@ class GroupChatController extends ChangeNotifier {
             'is_audio': normalized['is_audio'] ?? currentLocal['is_audio'],
             'is_file': normalized['is_file'] ?? currentLocal['is_file'],
             'time': normalized['time'] ?? currentLocal['time'],
+            'reply': normalized['reply'] ?? currentLocal['reply'],
+            'reply_id': normalized['reply_id'] ?? currentLocal['reply_id'],
             'uploading': false,
             'failed': false,
             'is_local': false,
@@ -320,6 +396,133 @@ class GroupChatController extends ChangeNotifier {
       }
       lastError = e.toString();
       notifyListeners();
+    }
+  }
+
+  // ---------- Reaction ----------
+  /// Bật/tắt reaction cho 1 message trong group
+  ///
+  /// [reactionKey] là key bên WoWonder (vd: "Like", "Love", "Sad"...)
+  Future<void> reactToMessage({
+    required String groupId,
+    required String messageId,
+    required String reactionKey,
+  }) async {
+    lastError = null;
+
+    final list = _messagesByGroup[groupId];
+    if (list == null) return;
+
+    final idx = list.indexWhere((m) => '${m['id'] ?? ''}' == messageId);
+    if (idx == -1) return;
+
+    final current = Map<String, dynamic>.from(list[idx]);
+    final prevMy = current['my_reaction']?.toString();
+    final prevCount = (current['reactions_count'] as int?) ?? 0;
+
+    final removing = (prevMy == reactionKey);
+
+    // 🔮 Optimistic update
+    current['my_reaction'] = removing ? null : reactionKey;
+    int newCount = prevCount;
+    if (removing) {
+      if (newCount > 0) newCount--;
+    } else {
+      newCount++;
+    }
+    current['reactions_count'] = newCount;
+
+    list[idx] = current;
+    _setMessages(groupId, List<Map<String, dynamic>>.from(list));
+    notifyListeners();
+
+    try {
+      // Gọi API reaction
+      final res = await repo.reactToMessage(
+        groupId: groupId,
+        messageId: messageId,
+        reactionKey: reactionKey,
+      );
+
+      // Thử reload message từ server để lấy reaction chính xác
+      final updated = await repo.fetchMessageById(groupId, messageId);
+      if (updated != null) {
+        final normalized = _normalizeServerMessage(updated);
+        final newList = _messagesByGroup[groupId];
+        if (newList != null) {
+          final jdx =
+              newList.indexWhere((m) => '${m['id'] ?? ''}' == messageId);
+          if (jdx != -1) {
+            newList[jdx] = {
+              ...newList[jdx],
+              ...normalized,
+              // giữ các flag local nếu có
+              'is_local': false,
+            };
+            _setMessages(groupId, List<Map<String, dynamic>>.from(newList));
+            notifyListeners();
+          }
+        }
+      } else {
+        // nếu server không trả về, ít nhất giữ lại reaction theo res
+        final newList = _messagesByGroup[groupId];
+        if (newList != null) {
+          final jdx =
+              newList.indexWhere((m) => '${m['id'] ?? ''}' == messageId);
+          if (jdx != -1) {
+            final m = Map<String, dynamic>.from(newList[jdx]);
+            m['my_reaction'] = res['my_reaction'] ?? m['my_reaction'];
+            if (res['reactions_count'] != null) {
+              m['reactions_count'] = res['reactions_count'];
+            }
+            if (res['reaction'] != null) {
+              m['reaction'] = res['reaction'];
+            }
+            newList[jdx] = m;
+            _setMessages(groupId, List<Map<String, dynamic>>.from(newList));
+            notifyListeners();
+          }
+        }
+      }
+    } catch (e) {
+      // rollback nếu lỗi
+      final list2 = _messagesByGroup[groupId];
+      if (list2 != null) {
+        final jdx = list2.indexWhere((m) => '${m['id'] ?? ''}' == messageId);
+        if (jdx != -1) {
+          final m = Map<String, dynamic>.from(list2[jdx]);
+          m['my_reaction'] = prevMy;
+          m['reactions_count'] = prevCount;
+          list2[jdx] = m;
+          _setMessages(groupId, List<Map<String, dynamic>>.from(list2));
+        }
+      }
+      lastError = e.toString();
+      notifyListeners();
+    }
+  }
+
+  /// Xoá 1 message trong group
+  Future<bool> deleteMessage({
+    required String groupId,
+    required String messageId,
+  }) async {
+    lastError = null;
+    try {
+      final ok = await repo.deleteMessage(messageId);
+      if (ok) {
+        final list = _messagesByGroup[groupId];
+        if (list != null) {
+          list.removeWhere((m) => '${m['id'] ?? ''}' == messageId);
+          _setMessages(groupId, List<Map<String, dynamic>>.from(list));
+        }
+      }
+      notifyListeners();
+      return ok;
+    } catch (e) {
+      lastError = e.toString();
+      notifyListeners();
+      return false;
     }
   }
 
@@ -440,7 +643,6 @@ class GroupChatController extends ChangeNotifier {
     }
   }
 
-
   Future<bool> removeUsers(String groupId, List<String> ids) async {
     final ok = await repo.removeGroupUsers(groupId, ids);
     if (ok) {
@@ -484,5 +686,4 @@ class GroupChatController extends ChangeNotifier {
     _messagesByGroup[groupId] = list;
     notifyListeners();
   }
-
 }

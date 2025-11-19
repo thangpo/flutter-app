@@ -1,8 +1,10 @@
 // G:\flutter-app\lib\features\social\screens\group_chat_screen.dart
 import 'dart:io';
+import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -62,12 +64,18 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   // NEW: chống mở nhiều dialog "cuộc gọi đến"
   bool _ringingDialogOpen = false;
 
+  // NEW: reply preview
+  Map<String, dynamic>? _replyTo;
+
+  // NEW: realtime polling
+  Timer? _pollTimer;
+
   @override
   void initState() {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // ❌ BỎ autoOpen; ✅ dùng dialog Chấp nhận/Từ chối qua onIncoming
+      // Không autoOpen; dùng dialog Chấp nhận/Từ chối qua onIncoming
       _bindIncomingWatcher();
 
       await _initRecorder();
@@ -76,6 +84,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       // Thử lấy meta từ store nếu widget không có
       _hydrateFromStore();
       _scrollToBottom(immediate: true);
+
+      // Bật vòng lặp realtime
+      _startRealtimePolling();
     });
 
     _scroll.addListener(() {
@@ -179,6 +190,24 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     };
   }
 
+  // ====== REALTIME POLLING ======
+  void _startRealtimePolling() {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
+      if (!mounted) return;
+      try {
+        await context
+            .read<GroupChatController>()
+            .fetchNewMessages(widget.groupId);
+      } catch (_) {}
+    });
+  }
+
+  void _stopRealtimePolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -192,6 +221,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     if (oldWidget.groupId != widget.groupId) {
       // ✅ Nếu chuyển sang group khác, gắn watcher mới (không autoOpen)
       _bindIncomingWatcher();
+      _startRealtimePolling();
+      setState(() {
+        _replyTo = null;
+      });
     }
   }
 
@@ -201,6 +234,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     final gcc = context.read<GroupCallController>();
     gcc.stopWatchingInbox();
     gcc.onIncoming = null;
+
+    _stopRealtimePolling();
 
     _recorder.closeRecorder();
     _textCtrl.dispose();
@@ -274,11 +309,18 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     _textCtrl.clear();
     setState(() => _sending = true);
     try {
-      await context
-          .read<GroupChatController>()
-          .sendMessage(widget.groupId, text);
+      // Hiện tại mới gửi text thường; reply_id sẽ nối vào repo/controller sau
+      await context.read<GroupChatController>().sendMessage(
+            widget.groupId,
+            text,
+          );
     } finally {
-      if (mounted) setState(() => _sending = false);
+      if (mounted) {
+        setState(() {
+          _sending = false;
+          _replyTo = null; // gửi xong thì clear reply
+        });
+      }
     }
     _scrollToBottom();
   }
@@ -1025,6 +1067,300 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     });
   }
 
+  // ===== Long press menu (reactions + actions, Messenger-style) =====
+  void _onMessageLongPress(Map<String, dynamic> message, bool isMe) {
+    if (message['is_system'] == true) return;
+    final idStr = '${message['id'] ?? ''}';
+    if (idStr.isEmpty) return;
+    final ctrl = context.read<GroupChatController>();
+
+    final rawText =
+        (message['display_text'] ?? message['text'] ?? '').toString().trim();
+    final canCopy = rawText.isNotEmpty;
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black26,
+      builder: (ctx) {
+        return Stack(
+          children: [
+            // tap nền để đóng
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () => Navigator.of(ctx).pop(),
+                child: Container(color: Colors.transparent),
+              ),
+            ),
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 16, left: 12, right: 12),
+                child: Material(
+                  color: Colors.white,
+                  elevation: 12,
+                  borderRadius: BorderRadius.circular(24),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // reactions row
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            _reactionChip('Like', '👍', () {
+                              Navigator.of(ctx).pop();
+                              ctrl.reactToMessage(
+                                groupId: widget.groupId,
+                                messageId: idStr,
+                                reactionKey: 'Like',
+                              );
+                            }),
+                            _reactionChip('Love', '❤️', () {
+                              Navigator.of(ctx).pop();
+                              ctrl.reactToMessage(
+                                groupId: widget.groupId,
+                                messageId: idStr,
+                                reactionKey: 'Love',
+                              );
+                            }),
+                            _reactionChip('HaHa', '😂', () {
+                              Navigator.of(ctx).pop();
+                              ctrl.reactToMessage(
+                                groupId: widget.groupId,
+                                messageId: idStr,
+                                reactionKey: 'HaHa',
+                              );
+                            }),
+                            _reactionChip('Wow', '😮', () {
+                              Navigator.of(ctx).pop();
+                              ctrl.reactToMessage(
+                                groupId: widget.groupId,
+                                messageId: idStr,
+                                reactionKey: 'Wow',
+                              );
+                            }),
+                            _reactionChip('Sad', '😢', () {
+                              Navigator.of(ctx).pop();
+                              ctrl.reactToMessage(
+                                groupId: widget.groupId,
+                                messageId: idStr,
+                                reactionKey: 'Sad',
+                              );
+                            }),
+                            _reactionChip('Angry', '😡', () {
+                              Navigator.of(ctx).pop();
+                              ctrl.reactToMessage(
+                                groupId: widget.groupId,
+                                messageId: idStr,
+                                reactionKey: 'Angry',
+                              );
+                            }),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        const Divider(height: 1),
+                        const SizedBox(height: 6),
+                        // actions row
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            _actionButton(
+                              icon: Icons.reply,
+                              label: 'Trả lời',
+                              onTap: () {
+                                Navigator.of(ctx).pop();
+                                setState(() {
+                                  _replyTo = message;
+                                });
+                              },
+                            ),
+                            if (canCopy)
+                              _actionButton(
+                                icon: Icons.content_copy,
+                                label: 'Sao chép',
+                                onTap: () {
+                                  Navigator.of(ctx).pop();
+                                  Clipboard.setData(
+                                      ClipboardData(text: rawText));
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                        content: Text('Đã sao chép')),
+                                  );
+                                },
+                              ),
+                            _actionButton(
+                              icon: Icons.delete_outline,
+                              label: 'Xoá',
+                              destructive: true,
+                              onTap: isMe
+                                  ? () {
+                                      Navigator.of(ctx).pop();
+                                      // TODO: nối API xoá message group
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                            content: Text(
+                                                'Tính năng xoá tin nhắn: chờ kết nối API')),
+                                      );
+                                    }
+                                  : null,
+                            ),
+                            _actionButton(
+                              icon: Icons.forward,
+                              label: 'Chuyển tiếp',
+                              onTap: () {
+                                Navigator.of(ctx).pop();
+                                // TODO: nối API forward group chat
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                        'Tính năng chuyển tiếp: chờ kết nối API server'),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _reactionChip(String label, String emoji, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(24),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: Text(
+          emoji,
+          style: const TextStyle(fontSize: 26),
+        ),
+      ),
+    );
+  }
+
+  Widget _actionButton({
+    required IconData icon,
+    required String label,
+    VoidCallback? onTap,
+    bool destructive = false,
+  }) {
+    final bool disabled = onTap == null;
+    Color color;
+    if (disabled) {
+      color = Colors.grey;
+    } else if (destructive) {
+      color = Colors.red;
+    } else {
+      color = Colors.black87;
+    }
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 20, color: color),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(fontSize: 12, color: color),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReplyPreview() {
+    final msg = _replyTo!;
+    final userData = (msg['user_data'] ?? {}) as Map? ?? {};
+    final name =
+        '${userData['name'] ?? userData['username'] ?? (msg['from_id'] ?? '')}';
+    final isImage = msg['is_image'] == true;
+    final isVideo = msg['is_video'] == true;
+    final isAudio = msg['is_audio'] == true;
+    final isFile = msg['is_file'] == true;
+
+    String label;
+    if (isImage) {
+      label = '[Ảnh]';
+    } else if (isVideo) {
+      label = '[Video]';
+    } else if (isAudio) {
+      label = '[Âm thanh]';
+    } else if (isFile) {
+      label = '[Tệp đính kèm]';
+    } else {
+      label = (msg['display_text'] ?? msg['text'] ?? '').toString();
+    }
+    if (label.length > 80) {
+      label = '${label.substring(0, 80)}…';
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F2F5),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 36,
+            decoration: BoxDecoration(
+              color: Colors.blue.shade400,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Trả lời $name',
+                  style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.blueGrey),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  label.isEmpty ? 'Tin nhắn' : label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style:
+                      const TextStyle(fontSize: 13, color: Color(0xFF050505)),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 18),
+            onPressed: () {
+              setState(() => _replyTo = null);
+            },
+          )
+        ],
+      ),
+    );
+  }
+
   // ---------------- UI ----------------
   @override
   Widget build(BuildContext context) {
@@ -1152,11 +1488,16 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                                                     .width *
                                                 0.78,
                                           ),
-                                          child: ChatMessageBubble(
-                                            key: ValueKey(
-                                                '${msg['id'] ?? msg.hashCode}'),
-                                            message: msg,
-                                            isMe: false,
+                                          child: GestureDetector(
+                                            behavior: HitTestBehavior.opaque,
+                                            onLongPress: () =>
+                                                _onMessageLongPress(msg, isMe),
+                                            child: ChatMessageBubble(
+                                              key: ValueKey(
+                                                  '${msg['id'] ?? msg.hashCode}'),
+                                              message: msg,
+                                              isMe: false,
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -1180,11 +1521,16 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                                                   .width *
                                               0.78,
                                         ),
-                                        child: ChatMessageBubble(
-                                          key: ValueKey(
-                                              '${msg['id'] ?? msg.hashCode}'),
-                                          message: msg,
-                                          isMe: true,
+                                        child: GestureDetector(
+                                          behavior: HitTestBehavior.opaque,
+                                          onLongPress: () =>
+                                              _onMessageLongPress(msg, isMe),
+                                          child: ChatMessageBubble(
+                                            key: ValueKey(
+                                                '${msg['id'] ?? msg.hashCode}'),
+                                            message: msg,
+                                            isMe: true,
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -1197,66 +1543,77 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
               // Composer
               SafeArea(
                 top: false,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8.0, vertical: 6.0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _textCtrl,
-                          enabled: !_sending,
-                          minLines: 1,
-                          maxLines: 4,
-                          textInputAction: TextInputAction.newline,
-                          decoration: InputDecoration(
-                            hintText:
-                                _sending ? 'Đang gửi...' : 'Nhập tin nhắn...',
-                            isDense: true,
-                            filled: true,
-                            fillColor: Colors.white,
-                            prefixIcon: IconButton(
-                              icon: const Icon(Icons.attach_file),
-                              onPressed: _sending ? null : _openAttachSheet,
-                              tooltip: 'Đính kèm',
-                            ),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _recording ? Icons.mic_off : Icons.mic,
-                                color: _recording ? Colors.red : null,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_replyTo != null)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8.0, 4.0, 8.0, 0.0),
+                        child: _buildReplyPreview(),
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8.0, vertical: 6.0),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _textCtrl,
+                              enabled: !_sending,
+                              minLines: 1,
+                              maxLines: 4,
+                              textInputAction: TextInputAction.newline,
+                              decoration: InputDecoration(
+                                hintText: _sending
+                                    ? 'Đang gửi...'
+                                    : 'Nhập tin nhắn...',
+                                isDense: true,
+                                filled: true,
+                                fillColor: Colors.white,
+                                prefixIcon: IconButton(
+                                  icon: const Icon(Icons.attach_file),
+                                  onPressed: _sending ? null : _openAttachSheet,
+                                  tooltip: 'Đính kèm',
+                                ),
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _recording ? Icons.mic_off : Icons.mic,
+                                    color: _recording ? Colors.red : null,
+                                  ),
+                                  onPressed: _sending ? null : _toggleRecord,
+                                  tooltip: _recording
+                                      ? 'Dừng ghi & gửi'
+                                      : 'Nhấn để ghi âm / gửi',
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                  borderSide: BorderSide(
+                                      color: Colors.blue.shade200, width: 1),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                  borderSide: BorderSide(
+                                      color: Colors.blue.shade400, width: 1.5),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                    vertical: 10, horizontal: 8),
                               ),
-                              onPressed: _sending ? null : _toggleRecord,
-                              tooltip: _recording
-                                  ? 'Dừng ghi & gửi'
-                                  : 'Nhấn để ghi âm / gửi',
+                              onSubmitted: (_) => _sendText(),
                             ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(18),
-                              borderSide: BorderSide(
-                                  color: Colors.blue.shade200, width: 1),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(18),
-                              borderSide: BorderSide(
-                                  color: Colors.blue.shade400, width: 1.5),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                                vertical: 10, horizontal: 8),
                           ),
-                          onSubmitted: (_) => _sendText(),
-                        ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            tooltip: 'Gửi',
+                            icon: const Icon(Icons.send),
+                            onPressed: _sending ? null : _sendText,
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        tooltip: 'Gửi',
-                        icon: const Icon(Icons.send),
-                        onPressed: _sending ? null : _sendText,
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ],
