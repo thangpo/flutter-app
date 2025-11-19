@@ -4,7 +4,7 @@ import 'package:flutter_sixvalley_ecommerce/features/order/widgets/order_shimmer
 import 'package:flutter_sixvalley_ecommerce/features/order/widgets/order_type_button_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/features/order/widgets/order_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/dimensions.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/images.dart';

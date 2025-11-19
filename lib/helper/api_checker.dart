@@ -8,7 +8,7 @@ import 'package:flutter_sixvalley_ecommerce/data/model/error_response.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 import 'package:provider/provider.dart';
 
 class ApiChecker {
@@ -109,3 +109,4 @@ class ApiChecker {
     return error;
   }
 }
+

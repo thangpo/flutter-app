@@ -1,3 +1,4 @@
+// G:\flutter-app\lib\features\social\widgets\chat_message_bubble.dart
 import 'dart:convert';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:chewie/chewie.dart';
@@ -11,13 +12,9 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:encrypt/encrypt.dart' as enc;
+
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/call_invite.dart';
-import 'package:provider/provider.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/controllers/call_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/call_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/incoming_call_screen.dart';
-
-
 
 class ChatMessageBubble extends StatefulWidget {
   final Map<String, dynamic> message;
@@ -178,7 +175,9 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
     );
   }
 
-// Lấy plain-text ưu tiên display_text -> decrypt(text,time) -> text gốc
+  // ===================== CALL INVITE HELPERS =====================
+
+  /// Lấy plain-text ưu tiên display_text -> decrypt(text,time) -> text gốc
   String? _getPlainTextForInvite() {
     final disp = (m['display_text'] ?? '').toString();
     if (disp.isNotEmpty) return disp;
@@ -223,83 +222,13 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
 
   String _stripZeros(String s) => s.replaceAll(RegExp(r'\x00+\$'), '');
 
-
+  // ===================== BUILD =====================
 
   @override
   Widget build(BuildContext context) {
-    // 🔔 ƯU TIÊN: nếu là lời mời gọi thì render bubble đặc biệt
-    final invite = CallInvite.tryParse(_getPlainTextForInvite() ?? '');
-Widget _buildInviteBubble(CallInvite inv) {
-      final isVideo = inv.mediaType == 'video';
-      final title = widget.isMe
-          ? 'Bạn đã mời gọi ${isVideo ? 'video' : 'thoại'}'
-          : 'Mời bạn gọi ${isVideo ? 'video' : 'thoại'}';
-
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color:
-              widget.isMe ? const Color(0xFF2F80ED) : const Color(0xFFEFEFEF),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (!widget.isMe) ...[
-                TextButton(
-                  onPressed: () async {
-                    final call = context.read<CallController>();
-                    try {
-                      // gắn vào cuộc gọi => controller bắt đầu poll
-                      await call.attachIncoming(
-                          callId: inv.callId, mediaType: inv.mediaType);
-
-                      // báo trả lời để caller chuyển sang "answered"
-                      await call.action('answer');
-
-                      if (!mounted) return;
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => CallScreen(
-                            isCaller: false,
-                            callId: inv.callId,
-                            mediaType: inv.mediaType, // 'audio' | 'video'
-                            peerName: (m['user_data']?['name'] ??
-                                    m['user_data']?['username'] ??
-                                    '')
-                                .toString(),
-                            peerAvatar:
-                                (m['user_data']?['avatar'] ?? '').toString(),
-                          ),
-                        ),
-                      );
-                    } catch (e) {
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Không thể nhận cuộc gọi: $e')),
-                      );
-                    }
-                  },
-                  child: const Text('Nhận'),
-                ),
-                TextButton(
-                  onPressed: () async {
-                    final call = context.read<CallController>();
-                    try {
-                      await call.attachIncoming(
-                          callId: inv.callId, mediaType: inv.mediaType);
-                      await call.action('decline');
-                    } catch (_) {}
-                  },
-                  child: const Text('Từ chối'),
-                ),
-              ],
-            ],
-          )
-
-      );
-    }
+    // 🔔 Nếu nội dung là JSON lời mời gọi 1-1 => render bubble đặc biệt
+    final plain = _getPlainTextForInvite();
+    final invite = plain != null ? CallInvite.tryParse(plain) : null;
 
     if (invite != null) {
       return _buildInviteBubble(invite);
@@ -425,11 +354,23 @@ Widget _buildInviteBubble(CallInvite inv) {
   }
 
   /// Bubble đặc biệt cho lời mời gọi 1-1
+  ///
+  /// ⚠️ Lưu ý:
+  /// - Luồng "chuông + màn nghe/từ chối tự nhảy" đang được xử lý bằng FCM
+  ///   ở main.dart (_handleCallInviteOpen -> IncomingCallScreen).
+  /// - Bubble này chỉ dùng để HIỂN THỊ LỊCH SỬ + fallback "Trả lời" khi
+  ///   user đang ở trong đoạn chat (giống Messenger mở lại log cuộc gọi).
   Widget _buildInviteBubble(CallInvite invite) {
     final isExpired = invite.isExpired();
     final isVideo = invite.media == 'video';
     final bg = widget.isMe ? const Color(0xFF2F80ED) : const Color(0xFFEFEFEF);
     final fg = widget.isMe ? Colors.white : Colors.black87;
+
+    final title = widget.isMe
+        ? (isVideo ? 'Bạn đã mời gọi video' : 'Bạn đã mời gọi thoại')
+        : (isVideo ? 'Lời mời gọi video' : 'Lời mời gọi thoại');
+
+    final subtitle = isExpired ? 'Đã hết hạn' : 'Đang chờ trả lời';
 
     final content = Row(
       mainAxisSize: MainAxisSize.min,
@@ -437,12 +378,26 @@ Widget _buildInviteBubble(CallInvite inv) {
         Icon(isVideo ? Icons.videocam : Icons.call, color: fg),
         const SizedBox(width: 10),
         Flexible(
-          child: Text(
-            widget.isMe
-                ? (isVideo ? 'Bạn đã mời gọi video' : 'Bạn đã mời gọi thoại')
-                : (isVideo ? 'Lời mời gọi video' : 'Lời mời gọi thoại') +
-                    (isExpired ? ' (hết hạn)' : ''),
-            style: TextStyle(color: fg, fontSize: 15),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title + (isExpired ? ' (hết hạn)' : ''),
+                style: TextStyle(
+                  color: fg,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  color: fg.withOpacity(0.7),
+                  fontSize: 12,
+                ),
+              ),
+            ],
           ),
         ),
         if (!widget.isMe && !isExpired)
@@ -501,9 +456,10 @@ Widget _buildInviteBubble(CallInvite inv) {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 5,
-              offset: const Offset(2, 2))
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 5,
+            offset: const Offset(2, 2),
+          )
         ],
       ),
       child: Row(
@@ -521,11 +477,12 @@ Widget _buildInviteBubble(CallInvite inv) {
                     }
                   },
             icon: Icon(
-                _audioPlaying
-                    ? Icons.pause_circle_filled
-                    : Icons.play_circle_fill,
-                color: fg,
-                size: 26),
+              _audioPlaying
+                  ? Icons.pause_circle_filled
+                  : Icons.play_circle_fill,
+              color: fg,
+              size: 26,
+            ),
           ),
           Expanded(
             child: Slider(

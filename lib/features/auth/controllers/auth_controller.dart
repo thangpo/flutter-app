@@ -27,7 +27,7 @@ import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/country_code_helper.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/app_localization.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_notifications_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/controllers/localization_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
@@ -312,6 +312,12 @@ class AuthController with ChangeNotifier {
         await Provider.of<SocialController>(Get.context!, listen: false)
             .loadCurrentUser(force: true);
       } catch (_) {}
+      // 🔴 CẬP NHẬT FCM TOKEN CHO USER SOCIAL VỪA ĐĂNG KÝ
+      try {
+        await FirebaseTokenUpdater.update();
+      } catch (e) {
+        debugPrint('[FCM] update after social registration failed: $e');
+      }
       // ========== END EXTERNAL CALL ==========
 
       Future<void> saveSocialUserId(String userId) async {
@@ -563,6 +569,12 @@ class AuthController with ChangeNotifier {
         await Provider.of<SocialController>(Get.context!, listen: false)
             .loadCurrentUser(force: true);
       } catch (_) {}
+      // 🔴 CẬP NHẬT FCM TOKEN CHO USER SOCIAL VỪA LOGIN
+      try {
+        await FirebaseTokenUpdater.update();
+      } catch (e) {
+        debugPrint('[FCM] update after social login failed: $e');
+      }
       // ========== END EXTERNAL SOCIAL AUTH ==========
       if (token != null && token.isNotEmpty) {
         authServiceInterface.saveUserToken(token);
@@ -1458,3 +1470,4 @@ class AuthController with ChangeNotifier {
     return authServiceInterface.getGuestCartId();
   }
 }
+

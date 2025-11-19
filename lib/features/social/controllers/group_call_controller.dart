@@ -1,15 +1,7 @@
 // lib/features/social/controllers/group_call_controller.dart
-//
-// Controller quản lý vòng đời group call (P2P full-mesh):
-// - Caller: create -> join -> peers -> start polling
-// - Callee: attachAndJoin(callId) -> peers -> start polling
-// - Polling 1s: nhận offer/answer/candidate gửi cho mình và bắc cầu ra callbacks
-// - Theo dõi participants (peers online), trạng thái call
-//
-// YÊU CẦU: Dùng kèm WebRTCGroupSignalingRepositoryImpl (đã map endpoint webrtc_group.php)
-
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/webrtc_group_signaling_repository.dart';
 
 enum CallStatus { idle, ringing, ongoing, ended }
@@ -18,78 +10,126 @@ class GroupCallController extends ChangeNotifier {
   final GroupWebRTCSignalingRepository signaling;
   GroupCallController({required this.signaling});
 
-  /// Call hiện tại (nếu có)
   int? currentCallId;
-
-  /// Trạng thái call
   CallStatus status = CallStatus.idle;
-
-  /// Danh sách userId peers đang tham gia (trừ mình)
   final Set<int> participants = <int>{};
 
-  /// Tự động polling?
   bool _pollingEnabled = false;
   Timer? _pollTimer;
   bool _pollInFlight = false;
-
-  /// Đếm nhịp để refresh peers định kỳ (5s/lần)
   int _tick = 0;
 
-  /// Callbacks bắc cầu sang lớp WebRTC/PeerManager
   void Function(Map<String, dynamic> ev)? onOffer;
   void Function(Map<String, dynamic> ev)? onAnswer;
   void Function(Map<String, dynamic> ev)? onCandidate;
 
-  /// Callback khi đổi peers (đã lọc trùng)
   void Function(Set<int> peers)? onPeersChanged;
-
-  /// Callback khi trạng thái thay đổi
   void Function(CallStatus status)? onStatusChanged;
 
-  /// no-op để giữ tương thích nếu nơi khác có gọi
+  bool _isCreator = false;
+  bool get isCreator => _isCreator;
+
+  // ✅ auto-close khi peer rỗng liên tục (member)
+  int _emptyPeersCount = 0;
+
   void init() {}
 
-  // ---------------------------------------------------------------------------
-  // API KHỞI TẠO (CALLER): tạo + join
-  // ---------------------------------------------------------------------------
-  /// Caller: tạo call mới, join vào, tải peers ban đầu, khởi động polling.
-  /// Trả về response từ server (chứa call_id).
+  // ====================== WATCH INBOX ======================
+  Timer? _inboxTimer;
+  String? _watchGroupId;
+  int? _lastNotifiedCallId;
+  void Function(Map<String, dynamic> call)? onIncoming;
+
+  void watchGroupInbox(
+    String groupId, {
+    Duration period = const Duration(seconds: 3),
+    bool autoOpen = false, // giữ tham số cho tương thích
+  }) {
+    if (_watchGroupId != null && _watchGroupId != groupId) {
+      stopWatchingInbox();
+    }
+    _watchGroupId = groupId;
+    _inboxTick();
+    _inboxTimer?.cancel();
+    _inboxTimer = Timer.periodic(period, (_) => _inboxTick());
+    debugPrint(
+        '[GROUP-INBOX] Watching group=$groupId every ${period.inSeconds}s');
+  }
+
+  void stopWatchingInbox() {
+    _inboxTimer?.cancel();
+    _inboxTimer = null;
+    _watchGroupId = null;
+    _lastNotifiedCallId = null;
+    debugPrint('[GROUP-INBOX] Stopped watching.');
+  }
+
+  Future<void> forceCheckInbox() async => _inboxTick();
+
+  Future<void> _inboxTick() async {
+    final gid = _watchGroupId;
+    if (gid == null) return;
+
+    try {
+      final call = await signaling.inbox(groupId: gid);
+      if (call == null) return;
+
+      final callId = _asInt(call['call_id']) ?? _asInt(call['id']);
+      final statusStr = '${call['status'] ?? ''}';
+      final media = (call['media'] == 'video') ? 'video' : 'audio';
+
+      if (callId == null || _lastNotifiedCallId == callId) return;
+      if (statusStr != 'ringing' && statusStr != 'ongoing') return;
+
+      debugPrint(
+          '[GROUP-INBOX] Incoming call: call_id=$callId, gid=$gid, media=$media, status=$statusStr');
+      _lastNotifiedCallId = callId;
+
+      onIncoming?.call({
+        'call_id': callId,
+        'group_id': gid,
+        'media': media,
+        'status': statusStr,
+      });
+    } catch (e) {
+      debugPrint('[GROUP-INBOX] inbox error: $e');
+    }
+  }
+
+  // ====================== CALLER FLOW ======================
   Future<Map<String, dynamic>> joinRoom({
     required String groupId,
-    required String mediaType, // 'audio' | 'video'
-    List<int>? invitees, // optional: mời người khác, server có thể push FCM
+    required String mediaType,
+    List<int>? invitees,
   }) async {
-    // Create
     final resp = await signaling.create(
       groupId: groupId,
       media: (mediaType == 'video') ? 'video' : 'audio',
       participants: invitees,
     );
+
     final callId = _extractCallId(resp);
     if (callId == null) {
+      debugPrint('[GROUP-CALL] ❌ no_call_id from response: $resp');
       throw Exception('no_call_id');
     }
+
+    _isCreator = true;
     currentCallId = callId;
     status = CallStatus.ringing;
     notifyListeners();
     _emitStatus();
 
-    // Join
     await _joinInternal(callId);
-
-    // Start polling
     _startPolling();
-
     return resp;
   }
 
-  // ---------------------------------------------------------------------------
-  // API KHỞI TẠO (CALLEE): join vào call có sẵn (ví dụ mở từ FCM có call_id)
-  // ---------------------------------------------------------------------------
-  /// Callee: gắn vào call đã có (callId) và bắt đầu polling.
+  // ====================== CALLEE FLOW ======================
   Future<void> attachAndJoin({required int callId}) async {
+    _isCreator = false;
     currentCallId = callId;
-    status = CallStatus.ongoing; // có thể set ringing -> ongoing khi join xong
+    status = CallStatus.ongoing;
     notifyListeners();
     _emitStatus();
 
@@ -97,10 +137,7 @@ class GroupCallController extends ChangeNotifier {
     _startPolling();
   }
 
-  // ---------------------------------------------------------------------------
-  // RỜI / KẾT THÚC
-  // ---------------------------------------------------------------------------
-  /// Người thường rời call
+  // ====================== LEAVE / END ======================
   Future<void> leaveRoom(int callId) async {
     try {
       await signaling.leave(callId: callId);
@@ -109,18 +146,18 @@ class GroupCallController extends ChangeNotifier {
     }
   }
 
-  /// Creator kết thúc call
   Future<void> endRoom(int callId) async {
     try {
       await signaling.end(callId: callId);
     } finally {
+      // Phát 1 nhịp 'ended' để UI nắm bắt rồi cleanup → idle
+      status = CallStatus.ended;
+      _emitStatus();
       _cleanup();
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // GỬI TÍN HIỆU (dành cho lớp WebRTC/PeerManager sẽ gọi)
-  // ---------------------------------------------------------------------------
+  // ====================== SEND SIGNALS ======================
   Future<void> sendOffer({
     required int callId,
     required int toUserId,
@@ -149,13 +186,11 @@ class GroupCallController extends ChangeNotifier {
       toUserId: toUserId,
       candidate: candidate,
       sdpMid: sdpMid,
-      sdpMLineIndex: sdpMLineIndex,
+      sdpMLineIndex: sdpMLineIndex?.toString(),
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // POLLING
-  // ---------------------------------------------------------------------------
+  // ====================== POLLING SIGNALS ======================
   void _startPolling() {
     if (currentCallId == null) return;
     _pollingEnabled = true;
@@ -176,7 +211,6 @@ class GroupCallController extends ChangeNotifier {
 
     _pollInFlight = true;
     try {
-      // 1) Nhận tín hiệu gửi cho mình
       final events = await signaling.poll(callId: callId);
       if (events.isNotEmpty) {
         for (final ev in events) {
@@ -191,18 +225,17 @@ class GroupCallController extends ChangeNotifier {
             case 'candidate':
               onCandidate?.call(ev);
               break;
-            default:
-              // ignore
-              break;
           }
         }
       }
 
-      // 2) 5s/lần: refresh danh sách peers (đã join)
-      _tick = (_tick + 1) % 5;
+      // refresh peers mỗi 2s (prod có thể tăng 5s)
+      _tick = (_tick + 1) % 2;
       if (_tick == 0) {
         final newPeers = await signaling.peers(callId: callId);
         final newSet = newPeers.toSet();
+
+        // cập nhật participants
         if (!_setEquals(participants, newSet)) {
           participants
             ..clear()
@@ -210,24 +243,34 @@ class GroupCallController extends ChangeNotifier {
           onPeersChanged?.call(Set<int>.from(participants));
           notifyListeners();
         }
+
+        // ✅ Auto-close cho member nếu không còn ai trong 3 lần liên tiếp (~3s)
+        if (!_isCreator) {
+          _emptyPeersCount = participants.isEmpty ? (_emptyPeersCount + 1) : 0;
+          if (_emptyPeersCount >= 3) {
+            _cleanup();
+            return;
+          }
+        } else {
+          _emptyPeersCount = 0;
+        }
       }
-    } catch (_) {
-      // Có thể log nếu cần
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[GROUP-POLL] error: $e');
+      }
     } finally {
       _pollInFlight = false;
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // INTERNALS
-  // ---------------------------------------------------------------------------
+  // ====================== INTERNALS ======================
   Future<void> _joinInternal(int callId) async {
-    // join -> peers ban đầu
     final peers = await signaling.join(callId: callId);
     participants
       ..clear()
       ..addAll(peers);
-    status = CallStatus.ongoing; // sau join coi như ongoing
+    status = CallStatus.ongoing;
     notifyListeners();
     _emitStatus();
     onPeersChanged?.call(Set<int>.from(participants));
@@ -239,24 +282,27 @@ class GroupCallController extends ChangeNotifier {
     status = CallStatus.idle;
     final oldId = currentCallId;
     currentCallId = null;
+    _isCreator = false;
     notifyListeners();
     _emitStatus();
     if (kDebugMode) {
-      // ignore: avoid_print
-      print('GroupCallController: cleaned up (old call $oldId)');
+      debugPrint('GroupCallController: cleaned up (old call $oldId)');
     }
   }
 
   int? _extractCallId(dynamic resp) {
+    if (resp == null) return null;
     if (resp is Map) {
       dynamic v = resp['call_id'] ??
           resp['id'] ??
-          (resp['data'] is Map ? (resp['data'] as Map)['call_id'] : null) ??
-          (resp['call'] is Map ? (resp['call'] as Map)['id'] : null);
+          resp['data']?['call_id'] ??
+          resp['call']?['id'] ??
+          resp['call']?['call_id'];
       if (v is int) return v;
       if (v is num) return v.toInt();
       if (v is String) return int.tryParse(v);
     }
+    debugPrint('[GROUP-CALL] ⚠️ _extractCallId failed: $resp');
     return null;
   }
 
@@ -269,6 +315,13 @@ class GroupCallController extends ChangeNotifier {
     return true;
   }
 
+  int? _asInt(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v is String) return int.tryParse(v);
+    return null;
+  }
+
   void _emitStatus() {
     onStatusChanged?.call(status);
   }
@@ -276,6 +329,7 @@ class GroupCallController extends ChangeNotifier {
   @override
   void dispose() {
     _stopPolling();
+    stopWatchingInbox();
     super.dispose();
   }
 }

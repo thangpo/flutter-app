@@ -9,7 +9,7 @@ import 'package:flutter_sixvalley_ecommerce/features/deal/domain/models/flash_de
 import 'package:flutter_sixvalley_ecommerce/features/deal/domain/services/flash_deal_service_interface.dart';
 import 'package:flutter_sixvalley_ecommerce/features/product/domain/models/product_model.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:intl/intl.dart';
 
@@ -137,3 +137,4 @@ class FlashDealController extends ChangeNotifier {
     notifyListeners();
   }
 }
+

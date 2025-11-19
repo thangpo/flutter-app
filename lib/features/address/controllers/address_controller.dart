@@ -6,7 +6,7 @@ import 'package:flutter_sixvalley_ecommerce/features/address/domain/models/label
 import 'package:flutter_sixvalley_ecommerce/features/address/domain/models/restricted_zip_model.dart';
 import 'package:flutter_sixvalley_ecommerce/features/address/domain/services/address_service_interface.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 
 class AddressController with ChangeNotifier {
   final AddressServiceInterface addressServiceInterface;
@@ -169,3 +169,4 @@ class AddressController with ChangeNotifier {
   }
   
 }
+

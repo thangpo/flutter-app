@@ -14,6 +14,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_post_
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_group_detail_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_groups_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/family_requests_screen.dart';
 
 class NotificationItem extends StatefulWidget {
   final SocialNotification n;
@@ -335,7 +336,17 @@ class _NotificationItemState extends State<NotificationItem> {
       }
     }
 
-
+    // 🟢 3️⃣ Yêu cầu gia đình → mở màn danh sách yêu cầu gia đình
+    if (n.type == 'added_u_as') {
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const FamilyRequestsScreen(),
+        ),
+      );
+      return;
+    }
     // 🟢 3️⃣ Mặc định: mở profile
     final String notifierId = n.notifierId ?? '';
     if (notifierId.isNotEmpty) {
@@ -387,6 +398,10 @@ class _NotificationItemState extends State<NotificationItem> {
         return "đã bắt đầu theo dõi bạn.";
       case 'viewed_story':
         return "đã xem story của bạn.";
+        case 'poke':
+      return "đã chọc bạn.";
+      case 'added_u_as':
+        return "đã gửi cho bạn lời mời gia đình.";
       default:
         return "đã tương tác với bạn.";
     }
@@ -460,6 +475,10 @@ class _NotificationItemState extends State<NotificationItem> {
         return Icons.person_add_alt_1_rounded;
       case 'viewed_story':
         return Icons.visibility_rounded;
+        case 'poke':
+      return Icons.touch_app_rounded;
+      case 'added_u_as':
+        return Icons.family_restroom;
       default:
         return Icons.notifications_rounded;
     }
@@ -481,6 +500,10 @@ class _NotificationItemState extends State<NotificationItem> {
       case 'group_admin': return const Color(0xFF1877F2); // Blue check
       case 'following': return const Color(0xFFFB6B90); // Pink coral
       case 'viewed_story': return const Color(0xFFF94892); // Magenta
+      case 'poke':
+        return const Color(0xFF0A84FF);
+      case 'added_u_as':
+        return const Color(0xFFFFB020); // vàng cam nhẹ cho family
       default: return const Color(0xFFAAAAAA);
     }
   }

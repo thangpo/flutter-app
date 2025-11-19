@@ -1,3 +1,4 @@
+// G:\flutter-app\lib\features\chat\controllers\chat_controller.dart
 import 'dart:io';
 import 'package:archive/archive_io.dart';
 import 'package:file_picker/file_picker.dart';
@@ -13,7 +14,7 @@ import 'package:flutter_sixvalley_ecommerce/features/chat/domain/services/chat_s
 import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/date_converter.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/image_size_checker.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:get_thumbnail_video/index.dart';
 import 'package:get_thumbnail_video/video_thumbnail.dart';
@@ -620,4 +621,5 @@ class ChatController extends ChangeNotifier {
   }
 
 }
+
 

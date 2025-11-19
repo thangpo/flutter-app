@@ -7,7 +7,7 @@ import 'package:flutter_sixvalley_ecommerce/features/profile/domain/models/profi
 import 'package:flutter_sixvalley_ecommerce/features/profile/screens/profile_screen1.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/custom_themes.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/dimensions.dart';
@@ -228,6 +228,7 @@ class ProfileScreenState extends State<ProfileScreen> {
                     '${profile.userInfoModel!.fName} ${profile.userInfoModel!.lName ?? ''}',
                     style: textBold.copyWith(color:  Theme.of(context).colorScheme.secondaryContainer, fontSize: Dimensions.fontSizeLarge),
                   ),
+
                 ]),
                 const SizedBox(height: Dimensions.paddingSizeLarge),
 
@@ -342,3 +343,4 @@ class ProfileScreenState extends State<ProfileScreen> {
     );
   }
 }
+

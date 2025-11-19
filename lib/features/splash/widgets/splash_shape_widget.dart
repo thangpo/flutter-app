@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 
 class SplashShapeWidget extends CustomPainter {
   @override
@@ -24,3 +24,4 @@ class SplashShapeWidget extends CustomPainter {
     return true;
   }
 }
+

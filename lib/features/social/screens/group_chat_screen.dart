@@ -54,16 +54,22 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
   // --- override tên & avatar để cập nhật ngay ---
   String? _titleOverride; // tên nhóm sau khi đổi
-  String? _avatarOverridePath; // có thể là http(s) hoặc file path/local uri
+  String? _avatarOverridePath; // http(s) hoặc file path/local uri
 
   // Flag chống bấm gọi liên tiếp
   bool _launchingCall = false;
+
+  // NEW: chống mở nhiều dialog "cuộc gọi đến"
+  bool _ringingDialogOpen = false;
 
   @override
   void initState() {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // ❌ BỎ autoOpen; ✅ dùng dialog Chấp nhận/Từ chối qua onIncoming
+      _bindIncomingWatcher();
+
       await _initRecorder();
       final ctrl = context.read<GroupChatController>();
       await ctrl.loadMessages(widget.groupId);
@@ -96,6 +102,83 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     });
   }
 
+  // Gắn watcher inbox cho group này & thiết lập onIncoming
+  void _bindIncomingWatcher() {
+    final gcc = context.read<GroupCallController>();
+    final gchat = context.read<GroupChatController>();
+
+    // Ngắt watcher cũ (nếu có) trước khi gắn mới
+    gcc.stopWatchingInbox();
+
+    // Không auto mở phòng; chỉ callback cho UI
+    gcc.watchGroupInbox(widget.groupId, autoOpen: false);
+
+    // Khi có cuộc gọi đến -> hiện dialog Chấp nhận / Từ chối
+    gcc.onIncoming = (call) async {
+      if (!mounted) return;
+      if (_ringingDialogOpen) return; // tránh trùng lặp
+
+      // Dữ liệu call từ API inbox
+      final callId = (call['call_id'] ?? call['id']) is int
+          ? (call['call_id'] ?? call['id']) as int
+          : int.tryParse('${call['call_id'] ?? call['id'] ?? 0}') ?? 0;
+      final media = (call['media'] ?? 'audio').toString();
+      final joined = call['joined'] == true;
+
+      // user hiện tại & creator
+      final meId = int.tryParse('${gchat.currentUserId}') ?? 0;
+      final creatorId = int.tryParse('${call['creator_id'] ?? 0}') ?? 0;
+
+      // ⛔️ Không hiển thị dialog nếu:
+      // - đã join rồi (bao gồm creator vì create() đã mark joined_at)
+      // - mình chính là creator (caller)
+      // - controller đang ở đúng call này (đang trên màn call)
+      if (joined ||
+          creatorId == meId ||
+          (gcc.currentCallId != null && gcc.currentCallId == callId)) {
+        return;
+      }
+
+      _ringingDialogOpen = true;
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          title: Text(media == 'video' ? 'Cuộc gọi video' : 'Cuộc gọi thoại'),
+          content: const Text('Bạn có muốn tham gia cuộc gọi nhóm không?'),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                // Đánh dấu đã từ chối (left_at) để không hiện lại trong inbox
+                try {
+                  await gcc.leaveRoom(callId);
+                } catch (_) {}
+                if (mounted) Navigator.of(context).pop();
+              },
+              child: const Text('TỪ CHỐI'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => GroupCallScreen(
+                    groupId: widget.groupId,
+                    mediaType: media,
+                    callId: callId, // attachAndJoin
+                    groupName: _finalTitle(context.read<GroupChatController>()),
+                  ),
+                ));
+              },
+              child: const Text('CHẤP NHẬN'),
+            ),
+          ],
+        ),
+      );
+
+      _ringingDialogOpen = false;
+    };
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -104,7 +187,21 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   }
 
   @override
+  void didUpdateWidget(covariant GroupChatScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.groupId != widget.groupId) {
+      // ✅ Nếu chuyển sang group khác, gắn watcher mới (không autoOpen)
+      _bindIncomingWatcher();
+    }
+  }
+
+  @override
   void dispose() {
+    // ✅ Dừng watcher inbox khi rời màn và bỏ callback
+    final gcc = context.read<GroupCallController>();
+    gcc.stopWatchingInbox();
+    gcc.onIncoming = null;
+
     _recorder.closeRecorder();
     _textCtrl.dispose();
     _scroll.dispose();
@@ -282,6 +379,58 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     );
   }
 
+  // Thu thập danh sách userId thành viên nhóm (trừ mình) để mời vào cuộc gọi
+  Future<List<int>> _collectInvitees() async {
+    final ids = <int>{};
+    try {
+      final gc = context.read<GroupChatController>();
+
+      // đảm bảo có danh sách thành viên trước khi lấy
+      try {
+        await gc.loadGroupMembers(widget.groupId);
+      } catch (e) {
+        debugPrint('⚠️ loadGroupMembers error: $e');
+      }
+
+      final members = gc.membersOf(widget.groupId);
+      final meStr = gc.currentUserId?.toString();
+      final meId = meStr != null ? int.tryParse(meStr) : null;
+
+      // 1) Lấy từ danh sách thành viên
+      for (final m in members) {
+        final v = m['user_id'] ?? m['id'] ?? m['uid'];
+        int? id;
+        if (v is int) id = v;
+        if (v is String) id = int.tryParse(v);
+        if (id != null && (meId == null || id != meId)) {
+          ids.add(id);
+        }
+      }
+
+      // 2) UNION với người từng nhắn trong nhóm
+      final msgs = gc.messagesOf(widget.groupId);
+      for (final msg in msgs) {
+        final v = msg['from_id'] ?? msg['user_id'];
+        int? id;
+        if (v is int) id = v;
+        if (v is String) id = int.tryParse(v);
+        if (id != null && (meId == null || id != meId)) {
+          ids.add(id);
+        }
+      }
+
+      if (ids.isEmpty) {
+        debugPrint('⚠️ _collectInvitees: không tìm thấy ai để mời.');
+      }
+    } catch (e) {
+      debugPrint('⚠️ _collectInvitees error: $e');
+    }
+
+    final list = ids.toList()..sort();
+    debugPrint('[GROUP CALL] Invitees (final) => $list');
+    return list;
+  }
+
   // ====== GỌI NHÓM: xin quyền + điều hướng vào GroupCallRoom ======
   Future<void> _startGroupCall({required bool isVideo}) async {
     if (_launchingCall) return;
@@ -311,17 +460,24 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         }
       }
 
+      // ✅ Thu thập invitees và truyền sang GroupCallScreen
+      final invitees = await _collectInvitees();
+
+      // 🔇 Tắt watcher để caller KHÔNG thấy dialog "tham gia"
+      final gcc = context.read<GroupCallController>();
+      gcc.stopWatchingInbox();
+
       if (!mounted) return;
       await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => GroupCallScreen(
             groupId: widget.groupId,
             mediaType: isVideo ? 'video' : 'audio',
+            invitees: invitees, // server sẽ bắn FCM cho thành viên
+            groupName: _finalTitle(context.read<GroupChatController>()),
           ),
         ),
       );
-
-
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -329,6 +485,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         );
       }
     } finally {
+      // 🔔 Bật lại watcher khi quay về màn chat
+      if (mounted) _bindIncomingWatcher();
       _launchingCall = false;
     }
   }
@@ -394,7 +552,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     if (File(localPath).existsSync()) {
       return FileImage(File(localPath));
     }
-    // fallback: nếu là base64 hay gì khác thì bỏ qua
     return null;
   }
 
@@ -422,9 +579,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       ),
     );
     if (ok == true) {
-      // Cập nhật ngay UI
       setState(() => _titleOverride = textCtrl.text.trim());
-      // Gọi API
       final success = await ctrl.editGroup(
         groupId: widget.groupId,
         name: _titleOverride,
@@ -454,7 +609,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     );
 
     if (!mounted) return;
-    // Nếu server có URL mới, lần build sau _hydrateFromStore() sẽ thay thế bằng URL
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
           content: Text(ok ? 'Đã cập nhật ảnh nhóm' : 'Cập nhật ảnh thất bại')),
@@ -550,7 +704,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   }
 
   Future<void> _openAddMembersPicker() async {
-    // bên trong GroupChatScreen, trước khi push màn add:
     final ctrl = context.read<GroupChatController>();
     await ctrl.loadGroupMembers(widget.groupId);
     final existing = ctrl.existingMemberIdsOf(widget.groupId).toSet();
@@ -754,12 +907,12 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                   _circleAction(
                     icon: Icons.call,
                     label: getTranslated('voice_call', context)!,
-                    onTap: () => _startGroupCall(isVideo: false), // ⬅️ thêm
+                    onTap: () => _startGroupCall(isVideo: false),
                   ),
                   _circleAction(
                     icon: Icons.videocam,
                     label: getTranslated('video_call', context)!,
-                    onTap: () => _startGroupCall(isVideo: true), // ⬅️ thêm
+                    onTap: () => _startGroupCall(isVideo: true),
                   ),
                   _circleAction(
                     icon: Icons.group_add,
@@ -918,12 +1071,12 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           IconButton(
             tooltip: 'Gọi thoại',
             icon: const Icon(Icons.call),
-            onPressed: () => _startGroupCall(isVideo: false), // ⬅️ gọi ngay
+            onPressed: () => _startGroupCall(isVideo: false),
           ),
           IconButton(
             tooltip: 'Gọi video',
             icon: const Icon(Icons.videocam),
-            onPressed: () => _startGroupCall(isVideo: true), // ⬅️ gọi ngay
+            onPressed: () => _startGroupCall(isVideo: true),
           ),
           IconButton(
             tooltip: 'Thông tin',
@@ -953,7 +1106,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                               final isMe = ctrl.isMyMessage(msg);
                               final isSystem = msg['is_system'] == true;
 
-                              // 🔹 Nếu là tin nhắn hệ thống -> hiển thị đơn giản, không avatar
                               if (isSystem) {
                                 return Padding(
                                   padding:

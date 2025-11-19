@@ -6,7 +6,7 @@ import 'package:flutter_sixvalley_ecommerce/features/wallet/domain/services/wall
 import 'package:flutter_sixvalley_ecommerce/features/wallet/screens/add_fund_to_wallet_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/price_converter.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 
 class WalletController extends ChangeNotifier {
@@ -169,3 +169,4 @@ class WalletController extends ChangeNotifier {
 
 
 }
+

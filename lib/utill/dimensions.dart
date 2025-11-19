@@ -1,5 +1,5 @@
 import 'package:flutter_sixvalley_ecommerce/helper/responsive_helper.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 
 class Dimensions {
   static  double fontSizeExtraSmall = ResponsiveHelper.isTab(Get.context!) ? 14 : 10.0;
@@ -64,3 +64,4 @@ class Dimensions {
 
 
 }
+

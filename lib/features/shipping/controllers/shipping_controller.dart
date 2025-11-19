@@ -10,7 +10,7 @@ import 'package:flutter_sixvalley_ecommerce/features/checkout/domain/models/sele
 import 'package:flutter_sixvalley_ecommerce/features/shipping/domain/services/shipping_service_interface.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 import 'package:provider/provider.dart';
 
 class ShippingController extends ChangeNotifier {
@@ -191,3 +191,4 @@ class ShippingController extends ChangeNotifier {
 
 
 }
+

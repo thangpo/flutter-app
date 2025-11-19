@@ -4,7 +4,7 @@ import 'package:flutter_sixvalley_ecommerce/features/loyaltyPoint/domain/models/
 import 'package:flutter_sixvalley_ecommerce/features/loyaltyPoint/domain/services/loyalty_point_service_interface.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-import 'package:flutter_sixvalley_ecommerce/main.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 
 class LoyaltyPointController extends ChangeNotifier {
@@ -135,3 +135,4 @@ class LoyaltyPointController extends ChangeNotifier {
 
 
 }
+
