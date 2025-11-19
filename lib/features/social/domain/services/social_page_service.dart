@@ -82,24 +82,31 @@ class SocialPageService implements SocialPageServiceInterface {
   @override
   Future<List<SocialGetPage>> getLikedPages({
     int limit = 20,
-    required String userId, // <-- 1. THÊM THAM SỐ NÀY
+    required String userId,
   }) async {
-    // 2. GỌI HÀM MỚI (getLikedPages) TRONG REPO, KHÔNG GỌI getMyPage
     final ApiResponseModel<Response> resp =
     await socialPageRepository.getLikedPages(
       limit: limit,
-      userId: userId, // <-- 3. TRUYỀN USER ID XUỐNG
+      userId: userId,
     );
 
     if (resp.isSuccess && resp.response != null) {
       final dynamic data = resp.response!.data;
       print('DEBUG LIKED PAGES RESPONSE: ${data.toString()}');
+
       final int status =
-          int.tryParse('${data?['api_status'] ?? data?['status'] ?? 200}') ??
-              200;
+          int.tryParse('${data?['api_status'] ?? data?['status'] ?? 200}') ?? 200;
 
       if (status == 200) {
-        return socialPageRepository.parseMyPages(resp.response!);
+        // parse như cũ
+        final pages = socialPageRepository.parseMyPages(resp.response!);
+
+        // 🔥 VÌ ĐÂY LÀ API "LIKED PAGES" → 100% LÀ PAGE ĐÃ LIKE
+        return pages
+            .map(
+              (p) => p.copyWith(isLiked: true),
+        )
+            .toList();
       }
 
       final String message = (data?['errors']?['error_text'] ??
@@ -113,6 +120,18 @@ class SocialPageService implements SocialPageServiceInterface {
     return <SocialGetPage>[];
   }
 
+
+  bool _parseLikeStatus(dynamic raw) {
+    if (raw == null) return false;
+
+    if (raw is bool) return raw;
+
+    if (raw is num) return raw != 0;
+
+    final s = raw.toString().toLowerCase().trim();
+    // hỗ trợ nhiều kiểu backend có thể trả
+    return s == 'liked' || s == '1' || s == 'true';
+  }
   //───────────────── Like page ─────────────────
   @override
   Future<bool> toggleLikePage({required String pageId}) async {
@@ -121,21 +140,14 @@ class SocialPageService implements SocialPageServiceInterface {
 
     if (resp.isSuccess && resp.response != null) {
       final dynamic data = resp.response!.data;
-      // In log xem backend trả gì
       print('DEBUG LIKE PAGE RESPONSE: $data');
 
       final int status =
-          int.tryParse('${data?['api_status'] ?? data?['status'] ?? 400}') ??
-              400;
+          int.tryParse('${data?['api_status'] ?? data?['status'] ?? 400}') ?? 400;
 
       if (status == 200) {
-        // Tùy backend:
-        // WoWonder thường trả: { "like_status": "liked" } hoặc "unliked"
-        final String likeStatus =
-        (data?['like_status'] ?? data?['code'] ?? '').toString();
-
-        // true = sau call xong đang ở trạng thái "đã thích"
-        return likeStatus == 'liked';
+        // 👉 Chỉ cần biết là gọi API thành công
+        return true;
       }
 
       final String message = (data?['errors']?['error_text'] ??
@@ -146,9 +158,11 @@ class SocialPageService implements SocialPageServiceInterface {
     }
 
     ApiChecker.checkApi(resp);
-    // Nếu thất bại coi như không thay đổi gì
+    // request lỗi
     return false;
   }
+
+
 
   // ───────────────── GET ARTICLE CATEGORIES ─────────────────
   @override
@@ -462,20 +476,57 @@ class SocialPageService implements SocialPageServiceInterface {
         }
       }
     } else if (j['postFile'] != null &&
-        j['postFile']
-            .toString()
-            .isNotEmpty &&
-        (j['postFile_full'] ?? j['postFile']) != null) {
-      // tuỳ backend trả; cái này chỉ là ví dụ
+        j['postFile'].toString().isNotEmpty) {
       imageUrls.add(j['postFile'].toString());
     }
 
-    // Reactions
-    final int reactionCount =
-        int.tryParse('${j['reaction_count'] ?? j['reactors'] ?? 0}') ?? 0;
-    final String myReaction = j['reaction']?.toString() ?? '';
+    // ------------ REACTION MỚI ------------
+    final dynamic rawReaction = j['reaction'];
 
-    // Comments / shares
+    // mặc định
+    int reactionCount =
+        int.tryParse('${j['reaction_count'] ?? j['reactors'] ?? 0}') ?? 0;
+    String myReaction = '';
+    Map<String, int> reactionBreakdown = const <String, int>{};
+
+    if (rawReaction is Map) {
+      // nếu backend có field count trong reaction thì ưu tiên
+      final dynamic rawCount = rawReaction['count'] ?? rawReaction['all'];
+      if (rawCount != null) {
+        reactionCount = int.tryParse('$rawCount') ?? reactionCount;
+      }
+
+      // đã react hay chưa
+      final bool isReacted =
+          rawReaction['is_reacted'] == 1 ||
+              rawReaction['is_react'] == 1 ||
+              rawReaction['is_reacted'] == true;
+
+      if (isReacted) {
+        final dynamic typeVal = rawReaction['type'];
+        final String typeStr = typeVal?.toString() ?? '';
+
+        // tuỳ backend: có thể trả '1'..'6' hoặc 'Like' / 'Love'
+        myReaction = _mapReactionType(typeStr);
+      }
+
+      // breakdown theo id reaction nếu bạn cần
+      int _toInt(dynamic v) => int.tryParse('$v') ?? 0;
+
+      reactionBreakdown = <String, int>{
+        'Like': _toInt(rawReaction['1']),
+        'Love': _toInt(rawReaction['2']),
+        'HaHa': _toInt(rawReaction['3']),
+        'Wow': _toInt(rawReaction['4']),
+        'Sad': _toInt(rawReaction['5']),
+        'Angry': _toInt(rawReaction['6']),
+      }..removeWhere((_, value) => value == 0);
+    } else if (rawReaction is String) {
+      // trường hợp API nào đó đã trả sẵn 'Like', 'Love'...
+      myReaction = rawReaction;
+    }
+
+    // ------------ COMMENT / SHARE ------------
     final int commentCount =
         int.tryParse('${j['post_comments'] ?? j['comments'] ?? 0}') ?? 0;
     final int shareCount =
@@ -494,13 +545,37 @@ class SocialPageService implements SocialPageServiceInterface {
       imageUrls: imageUrls,
       imageUrl: imageUrls.isNotEmpty ? imageUrls.first : null,
       fileUrl: j['postFile']?.toString(),
+
       reactionCount: reactionCount,
       myReaction: myReaction,
+      reactionBreakdown: reactionBreakdown,
+
       commentCount: commentCount,
       shareCount: shareCount,
-      // Các field khác để default theo constructor
-      reactionBreakdown: const <String, int>{},
+
       hasProduct: false,
     );
   }
+
+  /// Map type backend -> tên reaction trong app
+  String _mapReactionType(String typeStr) {
+    switch (typeStr) {
+      case '1':
+        return 'Like';
+      case '2':
+        return 'Love';
+      case '3':
+        return 'HaHa';
+      case '4':
+        return 'Wow';
+      case '5':
+        return 'Sad';
+      case '6':
+        return 'Angry';
+      default:
+      // Nếu backend đã trả 'Like', 'Love' sẵn thì dùng luôn
+        return typeStr;
+    }
+  }
+
 }

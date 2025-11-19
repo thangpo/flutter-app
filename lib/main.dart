@@ -665,6 +665,7 @@ Future<void> main() async {
       ChangeNotifierProvider(create: (_) => di.sl<SocialGroupController>()),
       ChangeNotifierProvider(
           create: (_) => GroupChatController(GroupChatRepository())),
+      ChangeNotifierProvider(create: (context) => di.sl<SocialPageController>()),
       ChangeNotifierProvider(
         create: (_) => SocialNotificationsController(
           repo: SocialNotificationsRepository(),

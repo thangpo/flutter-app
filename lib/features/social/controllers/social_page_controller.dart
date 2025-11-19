@@ -581,58 +581,83 @@ class SocialPageController with ChangeNotifier {
   ///   true  -> sau khi gọi xong, page đang ở trạng thái "đã thích"
   ///   false -> sau khi gọi xong, page đang ở trạng thái "chưa thích" hoặc lỗi
   Future<bool> toggleLikePage(SocialGetPage page) async {
-    if (_likingPage) return false; // tránh spam
+    if (_likingPage) {
+      // đang gửi request rồi -> không làm gì thêm, giữ nguyên trạng thái cũ
+      return page.isLiked;
+    }
 
     _likingPage = true;
     _likePageError = null;
     notifyListeners();
 
+    final bool wasLiked = page.isLiked;
+
     try {
-      // Gọi service -> backend sẽ tự toggle like/unlike
-      final bool isLikedNow = await service.toggleLikePage(
+      // ❗ Ở đây: CHỈ CẦN BIẾT REQUEST CÓ OK KHÔNG
+      final bool ok = await service.toggleLikePage(
         pageId: page.pageId.toString(),
       );
 
-      // Nếu SocialGetPage có field isLiked + copyWith -> cập nhật flag local
-      SocialGetPage updatedPage;
-      try {
-        updatedPage = page.copyWith(isLiked: isLikedNow);
-      } catch (_) {
-        // Nếu model chưa support copyWith / isLiked thì cứ dùng lại page cũ
-        updatedPage = page;
+      if (!ok) {
+        // API trả lỗi -> không đổi gì
+        return wasLiked;
       }
 
-      // Cập nhật 3 state list
-      _applyLikeToggleToState(
-        _recommendedState,
-        updatedPage,
-        isLikedNow,
-        isLikedTab: false,
+      // 👉 TRẠNG THÁI MỚI = ĐẢO TRẠNG THÁI CŨ
+      final bool isLikedNow = !wasLiked;
+
+      // Tính lại lượt theo dõi
+      int newLikes = page.likesCount;
+      if (isLikedNow && !wasLiked) {
+        newLikes++;
+      } else if (!isLikedNow && wasLiked && newLikes > 0) {
+        newLikes--;
+      }
+
+      final SocialGetPage updatedPage = page.copyWith(
+        isLiked: isLikedNow,
+        likesCount: newLikes,
       );
+
+      // Cập nhật cả 3 list: myPages, recommended, likedPages
       _applyLikeToggleToState(
         _myPagesState,
         updatedPage,
         isLikedNow,
         isLikedTab: false,
       );
+
+      _applyLikeToggleToState(
+        _recommendedState,
+        updatedPage,
+        isLikedNow,
+        isLikedTab: false,
+      );
+
       _applyLikeToggleToState(
         _likedPagesState,
         updatedPage,
         isLikedNow,
-        isLikedTab: true, // list "Trang đã thích"
+        isLikedTab: true,
       );
 
       notifyListeners();
       return isLikedNow;
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('toggleLikePage ERROR: $e\n$st');
       _likePageError = e.toString();
       notifyListeners();
-      return false;
+      // lỗi thì giữ nguyên trạng thái cũ
+      return wasLiked;
     } finally {
       _likingPage = false;
       notifyListeners();
     }
   }
+
+
+
+
   /// Cập nhật 1 `_PageListState` sau khi like/unlike 1 page.
   ///
   /// - Nếu page đã có trong list:
@@ -646,25 +671,22 @@ class SocialPageController with ChangeNotifier {
       bool isLikedNow, {
         required bool isLikedTab,
       }) {
-    final List<SocialGetPage> current =
-    List<SocialGetPage>.from(state.items);
-
+    final List<SocialGetPage> current = List<SocialGetPage>.from(state.items);
     final int index =
     current.indexWhere((p) => p.pageId == updatedPage.pageId);
 
     if (index >= 0) {
-      // Đã tồn tại trong list
       if (isLikedTab && !isLikedNow) {
-        // Tab "Trang đã thích" mà giờ unliked -> xoá khỏi list
+        // Tab "Trang đã thích" mà giờ unliked -> remove
         current.removeAt(index);
       } else {
-        // Các list khác, hoặc vẫn ở trạng thái liked -> cập nhật item
+        // Các list khác, hoặc vẫn liked -> update item
         current[index] = updatedPage;
       }
     } else {
-      // Chưa có trong list
+      // chưa có trong list
       if (isLikedTab && isLikedNow) {
-        // Vừa like xong -> thêm vào đầu danh sách likedPages
+        // mới like -> thêm vào đầu list likedPages
         current.insert(0, updatedPage);
       }
     }
@@ -672,10 +694,10 @@ class SocialPageController with ChangeNotifier {
     state.items = current;
 
     if (isLikedTab) {
-      // đảm bảo coi như đã init khi user đã thao tác
       state.initialized = true;
     }
   }
+
 
 
 

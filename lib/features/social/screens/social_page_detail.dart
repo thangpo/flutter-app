@@ -1,893 +1,650 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_get_page.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
-
-// Dùng lại SocialPostCard từ social_screen.dart (giống profile)
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_screen.dart'
     show SocialPostCard;
 
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/dimensions.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_page_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/utill/custom_themes.dart';
 
 class SocialPageDetailScreen extends StatefulWidget {
   final SocialGetPage page;
 
   const SocialPageDetailScreen({
-    super.key,
+    Key? key,
     required this.page,
-  });
+  }) : super(key: key);
 
   @override
   State<SocialPageDetailScreen> createState() => _SocialPageDetailScreenState();
 }
 
 class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
+  final ScrollController _scrollController = ScrollController();
+  bool _showTitle = false;
+  late SocialGetPage _page;
+
   @override
   void initState() {
     super.initState();
+    _page = widget.page; // <-- KHỞI TẠO STATE LOCAL
 
-    // Gọi controller để load bài viết của page lần đầu
+    // Load posts ban đầu
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final pageCtrl = context.read<SocialPageController>();
-      pageCtrl.loadInitialPagePosts(widget.page.pageId);
+      pageCtrl.loadInitialPagePosts(_page.pageId);
+    });
+
+    // Lắng nghe scroll để:
+    // - Hiện/ẩn Title trên AppBar
+    // - Tự động load more khi gần đáy
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    // 1. Hiện/ẩn title trong AppBar
+    if (_scrollController.offset > 180 && !_showTitle) {
+      setState(() => _showTitle = true);
+    } else if (_scrollController.offset <= 180 && _showTitle) {
+      setState(() => _showTitle = false);
+    }
+
+    // 2. Auto load more khi gần chạm đáy
+    final position = _scrollController.position;
+    if (position.pixels >= position.maxScrollExtent - 200) {
+      final pageCtrl = context.read<SocialPageController>();
+      if (pageCtrl.hasMorePagePosts && !pageCtrl.loadingMorePagePosts) {
+        pageCtrl.loadMorePagePosts(_page.pageId);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  // ---------------- ACTIONS -----------------
+
+  void _onFollowOrUnfollow() async {
+    final pageCtrl = context.read<SocialPageController>();
+
+    final bool wasLiked = _page.isLiked;
+
+    final bool isLikedNow = await pageCtrl.toggleLikePage(_page);
+    if (!mounted) return;
+
+    setState(() {
+      int newLikes = _page.likesCount;
+
+      if (isLikedNow && !wasLiked) {
+        newLikes++;
+      } else if (!isLikedNow && wasLiked && newLikes > 0) {
+        newLikes--;
+      }
+
+      _page = _page.copyWith(
+        isLiked: isLikedNow,
+        likesCount: newLikes,
+      );
     });
   }
 
-  // ================== HANDLER CÁC ACTION (tạm thời) ==================
 
-  void _onCreatePost() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          getTranslated('feature_coming_soon', context) ??
-              'Chức năng đăng bài với tư cách trang sẽ sớm được bổ sung.',
-        ),
-      ),
-    );
-  }
 
-  void _onShowAbout() {
-    final desc = widget.page.description;
-    if (desc == null || desc.isEmpty) return;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) {
-        final theme = Theme.of(ctx);
-        return Padding(
-          padding: const EdgeInsets.all(Dimensions.paddingSizeDefault),
-          child: SafeArea(
-            top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Giới thiệu về ${widget.page.name}',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  desc,
-                  style: theme.textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 16),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _onToggleLike() async {
-    final pageCtrl = context.read<SocialPageController>();
-    final bool isLikedNow = await pageCtrl.toggleLikePage(widget.page);
-
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          isLikedNow
-              ? (getTranslated('page_liked', context) ?? 'Đã thích trang.')
-              : (getTranslated('page_unliked', context) ?? 'Đã bỏ thích trang.'),
-        ),
-      ),
-    );
-  }
 
   void _onMessage() {
+    _showToast(getTranslated('feature_coming_soon', context) ?? 'Sắp ra mắt');
+  }
+
+  void _onEditPage() {
+    _showToast('Tính năng chỉnh sửa đang phát triển');
+  }
+
+  void _onAdvertise() {
+    _showToast('Tính năng quảng cáo đang phát triển');
+  }
+
+  void _onCreatePost() {
+    _showToast(getTranslated('feature_coming_soon', context) ?? 'Sắp ra mắt');
+  }
+
+  void _showToast(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          getTranslated('feature_coming_soon', context) ??
-              'Chức năng nhắn tin với trang sẽ sớm được bổ sung.',
-        ),
+        content: Text(msg),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 1),
       ),
     );
   }
 
-  void _onMore() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.share),
-                title: const Text('Chia sẻ trang'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  // TODO: share
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.link),
-                title: const Text('Sao chép liên kết'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  // TODO: copy link
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // ================== BUILD UI ==================
+  // ---------------- UI -----------------
 
   @override
   Widget build(BuildContext context) {
-    final page = widget.page;
     final theme = Theme.of(context);
+    final page = _page;
     final bool isPageOwner = page.isPageOwner;
+
+    const double avatarRadius = 55;
+    const double topMargin = 60;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: Text(page.name),
-        elevation: 0,
-      ),
       body: Consumer<SocialPageController>(
-        builder: (context, pageCtrl, _) {
+        builder: (context, pageCtrl, child) {
           final List<SocialPost> posts = pageCtrl.pagePosts;
-          final bool isInitialLoading =
-              pageCtrl.loadingPagePosts && !pageCtrl.pagePostsInitialized;
-          final bool isLoadingMore = pageCtrl.loadingMorePagePosts;
-          final bool hasMore = pageCtrl.hasMorePagePosts;
-          final String? error = pageCtrl.pagePostsError;
+          final bool isNotInitialized = !pageCtrl.pagePostsInitialized;
 
-          // Đang load lần đầu
-          if (isInitialLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          // Lỗi khi load lần đầu (chưa có dữ liệu)
-          if (error != null && !pageCtrl.pagePostsInitialized) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(Dimensions.paddingSizeLarge),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      getTranslated('something_went_wrong', context) ??
-                          'Đã xảy ra lỗi khi tải dữ liệu.',
-                      style: theme.textTheme.titleMedium,
-                      textAlign: TextAlign.center,
+          return CustomScrollView(
+            controller: _scrollController,
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              // -------- APP BAR --------
+              SliverAppBar(
+                expandedHeight: 220.0,
+                floating: false,
+                pinned: true,
+                backgroundColor: theme.primaryColor,
+                leading: IconButton(
+                  icon: const CircleAvatar(
+                    backgroundColor: Colors.black38,
+                    child: Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                ),
+                actions: [
+                  IconButton(
+                    icon: const CircleAvatar(
+                      backgroundColor: Colors.black38,
+                      child: Icon(Icons.more_horiz, color: Colors.white, size: 20),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      error,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.hintColor,
+                    onPressed: () {},
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                title: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 200),
+                  opacity: _showTitle ? 1.0 : 0.0,
+                  child: Text(
+                    page.name,
+                    style: const TextStyle(color: Colors.white, fontSize: 18),
+                  ),
+                ),
+                flexibleSpace: FlexibleSpaceBar(
+                  background: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.network(
+                        page.coverUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) =>
+                            Container(color: Colors.grey.shade400),
                       ),
-                      textAlign: TextAlign.center,
+                      Container(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Colors.black26, Colors.transparent],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // -------- INFO SECTION (avatar + tên + stats + buttons) --------
+              SliverToBoxAdapter(
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  alignment: Alignment.topCenter,
+                  children: [
+                    Container(
+                      margin: const EdgeInsets.only(top: topMargin - avatarRadius),
+                      padding: const EdgeInsets.only(
+                        top: avatarRadius + 10,
+                        bottom: 20,
+                      ),
+                      decoration: BoxDecoration(color: theme.cardColor),
+                      child: Column(
+                        children: [
+                          // Tên trang
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Text(
+                              page.name,
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 22,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+
+                          // Username + category
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Text(
+                              '@${page.username} • ${page.category}',
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyMedium
+                                  ?.copyWith(color: theme.hintColor),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+
+                          // Stats
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: IntrinsicHeight(
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildStatItem(
+                                      context,
+                                      page.likesCount.toString(),
+                                      getTranslated('followers', context) ??
+                                          'Theo dõi',
+                                    ),
+                                  ),
+                                  VerticalDivider(
+                                    color: theme.dividerColor,
+                                    thickness: 1,
+                                    width: 20,
+                                  ),
+                                  Expanded(
+                                    child: _buildStatItem(
+                                      context,
+                                      page.usersPost.toString(),
+                                      getTranslated('posts', context) ??
+                                          'Bài viết',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+
+                          // Buttons
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: isPageOwner
+                                ? Row(
+                              children: [
+                                Expanded(
+                                  child: _buildActionButton(
+                                    context,
+                                    'Chỉnh sửa',
+                                    Icons.edit_outlined,
+                                    theme.canvasColor,
+                                    Colors.black87,
+                                    _onEditPage,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: _buildActionButton(
+                                    context,
+                                    'Quảng cáo',
+                                    Icons.campaign_outlined,
+                                    Colors.blue.shade50,
+                                    Colors.blue,
+                                    _onAdvertise,
+                                  ),
+                                ),
+                              ],
+                            )
+                                : Row(
+                              children: [
+                                Expanded(
+                                  child: _buildActionButton(
+                                    context,
+                                    page.isLiked
+                                        ? 'Đang theo dõi'
+                                        : 'Theo dõi',
+                                    page.isLiked
+                                        ? Icons.check
+                                        : Icons.add,
+                                    page.isLiked
+                                        ? theme.canvasColor
+                                        : theme.primaryColor,
+                                    page.isLiked
+                                        ? Colors.black87
+                                        : Colors.white,
+                                    _onFollowOrUnfollow,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: _buildActionButton(
+                                    context,
+                                    'Nhắn tin',
+                                    Icons.chat_bubble_outline,
+                                    theme.canvasColor,
+                                    Colors.black87,
+                                    _onMessage,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () {
-                        context
-                            .read<SocialPageController>()
-                            .loadInitialPagePosts(page.pageId);
-                      },
-                      child: Text(
-                        getTranslated('retry', context) ?? 'Thử lại',
+
+                    // Avatar
+                    Positioned(
+                      top: -avatarRadius + 30,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: theme.cardColor,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 8,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: CircleAvatar(
+                          radius: avatarRadius,
+                          backgroundImage: NetworkImage(page.avatarUrl),
+                          backgroundColor: Colors.grey.shade200,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-            );
-          }
 
-          // Có dữ liệu (hoặc chưa có nhưng không lỗi) -> build layout chính
-          return SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                /// HEADER
-                _PageHeaderBlock(
-                  page: page,
-                  isPageOwner: isPageOwner,
-                  onTapMore: _onMore,
-                  onTapMessage: _onMessage,
-                  onTapLikeOrUnlike: _onToggleLike,
+              // -------- INTRO + CREATE POST --------
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (page.description != null &&
+                          page.description!.isNotEmpty) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: theme.cardColor,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.03),
+                                blurRadius: 4,
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Giới thiệu",
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                page.description!,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  height: 1.4,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      InkWell(
+                        onTap: _onCreatePost,
+                        borderRadius: BorderRadius.circular(30),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: theme.cardColor,
+                            borderRadius: BorderRadius.circular(30),
+                            border: Border.all(color: theme.dividerColor),
+                          ),
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 16,
+                                backgroundImage: NetworkImage(page.avatarUrl),
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                "Bạn đang nghĩ gì?",
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: theme.hintColor,
+                                ),
+                              ),
+                              const Spacer(),
+                              Icon(
+                                Icons.image_outlined,
+                                color: Colors.green.shade400,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+              ),
 
-                const SizedBox(height: 12),
-
-                /// ALERT OWNER
-                if (isPageOwner)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: Dimensions.paddingSizeDefault,
+              // -------- TITLE "Bài viết" --------
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Text(
+                    "Bài viết",
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
-                    child: _PageManagementAlert(page: page),
-                  ),
-
-                const SizedBox(height: 12),
-
-                /// COMPOSER
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: Dimensions.paddingSizeDefault,
-                  ),
-                  child: _PageComposer(
-                    page: page,
-                    onCreatePost: _onCreatePost,
                   ),
                 ),
+              ),
 
-                const SizedBox(height: 12),
-
-                /// MAIN: Giới thiệu + Thông tin nhanh + Posts (tất cả xếp dọc)
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: Dimensions.paddingSizeDefault,
-                    vertical: 8,
+              // -------- POSTS / SKELETON / EMPTY --------
+              if (isNotInitialized)
+                SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                        (context, index) => _buildSkeletonPost(context),
+                    childCount: 3,
                   ),
-                  child: _PagePostsSection(
-                    page: page,
-                    posts: posts,
-                    isLoadingMore: isLoadingMore,
-                    onLoadMore: () => context
-                        .read<SocialPageController>()
-                        .loadMorePagePosts(page.pageId),
-                    onShowAbout: _onShowAbout,
-                    hasMore: hasMore,
+                )
+              else if (posts.isEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 50),
+                    child: Center(
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.post_add,
+                            size: 50,
+                            color: theme.disabledColor,
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            getTranslated('no_posts_yet', context) ??
+                                'Chưa có bài viết nào',
+                            style: TextStyle(color: theme.hintColor),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+              else
+                SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                      // index cuối để render loading / spacing
+                      if (index == posts.length) {
+                        if (pageCtrl.hasMorePagePosts) {
+                          return const Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                          );
+                        }
+                        return const SizedBox(height: 40);
+                      }
+
+                      // Mỗi bài viết
+                      final post = posts[index];
+                      return Container(
+                        width: double.infinity, // RẤT QUAN TRỌNG: width bounded
+                        margin: const EdgeInsets.only(bottom: 8),
+                        color: theme.cardColor,
+                        child: SocialPostCard(post: post),
+                      );
+                    },
+                    childCount: posts.length + 1,
                   ),
                 ),
-
-                const SizedBox(height: 24),
-              ],
-            ),
+            ],
           );
         },
       ),
     );
   }
-}
 
-/// ===================================================================
-/// HEADER PAGE (cover + avatar + info + nút)
-/// ===================================================================
+  // ---------------- HELPERS -----------------
 
-class _PageHeaderBlock extends StatelessWidget {
-  final SocialGetPage page;
-  final bool isPageOwner;
-  final VoidCallback onTapMore;
-  final VoidCallback onTapMessage;
-  final VoidCallback onTapLikeOrUnlike;
-
-  const _PageHeaderBlock({
-    required this.page,
-    required this.isPageOwner,
-    required this.onTapMore,
-    required this.onTapMessage,
-    required this.onTapLikeOrUnlike,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildStatItem(BuildContext context, String value, String label) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    return Container(
-      color: theme.cardColor,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Cover
-          SizedBox(
-            height: 220,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Image.network(
-                  page.coverUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) =>
-                      Container(color: Colors.grey.shade300),
-                ),
-                Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.bottomCenter,
-                        end: Alignment.topCenter,
-                        colors: [
-                          Colors.black.withOpacity(0.4),
-                          Colors.transparent,
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Avatar + info + nút
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              Dimensions.paddingSizeDefault,
-              16,
-              Dimensions.paddingSizeDefault,
-              12,
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: theme.scaffoldBackgroundColor,
-                      width: 4,
-                    ),
-                  ),
-                  child: CircleAvatar(
-                    radius: 40,
-                    backgroundImage: NetworkImage(page.avatarUrl),
-                    backgroundColor: Colors.grey.shade200,
-                  ),
-                ),
-                const SizedBox(width: 16),
-
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        page.name,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '@${page.username} · ${page.category}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.hintColor,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Text(
-                            '${page.likesCount} lượt thích',
-                            style: theme.textTheme.bodySmall
-                                ?.copyWith(color: theme.hintColor),
-                          ),
-                          const SizedBox(width: 8),
-                          const Text('•'),
-                          const SizedBox(width: 8),
-                          Text(
-                            '${page.usersPost} bài viết',
-                            style: theme.textTheme.bodySmall
-                                ?.copyWith(color: theme.hintColor),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-
-                IconButton(
-                  onPressed: onTapMore,
-                  icon: const Icon(Icons.more_horiz),
-                  color: isDark ? Colors.white : Colors.black87,
-                ),
-              ],
-            ),
-          ),
-
-          // Hàng nút action (tách thành 2 dòng để tránh overflow)
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: Dimensions.paddingSizeDefault,
-              vertical: 8,
-            ),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: onTapLikeOrUnlike,
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                        ),
-                        icon: Icon(
-                          page.isLiked
-                              ? Icons.check
-                              : Icons.thumb_up_outlined,
-                          size: 18,
-                        ),
-                        label:
-                        Text(page.isLiked ? 'Đang thích' : 'Thích trang'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: onTapMessage,
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                        ),
-                        icon: const Icon(Icons.message_outlined, size: 18),
-                        label: const Text('Nhắn tin'),
-                      ),
-                    ),
-                  ],
-                ),
-                if (isPageOwner) ...[
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        // TODO: mở EditPageScreen
-                      },
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                      child: const Text('Chỉnh sửa'),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// ===================================================================
-/// ALERT QUẢN LÝ PAGE (OWNER)
-/// ===================================================================
-
-class _PageManagementAlert extends StatelessWidget {
-  final SocialGetPage page;
-
-  const _PageManagementAlert({required this.page});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      padding: const EdgeInsets.all(Dimensions.paddingSizeDefault),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.dividerColor),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.blueAccent,
-            ),
-            child: const Icon(Icons.flag, size: 18, color: Colors.white),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'Bạn đang quản lý trang này. Hãy đăng nội dung thường xuyên để tăng tương tác.',
-              style: theme.textTheme.bodyMedium,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// ===================================================================
-/// COMPOSER ĐĂNG BÀI VỚI TƯ CÁCH PAGE
-/// ===================================================================
-
-class _PageComposer extends StatelessWidget {
-  final SocialGetPage page;
-  final VoidCallback onCreatePost;
-
-  const _PageComposer({
-    required this.page,
-    required this.onCreatePost,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      padding: const EdgeInsets.all(Dimensions.paddingSizeDefault),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.dividerColor),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundImage: NetworkImage(page.avatarUrl),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: GestureDetector(
-                  onTap: onCreatePost,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: theme.inputDecorationTheme.fillColor ??
-                          theme.dividerColor.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      'Viết gì đó với tư cách ${page.name}...',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.hintColor,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: const [
-              _ComposerIconButton(
-                icon: Icons.image_outlined,
-                label: 'Ảnh/Video',
-              ),
-              _ComposerIconButton(
-                icon: Icons.insert_emoticon_outlined,
-                label: 'Cảm xúc',
-              ),
-              _ComposerIconButton(
-                icon: Icons.location_on_outlined,
-                label: 'Check-in',
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ComposerIconButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-
-  const _ComposerIconButton({
-    required this.icon,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(8),
-      onTap: () {
-        // TODO: mở picker tương ứng
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: theme.hintColor),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.hintColor,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// ===================================================================
-/// PHẦN POSTS CỦA PAGE
-/// ===================================================================
-
-class _PagePostsSection extends StatelessWidget {
-  final SocialGetPage page;
-  final List<SocialPost> posts;
-  final bool isLoadingMore;
-  final VoidCallback onLoadMore;
-  final VoidCallback onShowAbout;
-  final bool hasMore;
-
-  const _PagePostsSection({
-    required this.page,
-    required this.posts,
-    required this.isLoadingMore,
-    required this.onLoadMore,
-    required this.onShowAbout,
-    required this.hasMore,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    if (posts.isEmpty) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SizedBox(height: 8),
-          _PageAboutSnippet(page: page, onShowAbout: onShowAbout),
-          const SizedBox(height: 12),
-          // 👉 Thông tin nhanh đặt NGAY DƯỚI Giới thiệu
-          _PageSidebarInfo(page: page),
-          const SizedBox(height: 16),
-          Padding(
-            padding: const EdgeInsets.all(Dimensions.paddingSizeDefault),
-            child: Text(
-              getTranslated('no_posts_yet', context) ??
-                  'Trang này chưa có bài viết nào',
-              style: TextStyle(color: Theme.of(context).hintColor),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ],
-      );
-    }
-
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SizedBox(height: 8),
-        _PageAboutSnippet(page: page, onShowAbout: onShowAbout),
-        const SizedBox(height: 12),
-        // 👉 Thông tin nhanh ngay dưới Giới thiệu
-        _PageSidebarInfo(page: page),
-        const SizedBox(height: 16),
-
-        for (int i = 0; i < posts.length; i++) ...[
-          Container(
-            color: theme.cardColor,
-            child: SocialPostCard(post: posts[i]),
+        Text(
+          value,
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
           ),
-          if (i != posts.length - 1)
-            Container(
-              height: 8,
-              color: const Color(0xFFF0F2F5),
-            ),
-        ],
-
-        const SizedBox(height: Dimensions.paddingSizeDefault),
-        if (isLoadingMore)
-          const Center(child: CircularProgressIndicator())
-        else if (hasMore)
-          Center(
-            child: TextButton(
-              onPressed: onLoadMore,
-              child: Text(
-                getTranslated('load_more', context) ?? 'Tải thêm',
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ),
-          )
-        else
-          const SizedBox.shrink(),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.hintColor,
+          ),
+        ),
       ],
     );
   }
-}
 
-class _PageAboutSnippet extends StatelessWidget {
-  final SocialGetPage page;
-  final VoidCallback onShowAbout;
-
-  const _PageAboutSnippet({
-    required this.page,
-    required this.onShowAbout,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    if (page.description == null || page.description!.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
+  Widget _buildActionButton(
+      BuildContext context,
+      String label,
+      IconData icon,
+      Color bg,
+      Color text,
+      VoidCallback onTap,
+      ) {
     return InkWell(
-      onTap: onShowAbout,
-      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.all(Dimensions.paddingSizeDefault),
+        height: 45,
+        alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: theme.cardColor,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: theme.dividerColor),
+          color: bg,
+          borderRadius: BorderRadius.circular(8),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              'Giới thiệu',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
+            Icon(icon, size: 18, color: text),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: text,
+                  fontSize: 14,
+                ),
               ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              page.description!,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodyMedium,
             ),
           ],
         ),
       ),
     );
   }
-}
 
-/// ===================================================================
-/// SIDEBAR INFO PAGE (giờ dùng như "card thông tin nhanh" dưới Giới thiệu)
-/// ===================================================================
-
-class _PageSidebarInfo extends StatelessWidget {
-  final SocialGetPage page;
-
-  const _PageSidebarInfo({required this.page});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+  Widget _buildSkeletonPost(BuildContext context) {
+    final color = Theme.of(context).hintColor.withOpacity(0.1);
+    final cardColor = Theme.of(context).cardColor;
 
     return Container(
-      padding: const EdgeInsets.all(Dimensions.paddingSizeDefault),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.dividerColor),
-      ),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(15),
+      color: cardColor,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Thông tin nhanh',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          _InfoRow(
-            icon: Icons.thumb_up_alt_outlined,
-            label: 'Lượt thích',
-            value: page.likesCount.toString(),
-          ),
-          _InfoRow(
-            icon: Icons.article_outlined,
-            label: 'Bài viết',
-            value: page.usersPost.toString(),
-          ),
-          if (page.website != null && page.website!.isNotEmpty)
-            _InfoRow(
-              icon: Icons.public,
-              label: 'Website',
-              value: page.website!,
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-
-  const _InfoRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: theme.hintColor),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              label,
-              style: theme.textTheme.bodyMedium,
-            ),
-          ),
-          const SizedBox(width: 8),
-          // 👇 Cho value co giãn + ellipsis để tránh overflow
-          Flexible(
-            child: Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.right,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                ),
               ),
-            ),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(width: 120, height: 14, color: color),
+                  const SizedBox(height: 6),
+                  Container(width: 80, height: 12, color: color),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 15),
+          Container(
+            width: double.infinity,
+            height: 200,
+            color: color,
           ),
         ],
       ),
