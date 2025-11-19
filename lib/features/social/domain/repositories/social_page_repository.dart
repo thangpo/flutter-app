@@ -515,6 +515,56 @@ class SocialPageRepository {
       return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
     }
   }
+  Future<ApiResponseModel<Response>> sendMessageToPage({
+    required String pageId,
+    required String recipientId,
+    required String text,
+    required String messageHashId,
+    MultipartFile? file,     // optional
+    String? gif,             // optional
+    String? imageUrl,        // optional
+    String? lng,             // optional
+    String? lat,             // optional
+  }) async {
+    try {
+      // Lấy access_token social
+      final String? token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError(
+          'Bạn chưa đăng nhập tài khoản social.',
+        );
+      }
 
+      // URL: base + /api/page_chat + access_token
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialSendMessPage}?access_token=$token';
 
+      // Body giống Postman: server_key, type, page_id, recipient_id, text, message_hash_id, ...
+      final Map<String, dynamic> body = <String, dynamic>{
+        'server_key': AppConstants.socialServerKey,
+        'type': 'send',
+        'page_id': pageId,
+        'recipient_id': recipientId,
+        'text': text,
+        'message_hash_id': messageHashId,
+      };
+
+      if (file != null) body['file'] = file;
+      if (gif != null && gif.isNotEmpty) body['gif'] = gif;
+      if (imageUrl != null && imageUrl.isNotEmpty) body['image_url'] = imageUrl;
+      if (lng != null && lng.isNotEmpty) body['lng'] = lng;
+      if (lat != null && lat.isNotEmpty) body['lat'] = lat;
+
+      final FormData formData = FormData.fromMap(body);
+
+      final Response response = await dioClient.post(
+        url,
+        data: formData,
+      );
+
+      return ApiResponseModel.withSuccess(response);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
 }

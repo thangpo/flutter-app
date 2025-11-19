@@ -551,18 +551,9 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
       );
     }
 
-
     Future<void> handleLike() async {
-      // TODO: gọi controller để like / unlike page
-      // await context.read<SocialPageController>().toggleLike(page.pageId);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            getTranslated('feature_coming_soon', context) ??
-                'Chức năng này sẽ sớm được bổ sung.',
-          ),
-        ),
-      );
+      final pageCtrl = context.read<SocialPageController>();
+      await pageCtrl.toggleLikePage(page);
     }
 
     final String buttonLabel = isLiked
@@ -652,8 +643,7 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color:
-                        Colors.white.withValues(alpha: 0.85),
+                        color: Colors.white.withValues(alpha: 0.85),
                       ) ??
                           TextStyle(
                             color: Colors.white.withValues(alpha: 0.85),
@@ -686,6 +676,7 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
     );
   }
 
+
   String _buildPageSubtitle(BuildContext context, SocialGetPage page) {
     final String category = page.category.isNotEmpty
         ? page.category
@@ -703,7 +694,10 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
   // ───────────────── LIST ITEM CHO "TRANG CỦA BẠN" & "ĐÃ THÍCH" ─────────────────
 
   List<Widget> _buildPageListItems(
-      BuildContext context, List<SocialGetPage> pages) {
+      BuildContext context,
+      List<SocialGetPage> pages, {
+        bool canEdit = false,
+      }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final Color mutedColor =
@@ -812,11 +806,14 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
 
                 const SizedBox(width: 4),
 
-                _buildPageMoreButton(
-                  context,
-                  page,
-                  mutedColor,
-                ),
+                const SizedBox(width: 4),
+
+                if (canEdit && page.isPageOwner)
+                  _buildPageMoreButton(
+                    context,
+                    page,
+                    mutedColor,
+                  ),
               ],
             ),
           ),

@@ -84,6 +84,7 @@ class AppConstants {
   static const String socialCreatePage='/api/create-page';
   static const String socialUpdateDatePage='/api/update-page-data';
   static const String socialLikePage='/api/like-page';
+  static const String socialSendMessPage='/api/page_chat';
   //follow
   static const String socialFollowUser = '/api/follow-user';
   static const String socialUpdateDataUser = '/api/update-user-data';
