@@ -28,6 +28,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/widgets/social_post_
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/social_feeling_helper.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_post_full_with_screen.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 bool _listsEqual<T>(List<T> a, List<T> b) {
@@ -110,8 +111,10 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
 
     final int eligibleCount = eligibleEntries.length;
     final int adCount = ads.length;
-    final List<int?> adIds =
-        List<int?>.generate(adCount, (index) => ads[index].id);
+    final List<int?> adIds = List<int?>.generate(
+      adCount,
+      (index) => ads[index].id,
+    );
 
     final List<String> newEligibleKeys =
         eligibleEntries.map((entry) => entry.id).toList();
@@ -206,13 +209,16 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final bool isLightTheme = theme.brightness == Brightness.light;
     final mediaQuery = MediaQuery.of(context);
+    final Color pageBg = isLightTheme ? cs.surface : cs.background;
     final double listTopPadding = _FacebookHeader.totalHeight(context) + 12;
     final double listBottomPadding = mediaQuery.padding.bottom + 16;
 
     return Scaffold(
-      backgroundColor: cs.background,
+      backgroundColor: pageBg,
       body: Stack(
         children: [
           Positioned.fill(
@@ -292,8 +298,10 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
                             sc.loadMore();
                           }
 
-                          final AdsModel? inlineAd =
-                              _postAdForIndex(postIndex, postAds);
+                          final AdsModel? inlineAd = _postAdForIndex(
+                            postIndex,
+                            postAds,
+                          );
 
                           return Column(
                             children: [
@@ -309,10 +317,7 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
               ),
             ),
           ),
-          Align(
-            alignment: Alignment.topCenter,
-            child: const _FacebookHeader(),
-          ),
+          Align(alignment: Alignment.topCenter, child: const _FacebookHeader()),
         ],
       ),
     );
@@ -330,8 +335,10 @@ Future<void> _launchAdUrl(BuildContext context, String? url) async {
     return;
   }
   try {
-    final bool launched =
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final bool launched = await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    );
     if (!launched) {
       _showAdLaunchError(context);
     }
@@ -341,9 +348,9 @@ Future<void> _launchAdUrl(BuildContext context, String? url) async {
 }
 
 void _showAdLaunchError(BuildContext context) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Không thấy quảng cáo')),
-  );
+  ScaffoldMessenger.of(
+    context,
+  ).showSnackBar(const SnackBar(content: Text('Không thấy quảng cáo')));
 }
 
 class _FacebookHeader extends StatelessWidget {
@@ -358,110 +365,130 @@ class _FacebookHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final bool isDarkTheme = theme.brightness == Brightness.dark;
-    final Color onAppBar = isDarkTheme ? Colors.white : Colors.black87;
-    final Color accentColor = isDarkTheme ? Colors.white : Colors.black;
-    final Color baseFill = isDarkTheme ? Colors.black : Colors.white;
-    final double glassOpacity = isDarkTheme ? 0.22 : 0.035;
-    final double fillOpacity = isDarkTheme ? 0.28 : 0.1;
-    final double outlineOpacity = isDarkTheme ? 0.16 : 0.04;
-    final double bubbleOpacity = isDarkTheme ? 0.16 : 0.05;
-    final Color glassTint = accentColor.withValues(alpha: glassOpacity);
-    final Color outlineColor = accentColor.withValues(alpha: outlineOpacity);
-    final Color fallbackFill = baseFill.withValues(alpha: fillOpacity);
+
+    final Color onAppBar =
+        isDarkTheme ? Colors.white : cs.onSurface.withOpacity(0.9);
+    final double bubbleOpacity = isDarkTheme ? 0.18 : 0.14;
+
     final BorderRadius borderRadius = BorderRadius.circular(32);
-    final double blurAmount = isDarkTheme ? 18 : 24;
-    final double thickness = isDarkTheme ? 26 : 18;
-    final LiquidGlassSettings headerSettings = LiquidGlassSettings(
-      blur: blurAmount,
-      thickness: thickness,
-      chromaticAberration: 0.25,
-      lightIntensity: isDarkTheme ? 0.65 : 0.52,
-      ambientStrength: isDarkTheme ? 0.35 : 0.18,
-      glassColor: glassTint,
+
+    // 🔹 Kính rất trong: blur nhỏ, tint rất mỏng
+    final LiquidGlassSettings headerSettings = const LiquidGlassSettings(
+      blur: 1, // 2–4, càng nhỏ càng trong
+      thickness: 12,
+      refractiveIndex: 1.15,
+      lightAngle: 0.5 * pi,
+      lightIntensity: 1.0,
+      ambientStrength: 0.30,
+      saturation: 1.05,
+      glassColor: Color(0x10FFFFFF), // ~6% trắng
     );
 
     final sc = context.read<SocialController>();
 
     return SafeArea(
       bottom: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-        child: LiquidGlassLayer(
-          settings: headerSettings,
-          child: LiquidGlass(
-            shape: const LiquidRoundedSuperellipse(borderRadius: 32),
-            clipBehavior: Clip.antiAlias,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: borderRadius,
-                border: Border.all(color: outlineColor),
-                color: fallbackFill,
-              ),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Image.asset(
-                      isDarkTheme
-                          ? Images.logoWithNameSocialImageWhite
-                          : Images.logoWithNameSocialImage,
-                      height: 35,
-                      fit: BoxFit.contain,
-                    ),
-                    Row(
-                      children: [
-                        _HeaderIcon(
-                          icon: Icons.search,
-                          iconColor: onAppBar,
-                          bubbleColor:
-                              onAppBar.withValues(alpha: bubbleOpacity),
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const SocialSearchScreen(),
-                              ),
-                            );
-                          },
+      child: SizedBox(
+        height: _baseHeight + MediaQuery.of(context).padding.top,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+          child: LiquidGlassLayer(
+            useBackdropGroup: true,
+            settings: headerSettings,
+            child: LiquidGlass(
+              shape: const LiquidRoundedSuperellipse(borderRadius: 32),
+              clipBehavior: Clip.antiAlias,
+              glassContainsChild: true,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: borderRadius,
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.60), // viền sáng rõ
+                    width: 2,
+                  ),
+                  // 🔹 Fill gần như 0, chỉ chút xíu cho đỡ gắt
+                  color: Colors.white.withOpacity(isDarkTheme ? 0.008 : 0.012),
+                ),
+                child: ClipRRect(
+                  borderRadius: borderRadius,
+                  child: Stack(
+                    children: [
+                      // 🔹 Highlight dọc cực nhẹ, không thêm sương
+                      Positioned.fill(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.white
+                                    .withOpacity(isDarkTheme ? 0.03 : 0.05),
+                                Colors.white.withOpacity(0.0),
+                              ],
+                            ),
+                          ),
                         ),
-                        const SizedBox(width: 12),
-                        _HeaderIcon(
-                          icon: Icons.people_outline,
-                          iconColor: onAppBar,
-                          bubbleColor:
-                              onAppBar.withValues(alpha: bubbleOpacity),
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => FriendsScreen(),
+                      ),
+
+                      // ❌ Bỏ glow 2 góc cho đỡ mờ
+
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 2,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Image.asset(
+                                isDarkTheme
+                                    ? Images.logoWithNameSocialImageWhite
+                                    : Images.logoWithNameSocialImage,
+                                height: 32,
+                                fit: BoxFit.contain,
                               ),
-                            );
-                          },
-                        ),
-                        const SizedBox(width: 12),
-                        _HeaderIcon(
-                          icon: Icons.messenger_outline,
-                          iconColor: onAppBar,
-                          bubbleColor:
-                              onAppBar.withValues(alpha: bubbleOpacity),
-                          onTap: () {
-                            final token = sc.accessToken;
-                            if (token == null || token.isEmpty) {
-                              return;
-                            }
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    FriendsListScreen(accessToken: token),
+                              LiquidGlassBlendGroup(
+                                blend: isDarkTheme ? 24 : 18,
+                                child: _HeaderActionsRow(
+                                  iconColor: onAppBar,
+                                  bubbleOpacity: bubbleOpacity,
+                                  onSearch: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            const SocialSearchScreen(),
+                                      ),
+                                    );
+                                  },
+                                  onFriends: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => FriendsScreen(),
+                                      ),
+                                    );
+                                  },
+                                  onMessages: () {
+                                    final token = sc.accessToken;
+                                    if (token == null || token.isEmpty) return;
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => FriendsListScreen(
+                                          accessToken: token,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
                               ),
-                            );
-                          },
+                            ],
+                          ),
                         ),
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -475,36 +502,125 @@ class _FacebookHeader extends StatelessWidget {
 class _HeaderIcon extends StatelessWidget {
   final IconData icon;
   final Color? iconColor;
-  final Color? bubbleColor;
   final VoidCallback? onTap;
+
   const _HeaderIcon({
     required this.icon,
     this.iconColor,
-    this.bubbleColor,
     this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final onSurface = cs.onSurface;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final bool isDark = theme.brightness == Brightness.dark;
 
-    final child = Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: bubbleColor ?? cs.surfaceVariant,
-        shape: BoxShape.circle,
+    final Color baseIconColor =
+        iconColor ?? (isDark ? Colors.white : cs.onSurface.withOpacity(0.95));
+
+    // Icon kính tròn, nhỏ gọn
+    Widget glass = SizedBox(
+      width: 42,
+      height: 42,
+      child: LiquidGlass.grouped(
+        shape: LiquidOval(), // dùng chung layer với header
+        glassContainsChild: true,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: Colors.white.withOpacity(0.60),
+              width: 1.4,
+            ),
+            color: Colors.white.withOpacity(isDark ? 0.1 : 0.1),
+          ),
+          child: Stack(
+            children: [
+              // highlight trên
+              Positioned(
+                top: 3,
+                left: 6,
+                right: 6,
+                child: Container(
+                  height: 14,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.white.withOpacity(isDark ? 0.45 : 0.65),
+                        Colors.white.withOpacity(0.0),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Center(
+                child: Icon(
+                  icon,
+                  size: 20,
+                  color: baseIconColor,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
-      child:
-          Icon(icon, color: iconColor ?? onSurface.withOpacity(.9), size: 24),
     );
 
-    return onTap == null
-        ? child
-        : InkWell(
-            borderRadius: BorderRadius.circular(100),
-            onTap: onTap,
-            child: child);
+    if (onTap == null) return glass;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: glass,
+      ),
+    );
+  }
+}
+
+class _HeaderActionsRow extends StatelessWidget {
+  final Color iconColor;
+  final double bubbleOpacity; // không dùng nữa nhưng giữ cho khỏi sửa chỗ khác
+  final VoidCallback onSearch;
+  final VoidCallback onFriends;
+  final VoidCallback onMessages;
+
+  const _HeaderActionsRow({
+    required this.iconColor,
+    required this.bubbleOpacity,
+    required this.onSearch,
+    required this.onFriends,
+    required this.onMessages,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _HeaderIcon(
+          icon: CupertinoIcons.search,
+          iconColor: iconColor,
+          onTap: onSearch,
+        ),
+        const SizedBox(width: 14),
+        _HeaderIcon(
+          icon: CupertinoIcons.person_2,
+          iconColor: iconColor,
+          onTap: onFriends,
+        ),
+        const SizedBox(width: 14),
+        _HeaderIcon(
+          icon: CupertinoIcons.chat_bubble_2,
+          iconColor: iconColor,
+          onTap: onMessages,
+        ),
+      ],
+    );
   }
 }
 
@@ -575,18 +691,23 @@ class _WhatsOnYourMind extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                   child: Builder(
                     builder: (context) {
-                      final cs =
-                          Theme.of(context).colorScheme; // <-- thÃªm dÃ²ng nÃ y
+                      final cs = Theme.of(
+                        context,
+                      ).colorScheme; // <-- thÃªm dÃ²ng nÃ y
                       return Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
                         decoration: BoxDecoration(
                           color: cs.surfaceVariant.withOpacity(.5),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          getTranslated('whats_on_your_mind',
-                                  context) // <-- sá»­a key
+                          getTranslated(
+                                'whats_on_your_mind',
+                                context,
+                              ) // <-- sá»­a key
                               ??
                               "What's on your mind?",
                           style: TextStyle(
@@ -605,13 +726,13 @@ class _WhatsOnYourMind extends StatelessWidget {
 
             // (tuá»³ chá»n) nÃºt +
             InkWell(
-              onTap: () {/* TODO: action khÃ¡c (vÃ­ dá»¥ táº¡o story) */},
+              onTap: () {
+                /* TODO: action khÃ¡c (vÃ­ dá»¥ táº¡o story) */
+              },
               customBorder: const CircleBorder(),
               child: Container(
                 padding: const EdgeInsets.all(8),
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                ),
+                decoration: const BoxDecoration(shape: BoxShape.circle),
                 child: Icon(Icons.add, color: cs.onSurface, size: 20),
               ),
             ),
@@ -627,19 +748,13 @@ class _SectionSeparator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Column(
-      children: [
-        SizedBox(height: 8),
-      ],
-    );
+    return const Column(children: [SizedBox(height: 8)]);
   }
 }
 
 class _StoriesSectionFromApi extends StatefulWidget {
   final List<SocialStory> stories;
-  const _StoriesSectionFromApi({
-    required this.stories,
-  });
+  const _StoriesSectionFromApi({required this.stories});
 
   @override
   State<_StoriesSectionFromApi> createState() => _StoriesSectionFromApiState();
@@ -651,8 +766,9 @@ class _StoriesSectionFromApiState extends State<_StoriesSectionFromApi> {
     final cs = Theme.of(context).colorScheme;
     final SocialUser? currentUser =
         context.select<SocialController, SocialUser?>((c) => c.currentUser);
-    final SocialStory? myStory = context
-        .select<SocialController, SocialStory?>((c) => c.currentUserStory);
+    final SocialStory? myStory = context.select<SocialController, SocialStory?>(
+      (c) => c.currentUserStory,
+    );
 
     final List<SocialStory> orderedStories = _orderedStories(
       widget.stories,
@@ -813,8 +929,10 @@ class _StoryCardFromApi extends StatelessWidget {
                 top: 8,
                 right: 8,
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black.withOpacity(.6),
                     borderRadius: BorderRadius.circular(12),
@@ -852,8 +970,11 @@ class _StoryCardFromApi extends StatelessWidget {
                           ? CachedNetworkImageProvider(story.userAvatar!)
                           : null,
                   child: (story.userAvatar == null || story.userAvatar!.isEmpty)
-                      ? Icon(Icons.person,
-                          color: onSurface.withOpacity(.6), size: 20)
+                      ? Icon(
+                          Icons.person,
+                          color: onSurface.withOpacity(.6),
+                          size: 20,
+                        )
                       : null,
                 ),
               ),
@@ -923,9 +1044,7 @@ class _CreateStoryCard extends StatelessWidget {
     return Container(
       width: 110,
       margin: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: Material(
@@ -970,11 +1089,14 @@ class _CreateStoryCard extends StatelessWidget {
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white, width: 2),
                         boxShadow: [
-                          BoxShadow(color: Colors.black26, blurRadius: 6)
+                          BoxShadow(color: Colors.black26, blurRadius: 6),
                         ],
                       ),
-                      child:
-                          const Icon(Icons.add, size: 18, color: Colors.white),
+                      child: const Icon(
+                        Icons.add,
+                        size: 18,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
@@ -1044,8 +1166,11 @@ class _StoryCard extends StatelessWidget {
               child: CircleAvatar(
                 radius: 18,
                 backgroundColor: cs.surfaceVariant,
-                child: Icon(Icons.person,
-                    color: onSurface.withOpacity(.6), size: 20),
+                child: Icon(
+                  Icons.person,
+                  color: onSurface.withOpacity(.6),
+                  size: 20,
+                ),
               ),
             ),
           ),
@@ -1082,9 +1207,12 @@ class SocialPostCard extends StatelessWidget {
           (ctrl) => ctrl.findPostById(this.post.id),
         ) ??
         this.post;
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final bool isLightTheme = theme.brightness == Brightness.light;
     final onSurface = cs.onSurface;
-    final Color baseColor = Theme.of(context).scaffoldBackgroundColor;
+    final Color baseColor =
+        isLightTheme ? Colors.white : theme.scaffoldBackgroundColor;
     final SocialPost? sharedPost = post.sharedPost;
     final bool hasSharedPost = sharedPost != null;
     final bool hasFeeling = SocialFeelingHelper.hasFeeling(post);
@@ -1123,10 +1251,12 @@ class SocialPostCard extends StatelessWidget {
     final String? postLocation = post.postMap?.trim();
     final bool hasLocation =
         !hasSharedPost && postLocation != null && postLocation.isNotEmpty;
-    final bool hasBackgroundText =
-        SocialPostFullViewComposer.allowsBackground(post);
-    final bool hasInlineImages =
-        SocialPostFullViewComposer.normalizeImages(post).isNotEmpty;
+    final bool hasBackgroundText = SocialPostFullViewComposer.allowsBackground(
+      post,
+    );
+    final bool hasInlineImages = SocialPostFullViewComposer.normalizeImages(
+      post,
+    ).isNotEmpty;
     final bool backgroundWithMedia = hasBackgroundText && hasInlineImages;
     final double mediaTopSpacing = backgroundWithMedia ? 4 : 12;
 
@@ -1222,7 +1352,9 @@ class SocialPostCard extends StatelessWidget {
                                   child: GestureDetector(
                                     onTap: (post.groupId?.isNotEmpty ?? false)
                                         ? () => _openGroupDetailFromPost(
-                                            context, post)
+                                              context,
+                                              post,
+                                            )
                                         : null,
                                     child: Text(
                                       post.groupTitle ?? post.groupName ?? '',
@@ -1283,14 +1415,16 @@ class SocialPostCard extends StatelessWidget {
                                   child: Text(
                                     post.postType == 'profile_picture'
                                         ? (getTranslated(
-                                                'updated_profile_picture',
-                                                context) ??
+                                              'updated_profile_picture',
+                                              context,
+                                            ) ??
                                             'updated profile picture')
                                         : post.postType ==
                                                 'profile_cover_picture'
                                             ? (getTranslated(
-                                                    'updated_cover_photo',
-                                                    context) ??
+                                                  'updated_cover_photo',
+                                                  context,
+                                                ) ??
                                                 'updated cover photo')
                                             : post.postType!,
                                     style: TextStyle(
@@ -1369,8 +1503,10 @@ class SocialPostCard extends StatelessWidget {
             // Poll
             if (post.pollOptions != null && post.pollOptions!.isNotEmpty)
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1381,8 +1517,9 @@ class SocialPostCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(8),
                         child: LinearProgressIndicator(
                           value: (((double.tryParse(
-                                          (opt['percentage_num'] ?? '0')
-                                              .toString()) ??
+                                        (opt['percentage_num'] ?? '0')
+                                            .toString(),
+                                      ) ??
                                       0.0) /
                                   100.0))
                               .clamp(0, 1),
@@ -1415,7 +1552,9 @@ class SocialPostCard extends StatelessWidget {
                     children: [
                       Padding(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
                         child: Row(
                           children: [
                             if (showReactions)
@@ -1628,8 +1767,9 @@ class SocialPostCard extends StatelessWidget {
 
   Future<String?> _promptEditPost(BuildContext context, SocialPost post) async {
     final String initialText = _editableTextFromPost(post);
-    final TextEditingController textController =
-        TextEditingController(text: initialText);
+    final TextEditingController textController = TextEditingController(
+      text: initialText,
+    );
     final result = await showDialog<String>(
       context: context,
       builder: (dialogCtx) {
@@ -1661,9 +1801,7 @@ class SocialPostCard extends StatelessWidget {
               onPressed: () {
                 Navigator.of(dialogCtx).pop(textController.text);
               },
-              child: Text(
-                getTranslated('save_changes', dialogCtx) ?? 'Save',
-              ),
+              child: Text(getTranslated('save_changes', dialogCtx) ?? 'Save'),
             ),
           ],
         );
@@ -1676,8 +1814,10 @@ class SocialPostCard extends StatelessWidget {
     if (trimmed.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(getTranslated('post_text_required', context) ??
-              'Post text cannot be empty'),
+          content: Text(
+            getTranslated('post_text_required', context) ??
+                'Post text cannot be empty',
+          ),
         ),
       );
       return null;
@@ -1713,19 +1853,15 @@ class SocialPostCard extends StatelessWidget {
     }
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => SocialGroupDetailScreen(
-          groupId: groupId,
-          initialGroup: initial,
-        ),
+        builder: (_) =>
+            SocialGroupDetailScreen(groupId: groupId, initialGroup: initial),
       ),
     );
   }
 
   void _openSharedPostDetail(BuildContext context, SocialPost shared) {
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => SocialPostDetailScreen(post: shared),
-      ),
+      MaterialPageRoute(builder: (_) => SocialPostDetailScreen(post: shared)),
     );
   }
 }
@@ -1817,9 +1953,7 @@ class _PostAdCardState extends State<_PostAdCard> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (media != null && media.isNotEmpty)
-                _AdResponsiveImage(
-                  url: media,
-                ),
+                _AdResponsiveImage(url: media),
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -1858,8 +1992,9 @@ class _PostAdCardState extends State<_PostAdCard> {
                       child: ElevatedButton(
                         onPressed: _handleAdClick,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              Theme.of(context).colorScheme.primary,
+                          backgroundColor: Theme.of(
+                            context,
+                          ).colorScheme.primary,
                           foregroundColor: Colors.white,
                         ),
                         child: Text(learnMoreLabel),
@@ -1922,8 +2057,10 @@ class _AdResponsiveImageState extends State<_AdResponsiveImage> {
         final double naturalHeight = resolvedWidth / ratio;
         final double ratioLimitedHeight =
             resolvedWidth * widget.maxHeightToWidthRatio;
-        final double allowedHeight =
-            min(naturalHeight, min(screenHeight, ratioLimitedHeight));
+        final double allowedHeight = min(
+          naturalHeight,
+          min(screenHeight, ratioLimitedHeight),
+        );
         final bool shouldClip = allowedHeight < naturalHeight;
         final Widget image = CachedNetworkImage(
           imageUrl: widget.url,
@@ -1977,10 +2114,7 @@ class _PostOptionEntry {
 class _PostOptionsSheet extends StatelessWidget {
   final ValueChanged<_PostOptionsAction> onSelected;
   final bool isOwner;
-  const _PostOptionsSheet({
-    required this.onSelected,
-    required this.isOwner,
-  });
+  const _PostOptionsSheet({required this.onSelected, required this.isOwner});
 
   @override
   Widget build(BuildContext context) {
@@ -2047,8 +2181,10 @@ class _PostOptionsSheet extends StatelessWidget {
                 ),
               ),
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 16,
+                ),
                 child: Row(
                   children: [
                     Expanded(
@@ -2283,10 +2419,7 @@ class _ImageGrid extends StatelessWidget {
   }
 
   // ?nh vuÃ´ng dÃ¹ng bÃªn trong grid
-  Widget _square(String u) => AspectRatio(
-        aspectRatio: 1,
-        child: _tile(u),
-      );
+  Widget _square(String u) => AspectRatio(aspectRatio: 1, child: _tile(u));
 
   Widget _tile(String u) => Image(
         image: CachedNetworkImageProvider(u),
@@ -2308,12 +2441,14 @@ class _ReactionPicker extends StatelessWidget {
         child: Wrap(
           alignment: WrapAlignment.spaceEvenly,
           children: items
-              .map((e) => IconButton(
-                    iconSize: 32,
-                    onPressed: () => Navigator.pop(context, e),
-                    icon: _reactionIcon(e),
-                    tooltip: e,
-                  ))
+              .map(
+                (e) => IconButton(
+                  iconSize: 32,
+                  onPressed: () => Navigator.pop(context, e),
+                  icon: _reactionIcon(e),
+                  tooltip: e,
+                ),
+              )
               .toList(),
         ),
       ),
@@ -2327,9 +2462,7 @@ List<String> _topReactionLabels(SocialPost post, {int limit = 3}) {
     ..sort((a, b) => b.value.compareTo(a.value));
   if (entries.isEmpty) {
     if (post.reactionCount > 0 || post.myReaction.isNotEmpty) {
-      return <String>[
-        post.myReaction.isNotEmpty ? post.myReaction : 'Like',
-      ];
+      return <String>[post.myReaction.isNotEmpty ? post.myReaction : 'Like'];
     }
     return const <String>[];
   }
@@ -2349,8 +2482,9 @@ String _formatSocialCount(int value) {
     if (value >= unit.threshold) {
       final double scaled = value / unit.threshold;
       final int precision = scaled >= 100 ? 0 : 1;
-      final String formatted =
-          _trimTrailingZeros(scaled.toStringAsFixed(precision));
+      final String formatted = _trimTrailingZeros(
+        scaled.toStringAsFixed(precision),
+      );
       return '$formatted${unit.suffix}';
     }
   }
@@ -2393,10 +2527,7 @@ String _sharedSubtitleText(BuildContext context, SocialPost parent) {
 class _ReactionIconStack extends StatelessWidget {
   final List<String> labels;
   final double size;
-  const _ReactionIconStack({
-    required this.labels,
-    this.size = 20,
-  });
+  const _ReactionIconStack({required this.labels, this.size = 20});
 
   @override
   Widget build(BuildContext context) {
@@ -2481,38 +2612,42 @@ void _showReactionsOverlay(
   final overlay = Overlay.of(context);
   late OverlayEntry entry;
 
-  entry = OverlayEntry(builder: (_) {
-    final RenderBox overlayBox =
-        overlay.context.findRenderObject() as RenderBox;
-    final Offset local = overlayBox.globalToLocal(globalPos);
+  entry = OverlayEntry(
+    builder: (_) {
+      final RenderBox overlayBox =
+          overlay.context.findRenderObject() as RenderBox;
+      final Offset local = overlayBox.globalToLocal(globalPos);
 
-    // KÃ­ch thu?c khung popup, canh n?m ngay trÃªn nÃºt
-    const double popupWidth = 300;
-    const double popupHeight = 56;
+      // KÃ­ch thu?c khung popup, canh n?m ngay trÃªn nÃºt
+      const double popupWidth = 300;
+      const double popupHeight = 56;
 
-    return Stack(
-      children: [
-        // Tap ra ngoÃ i d? t?t
-        Positioned.fill(
-          child: GestureDetector(onTap: () => entry.remove()),
-        ),
-        Positioned(
-          left: (local.dx - popupWidth / 2)
-              .clamp(8.0, overlayBox.size.width - popupWidth - 8.0),
-          top: (local.dy - popupHeight - 12)
-              .clamp(8.0, overlayBox.size.height - popupHeight - 8.0),
-          width: popupWidth,
-          height: popupHeight,
-          child: _ReactionBar(
-            onPick: (v) {
-              onSelect(v);
-              entry.remove();
-            },
+      return Stack(
+        children: [
+          // Tap ra ngoÃ i d? t?t
+          Positioned.fill(child: GestureDetector(onTap: () => entry.remove())),
+          Positioned(
+            left: (local.dx - popupWidth / 2).clamp(
+              8.0,
+              overlayBox.size.width - popupWidth - 8.0,
+            ),
+            top: (local.dy - popupHeight - 12).clamp(
+              8.0,
+              overlayBox.size.height - popupHeight - 8.0,
+            ),
+            width: popupWidth,
+            height: popupHeight,
+            child: _ReactionBar(
+              onPick: (v) {
+                onSelect(v);
+                entry.remove();
+              },
+            ),
           ),
-        ),
-      ],
-    );
-  });
+        ],
+      );
+    },
+  );
 
   overlay.insert(entry);
 }
@@ -2628,11 +2763,7 @@ class _Story {
   final String? imageUrl;
   final bool isCreateStory;
 
-  _Story({
-    required this.name,
-    this.imageUrl,
-    this.isCreateStory = false,
-  });
+  _Story({required this.name, this.imageUrl, this.isCreateStory = false});
 }
 
 // Small helper to avoid EdgeInsets.zero import everywhere
