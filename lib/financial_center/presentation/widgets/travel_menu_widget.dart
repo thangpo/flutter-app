@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'dart:ui'; // Thêm import này cho BackdropFilter
+import 'dart:ui';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/dimensions.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/styles.dart';
@@ -145,7 +145,7 @@ class _TravelMenuWidgetState extends State<TravelMenuWidget>
           end: Alignment.bottomRight,
           colors: darkTheme
               ? [
-            Colors.grey[850]!.withOpacity(0.8),
+            Colors.grey[900]!.withOpacity(0.8),
             Colors.grey[900]!.withOpacity(0.6),
           ]
               : [

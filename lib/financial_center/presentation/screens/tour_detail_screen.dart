@@ -41,15 +41,31 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
   }
 
   Future<void> fetchTourDetail() async {
-    final url = Uri.parse("https://vietnamtoure.com/api/tours/${widget.tourId}");
-    final response = await http.get(url);
-    if (response.statusCode == 200) {
-      final jsonRes = json.decode(response.body);
-      setState(() {
-        tourData = jsonRes['data'];
-        isLoading = false;
-      });
+    try {
+      final url = Uri.parse("https://vietnamtoure.com/api/tours/${widget.tourId}");
+      final response = await http.get(url).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final jsonRes = json.decode(response.body);
+        setState(() {
+          tourData = jsonRes['data'];
+          isLoading = false;
+        });
+      } else {
+        setState(() => isLoading = false);
+        _showErrorSnack('Không tải được dữ liệu tour (mã ${response.statusCode})');
+      }
+    } catch (e) {
+      setState(() => isLoading = false);
+      _showErrorSnack('Lỗi kết nối, vui lòng thử lại.');
     }
+  }
+
+  void _showErrorSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   void _bookTour() async {
@@ -229,7 +245,7 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
 
         return StatefulBuilder(
           builder: (context, setState) {
-            final theme = Provider.of<ThemeController>(context);
+            final theme = Provider.of<ThemeController>(context, listen: false);
             final isDark = theme.darkTheme;
             final total = calculateTotal();
 
@@ -746,7 +762,7 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Provider.of<ThemeController>(context);
+    final theme = Provider.of<ThemeController>(context, listen: false);
     final isDark = theme.darkTheme;
 
     if (isLoading) {

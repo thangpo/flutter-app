@@ -74,4 +74,5 @@ flutter {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     implementation("com.google.firebase:firebase-messaging:23.4.1")
+    implementation("androidx.activity:activity-ktx:1.9.0")
 }
