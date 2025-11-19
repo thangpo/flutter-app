@@ -4,7 +4,8 @@ import 'package:provider/provider.dart';
 import 'dart:ui';
 import 'package:flutter/services.dart'; // Clipboard
 import 'dart:typed_data';
-import 'package:video_thumbnail/video_thumbnail.dart';
+import 'package:get_thumbnail_video/index.dart';
+import 'package:get_thumbnail_video/video_thumbnail.dart';
 import 'package:collection/collection.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';

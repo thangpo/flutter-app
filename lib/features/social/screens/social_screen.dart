@@ -27,6 +27,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_scre
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/social_post_text_block.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/social_feeling_helper.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_post_full_with_screen.dart';
+import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 bool _listsEqual<T>(List<T> a, List<T> b) {
@@ -206,14 +207,18 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
   Widget build(BuildContext context) {
     super.build(context);
     final cs = Theme.of(context).colorScheme;
+    final mediaQuery = MediaQuery.of(context);
+    final double listTopPadding = _FacebookHeader.totalHeight(context) + 12;
+    final double listBottomPadding = mediaQuery.padding.bottom + 16;
 
     return Scaffold(
       backgroundColor: cs.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _FacebookHeader(),
-            Expanded(
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: SafeArea(
+              top: false,
+              bottom: false,
               child: Consumer<SocialController>(
                 builder: (context, sc, _) {
                   if (sc.loading && sc.posts.isEmpty) {
@@ -243,7 +248,10 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
                       // },
                       child: ListView.builder(
                         controller: _scrollController,
-                        padding: EdgeInsets.zero,
+                        padding: EdgeInsets.only(
+                          top: listTopPadding,
+                          bottom: listBottomPadding,
+                        ),
                         itemCount: posts.length + headerCount,
                         itemBuilder: (ctx, i) {
                           if (i == 0) {
@@ -300,8 +308,12 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
                 },
               ),
             ),
-          ],
-        ),
+          ),
+          Align(
+            alignment: Alignment.topCenter,
+            child: const _FacebookHeader(),
+          ),
+        ],
       ),
     );
   }
@@ -335,97 +347,126 @@ void _showAdLaunchError(BuildContext context) {
 }
 
 class _FacebookHeader extends StatelessWidget {
+  const _FacebookHeader();
+
+  static const double _baseHeight = 68;
+
+  static double totalHeight(BuildContext context) {
+    return MediaQuery.of(context).padding.top + _baseHeight;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // uu tiÃªn appBarTheme.backgroundColor; fallback sang highlightColor (Home cung dang dÃ¹ng highlightColor)
-    final Color appBarColor =
-        theme.appBarTheme.backgroundColor ?? theme.highlightColor;
-    // Ch?n mÃ u ch?/icon tuong ph?n trÃªn n?n appBarColor
-    final bool isDark =
-        ThemeData.estimateBrightnessForColor(appBarColor) == Brightness.dark;
-    final Color onAppBar = isDark ? Colors.white : Colors.black87;
+    final bool isDarkTheme = theme.brightness == Brightness.dark;
+    final Color onAppBar = isDarkTheme ? Colors.white : Colors.black87;
+    final Color accentColor = isDarkTheme ? Colors.white : Colors.black;
+    final Color baseFill = isDarkTheme ? Colors.black : Colors.white;
+    final double glassOpacity = isDarkTheme ? 0.22 : 0.035;
+    final double fillOpacity = isDarkTheme ? 0.28 : 0.1;
+    final double outlineOpacity = isDarkTheme ? 0.16 : 0.04;
+    final double bubbleOpacity = isDarkTheme ? 0.16 : 0.05;
+    final Color glassTint = accentColor.withValues(alpha: glassOpacity);
+    final Color outlineColor = accentColor.withValues(alpha: outlineOpacity);
+    final Color fallbackFill = baseFill.withValues(alpha: fillOpacity);
+    final BorderRadius borderRadius = BorderRadius.circular(32);
+    final double blurAmount = isDarkTheme ? 18 : 24;
+    final double thickness = isDarkTheme ? 26 : 18;
+    final LiquidGlassSettings headerSettings = LiquidGlassSettings(
+      blur: blurAmount,
+      thickness: thickness,
+      chromaticAberration: 0.25,
+      lightIntensity: isDarkTheme ? 0.65 : 0.52,
+      ambientStrength: isDarkTheme ? 0.35 : 0.18,
+      glassColor: glassTint,
+    );
 
     final sc = context.read<SocialController>();
-    final token = sc.accessToken;
 
-    return Container(
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 8,
-        left: 16,
-        right: 16,
-        bottom: 8,
-      ),
-      color: appBarColor,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Image.asset(
-            Theme.of(context).brightness == Brightness.dark
-                ? Images.logoWithNameSocialImageWhite
-                : Images.logoWithNameSocialImage,
-            height: 35,
-            fit: BoxFit.contain,
+    return SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+        child: LiquidGlassLayer(
+          settings: headerSettings,
+          child: LiquidGlass(
+            shape: const LiquidRoundedSuperellipse(borderRadius: 32),
+            clipBehavior: Clip.antiAlias,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: borderRadius,
+                border: Border.all(color: outlineColor),
+                color: fallbackFill,
+              ),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Image.asset(
+                      isDarkTheme
+                          ? Images.logoWithNameSocialImageWhite
+                          : Images.logoWithNameSocialImage,
+                      height: 35,
+                      fit: BoxFit.contain,
+                    ),
+                    Row(
+                      children: [
+                        _HeaderIcon(
+                          icon: Icons.search,
+                          iconColor: onAppBar,
+                          bubbleColor:
+                              onAppBar.withValues(alpha: bubbleOpacity),
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const SocialSearchScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(width: 12),
+                        _HeaderIcon(
+                          icon: Icons.people_outline,
+                          iconColor: onAppBar,
+                          bubbleColor:
+                              onAppBar.withValues(alpha: bubbleOpacity),
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => FriendsScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(width: 12),
+                        _HeaderIcon(
+                          icon: Icons.messenger_outline,
+                          iconColor: onAppBar,
+                          bubbleColor:
+                              onAppBar.withValues(alpha: bubbleOpacity),
+                          onTap: () {
+                            final token = sc.accessToken;
+                            if (token == null || token.isEmpty) {
+                              return;
+                            }
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    FriendsListScreen(accessToken: token),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-          Row(
-            children: [
-              _HeaderIcon(
-                icon: Icons.search,
-                iconColor: onAppBar,
-                bubbleColor: onAppBar.withOpacity(0.08),
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const SocialSearchScreen(),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(width: 12),
-              _HeaderIcon(
-                icon: Icons.people_outline, // biá»ƒu tÆ°á»£ng báº¡n bÃ¨
-                iconColor: onAppBar,
-                bubbleColor: onAppBar.withOpacity(0.08),
-                onTap: () {
-                  // final token = context.read<SocialController>().accessToken;
-                  // if (token == null || token.isEmpty) {
-                  //   ScaffoldMessenger.of(context).showSnackBar(
-                  //     const SnackBar(content: Text('Đăng nhập tai')),
-                  //   );
-                  //   return;
-                  // }
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => FriendsScreen(),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(width: 12),
-              _HeaderIcon(
-                icon: Icons.messenger_outline,
-                iconColor: onAppBar,
-                bubbleColor: onAppBar.withOpacity(0.08),
-                onTap: () {
-                  final token = context.read<SocialController>().accessToken;
-                  if (token == null || token.isEmpty) {
-                    // ScaffoldMessenger.of(context).showSnackBar(
-                    //   const SnackBar(
-                    //       content: Text(
-                    //           'Vui lÃ²ng k?t n?i tÃ i kho?n WoWonder tru?c.')),
-                    // );
-                    return;
-                  }
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => FriendsListScreen(accessToken: token),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
