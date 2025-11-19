@@ -117,11 +117,48 @@ AndroidNotificationChannel(
 );
 
 // Background FCM
+@pragma('vm:entry-point')
 Future<void> myBackgroundMessageHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
-  
+  try {
+    if (Firebase.apps.isEmpty) {
+      if (Platform.isAndroid) {
+        await Firebase.initializeApp(
+          options: const FirebaseOptions(
+            apiKey: AppConstants.fcmApiKey,
+            appId: AppConstants.fcmMobilesdkAppId,
+            messagingSenderId: AppConstants.fcmProjectNumber,
+            projectId: AppConstants.fcmProjectId,
+          ),
+        );
+      } else {
+        await Firebase.initializeApp();
+      }
+      print('✅ [BG] Firebase initialized in background isolate');
+    } else {
+      Firebase.app(); // dùng app hiện có (phòng khi bị reuse)
+      print('ℹ️ [BG] Firebase already initialized in background');
+    }
+  } on FirebaseException catch (e) {
+    if (e.code == 'duplicate-app') {
+      print('⚠️ [BG] Firebase duplicate-app in background, using existing app.');
+      Firebase.app();
+    } else {
+      print('❌ [BG] Firebase init error in background: $e');
+    }
+  } catch (e) {
+    print('❌ [BG] Firebase init error in background: $e');
+  }
+  // nếu sau này cần xử lý message ở background thì làm tiếp ở đây
 }
 
+Future<void> _debugPrintFcmToken() async {
+  try {
+    final token = await FirebaseMessaging.instance.getToken();
+    print('🔥 FCM TOKEN (device) = $token');
+  } catch (e) {
+    print('❌ Error getting FCM token: $e');
+  }
+}
 // =================== ANALYTICS HELPER ===================
 class AnalyticsHelper {
   // Log khi app được mở
@@ -207,6 +244,7 @@ Future<void> _showIncomingCallNotification(Map<String, dynamic> data) async {
     fullScreenIntent: true,
     ticker: 'incoming_call',
     styleInformation: const DefaultStyleInformation(true, true),
+    sound: RawResourceAndroidNotificationSound('notification'),  // Tên file âm thanh (không cần đuôi .mp3)
   );
 
   await flutterLocalNotificationsPlugin.show(
@@ -334,11 +372,11 @@ Future<void> _scheduleGroupCallInviteOpen(Map<String, dynamic> data) async {
 Future<void> main() async {
   HttpOverrides.global = MyHttpOverrides();
   WidgetsFlutterBinding.ensureInitialized();
-  
 
-    // =================== FIREBASE INITIALIZATION ===================
-  if (Firebase.apps.isEmpty) {
-    try {
+
+  // =================== FIREBASE INITIALIZATION ===================
+  try {
+    if (Firebase.apps.isEmpty) {
       if (Platform.isAndroid) {
         await Firebase.initializeApp(
           options: const FirebaseOptions(
@@ -351,15 +389,23 @@ Future<void> main() async {
       } else {
         await Firebase.initializeApp();
       }
-      print('Firebase initialized successfully');
-      await analytics.setAnalyticsCollectionEnabled(true);
-      print('Firebase Analytics enabled');
-    } catch (e) {
+      print('✅ Firebase initialized successfully');
+    } else {
+      Firebase.app(); // dùng app hiện có
+      print('ℹ️ Firebase already initialized (Dart).');
+    }
+
+    await analytics.setAnalyticsCollectionEnabled(true);
+    print('✅ Firebase Analytics enabled');
+  } on FirebaseException catch (e) {
+    if (e.code == 'duplicate-app') {
+      print('⚠️ Firebase duplicate-app, using existing app.');
+      Firebase.app();
+    } else {
       print('Firebase init error: $e');
     }
-  } else {
-    print('Firebase already initialized');
   }
+
 
   FcmChatHandler.initialize();
 
@@ -392,6 +438,7 @@ Future<void> main() async {
 
     // =================== LOG APP OPEN ===================
     await AnalyticsHelper.logAppOpen();
+    await _debugPrintFcmToken();
   });
 
   // tạo kênh heads-up
@@ -444,7 +491,6 @@ Future<void> main() async {
     final RemoteMessage? initialMessage =
         await FirebaseMessaging.instance.getInitialMessage();
     if (initialMessage != null) {
-      print('🔥 getInitialMessage: ${initialMessage.data}');
       final t = (initialMessage.data['type'] ?? '').toString();
 
       if (t == 'call_invite') {
@@ -527,6 +573,7 @@ Future<void> main() async {
         priority: Priority.high,
         playSound: true,
         icon: 'notification_icon',
+        sound: RawResourceAndroidNotificationSound('notification'),
       );
       const details = NotificationDetails(android: androidDetails);
 
@@ -544,6 +591,8 @@ Future<void> main() async {
       'Thông báo VNShop247',
       description: 'Kênh thông báo mặc định cho VNShop247',
       importance: Importance.max,
+      playSound: true, // Bật âm thanh
+      enableVibration: true, // Bật rung
     );
     await flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<

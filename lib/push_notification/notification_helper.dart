@@ -42,6 +42,8 @@ class NotificationHelper {
       'VNShop247 Notifications',
       description: 'Kênh mặc định cho thông báo VNShop247',
       importance: Importance.high,
+          playSound: true, // Bật âm thanh
+          enableVibration: true, // Bật rung
     );
 
     await flutterLocalNotificationsPlugin

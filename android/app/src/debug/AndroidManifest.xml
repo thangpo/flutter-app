@@ -1,7 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.vnsshop.ecommerce">
-    <!-- Flutter needs it to communicate with the running application
-         to allow setting breakpoints, to provide hot reload, etc.
+    package="com.andrvnshop247.app">
+    <!-- Không sửa package
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
 </manifest>

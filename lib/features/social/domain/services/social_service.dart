@@ -618,6 +618,65 @@ class SocialService implements SocialServiceInterface {
     ApiChecker.checkApi(resp);
     throw Exception('Create story failed');
   }
+// Recent search
+  @override
+  Future<List<SocialUser>> getRecentSearches() async {
+    final resp = await socialRepository.getRecentSearches();
+
+    if (resp.isSuccess && resp.response != null) {
+      final raw = resp.response!.data;
+      final Map<String, dynamic> data =
+      raw is Map<String, dynamic> ? raw : jsonDecode(raw.toString());
+
+      final int status = int.tryParse('${data['api_status'] ?? 0}') ?? 0;
+
+      if (status == 200) {
+        final List<dynamic> list = data['data'] as List<dynamic>? ?? [];
+        return list
+            .map((e) => _mapRecentUser(e as Map<String, dynamic>))
+            .toList();
+      }
+
+      final String message = (data['errors']?['error_text'] ??
+          data['message'] ??
+          'Lấy lịch sử tìm kiếm thất bại')
+          .toString();
+      throw Exception(message);
+    }
+
+    ApiChecker.checkApi(resp);
+    throw Exception("Fetch recent searches failed");
+  }
+
+// Hàm map JSON → SocialUser, KHÔNG cần sửa SocialUser
+  SocialUser _mapRecentUser(Map<String, dynamic> json) {
+    final details = json['details'] as Map<String, dynamic>?;
+
+    // ⚠️ Ở đây BẮT BUỘC phải khớp với constructor SocialUser hiện tại của bạn
+    return SocialUser(
+      id: json['user_id']?.toString() ?? '',
+      userName: json['username']?.toString(),
+      displayName: _buildDisplayName(json),
+      avatarUrl: json['avatar']?.toString(),
+      genderText: json['gender']?.toString(),
+      birthday: json['birthday']?.toString(),
+      about: json['about']?.toString(),
+      followersCount: int.tryParse(
+        '${details?['followers_count'] ?? 0}',
+      ),
+      // nếu SocialUser còn nhiều tham số required khác
+      // thì set default ở đây: isFriend: false, isFollowing: false, ...
+    );
+  }
+
+  String? _buildDisplayName(Map<String, dynamic> json) {
+    final first = (json['first_name'] ?? '').toString().trim();
+    final last  = (json['last_name'] ?? '').toString().trim();
+    final full  = '$first $last'.trim();
+    if (full.isNotEmpty) return full;
+    return json['name']?.toString();
+  }
+
 
   // create poke
   @override
@@ -684,31 +743,6 @@ class SocialService implements SocialServiceInterface {
       if (status == 400) return false;    // 🔴 Lỗi
     }
     return false;
-  }
-  // ================= ADD TO FAMILY =================
-  @override
-  Future<bool> addToFamily(int userId, String relationshipType) async {
-    final resp =
-    await socialRepository.addToFamily(userId, relationshipType);
-    if (resp.isSuccess && resp.response != null) {
-      final raw = resp.response!.data;
-      final Map<String, dynamic> data =
-      raw is Map<String, dynamic> ? raw : jsonDecode(raw.toString());
-      final int status = int.tryParse('${data['api_status'] ?? 0}') ?? 0;
-
-      if (status == 200) return true; // request gửi OK
-      if (status == 400) return false; // ví dụ: đã gửi trước đó
-
-      final String message = (data['errors']?['error_text'] ??
-          data['message'] ??
-          '')
-          .toString();
-      throw Exception(
-          message.isNotEmpty ? message : 'Add to family failed');
-    }
-
-    ApiChecker.checkApi(resp);
-    throw Exception('Add to family failed');
   }
 
   @override

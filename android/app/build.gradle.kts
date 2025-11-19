@@ -16,7 +16,8 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.vnsshop.ecommerce"
+    //Không sửa com.andrvnshop247.app
+    namespace = "com.andrvnshop247.app"
     compileSdk = 36
 
     compileOptions {
@@ -30,7 +31,8 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.vnsshop.ecommerce"
+        // Không sửa com.andrvnshop247.app
+        applicationId = "com.andrvnshop247.app"
         minSdk = flutter.minSdkVersion
         targetSdk = 36
         versionCode = flutter.versionCode

@@ -14,7 +14,6 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_post_
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_group_detail_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_groups_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/family_requests_screen.dart';
 
 class NotificationItem extends StatefulWidget {
   final SocialNotification n;
@@ -336,17 +335,6 @@ class _NotificationItemState extends State<NotificationItem> {
       }
     }
 
-    // 🟢 3️⃣ Yêu cầu gia đình → mở màn danh sách yêu cầu gia đình
-    if (n.type == 'added_u_as') {
-      if (!mounted) return;
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const FamilyRequestsScreen(),
-        ),
-      );
-      return;
-    }
     // 🟢 3️⃣ Mặc định: mở profile
     final String notifierId = n.notifierId ?? '';
     if (notifierId.isNotEmpty) {

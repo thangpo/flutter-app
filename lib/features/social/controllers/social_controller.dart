@@ -32,6 +32,15 @@ class SocialController with ChangeNotifier {
   SocialController({required this.service}) {
     loadPostBackgrounds();
   }
+  //recent search
+  bool _loadingRecentSearch = false;
+  bool get loadingRecentSearch => _loadingRecentSearch;
+
+  List<SocialUser> _recentSearches = [];
+  List<SocialUser> get recentSearches => _recentSearches;
+
+  String? _recentSearchError;
+  String? get recentSearchError => _recentSearchError;
   //follow user in profile
   final Set<String> _followBusy = {};
   bool _updatingProfile = false;
@@ -45,7 +54,7 @@ class SocialController with ChangeNotifier {
   bool _loading = false;
   bool get loading => _loading;
 
-  bool _loadingAds = false;
+    bool _loadingAds = false;
   bool get loadingAds => _loadingAds;
 
   bool _creatingPost = false;
@@ -56,9 +65,6 @@ class SocialController with ChangeNotifier {
 
   bool _creatingPoke= false;
   bool get creatingPoke => _creatingPoke;
-
-  bool _addingFamily = false;
-  bool get addingFamily => _addingFamily;
 
   bool _loadingUser = false;
   SocialUser? _currentUser;
@@ -1353,6 +1359,25 @@ class SocialController with ChangeNotifier {
       notifyListeners();
     }
   }
+  Future<void> fetchRecentSearches() async {
+    if (_loadingRecentSearch) return;
+    _loadingRecentSearch = true;
+    _recentSearchError = null;
+    notifyListeners();
+
+    try {
+      _recentSearches = await service.getRecentSearches();
+    } catch (e) {
+      _recentSearches = [];
+      _recentSearchError = e.toString();
+      if (Get.context != null) {
+        showCustomSnackBar(e.toString(), Get.context!, isError: true);
+      }
+    } finally {
+      _loadingRecentSearch = false;
+      notifyListeners();
+    }
+  }
   // ========== POKE CREATION ==========
   Future<bool> createPoke(int userId) async {
     if (_creatingPoke) return false;
@@ -1400,24 +1425,6 @@ class SocialController with ChangeNotifier {
       return false;
     }
   }
-  // ================= ADD TO FAMILY =================
-  Future<bool> addToFamily(int userId, String relationshipType) async {
-    if (_addingFamily) return false;
-    _addingFamily = true;
-    notifyListeners();
-
-    try {
-      final bool ok = await service.addToFamily(userId, relationshipType);
-      return ok;
-    } catch (e) {
-      showCustomSnackBar(e.toString(), Get.context!, isError: true);
-      return false;
-    } finally {
-      _addingFamily = false;
-      notifyListeners();
-    }
-  }
-
 
   void setAccessToken(String token) {
     _accessToken = token;

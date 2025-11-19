@@ -56,6 +56,7 @@ class AppConstants {
   static const String socialDeleteGroupUri = '/api/delete_group';
   static const String socialGetGroupDataUri = '/api/get-group-data';
   static const String socialSearch = '/api/search';
+  static const String socialRecentSearchUri = '/api/recent_search';
   static const String socialFetchRecommendedUri = '/api/fetch-recommended';
   static const String socialGetUserDataInfoUri = '/api/get-user-data';
   static const String socialCheckUsernameUri = '/api/check_username';
@@ -297,10 +298,10 @@ class AppConstants {
   static const String registerWithSocialMedia =
       '/api/v1/auth/registration-with-social-media';
   // fcm firebase token
-  static const String fcmApiKey='AIzaSyCGsaNtMwBGlqphpTXuI02-LrU3DRWXq0c';
-  static const String fcmMobilesdkAppId='1:948810422905:android:e0118faea13be3d29d12a8';
-  static const String fcmProjectNumber='948810422905';
-  static const String fcmProjectId='vnshop247-1fb1d';
+  static const String fcmApiKey='AIzaSyBSUqjSHG8JpDXreNCKif2A6C8OPzf1MwU';
+  static const String fcmMobilesdkAppId='1:303095808313:android:59947066e568060b34a8e8';
+  static const String fcmProjectNumber='303095808313';
+  static const String fcmProjectId='social-vnshop247-com';
   // sharePreference
   static const String userLoginToken = 'user_login_token';
   static const String socialAccessToken = 'social_access_token';

@@ -95,6 +95,26 @@ class SocialRepository {
     }
     return null;
   }
+  // Recent search
+  Future<ApiResponseModel<Response>> getRecentSearches() async {
+    try {
+      final token = _getSocialAccessToken();
+      final url =
+          "${AppConstants.socialBaseUrl}/${AppConstants.socialRecentSearchUri}?access_token=$token";
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+      });
+      final res = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      debugPrint('recent search:$res.data');
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
 
   //Feeds
   Future<ApiResponseModel<Response>> fetchNewsFeed({
@@ -1561,32 +1581,6 @@ class SocialRepository {
     }
   }
 
-  Future<ApiResponseModel<Response>> addToFamily(
-      int userId,
-      String relationshipType,
-      ) async {
-    try {
-      final token = _getSocialAccessToken();
-      final url =
-          "${AppConstants.socialBaseUrl}/api/add-to-family?access_token=$token";
-
-      final form = FormData.fromMap({
-        'server_key': AppConstants.socialServerKey,
-        'user_id': userId.toString(),
-        'type': relationshipType,
-      });
-
-      final res = await dioClient.post(
-        url,
-        data: form,
-        options: Options(contentType: 'multipart/form-data'),
-      );
-
-      return ApiResponseModel.withSuccess(res);
-    } catch (e) {
-      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
-    }
-  }
 
   Future<ApiResponseModel<Response>> sharePostOnTimeline({
     required String postId,

@@ -10,7 +10,6 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_story_viewer_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_group_detail_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_groups_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/family_requests_screen.dart';
 
 /// ========================= CONFIG =========================
 
@@ -131,10 +130,6 @@ Future<void> _routeFromDataMap(Map<String, dynamic> data) async {
   debugPrint(
     '✅ parsed: type=$type | action=$action | postId=$postId | userId=$userId | storyId=$storyId',
   );
-  if (type == 'added_u_as' || action == 'open_family_requests') {
-    await _openFamilyRequests();
-    return;
-  }
   // 3️⃣ Điều hướng theo loạic
   if (_shouldOpenStory(type: type, action: action, storyId: storyId)) {
     await _openStory(storyId, userId);
@@ -265,13 +260,6 @@ Future<void> _openGroupList() async {
   await _pushOnce(() {
     return MaterialPageRoute(
       builder: (_) => const SocialGroupsScreen(),
-    );
-  });
-}
-Future<void> _openFamilyRequests() async {
-  await _pushOnce(() {
-    return MaterialPageRoute(
-      builder: (_) => const FamilyRequestsScreen(),
     );
   });
 }

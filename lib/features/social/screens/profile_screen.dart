@@ -25,7 +25,6 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/member_list_
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/wallet_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/pokes_screen.dart';
 import 'package:video_player/video_player.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/widgets/add_to_family_sheet.dart';
 
 /// Tab hiện tại
 enum _ProfileTab { posts, about, reels, photos }
@@ -1535,18 +1534,6 @@ void _showOtherProfileMenu(BuildContext context, SocialUserProfile user) {
                           onTap: () async {
                             Navigator.pop(context);
                             await createPoke(context, user);
-                          },
-                        ),
-                        const Divider(height: 1),
-                        ListTile(
-                          leading: const Icon(Icons.family_restroom),
-                          title: Text(
-                            getTranslated('add_to_family', context) ??
-                                'Thêm vào gia đình',
-                          ),
-                          onTap: () async {
-                            Navigator.pop(context);
-                            await showAddToFamilySheet(context, user);
                           },
                         ),
                       ],
