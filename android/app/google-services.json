@@ -1,21 +1,22 @@
 {
+  "_comment":"Không sửa file này",
   "project_info": {
-    "project_number": "839301392682",
-    "project_id": "vnsshop-c7883",
-    "storage_bucket": "vnsshop-c7883.firebasestorage.app"
+    "project_number": "303095808313",
+    "project_id": "social-vnshop247-com",
+    "storage_bucket": "social-vnshop247-com.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:839301392682:android:51ce0e1487edd71de45653",
+        "mobilesdk_app_id": "1:303095808313:android:59947066e568060b34a8e8",
         "android_client_info": {
-          "package_name": "com.vnsshop.ecommerce"
+          "package_name": "com.andrvnshop247.app"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyA3d7ByFeD97ZelFqdeIUCDAR68Ih4_hKE"
+          "current_key": "AIzaSyBSUqjSHG8JpDXreNCKif2A6C8OPzf1MwU"
         }
       ],
       "services": {

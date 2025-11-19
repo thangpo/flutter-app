@@ -40,6 +40,7 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _focusNode.requestFocus();
+        sc.fetchRecentSearches();
         if (sc.hasSearchQuery && sc.searchResult.isEmpty && !sc.searchLoading) {
           sc.refreshSearchResults();
         }
@@ -241,15 +242,54 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
   }
 
   Widget _buildBody(BuildContext context, SocialController sc) {
+    // ================== CHƯA NHẬP KEYWORD -> HIỂN THỊ RECENT SEARCH ==================
     if (!sc.hasSearchQuery) {
-      return _CenteredMessage(
-        icon: Icons.search,
-        title: getTranslated("start_search", context) ?? "Bắt đầu tìm kiếm",
-        message: getTranslated("enter_keyword_to_search", context) ??
-            "Nhập từ khóa để tìm user, page, group hoặc channel.",
+      // Đang load recent
+      if (sc.loadingRecentSearch) {
+        return const Center(child: CircularProgressIndicator());
+      }
+
+      // Lỗi khi load recent
+      if (sc.recentSearchError != null) {
+        return _CenteredMessage(
+          icon: Icons.error_outline,
+          title: getTranslated("recent_search_failed", context) ??
+              "Không lấy được lịch sử tìm kiếm",
+          message: sc.recentSearchError ??
+              getTranslated("something_wrong", context) ??
+              "Đã có lỗi xảy ra, hãy thử lại.",
+          trailing: TextButton(
+            onPressed: () =>
+                context.read<SocialController>().fetchRecentSearches(),
+            child: Text(getTranslated("retry", context) ?? "Thử lại"),
+          ),
+        );
+      }
+
+      // Không có lịch sử nào -> vẫn hiện “Bắt đầu tìm kiếm”
+      if (sc.recentSearches.isEmpty) {
+        return _CenteredMessage(
+          icon: Icons.search,
+          title: getTranslated("start_search", context) ?? "Bắt đầu tìm kiếm",
+          message: getTranslated("enter_keyword_to_search", context) ??
+              "Nhập từ khóa để tìm user, page, group hoặc channel.",
+        );
+      }
+
+      // Có lịch sử tìm kiếm -> HIỆN LIST
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(4, 12, 4, 24),
+        children: [
+          _SearchSection(
+            title: getTranslated("recent_search", context) ??
+                "Tìm kiếm gần đây",
+            children: sc.recentSearches.map(_buildUserTile).toList(),
+          ),
+        ],
       );
     }
 
+    // ================== ĐÃ NHẬP KEYWORD -> GIỮ NGUYÊN CODE CŨ ==================
     if (sc.searchLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -304,6 +344,7 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
       ],
     );
   }
+
 
   Widget _buildUserTile(SocialUser user) {
     final context = this.context;
@@ -661,6 +702,7 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
     }
     _controller.clear();
     context.read<SocialController>().clearSearch();
+    context.read<SocialController>().fetchRecentSearches();
     _focusNode.requestFocus();
   }
 
