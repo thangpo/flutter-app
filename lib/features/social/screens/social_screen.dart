@@ -374,17 +374,42 @@ class _FacebookHeader extends StatelessWidget {
 
     final BorderRadius borderRadius = BorderRadius.circular(32);
 
-    // 🔹 Kính rất trong: blur nhỏ, tint rất mỏng
-    final LiquidGlassSettings headerSettings = const LiquidGlassSettings(
-      blur: 1, // 2–4, càng nhỏ càng trong
-      thickness: 12,
-      refractiveIndex: 1.15,
-      lightAngle: 0.5 * pi,
-      lightIntensity: 1.0,
-      ambientStrength: 0.30,
-      saturation: 1.05,
-      glassColor: Color(0x10FFFFFF), // ~6% trắng
-    );
+    // 👉 Lấy màu nền phía sau để quyết định sáng / tối
+    final Color behindColor = Theme.of(context).scaffoldBackgroundColor;
+    final bool isBehindDark = behindColor.computeLuminance() < 0.5;
+
+    // Kính header: style khác khi nền sáng / tối
+    final LiquidGlassSettings headerSettings = isBehindDark
+        ? const LiquidGlassSettings(
+            // nền tối -> kính sáng
+            blur: 2,
+            thickness: 16,
+            refractiveIndex: 1.25,
+            lightAngle: 0.5 * pi,
+            lightIntensity: 1.1,
+            ambientStrength: 0.35,
+            saturation: 1.08,
+            glassColor: Color(0x22FFFFFF), // trắng mỏng
+          )
+        : const LiquidGlassSettings(
+            // nền sáng -> kính hơi tối để tạo tương phản
+            blur: 3,
+            thickness: 16,
+            refractiveIndex: 1.25,
+            lightAngle: 0.5 * pi,
+            lightIntensity: 1.0,
+            ambientStrength: 0.35,
+            saturation: 1.02,
+            glassColor: Color(0x22000000), // đen mỏng
+          );
+
+    final Color headerBorderColor = isBehindDark
+        ? Colors.white.withOpacity(0.70)
+        : Colors.white.withOpacity(0.45);
+
+    final Color headerFillColor = isBehindDark
+        ? Colors.white.withOpacity(0.05)
+        : Colors.black.withOpacity(0.04);
 
     final sc = context.read<SocialController>();
 
@@ -400,22 +425,21 @@ class _FacebookHeader extends StatelessWidget {
             child: LiquidGlass(
               shape: const LiquidRoundedSuperellipse(borderRadius: 32),
               clipBehavior: Clip.antiAlias,
-              glassContainsChild: true,
+              glassContainsChild: false,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   borderRadius: borderRadius,
                   border: Border.all(
-                    color: Colors.white.withOpacity(0.60), // viền sáng rõ
-                    width: 2,
+                    color: headerBorderColor,
+                    width: 1.6,
                   ),
-                  // 🔹 Fill gần như 0, chỉ chút xíu cho đỡ gắt
-                  color: Colors.white.withOpacity(isDarkTheme ? 0.008 : 0.012),
+                  color: headerFillColor,
                 ),
                 child: ClipRRect(
                   borderRadius: borderRadius,
                   child: Stack(
                     children: [
-                      // 🔹 Highlight dọc cực nhẹ, không thêm sương
+                      // highlight dọc rất nhẹ
                       Positioned.fill(
                         child: DecoratedBox(
                           decoration: BoxDecoration(
@@ -431,8 +455,6 @@ class _FacebookHeader extends StatelessWidget {
                           ),
                         ),
                       ),
-
-                      // ❌ Bỏ glow 2 góc cho đỡ mờ
 
                       Center(
                         child: Padding(
@@ -450,38 +472,37 @@ class _FacebookHeader extends StatelessWidget {
                                 height: 32,
                                 fit: BoxFit.contain,
                               ),
-                              LiquidGlassBlendGroup(
-                                blend: isDarkTheme ? 24 : 18,
-                                child: _HeaderActionsRow(
-                                  iconColor: onAppBar,
-                                  bubbleOpacity: bubbleOpacity,
-                                  onSearch: () {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            const SocialSearchScreen(),
+
+                              // ❗ Không dùng BlendGroup nữa, để icon tự blur riêng
+                              _HeaderActionsRow(
+                                iconColor: onAppBar,
+                                bubbleOpacity: bubbleOpacity,
+                                onSearch: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const SocialSearchScreen(),
+                                    ),
+                                  );
+                                },
+                                onFriends: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => FriendsScreen(),
+                                    ),
+                                  );
+                                },
+                                onMessages: () {
+                                  final token = sc.accessToken;
+                                  if (token == null || token.isEmpty) return;
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => FriendsListScreen(
+                                        accessToken: token,
                                       ),
-                                    );
-                                  },
-                                  onFriends: () {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (_) => FriendsScreen(),
-                                      ),
-                                    );
-                                  },
-                                  onMessages: () {
-                                    final token = sc.accessToken;
-                                    if (token == null || token.isEmpty) return;
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (_) => FriendsListScreen(
-                                          accessToken: token,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
+                                    ),
+                                  );
+                                },
                               ),
                             ],
                           ),
@@ -519,53 +540,69 @@ class _HeaderIcon extends StatelessWidget {
     final Color baseIconColor =
         iconColor ?? (isDark ? Colors.white : cs.onSurface.withOpacity(0.95));
 
-    // Icon kính tròn, nhỏ gọn
+    // dùng cùng logic nền sáng/tối như header (nếu muốn)
+    final Color behindColor = Theme.of(context).scaffoldBackgroundColor;
+    final bool isBehindDark = behindColor.computeLuminance() < 0.5;
+
+    final Color iconBorderColor = isBehindDark
+        ? Colors.white.withOpacity(0.7)
+        : Colors.white.withOpacity(0.5);
+
+    final Color iconFillColor = isBehindDark
+        ? Colors.white.withOpacity(0.06)
+        : Colors.black.withOpacity(0.06);
+
     Widget glass = SizedBox(
-      width: 42,
-      height: 42,
-      child: LiquidGlass.grouped(
-        shape: LiquidOval(), // dùng chung layer với header
-        glassContainsChild: true,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: Colors.white.withOpacity(0.60),
-              width: 1.4,
-            ),
-            color: Colors.white.withOpacity(isDark ? 0.1 : 0.1),
+      width: 40,
+      height: 40,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: iconBorderColor,
+            width: 1.1,
           ),
-          child: Stack(
-            children: [
-              // highlight trên
-              Positioned(
-                top: 3,
-                left: 6,
-                right: 6,
-                child: Container(
-                  height: 14,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.white.withOpacity(isDark ? 0.45 : 0.65),
-                        Colors.white.withOpacity(0.0),
-                      ],
-                    ),
+          // “kính giả”: nền mờ + chút gradient sáng phía trên
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.white.withOpacity(isDark ? 0.20 : 0.30),
+              Colors.white.withOpacity(isDark ? 0.02 : 0.06),
+            ],
+          ),
+          color: iconFillColor,
+        ),
+        child: Stack(
+          children: [
+            // highlight nhỏ phía trên
+            Positioned(
+              top: 2,
+              left: 6,
+              right: 6,
+              child: Container(
+                height: 10,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.white.withOpacity(isDark ? 0.25 : 0.4),
+                      Colors.white.withOpacity(0.0),
+                    ],
                   ),
                 ),
               ),
-              Center(
-                child: Icon(
-                  icon,
-                  size: 20,
-                  color: baseIconColor,
-                ),
+            ),
+            Center(
+              child: Icon(
+                icon,
+                size: 19,
+                color: baseIconColor,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -585,7 +622,7 @@ class _HeaderIcon extends StatelessWidget {
 
 class _HeaderActionsRow extends StatelessWidget {
   final Color iconColor;
-  final double bubbleOpacity; // không dùng nữa nhưng giữ cho khỏi sửa chỗ khác
+  final double bubbleOpacity; // vẫn giữ để không phải sửa nơi khác
   final VoidCallback onSearch;
   final VoidCallback onFriends;
   final VoidCallback onMessages;
