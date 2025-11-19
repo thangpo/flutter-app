@@ -107,7 +107,7 @@ dependencies:
 
   # Thu âm thay cho 'record'
   flutter_sound: ^9.2.13
-  flutter_webrtc: ^1.2.0
+  # flutter_webrtc: ^1.2.0
   html_unescape: ^2.0.0
 
 #dependency_overrides:
