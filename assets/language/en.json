@@ -1228,6 +1228,8 @@
   "report_comment": "Report comment",
   "report_comment_confirm": "Are you sure you want to report this comment?",
   "comment_reported": "Comment has been reported.",
+  "report_post_confirm": "Are you sure you want to report this post?",
+  "post_reported": "Post has been reported.",
   "choose_relationship": "Choose relationship",
   "family_request_sent": "Family request sent",
   "family_request_already_sent": "You have already sent a family request to this user!",

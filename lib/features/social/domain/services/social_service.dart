@@ -1253,6 +1253,7 @@ class SocialService implements SocialServiceInterface {
     ApiChecker.checkApi(resp);
     throw Exception('Failed to load birthday users');
   }
+  // Report comment
   @override
   Future<void> reportComment({required String commentId}) async {
     final resp = await socialRepository.reportComment(commentId: commentId);
@@ -1269,6 +1270,16 @@ class SocialService implements SocialServiceInterface {
 
     ApiChecker.checkApi(resp);
     throw Exception('Failed to report comment');
+  }
+  // Report post
+  @override
+  Future<void> reportPost({required String postId}) async {
+    final res = await socialRepository.reportPost(postId: postId);
+    if (res.response?.data is Map &&
+        res.response!.data['api_status'] == 200) {
+      return;
+    }
+    throw Exception(res.error ?? 'Failed to report post');
   }
   @override
   Future<bool> blockUser({

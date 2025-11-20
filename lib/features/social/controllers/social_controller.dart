@@ -2718,28 +2718,7 @@ class SocialController with ChangeNotifier {
   }
 
   Future<void> reportPost(SocialPost post) async {
-    if (_postActionBusy.contains(post.id)) return;
-    _postActionBusy.add(post.id);
-    notifyListeners();
-
-    final BuildContext? ctx = Get.context;
-    try {
-      final String result = await service.performPostAction(
-        postId: post.id,
-        action: 'report',
-      );
-      if (ctx != null) {
-        final String message = getTranslated('post_reported', ctx) ?? result;
-        showCustomSnackBar(message, ctx, isError: false);
-      }
-    } catch (e) {
-      if (ctx != null) {
-        showCustomSnackBar(e.toString(), ctx, isError: true);
-      }
-    } finally {
-      _postActionBusy.remove(post.id);
-      notifyListeners();
-    }
+    await service.reportPost(postId: post.id);
   }
 
   Map<String, int> _adjustReactionBreakdown(
