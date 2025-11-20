@@ -526,12 +526,20 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                       // Mỗi bài viết
                       final post = posts[index];
                       return Container(
-                        width: double.infinity, // RẤT QUAN TRỌNG: width bounded
+                        width: double.infinity,
                         margin: const EdgeInsets.only(bottom: 8),
                         color: theme.cardColor,
-                        child: SocialPostCard(post: post),
+                        child: SocialPostCard(
+                          post: post,
+                          onPostUpdated: (updatedPost) {
+                            // ⬇️ Chính là dòng này
+                            context
+                                .read<SocialPageController>()
+                                .updatePagePost(updatedPost);
+                          },
+                        ),
                       );
-                    },
+                        },
                     childCount: posts.length + 1,
                   ),
                 ),

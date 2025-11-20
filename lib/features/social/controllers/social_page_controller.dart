@@ -5,6 +5,13 @@ import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_c
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_page_mess.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_page_chat.dart';
+
+import 'dart:async'; // cho Timer realtime
+
+import 'package:dio/dio.dart'; // nếu Lữ Bố muốn gửi file/gif/image
+
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_feed_page.dart';
 // XOÁ DÒNG NÀY NẾU CÓ
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_service_interface.dart';
@@ -46,6 +53,37 @@ class SocialPageController with ChangeNotifier {
   bool _loadingPagePosts = false;
   bool _pagePostsInitialized = false;
   String? _pagePostsError;
+  // ================== PAGE CHAT LIST ==================
+  List<PageChatThread> _pageChatList = [];
+  bool _loadingPageChatList = false;
+  String? _pageChatListError;
+
+  List<PageChatThread> get pageChatList =>
+      List<PageChatThread>.unmodifiable(_pageChatList);
+
+  bool get loadingPageChatList => _loadingPageChatList;
+  String? get pageChatListError => _pageChatListError;
+
+  // ================== PAGE CHAT STATE ==================
+  List<SocialPageMessage> _pageMessages = <SocialPageMessage>[];
+  bool _loadingPageMessages = false;
+  bool _sendingPageMessage = false;
+  String? _pageMessagesError;
+  bool _hasMorePageMessages = true;
+  int? _lastMessageId;
+
+  int? _currentChatPageId;
+  String? _currentChatRecipientId;
+  Timer? _chatPollingTimer;
+
+  List<SocialPageMessage> get pageMessages =>
+      List<SocialPageMessage>.unmodifiable(_pageMessages);
+
+  bool get loadingPageMessages => _loadingPageMessages;
+  bool get sendingPageMessage => _sendingPageMessage;
+  String? get pageMessagesError => _pageMessagesError;
+  bool get hasMorePageMessages => _hasMorePageMessages;
+
 
   // Thêm:
   bool _loadingMorePagePosts = false;
@@ -567,6 +605,148 @@ class SocialPageController with ChangeNotifier {
       notifyListeners();
     }
   }
+  // ============================================================
+  //                    PAGE CHAT: INIT / REALTIME
+  // ============================================================
+
+  /// Gọi khi mở màn hình chat với page
+  Future<void> initPageChat({
+    required int pageId,
+    required String recipientId,
+  }) async {
+    // Hủy timer cũ nếu có
+    _chatPollingTimer?.cancel();
+
+    _currentChatPageId = pageId;
+    _currentChatRecipientId = recipientId;
+    _pageMessages = <SocialPageMessage>[];
+    _lastMessageId = null;
+    _hasMorePageMessages = true;
+    _pageMessagesError = null;
+    _loadingPageMessages = true;
+    notifyListeners();
+
+    try {
+      final List<SocialPageMessage> initial =
+      await service.getPageMessages(
+        pageId: pageId.toString(),
+        recipientId: recipientId,
+        limit: 20,
+      );
+
+      _pageMessages = initial;
+      if (_pageMessages.isNotEmpty) {
+        // lấy id lớn nhất làm mốc
+        _lastMessageId = _pageMessages
+            .map((e) => e.id)
+            .reduce((a, b) => a > b ? a : b);
+      }
+    } catch (e, st) {
+      debugPrint('initPageChat ERROR: $e\n$st');
+      _pageMessagesError = e.toString();
+    } finally {
+      _loadingPageMessages = false;
+      notifyListeners();
+    }
+
+    // Bật polling 2s/lần
+    _chatPollingTimer = Timer.periodic(
+      const Duration(seconds: 2),
+          (_) => _pollNewPageMessages(),
+    );
+  }
+
+  /// Gọi trong dispose() của màn hình chat
+  void disposePageChat() {
+    _chatPollingTimer?.cancel();
+    _chatPollingTimer = null;
+  }
+
+  Future<void> _pollNewPageMessages() async {
+    if (_currentChatPageId == null ||
+        _currentChatRecipientId == null ||
+        _lastMessageId == null) {
+      return;
+    }
+
+    try {
+      final List<SocialPageMessage> newer =
+      await service.getPageMessages(
+        pageId: _currentChatPageId!.toString(),
+        recipientId: _currentChatRecipientId!,
+        afterMessageId: _lastMessageId,
+        limit: 20,
+      );
+
+      if (newer.isEmpty) return;
+
+      _pageMessages.addAll(newer);
+      _lastMessageId = _pageMessages
+          .map((e) => e.id)
+          .reduce((a, b) => a > b ? a : b);
+      notifyListeners();
+    } catch (e, st) {
+      debugPrint('_pollNewPageMessages ERROR: $e\n$st');
+      // thường không show lỗi khi poll, tránh nhảy snackbar liên tục
+    }
+  }
+
+  // ============================================================
+  //                    PAGE CHAT: SEND MESSAGE
+  // ============================================================
+
+  Future<void> sendPageChatMessage({
+    required String text,
+    MultipartFile? file,
+    String? gif,
+    String? imageUrl,
+    String? lng,
+    String? lat,
+  }) async {
+    if (_currentChatPageId == null || _currentChatRecipientId == null) {
+      debugPrint(
+          'sendPageChatMessage: missing _currentChatPageId or _currentChatRecipientId');
+      return;
+    }
+    if (_sendingPageMessage) return;
+
+    _sendingPageMessage = true;
+    _pageMessagesError = null;
+    notifyListeners();
+
+    try {
+      final String hashId =
+      DateTime.now().millisecondsSinceEpoch.toString();
+
+      final List<SocialPageMessage> sent =
+      await service.sendPageMessage(
+        pageId: _currentChatPageId!.toString(),
+        recipientId: _currentChatRecipientId!,
+        text: text,
+        messageHashId: hashId,
+        file: file,
+        gif: gif,
+        imageUrl: imageUrl,
+        lng: lng,
+        lat: lat,
+      );
+
+      if (sent.isNotEmpty) {
+        _pageMessages.addAll(sent);
+        _lastMessageId = _pageMessages
+            .map((e) => e.id)
+            .reduce((a, b) => a > b ? a : b);
+        notifyListeners();
+      }
+    } catch (e, st) {
+      debugPrint('sendPageChatMessage ERROR: $e\n$st');
+      _pageMessagesError = e.toString();
+      notifyListeners();
+    } finally {
+      _sendingPageMessage = false;
+      notifyListeners();
+    }
+  }
 
 
   // ============================================================
@@ -808,7 +988,83 @@ class SocialPageController with ChangeNotifier {
     }
   }
 
+  Future<void> loadPageChatList({int limit = 50, int offset = 0}) async {
+    _loadingPageChatList = true;
+    _pageChatListError = null;
+    notifyListeners();
+
+    try {
+      final List<PageChatThread> list =
+      await service.getPageChatList(limit: limit, offset: offset);
+
+      _pageChatList = list;
+    } catch (e, st) {
+      debugPrint('loadPageChatList ERROR: $e\n$st');
+      _pageChatListError = e.toString();
+    } finally {
+      _loadingPageChatList = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> refreshPageChatList() async {
+    return loadPageChatList(limit: 50, offset: 0);
+  }
+
+  Future<void> loadMorePageMessages() async {
+    if (_currentChatPageId == null ||
+        _currentChatRecipientId == null ||
+        !_hasMorePageMessages ||
+        _loadingPageMessages) {
+      return;
+    }
+
+    _loadingPageMessages = true;
+    notifyListeners();
+
+    try {
+      final int? oldestId = _pageMessages.isNotEmpty
+          ? _pageMessages.first.id
+          : null;
+
+      final List<SocialPageMessage> older =
+      await service.getPageMessages(
+        pageId: _currentChatPageId!.toString(),
+        recipientId: _currentChatRecipientId!,
+        beforeMessageId: oldestId,
+        limit: 20,
+      );
+
+      if (older.isEmpty) {
+        _hasMorePageMessages = false;
+      } else {
+        _pageMessages = [
+          ...older,
+          ..._pageMessages,
+        ];
+      }
+    } catch (e, st) {
+      debugPrint('loadMorePageMessages ERROR: $e\n$st');
+    } finally {
+      _loadingPageMessages = false;
+      notifyListeners();
+    }
+  }
+
+
   // ================== HELPER: UPSERT PAGE VÀO CÁC STATE ==================
+
+  void updatePagePost(SocialPost updated) {
+    final index = _pagePosts.indexWhere((p) => p.id == updated.id);
+    if (index == -1) return;
+
+    _pagePosts[index] = updated;
+    notifyListeners();
+  }
+
+
+
+
 
   void _upsertPageIntoStates(SocialGetPage page) {
     // myPages

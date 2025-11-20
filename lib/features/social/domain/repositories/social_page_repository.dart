@@ -9,6 +9,10 @@ import 'package:flutter_sixvalley_ecommerce/data/datasource/remote/exception/api
 import 'package:flutter_sixvalley_ecommerce/data/model/api_response.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_get_page.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_page_chat.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_page_mess.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/wowonder_text.dart';
+
 
 class SocialPageRepository {
   final DioClient dioClient;
@@ -49,6 +53,18 @@ class SocialPageRepository {
     if (lower == 'null' || lower == 'undefined') return null;
     return str;
   }
+  void _hydratePageMessage(Map<String, dynamic> m) {
+    // Decode text / base64 / gif / stickers... giống Wowonder chat 1-1
+    m['display_text'] = pickWoWonderText(m);
+
+    // Nếu có reply → decode luôn reply
+    if (m['reply'] is Map) {
+      final r = Map<String, dynamic>.from(m['reply']);
+      r['display_text'] = pickWoWonderText(r);
+      m['reply'] = r;
+    }
+  }
+
 
   String? _normalizeMediaUrl(dynamic raw) {
     final normalized = _normalizeString(raw);
@@ -539,15 +555,19 @@ class SocialPageRepository {
       final String url =
           '${AppConstants.socialBaseUrl}${AppConstants.socialSendMessPage}?access_token=$token';
 
-      // Body giống Postman: server_key, type, page_id, recipient_id, text, message_hash_id, ...
+      // Body: server_key, type, page_id, recipient_id, message_hash_id, ...
       final Map<String, dynamic> body = <String, dynamic>{
         'server_key': AppConstants.socialServerKey,
         'type': 'send',
         'page_id': pageId,
         'recipient_id': recipientId,
-        'text': text,
         'message_hash_id': messageHashId,
       };
+
+      // Chỉ gửi text nếu có nội dung (tránh gửi chuỗi rỗng)
+      if (text.trim().isNotEmpty) {
+        body['text'] = text;
+      }
 
       if (file != null) body['file'] = file;
       if (gif != null && gif.isNotEmpty) body['gif'] = gif;
@@ -560,11 +580,191 @@ class SocialPageRepository {
       final Response response = await dioClient.post(
         url,
         data: formData,
+        options: Options(contentType: 'multipart/form-data'),
       );
 
       return ApiResponseModel.withSuccess(response);
     } catch (e) {
       return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
     }
+  }
+  Future<ApiResponseModel<Response>> fetchPageMessages({
+    required String pageId,
+    required String recipientId,
+    int? after,
+    int? before,
+    int limit = 20,
+  }) async {
+    try {
+      final String? token = _getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        return ApiResponseModel.withError('Bạn chưa đăng nhập tài khoản social.');
+      }
+
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialGetChatPage}?access_token=$token';
+
+      final Map<String, dynamic> body = <String, dynamic>{
+        'server_key': AppConstants.socialServerKey,
+        'type': 'fetch',
+        'page_id': pageId,
+        'recipient_id': recipientId,
+        'limit': limit.toString(),
+      };
+
+      if (after != null) body['after'] = after.toString();
+      if (before != null) body['before'] = before.toString();
+
+      final Response response = await dioClient.post(
+        url,
+        data: FormData.fromMap(body),
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
+      return ApiResponseModel.withSuccess(response);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+
+  // Trong SocialPageRepository
+
+  // Future<ApiResponseModel<Response>> fetchPageChat({
+  //   required String pageId,
+  //   required String recipientId,
+  //   int limit = 20,
+  //   int? afterMessageId,     // lấy tin mới hơn
+  //   int? beforeMessageId,    // lấy tin cũ hơn
+  // }) async {
+  //   try {
+  //     final String? token = _getSocialAccessToken();
+  //     if (token == null || token.isEmpty) {
+  //       return ApiResponseModel.withError("Bạn chưa đăng nhập Social!");
+  //     }
+  //
+  //     final String url =
+  //         '${AppConstants.socialBaseUrl}${AppConstants.socialGetChatPage}?access_token=$token';
+  //
+  //     final form = FormData.fromMap({
+  //       'server_key': AppConstants.socialServerKey,
+  //       'type': 'fetch',
+  //       'page_id': pageId,
+  //       'recipient_id': recipientId,
+  //       'limit': limit.toString(),
+  //       if (afterMessageId != null) 'after': afterMessageId.toString(),
+  //       if (beforeMessageId != null) 'before': beforeMessageId.toString(),
+  //     });
+  //
+  //     final Response res = await dioClient.post(
+  //       url,
+  //       data: form,
+  //       options: Options(contentType: 'multipart/form-data'),
+  //     );
+  //
+  //     return ApiResponseModel.withSuccess(res);
+  //   } catch (e) {
+  //     return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+  //   }
+  // }
+
+  List<SocialPageMessage> parsePageChat(Response res) {
+    final List<SocialPageMessage> messages = [];
+
+    dynamic data = res.data;
+
+    // Nếu backend trả string → decode
+    if (data is String) {
+      try {
+        data = jsonDecode(data);
+      } catch (_) {
+        return messages;
+      }
+    }
+
+    if (data is! Map) return messages;
+
+    if (data['api_status'] != 200) return messages;
+
+    final List raw = data['data'] ?? [];
+
+    for (final item in raw) {
+      if (item is Map<String, dynamic>) {
+        _hydratePageMessage(item);
+        messages.add(SocialPageMessage.fromJson(item));
+
+      }
+    }
+
+    return messages;
+  }
+
+  // void _hydratePageMessage(Map<String, dynamic> m) {
+  //   m['display_text'] = pickWoWonderText(m);
+  //
+  //   // nếu có reply → decode luôn reply
+  //   if (m['reply'] is Map) {
+  //     final r = Map<String, dynamic>.from(m['reply']);
+  //     r['display_text'] = pickWoWonderText(r);
+  //     m['reply'] = r;
+  //   }
+  // }
+
+
+  Future<ApiResponseModel<Response>> fetchPageChatList({
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      if (token == null) {
+        return ApiResponseModel.withError("Bạn chưa đăng nhập Social!");
+      }
+
+      final String url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialGetPageChatList}?access_token=$token';
+
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'type': 'get_list',
+        'limit': limit.toString(),
+        'offset': offset.toString(),
+      });
+
+      final res = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
+      return ApiResponseModel.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+    }
+  }
+  List<PageChatThread> parsePageChatList(Response res) {
+    final List<PageChatThread> list = [];
+
+    dynamic data = res.data;
+
+    if (data is String) {
+      try {
+        data = jsonDecode(data);
+      } catch (_) {
+        return list;
+      }
+    }
+
+    if (data is! Map) return list;
+
+    if (data['api_status'] != 200) return list;
+
+    final List<dynamic> rows = data['data'] ?? [];
+
+    for (var x in rows) {
+      if (x is Map<String, dynamic>) {
+        list.add(PageChatThread.fromJson(x));
+      }
+    }
+    return list;
   }
 }

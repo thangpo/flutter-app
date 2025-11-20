@@ -10,6 +10,9 @@ import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_page_service_interface.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_page_mess.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_page_chat.dart';
+
 
 class SocialPageService implements SocialPageServiceInterface {
   final SocialPageRepository socialPageRepository;
@@ -391,6 +394,8 @@ class SocialPageService implements SocialPageServiceInterface {
     return page;
   }
 
+
+
   @override
   Future<List<SocialPost>> getPagePosts({
     required int pageId,
@@ -557,6 +562,121 @@ class SocialPageService implements SocialPageServiceInterface {
     );
   }
 
+
+  /// ───────────────── PAGE CHAT: SEND MESSAGE ─────────────────
+  @override
+  Future<List<SocialPageMessage>> sendPageMessage({
+    required String pageId,
+    required String recipientId,
+    required String text,
+    required String messageHashId,
+    MultipartFile? file,
+    String? gif,
+    String? imageUrl,
+    String? lng,
+    String? lat,
+  }) async {
+    final ApiResponseModel<Response> resp =
+    await socialPageRepository.sendMessageToPage(
+      pageId: pageId,
+      recipientId: recipientId,
+      text: text,
+      messageHashId: messageHashId,
+      file: file,
+      gif: gif,
+      imageUrl: imageUrl,
+      lng: lng,
+      lat: lat,
+    );
+
+    if (resp.isSuccess && resp.response != null) {
+      // Dùng parser chung cho send + fetch
+      final messages = _parsePageMessages(resp.response!);
+      if (messages.isNotEmpty) {
+        return messages;
+      }
+
+      // Nếu api_status != 200 mà vẫn isSuccess, xử lý giống các hàm khác
+      final dynamic data = resp.response!.data;
+      final String message = (data?['errors']?['error_text'] ??
+          data?['message'] ??
+          'Failed to send page message')
+          .toString();
+      throw Exception(message);
+    }
+
+    ApiChecker.checkApi(resp);
+    return <SocialPageMessage>[]; // fallback nếu checkApi không throw
+  }
+
+
+  /// ───────────────── PAGE CHAT: FETCH MESSAGES ─────────────────
+  @override
+  Future<List<SocialPageMessage>> getPageMessages({
+    required String pageId,
+    required String recipientId,
+    int? afterMessageId,
+    int? beforeMessageId,
+    int limit = 20,
+  }) async {
+    final ApiResponseModel<Response> resp =
+    await socialPageRepository.fetchPageMessages(
+      pageId: pageId,
+      recipientId: recipientId,
+      after: afterMessageId,
+      before: beforeMessageId,
+      limit: limit,
+    );
+
+    if (resp.isSuccess && resp.response != null) {
+      final messages = _parsePageMessages(resp.response!);
+      return messages;
+    }
+
+    ApiChecker.checkApi(resp);
+    return <SocialPageMessage>[];
+  }
+
+  /// Parse response page_chat -> List<SocialPageMessage>
+  List<SocialPageMessage> _parsePageMessages(Response res) {
+    final List<SocialPageMessage> result = <SocialPageMessage>[];
+    dynamic data = res.data;
+
+    // Trường hợp API trả JSON dạng String
+    if (data is String) {
+      try {
+        data = jsonDecode(data);
+      } catch (_) {
+        return result;
+      }
+    }
+
+    if (data is! Map) return result;
+    final Map<String, dynamic> map = data as Map<String, dynamic>;
+
+    final int status =
+        int.tryParse('${map['api_status'] ?? map['status'] ?? 200}') ?? 200;
+    if (status != 200) return result;
+
+    final List<dynamic> list = map['data'] as List<dynamic>? ?? const <dynamic>[];
+
+    for (final dynamic item in list) {
+      if (item is! Map) continue;
+      try {
+        result.add(
+          SocialPageMessage.fromJson(
+            Map<String, dynamic>.from(item as Map),
+          ),
+        );
+      } catch (_) {
+        // parse lỗi thì bỏ qua phần tử đó
+      }
+    }
+
+    return result;
+  }
+
+
   /// Map type backend -> tên reaction trong app
   String _mapReactionType(String typeStr) {
     switch (typeStr) {
@@ -577,5 +697,24 @@ class SocialPageService implements SocialPageServiceInterface {
         return typeStr;
     }
   }
+  //chat page
+  @override
+  Future<List<PageChatThread>> getPageChatList({
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    final resp = await socialPageRepository.fetchPageChatList(
+      limit: limit,
+      offset: offset,
+    );
+
+    if (resp.isSuccess && resp.response != null) {
+      return socialPageRepository.parsePageChatList(resp.response!);
+    }
+
+    ApiChecker.checkApi(resp);
+    return <PageChatThread>[];
+  }
+
 
 }
