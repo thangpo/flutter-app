@@ -1,4 +1,4 @@
-package com.andrvnshop247.app
+package com.vnsshop.ecommerce
 
 import android.os.Bundle
 import androidx.core.view.WindowCompat

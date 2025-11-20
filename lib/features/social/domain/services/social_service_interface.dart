@@ -151,6 +151,10 @@ abstract class SocialServiceInterface {
     String? ecomToken,
   });
   Future<List<SocialUser>> getBlockedUsers();
+  // ====== MỚI: LẤY DANH SÁCH SINH NHẬT HÔM NAY ======
+  Future<List<SocialUser>> getBirthdayUsers();
+
+  Future<void> reportComment({required String commentId});
   Future<bool> blockUser({required String targetUserId, required bool block});
   Future<String> reportUser({
     required String targetUserId,

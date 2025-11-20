@@ -353,9 +353,55 @@ class SocialRepository {
           ApiErrorHandler.getMessage(e));
     }
   }
+  // ====== MỚI: LẤY SINH NHẬT HÔM NAY ======
+  Future<ApiResponseModel<Response>> getBirthdayUsers() async {
+    try {
+      final token = _getSocialAccessToken();
+      final url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialGetBirthdayUsersUri}?access_token=$token';
 
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+      });
+
+      final res = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: Headers.multipartFormDataContentType),
+      );
+      return ApiResponseModel<Response>.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel<Response>.withError(
+        ApiErrorHandler.getMessage(e),
+      );
+    }
+  }
+  Future<ApiResponseModel<Response>> reportComment({
+    required String commentId,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      final url =
+          '${AppConstants.socialBaseUrl}${AppConstants.socialReportCommentUri}?access_token=$token';
+
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'comment_id': commentId,
+      });
+
+      final res = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: Headers.multipartFormDataContentType),
+      );
+      return ApiResponseModel<Response>.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel<Response>.withError(
+        ApiErrorHandler.getMessage(e),
+      );
+    }
+  }
   //30/10  thêm follow trong profile
-  // social_repository.dart
   Future<ApiResponseModel<Response>> toggleFollow({
     required String targetUserId,
   }) async {
