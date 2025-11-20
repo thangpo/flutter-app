@@ -1254,6 +1254,23 @@ class SocialService implements SocialServiceInterface {
     throw Exception('Failed to load birthday users');
   }
   @override
+  Future<void> reportComment({required String commentId}) async {
+    final resp = await socialRepository.reportComment(commentId: commentId);
+
+    if (resp.isSuccess &&
+        resp.response != null &&
+        resp.response!.statusCode == 200) {
+      final data = resp.response!.data;
+      if (data != null && data['api_status'] == 200) {
+        // server trả { "api_status": 200, "code": "report" }
+        return;
+      }
+    }
+
+    ApiChecker.checkApi(resp);
+    throw Exception('Failed to report comment');
+  }
+  @override
   Future<bool> blockUser({
     required String targetUserId,
     required bool block,

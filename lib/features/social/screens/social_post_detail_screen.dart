@@ -31,6 +31,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/widgets/social_post_
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/live_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/social_post_text_block.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/widgets/report_comment_dialog.dart';
 
 enum CommentSortOrder { newest, oldest }
 
@@ -1217,6 +1218,14 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                       .bodySmall
                                       ?.copyWith(
                                           color: onSurface.withOpacity(.6));
+                                  String? currentUserId;
+                                  try {
+                                    final socialCtrl =
+                                        context.read<SocialController>();
+                                    currentUserId = socialCtrl.currentUser?.id;
+                                  } catch (_) {
+                                    currentUserId = null;
+                                  }
                                   return Column(
                                     children: [
                                       for (final c in _comments)
@@ -1295,6 +1304,27 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                                     color: onSurface
                                                                         .withOpacity(
                                                                             .6)),
+                                                          ),
+                                                        if (currentUserId != null && currentUserId != c.userId)
+                                                          PopupMenuButton<String>(
+                                                            padding: EdgeInsets.zero,
+                                                            icon: const Icon(Icons.more_vert, size: 18),
+                                                            onSelected: (value) async {
+                                                              if (value == 'report') {
+                                                                await showReportCommentDialog(
+                                                                context: context,
+                                                                comment: c,
+                                                                );  // gọi trực tiếp vì đang trong State cha
+                                                              }
+                                                            },
+                                                            itemBuilder: (ctx) => [
+                                                              PopupMenuItem<String>(
+                                                                value: 'report',
+                                                                child: Text(
+                                                                  getTranslated('report_comment', ctx) ?? 'Report comment',
+                                                                ),
+                                                              ),
+                                                            ],
                                                           ),
                                                       ],
                                                     ),
@@ -1533,6 +1563,8 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                     _RepliesLazy(
                                                       comment: c,
                                                       service: svc,
+                                                      currentUserId:
+                                                          currentUserId,
                                                       onRequestReply: (target) {
                                                         setState(() {
                                                           _replyingTo = target;
@@ -1906,7 +1938,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
     }
   }
 
-  Widget _buildCommentActionIcon(
+    Widget _buildCommentActionIcon(
     BuildContext context, {
     required IconData icon,
     VoidCallback? onTap,
@@ -3228,11 +3260,14 @@ class _RepliesLazy extends StatefulWidget {
   final void Function(SocialComment) onRequestReply;
   final void Function(SocialComment comment,
       {bool isReply, BuildContext? context})? onShowReactions;
-  const _RepliesLazy(
-      {required this.comment,
-      required this.service,
-      required this.onRequestReply,
-      this.onShowReactions});
+  final String? currentUserId;
+  const _RepliesLazy({
+    required this.comment,
+    required this.service,
+    required this.onRequestReply,
+    this.onShowReactions,
+    this.currentUserId,
+  });
   @override
   State<_RepliesLazy> createState() => _RepliesLazyState();
 }
@@ -3338,6 +3373,13 @@ class _RepliesLazyState extends State<_RepliesLazy> {
         .textTheme
         .bodySmall
         ?.copyWith(color: onSurface.withOpacity(.6));
+    String? currentUserId;
+    try {
+      final socialCtrl = context.read<SocialController>();
+      currentUserId = socialCtrl.currentUser?.id;
+    } catch (_) {
+      currentUserId = null;
+    }
     if (!_expanded) {
       final repliesCount = widget.comment.repliesCount ?? 0;
       if (repliesCount == 0) {
@@ -3412,6 +3454,28 @@ class _RepliesLazyState extends State<_RepliesLazy> {
                                   .textTheme
                                   .bodySmall
                                   ?.copyWith(color: onSurface.withOpacity(.6)),
+                            ),
+                          // 🔹 Ẩn nút báo cáo nếu là reply của chính user login
+                          if (currentUserId != null && currentUserId != r.userId)
+                            PopupMenuButton<String>(
+                              padding: EdgeInsets.zero,
+                              icon: const Icon(Icons.more_vert, size: 18),
+                              onSelected: (value) async {
+                                if (value == 'report') {
+                                  await showReportCommentDialog(
+                                  context: context,
+                                  comment: r,
+                                  );
+                                }
+                              },
+                              itemBuilder: (ctx) => [
+                                PopupMenuItem<String>(
+                                  value: 'report',
+                                  child: Text(
+                                    getTranslated('report_comment', ctx) ?? 'Report comment',
+                                  ),
+                                ),
+                              ],
                             ),
                         ],
                       ),
