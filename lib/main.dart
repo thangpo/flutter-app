@@ -173,11 +173,277 @@ void _handleCallInviteOpen(Map<String, dynamic> data) {
 }
 
 Future<void> main() async {
+  HttpOverrides.global = MyHttpOverrides();
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const MaterialApp(
-    home: Scaffold(
-      body: Center(child: Text('iOS smoke test OK')),
-    ),
+
+  if (Firebase.apps.isEmpty) {
+    if (Platform.isAndroid) {
+      await Firebase.initializeApp(
+        options: const FirebaseOptions(
+          apiKey: AppConstants.fcmApiKey,
+          appId: AppConstants.fcmMobilesdkAppId,
+          messagingSenderId: AppConstants.fcmProjectNumber,
+          projectId: AppConstants.fcmProjectId,
+        ),
+      );
+    } else {
+      // 🔹 iOS / các platform khác dùng config mặc định (GoogleService-Info.plist)
+      await Firebase.initializeApp();
+    }
+  }
+
+  await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+    alert: false,
+    badge: true,
+    sound: true,
+  );
+
+  NotificationSettings settings =
+      await FirebaseMessaging.instance.requestPermission(
+    alert: true,
+    announcement: false,
+    badge: true,
+    carPlay: false,
+    criticalAlert: false,
+    provisional: false,
+    sound: true,
+  );
+
+  await FlutterDownloader.initialize(debug: true, ignoreSsl: true);
+  await di.init();
+
+  // Gửi FCM token về server sau khi app render frame đầu
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    await FirebaseTokenUpdater.update();
+  });
+
+  await flutterLocalNotificationsPlugin
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(_callInviteChannel);
+
+  // Init local notifications + handler tap
+  const androidInit = AndroidInitializationSettings('notification_icon');
+  final initSettings = const InitializationSettings(android: androidInit);
+
+  await flutterLocalNotificationsPlugin.initialize(
+    initSettings,
+    onDidReceiveNotificationResponse: (NotificationResponse resp) async {
+      final payload = resp.payload;
+      debugPrint('🔔 onDidReceiveNotificationResponse payload(raw)= $payload');
+      if (payload == null || payload.isEmpty) return;
+      try {
+        final Map<String, dynamic> map = (jsonDecode(payload) as Map)
+            .map((k, v) => MapEntry(k.toString(), v));
+
+        // Nếu là lời mời gọi => mở màn nhận/từ chối
+        if ((map['type'] ?? '') == 'call_invite') {
+          _handleCallInviteOpen(map);
+          return;
+        }
+
+        // Còn lại: điều hướng social
+        await handlePushNavigationFromMap(map);
+      } catch (e) {
+        debugPrint('parse payload error: $e');
+      }
+    },
+  );
+
+  FirebaseMessaging.onBackgroundMessage(myBackgroundMessageHandler);
+
+  NotificationBody? body;
+  try {
+    // 1) App mở từ trạng thái TERMINATED qua notification
+    final RemoteMessage? initialMessage =
+        await FirebaseMessaging.instance.getInitialMessage();
+
+    if (initialMessage != null) {
+      print('🔥 getInitialMessage: ${initialMessage.data}');
+      if ((initialMessage.data['type'] ?? '') == 'call_invite') {
+        _handleCallInviteOpen(initialMessage.data);
+      } else if (initialMessage.data['api_status'] != null ||
+          initialMessage.data['detail'] != null) {
+        await handlePushNavigation(initialMessage);
+      } else {
+        await handlePushNavigation(initialMessage);
+      }
+    }
+
+    // 2) NotificationHelper
+    await NotificationHelper.initialize(flutterLocalNotificationsPlugin);
+
+    // 3) User CLICK notification khi app BACKGROUND
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
+      print('🔥 onMessageOpenedApp (main): ${message.data}');
+      if ((message.data['type'] ?? '') == 'call_invite') {
+        _handleCallInviteOpen(message.data);
+        return;
+      }
+      await handlePushNavigation(message);
+    });
+
+    // 4) App đang FOREGROUND: nhận FCM
+    // 4) App đang FOREGROUND: nhận FCM
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
+      final data = message.data;
+      debugPrint('🔥 onMessage(foreground) data= $data');
+
+      // ⬇️ ƯU TIÊN CUỘC GỌI: vào màn nghe/từ chối ngay, KHÔNG cần bấm gì
+      final type = (data['type'] ?? '').toString();
+      if (type == 'call_invite' ||
+          (data.containsKey('call_id') && data.containsKey('media'))) {
+        _handleCallInviteOpen(data); // attachCall + push IncomingCallScreen
+        // (tuỳ bạn) có thể vẫn show heads-up để có sound/vibrate
+        // await _showIncomingCallNotification(data);
+        return;
+      }
+
+      // --- SOCIAL payload → để main.dart show local notif (payload = message.data) ---
+      // (giữ nguyên logic khác của bạn, ví dụ điều hướng Social…)
+      String? title = message.notification?.title;
+      String? bodyText = message.notification?.body;
+
+      title ??= (data['title'] ?? data['notification_title'] ?? 'VNShop247')
+          .toString();
+      bodyText ??=
+          (data['body'] ?? data['notification_body'] ?? 'Bạn có thông báo mới')
+              .toString();
+
+      if ((title?.isEmpty ?? true) && (bodyText?.isEmpty ?? true)) {
+        debugPrint('ℹ️ No displayable title/body. Skip showing local notif.');
+        return;
+      }
+
+      const androidDetails = AndroidNotificationDetails(
+        'high_importance_channel',
+        'Thông báo VNShop247',
+        importance: Importance.max,
+        priority: Priority.high,
+        playSound: true,
+        icon: 'notification_icon',
+      );
+      const details = NotificationDetails(android: androidDetails);
+
+      await flutterLocalNotificationsPlugin.show(
+        DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        title,
+        bodyText,
+        details,
+        payload: jsonEncode(data), // để khi tap còn route đúng
+      );
+    });
+
+    // 5) Channel mặc định
+    const AndroidNotificationChannel channel = AndroidNotificationChannel(
+      'high_importance_channel',
+      'Thông báo VNShop247',
+      description: 'Kênh thông báo mặc định cho VNShop247',
+      importance: Importance.max,
+    );
+    await flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(channel);
+  } catch (e, st) {
+    debugPrint('❌ FCM wiring error in main(): $e');
+    debugPrint('$st');
+  }
+
+  runApp(MultiProvider(
+    providers: [
+      ChangeNotifierProvider(create: (context) => di.sl<CategoryController>()),
+      ChangeNotifierProvider(create: (context) => di.sl<ShopController>()),
+      ChangeNotifierProvider(create: (context) => di.sl<FlashDealController>()),
+      ChangeNotifierProvider(
+          create: (context) => di.sl<FeaturedDealController>()),
+      ChangeNotifierProvider(create: (context) => di.sl<BrandController>()),
+      ChangeNotifierProvider(create: (context) => di.sl<ProductController>()),
+      ChangeNotifierProvider(create: (context) => di.sl<BannerController>()),
+      ChangeNotifierProvider(
+          create: (context) => di.sl<ProductDetailsController>()),
+      ChangeNotifierProvider(
+          create: (context) => di.sl<OnBoardingController>()),
+      ChangeNotifierProvider(create: (context) => di.sl<AuthController>()),
+      ChangeNotifierProvider(
+          create: (context) => di.sl<SearchProductController>()),
+      ChangeNotifierProvider(create: (context) => di.sl<CouponController>()),
+      ChangeNotifierProvider(create: (context) => di.sl<ChatController>()),
+      ChangeNotifierProvider(create: (context) => di.sl<OrderController>()),
+      ChangeNotifierProvider(
+          create: (context) => di.sl<NotificationController>()),
+      ChangeNotifierProvider(create: (context) => di.sl<ProfileController>()),
+      ChangeNotifierProvider(create: (context) => di.sl<WishListController>()),
+      ChangeNotifierProvider(create: (context) => di.sl<SplashController>()),
+      ChangeNotifierProvider(create: (context) => di.sl<CartController>()),
+      ChangeNotifierProvider(
+          create: (context) => di.sl<SupportTicketController>()),
+      ChangeNotifierProvider(
+          create: (context) => di.sl<LocalizationController>()),
+      ChangeNotifierProvider(create: (context) => di.sl<ThemeController>()),
+      ChangeNotifierProvider(
+          create: (context) => di.sl<GoogleSignInController>()),
+      ChangeNotifierProvider(
+          create: (context) => di.sl<FacebookLoginController>()),
+      ChangeNotifierProvider(create: (context) => di.sl<AddressController>()),
+      ChangeNotifierProvider(create: (context) => di.sl<WalletController>()),
+      ChangeNotifierProvider(create: (context) => di.sl<CompareController>()),
+      ChangeNotifierProvider(create: (context) => di.sl<CheckoutController>()),
+      ChangeNotifierProvider(
+          create: (context) => di.sl<LoyaltyPointController>()),
+      ChangeNotifierProvider(create: (context) => di.sl<LocationController>()),
+      ChangeNotifierProvider(create: (context) => di.sl<ContactUsController>()),
+      ChangeNotifierProvider(create: (context) => di.sl<ShippingController>()),
+      ChangeNotifierProvider(
+          create: (context) => di.sl<OrderDetailsController>()),
+      ChangeNotifierProvider(create: (context) => di.sl<RefundController>()),
+      ChangeNotifierProvider(create: (context) => di.sl<ReOrderController>()),
+      ChangeNotifierProvider(create: (context) => di.sl<ReviewController>()),
+      ChangeNotifierProvider(
+          create: (context) => di.sl<SellerProductController>()),
+      ChangeNotifierProvider(create: (context) => di.sl<RestockController>()),
+      ChangeNotifierProvider(
+        create: (_) =>
+            SocialController(service: di.sl<SocialServiceInterface>())
+              ..refresh(),
+      ),
+      ChangeNotifierProvider(
+        create: (_) => di.sl<SocialGroupController>(),
+      ),
+      ChangeNotifierProvider(
+        create: (_) => GroupChatController(GroupChatRepository()),
+      ),
+      // ChangeNotifierProvider(
+      //   create: (_) => CallController(
+      //     signaling: WebRTCSignalingRepository(
+      //       baseUrl: AppConstants.socialBaseUrl,
+      //       serverKey: AppConstants.socialServerKey,
+      //       accessTokenKey: AppConstants.socialAccessToken,
+      //     ),
+      //   )..init(),
+      // ),
+      // ChangeNotifierProvider(
+      //   create: (_) => SocialNotificationsController(
+      //     repo: SocialNotificationsRepository(),
+      //   ),
+      // ),
+      // ChangeNotifierProvider(
+      //   create: (_) {
+      //     final repo = WebRTCGroupSignalingRepositoryImpl(
+      //       baseUrl: AppConstants.socialBaseUrl, // https://social.vnshop247.com
+      //       serverKey: AppConstants.socialServerKey,
+      //       getAccessToken: () async {
+      //         final sp = await SharedPreferences.getInstance();
+      //         return sp.getString(AppConstants.socialAccessToken);
+      //       },
+      //       endpointPath: '/api/', // ⬅️ có dấu / cuối
+      //     );
+
+      //     return GroupCallController(signaling: repo)..init();
+      //   },
+      // ),
+    ],
+    child: MyApp(body: body),
   ));
 }
 
