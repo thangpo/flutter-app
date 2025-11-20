@@ -76,6 +76,13 @@ class SocialController with ChangeNotifier {
   SocialStory? _currentUserStory;
   SocialStory? get currentUserStory => _currentUserStory;
 
+  // ======= BIRTHDAY STATE =======
+  bool _loadingBirthdays = false;
+  List<SocialUser> _birthdayUsers = [];
+
+  bool get loadingBirthdays => _loadingBirthdays;
+  List<SocialUser> get birthdayUsers => _birthdayUsers;
+
   final List<SocialPost> _posts = [];
   List<SocialPost> get posts => List.unmodifiable(_posts);
 
@@ -436,6 +443,24 @@ class SocialController with ChangeNotifier {
       notifyListeners();
     }
   }
+  Future<void> refreshBirthdays({bool force = false}) async {
+    if (_loadingBirthdays) return;
+    if (!force && _birthdayUsers.isNotEmpty) return;
+
+    _loadingBirthdays = true;
+    notifyListeners();
+
+    try {
+      // service.getBirthdayUsers() sẽ trả về List<SocialUser>
+      final users = await service.getBirthdayUsers();
+
+      _birthdayUsers = users;
+    } finally {
+      _loadingBirthdays = false;
+      notifyListeners();
+    }
+  }
+
 
   void removeSuggestedGroupById(String groupId) {
     final int index =

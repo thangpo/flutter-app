@@ -1220,7 +1220,39 @@ class SocialService implements SocialServiceInterface {
     ApiChecker.checkApi(resp);
     throw Exception('Failed to load blocked users');
   }
+  @override
+  Future<List<SocialUser>> getBirthdayUsers() async {
+    final resp = await socialRepository.getBirthdayUsers();
 
+    if (resp.isSuccess &&
+        resp.response != null &&
+        resp.response!.statusCode == 200) {
+      final data = resp.response!.data;
+
+      // PHP trả về: { api_status: 200, data: [ ...users... ] }
+      // => Lấy list từ key 'data'
+      final list = (data?['data'] as List? ?? []);
+
+      return list.map<SocialUser>((u) {
+        String id = (u['user_id'] ?? u['id'] ?? '').toString();
+        String? name = (u['name'] ?? u['displayName'])?.toString();
+        String? username = (u['username'] ?? u['user_name'])?.toString();
+        String? avatar = (u['avatar'] ?? u['avatar_full'])?.toString();
+        String? cover = (u['cover'] ?? u['cover_full'])?.toString();
+
+        return SocialUser(
+          id: id,
+          displayName: name,
+          userName: username,
+          avatarUrl: avatar,
+          coverUrl: cover,
+        );
+      }).toList();
+    }
+
+    ApiChecker.checkApi(resp);
+    throw Exception('Failed to load birthday users');
+  }
   @override
   Future<bool> blockUser({
     required String targetUserId,

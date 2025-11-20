@@ -76,6 +76,7 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
       sc.loadCurrentUser();
       sc.loadPostBackgrounds();
       sc.fetchAdsForFeed();
+      sc.refreshBirthdays();
       if (sc.posts.isEmpty) {
         sc.refresh();
       }
@@ -230,7 +231,7 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
                   if (sc.loading && sc.posts.isEmpty) {
                     return const Center(child: CircularProgressIndicator());
                   }
-                  const int headerCount = 2;
+                  const int headerCount = 3;
                   final List<AdsModel> postAds = sc.postAds;
                   final List<SocialPost> posts = sc.posts;
                   final Set<String> eligibleIds = sc.postAdEligibleIds;
@@ -242,6 +243,7 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
                       await Future.wait([
                         sc.refresh(),
                         sc.fetchAdsForFeed(force: true),
+                        sc.refreshBirthdays(force: true),
                       ]);
                     },
                     child: NotificationListener<ScrollNotification>(
@@ -281,6 +283,12 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
                                   ],
                                 );
                               },
+                            );
+                          }
+                          if (i == 2) {
+                            return _BirthdaySection(
+                              users:
+                                  sc.birthdayUsers, // ⭐ dùng list từ controller
                             );
                           }
 
@@ -1144,6 +1152,255 @@ class _CreateStoryCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _BirthdaySection extends StatelessWidget {
+  final List<SocialUser> users;
+  const _BirthdaySection({required this.users});
+
+  @override
+  Widget build(BuildContext context) {
+    if (users.isEmpty) return const SizedBox.shrink();
+
+    final cs = Theme.of(context).colorScheme;
+    final onSurface = cs.onSurface;
+
+    // ===== TEXT MULTI-LANG =====
+    final String birthdayTitle =
+        getTranslated('birthday_today_title', context) ??
+            'Sinh nhật hôm nay';
+
+    final String singleTemplate =
+        getTranslated('birthday_single_template', context) ??
+            'Hôm nay là sinh nhật của {name}';
+
+    final String doubleTemplate =
+        getTranslated('birthday_double_template', context) ??
+            'Hôm nay sinh nhật {first} và {second}';
+
+    final String multiTemplate =
+        getTranslated('birthday_multi_template', context) ??
+            'Hôm nay sinh nhật {first} và {count} người bạn khác';
+
+    final String congratulateLabel =
+        getTranslated('birthday_congratulate', context) ??
+            'Chúc mừng';
+
+    final String fallbackFriend =
+        getTranslated('birthday_friend_fallback', context) ??
+            'bạn bè';
+
+    // ===== GHÉP CÂU =====
+    final SocialUser first = users.first;
+
+    String pickName(SocialUser u) {
+      final c = [
+        u.displayName,
+        u.userName,
+        u.firstName,
+        u.lastName,
+      ]
+          .whereType<String>()
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+      if (c.isEmpty) return fallbackFriend;
+      return c.first;
+    }
+
+    final String firstName = pickName(first);
+    final int others = users.length - 1;
+
+    String subtitle;
+    if (users.length == 1) {
+      subtitle = singleTemplate.replaceFirst('{name}', firstName);
+    } else if (users.length == 2) {
+      final secondName = pickName(users[1]);
+      subtitle = doubleTemplate
+          .replaceFirst('{first}', firstName)
+          .replaceFirst('{second}', secondName);
+    } else {
+      subtitle = multiTemplate
+          .replaceFirst('{first}', firstName)
+          .replaceFirst('{count}', others.toString());
+    }
+
+    void goToFirstProfile() {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ProfileScreen(targetUserId: first.id),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: goToFirstProfile,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: LinearGradient(
+              colors: [
+                cs.primary.withOpacity(0.9),
+                cs.secondary.withOpacity(0.9),
+              ],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: cs.primary.withOpacity(0.25),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // avatar chồng
+              _StackedBirthdayAvatars(
+                users: users.take(3).toList(),
+              ),
+              const SizedBox(width: 8),
+
+              // text co giãn
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.cake_outlined,
+                          size: 18,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            birthdayTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.95),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(width: 8),
+
+              // nút co lại cho vừa hàng
+              Flexible(
+                flex: 0,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: TextButton(
+                    style: TextButton.styleFrom(
+                      foregroundColor: cs.primary,
+                      backgroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                    onPressed: goToFirstProfile,
+                    child: Text(
+                      congratulateLabel,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+class _StackedBirthdayAvatars extends StatelessWidget {
+  final List<SocialUser> users;
+  const _StackedBirthdayAvatars({required this.users});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final onSurface = cs.onSurface;
+    const double size = 32;
+    const double overlap = 14;
+
+    return SizedBox(
+      width: size + (users.length - 1).clamp(0, 2) * overlap,
+      height: size,
+      child: Stack(
+        children: [
+          for (int i = 0; i < users.length && i < 3; i++)
+            Positioned(
+              left: i * overlap,
+              child: Container(
+                width: size,
+                height: size,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+                child: _buildAvatar(users[i], cs, onSurface),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAvatar(SocialUser u, ColorScheme cs, Color onSurface) {
+    final String? avatarUrl =
+        (u.avatarUrl != null && u.avatarUrl!.trim().isNotEmpty)
+            ? u.avatarUrl!.trim()
+            : null;
+
+    if (avatarUrl != null) {
+      return CircleAvatar(
+        backgroundImage: CachedNetworkImageProvider(avatarUrl),
+      );
+    }
+    return CircleAvatar(
+      backgroundColor: cs.surfaceVariant,
+      child: Icon(Icons.person, color: onSurface.withOpacity(.6), size: 18),
+    );
+  }
+}
+
+// tiện cho .firstOrNull
+extension _IterableFirstOrNull<E> on Iterable<E> {
+  E? get firstOrNull => isEmpty ? null : first;
 }
 
 class _StoryCard extends StatelessWidget {
