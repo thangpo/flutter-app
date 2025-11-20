@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
+import 'dart:math';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/dimensions.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/styles.dart';
@@ -7,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/flight_booking_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/tour_list_screen.dart';
+import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
 class IOSAppLaunchPageRoute extends PageRouteBuilder {
   final Widget page;
@@ -136,116 +138,79 @@ class _TravelMenuWidgetState extends State<TravelMenuWidget>
     final themeController = Provider.of<ThemeController>(context, listen: false);
     final bool darkTheme = themeController.darkTheme;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        // Liquid Glass Effect cho container chính
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: darkTheme
-              ? [
-            Colors.grey[900]!.withOpacity(0.8),
-            Colors.grey[900]!.withOpacity(0.6),
-          ]
-              : [
-            Colors.white.withOpacity(0.8),
-            Colors.white.withOpacity(0.5),
-          ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        decoration: BoxDecoration(
+          color: darkTheme ? Colors.black.withOpacity(0.35) : Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(
+            color: darkTheme
+                ? Colors.white.withOpacity(0.05)
+                : Colors.black.withOpacity(0.08),
+            width: 1.2,
+          ),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(darkTheme ? 0.3 : 0.08),
-            blurRadius: 24,
-            offset: const Offset(0, -4),
-            spreadRadius: -8,
-          ),
-          BoxShadow(
-            color: (darkTheme ? Colors.white : Colors.white).withOpacity(0.3),
-            blurRadius: 12,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: darkTheme
-                    ? [
-                  Colors.white.withOpacity(0.05),
-                  Colors.white.withOpacity(0.02),
-                ]
-                    : [
-                  Colors.white.withOpacity(0.3),
-                  Colors.white.withOpacity(0.1),
-                ],
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _buildAnimatedItem(
+              context: context,
+              index: 0,
+              icon: Icons.flight_takeoff,
+              title: getTranslated('flight', context) ?? 'Đặt vé máy bay',
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFF6B9D), Color(0xFFFFC371)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
+              darkTheme: darkTheme,
+              onTap: (position) {
+                Navigator.push(
+                  context,
+                  IOSAppLaunchPageRoute(
+                    page: const FlightBookingScreen(),
+                    startPosition: position,
+                  ),
+                );
+              },
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildAnimatedItem(
-                  context: context,
-                  index: 0,
-                  icon: Icons.flight_takeoff,
-                  title: getTranslated('flight', context) ?? 'Đặt vé máy bay',
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFF6B9D), Color(0xFFFFC371)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  onTap: (position) {
-                    Navigator.push(
-                      context,
-                      IOSAppLaunchPageRoute(
-                        page: const FlightBookingScreen(),
-                        startPosition: position,
-                      ),
-                    );
-                  },
-                ),
-                _buildAnimatedItem(
-                  context: context,
-                  index: 1,
-                  icon: Icons.hotel,
-                  title: getTranslated('hotel', context) ?? 'Đặt khách sạn',
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFF9A56), Color(0xFFFFD15C)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  onTap: (position) {
-                    // TODO: chuyển sang trang khách sạn với hiệu ứng iOS
-                  },
-                ),
-                _buildAnimatedItem(
-                  context: context,
-                  index: 2,
-                  icon: Icons.tour,
-                  title: getTranslated('tour', context) ?? 'Tour du lịch',
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF4FC3F7), Color(0xFF29B6F6)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  onTap: (position) {
-                    Navigator.push(
-                      context,
-                      IOSAppLaunchPageRoute(
-                        page: const TourListScreen(),
-                        startPosition: position,
-                      ),
-                    );
-                  },
-                ),
-              ],
+            _buildAnimatedItem(
+              context: context,
+              index: 1,
+              icon: Icons.hotel,
+              title: getTranslated('hotel', context) ?? 'Đặt khách sạn',
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFF9A56), Color(0xFFFFD15C)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              darkTheme: darkTheme,
+              onTap: (position) {},
             ),
-          ),
+            _buildAnimatedItem(
+              context: context,
+              index: 2,
+              icon: Icons.tour,
+              title: getTranslated('tour', context) ?? 'Tour du lịch',
+              gradient: const LinearGradient(
+                colors: [Color(0xFF4FC3F7), Color(0xFF29B6F6)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              darkTheme: darkTheme,
+              onTap: (position) {
+                Navigator.push(
+                  context,
+                  IOSAppLaunchPageRoute(
+                    page: const TourListScreen(),
+                    startPosition: position,
+                  ),
+                );
+              },
+            ),
+          ],
         ),
       ),
     );
@@ -257,6 +222,7 @@ class _TravelMenuWidgetState extends State<TravelMenuWidget>
     required IconData icon,
     required String title,
     required Gradient gradient,
+    required bool darkTheme,
     required Function(Offset) onTap,
   }) {
     return FadeTransition(
@@ -267,6 +233,7 @@ class _TravelMenuWidgetState extends State<TravelMenuWidget>
           icon: icon,
           title: title,
           gradient: gradient,
+          darkTheme: darkTheme,
           onTap: onTap,
         ),
       ),
@@ -278,12 +245,14 @@ class _TravelItem extends StatefulWidget {
   final IconData icon;
   final String title;
   final Gradient gradient;
+  final bool darkTheme;
   final Function(Offset) onTap;
 
   const _TravelItem({
     required this.icon,
     required this.title,
     required this.gradient,
+    required this.darkTheme,
     required this.onTap,
   });
 
@@ -301,7 +270,7 @@ class _TravelItemState extends State<_TravelItem>
   void initState() {
     super.initState();
     _rippleController = AnimationController(
-      duration: const Duration(milliseconds: 200),
+      duration: const Duration(milliseconds: 180),
       vsync: this,
     );
 
@@ -335,6 +304,28 @@ class _TravelItemState extends State<_TravelItem>
 
   @override
   Widget build(BuildContext context) {
+    final LiquidGlassSettings iconGlass = widget.darkTheme
+        ? const LiquidGlassSettings(
+      blur: 12,
+      thickness: 16,
+      refractiveIndex: 1.22,
+      lightAngle: 0.5 * pi,
+      lightIntensity: 1.4,
+      ambientStrength: 0.35,
+      saturation: 1.1,
+      glassColor: Color(0x1AFFFFFF),
+    )
+        : const LiquidGlassSettings(
+      blur: 12,
+      thickness: 16,
+      refractiveIndex: 1.22,
+      lightAngle: 0.5 * pi,
+      lightIntensity: 1.5,
+      ambientStrength: 0.35,
+      saturation: 1.1,
+      glassColor: Color(0x33FFFFFF),
+    );
+
     return GestureDetector(
       onTapDown: (_) => _rippleController.forward(),
       onTapUp: (_) {
@@ -347,87 +338,38 @@ class _TravelItemState extends State<_TravelItem>
         child: Column(
           key: _buttonKey,
           children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                // Liquid Glass Effect cho icon container
-                Container(
-                  height: 70,
-                  width: 70,
-                  decoration: BoxDecoration(
-                    gradient: widget.gradient,
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.3),
-                      width: 1.5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: widget.gradient.colors.first.withOpacity(0.4),
-                        blurRadius: 16,
-                        offset: const Offset(0, 8),
-                        spreadRadius: -4,
-                      ),
-                      BoxShadow(
-                        color: Colors.white.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(-2, -2),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(22),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              Colors.white.withOpacity(0.25),
-                              Colors.white.withOpacity(0.05),
-                            ],
-                          ),
-                        ),
-                        child: Center(
-                          child: Icon(
-                            widget.icon,
-                            color: Colors.white,
-                            size: 34,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+            // --- MỖI ICON = 1 VIÊN LIQUID GLASS RIÊNG ---
+            LiquidGlassLayer(
+              settings: iconGlass,
+              child: LiquidGlass(
+                shape: const LiquidRoundedSuperellipse(
+                  borderRadius: 26,
                 ),
-                // Enhanced glossy highlight
-                Positioned(
-                  top: 6,
-                  left: 10,
-                  right: 10,
+                clipBehavior: Clip.antiAlias,
+                glassContainsChild: false,
+                child: Container(
+                  padding: const EdgeInsets.all(8), // viền kính trong suốt
                   child: Container(
-                    height: 24,
+                    height: 70,
+                    width: 70,
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.white.withOpacity(0.5),
-                          Colors.white.withOpacity(0.1),
-                          Colors.transparent,
-                        ],
-                        stops: const [0.0, 0.5, 1.0],
+                      gradient: widget.gradient,
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    child: Center(
+                      child: Icon(
+                        widget.icon,
+                        color: Colors.white,
+                        size: 32,
                       ),
                     ),
                   ),
                 ),
-              ],
+              ),
             ),
             const SizedBox(height: 10),
             SizedBox(
-              width: 85,
+              width: 80,
               child: Text(
                 widget.title,
                 textAlign: TextAlign.center,
