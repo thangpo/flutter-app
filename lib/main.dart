@@ -64,6 +64,7 @@ import 'features/social/domain/repositories/group_chat_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_notifications_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_notifications_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_notification_service.dart';
+import 'firebase_options.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -73,7 +74,9 @@ final database = AppDatabase();
 
 // Handler cho background message (khi app tắt)
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   print("🔔 Background message: ${message.notification?.title}");
 }
 
@@ -83,14 +86,10 @@ Future<void> main() async {
 
   // Khởi tạo Firebase một lần duy nhất.
   if (Firebase.apps.isEmpty) {
-    if (Platform.isAndroid) {
-      await Firebase.initializeApp(
-          options: const FirebaseOptions(
-              apiKey: "AIzaSyCGsaNtMwBGlqphpTXuI02-LrU3DRWXq0c",
-              appId: "1:948810422905:android:e0118faea13be3d29d12a8",
-              messagingSenderId: "948810422905",
-              projectId: "vnshop247-1fb1d"));
-    }
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    await FirebaseMessaging.instance.requestPermission();
   }
 
   await FlutterDownloader.initialize(debug: true, ignoreSsl: true);
