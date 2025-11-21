@@ -85,12 +85,53 @@ class GroupChatController extends ChangeNotifier {
       _messagesLoadingByGroup[groupId] == true;
 
   void _setMessages(String groupId, List<Map<String, dynamic>> items) {
-    items.sort((a, b) {
+    // Gộp & chống trùng tin nhắn theo id / message_hash_id
+    final dedup = <Map<String, dynamic>>[];
+
+    for (final m in items) {
+      final idStr = '${m['id'] ?? m['message_id'] ?? ''}';
+      final hashStr = '${m['message_hash_id'] ?? ''}';
+
+      // Nếu cả id lẫn hash đều trống thì cứ add (vd: system message)
+      if (idStr.isEmpty && hashStr.isEmpty) {
+        dedup.add(m);
+        continue;
+      }
+
+      // Tìm phần tử đã có cùng id/hash trong dedup (ưu tiên phần tử mới hơn)
+      int? existingIndex;
+      for (var i = dedup.length - 1; i >= 0; i--) {
+        final prev = dedup[i];
+        final prevId = '${prev['id'] ?? prev['message_id'] ?? ''}';
+        final prevHash = '${prev['message_hash_id'] ?? ''}';
+
+        final sameId = idStr.isNotEmpty && prevId == idStr;
+        final sameHash = hashStr.isNotEmpty && prevHash == hashStr;
+        if (sameId || sameHash) {
+          existingIndex = i;
+          break;
+        }
+      }
+
+      if (existingIndex != null) {
+        // merge dữ liệu mới vào (server override local)
+        dedup[existingIndex] = {
+          ...dedup[existingIndex],
+          ...m,
+        };
+      } else {
+        dedup.add(m);
+      }
+    }
+
+    // Sắp xếp lại theo time tăng dần
+    dedup.sort((a, b) {
       final ta = int.tryParse('${a['time'] ?? 0}') ?? 0;
       final tb = int.tryParse('${b['time'] ?? 0}') ?? 0;
       return ta.compareTo(tb);
     });
-    _messagesByGroup[groupId] = items;
+
+    _messagesByGroup[groupId] = dedup;
   }
 
   Map<String, dynamic> _normalizeServerMessage(Map raw) {
@@ -100,6 +141,13 @@ class GroupChatController extends ChangeNotifier {
     final fileName = (m['mediaFileName'] ?? '').toString();
     final text = (m['text'] ?? '').toString();
 
+    // giữ lại hash từ server nếu có
+    final msgHash = (m['message_hash_id'] ??
+            m['msg_hash'] ??
+            m['hash'] ??
+            m['message_hash'])
+        ?.toString();
+
     // đảm bảo reply có display_text (phục vụ UI quote)
     if (m['reply'] is Map) {
       final r = Map<String, dynamic>.from(m['reply']);
@@ -108,16 +156,18 @@ class GroupChatController extends ChangeNotifier {
       m['reply'] = r;
     }
 
+    final lowerMedia = media.toLowerCase();
+
     final isImage = (m['is_image'] == true) ||
-        media.endsWith('.jpg') ||
-        media.endsWith('.jpeg') ||
-        media.endsWith('.png') ||
-        media.endsWith('.gif') ||
-        media.endsWith('.webp');
+        lowerMedia.endsWith('.jpg') ||
+        lowerMedia.endsWith('.jpeg') ||
+        lowerMedia.endsWith('.png') ||
+        lowerMedia.endsWith('.gif') ||
+        lowerMedia.endsWith('.webp');
     final isVideo = (m['is_video'] == true) ||
-        media.endsWith('.mp4') ||
-        media.endsWith('.mov') ||
-        media.endsWith('.mkv');
+        lowerMedia.endsWith('.mp4') ||
+        lowerMedia.endsWith('.mov') ||
+        lowerMedia.endsWith('.mkv');
     final isAudio = (m['is_audio'] == true) || typeTwo == 'voice';
     final isFile = (m['is_file'] == true) ||
         (!isImage && !isVideo && !isAudio && media.isNotEmpty);
@@ -136,6 +186,7 @@ class GroupChatController extends ChangeNotifier {
       'is_local': m['is_local'] == true,
       'uploading': m['uploading'] == true,
       'failed': m['failed'] == true,
+      if (msgHash != null && msgHash.isNotEmpty) 'message_hash_id': msgHash,
     };
   }
 
@@ -147,13 +198,54 @@ class GroupChatController extends ChangeNotifier {
       final serverList = await repo.fetchMessages(groupId);
 
       // giữ lại local messages (optimistic) nếu có
-      final localList = (_messagesByGroup[groupId] ?? [])
-          .where((m) => m['is_local'] == true)
-          .toList();
+      final current = List<Map<String, dynamic>>.from(
+        (_messagesByGroup[groupId] ?? []),
+      );
 
-      final normalized = serverList.map(_normalizeServerMessage).toList();
+      // map id/hash -> index
+      final Map<String, int> byId = {};
+      final Map<String, int> byHash = {};
+      for (var i = 0; i < current.length; i++) {
+        final idStr = '${current[i]['id'] ?? ''}';
+        if (idStr.isNotEmpty) byId[idStr] = i;
+        final h = current[i]['message_hash_id']?.toString();
+        if (h != null && h.isNotEmpty) byHash[h] = i;
+      }
 
-      _setMessages(groupId, [...normalized, ...localList]);
+      for (final raw in serverList) {
+        final normalized = _normalizeServerMessage(raw);
+        final idStr = '${normalized['id'] ?? ''}';
+        final h = normalized['message_hash_id']?.toString();
+
+        int? idx;
+        if (h != null && h.isNotEmpty && byHash.containsKey(h)) {
+          idx = byHash[h];
+        } else if (idStr.isNotEmpty && byId.containsKey(idStr)) {
+          idx = byId[idStr];
+        }
+
+        if (idx != null) {
+          // merge vào message hiện có (giữ flag local nếu cần)
+          final merged = {
+            ...current[idx],
+            ...normalized,
+            'is_local': false,
+            'uploading': false,
+            'failed':
+                current[idx]['failed'] == true && normalized['failed'] == true
+                    ? true
+                    : false,
+          };
+          current[idx] = merged;
+        } else {
+          current.add(normalized);
+          final newIndex = current.length - 1;
+          if (idStr.isNotEmpty) byId[idStr] = newIndex;
+          if (h != null && h.isNotEmpty) byHash[h] = newIndex;
+        }
+      }
+
+      _setMessages(groupId, current);
     } catch (e) {
       lastError = e.toString();
     } finally {
@@ -174,7 +266,22 @@ class GroupChatController extends ChangeNotifier {
 
       final normalized = older.map(_normalizeServerMessage).toList();
       final current = List<Map<String, dynamic>>.from(messagesOf(groupId));
-      _setMessages(groupId, [...normalized, ...current]);
+
+      // chèn vào đầu, tránh trùng id
+      final existingIds = current
+          .map((m) => '${m['id'] ?? ''}')
+          .where((s) => s.isNotEmpty)
+          .toSet();
+
+      final toAdd = <Map<String, dynamic>>[];
+      for (final m in normalized) {
+        final idStr = '${m['id'] ?? ''}';
+        if (idStr.isEmpty || !existingIds.contains(idStr)) {
+          toAdd.add(m);
+        }
+      }
+
+      _setMessages(groupId, [...toAdd, ...current]);
       notifyListeners();
     } catch (e) {
       lastError = e.toString();
@@ -183,14 +290,17 @@ class GroupChatController extends ChangeNotifier {
   }
 
   /// 🔄 Lấy thêm tin mới (phục vụ realtime) dựa trên id server cuối cùng
+  /// Có chống trùng theo id + message_hash_id để không bị x2 tin nhắn.
   Future<void> fetchNewMessages(String groupId) async {
     try {
-      final list = messagesOf(groupId);
-      // tìm message cuối cùng từ server (bỏ qua local_xxx)
+      // Copy list hiện tại để merge
+      final current = List<Map<String, dynamic>>.from(messagesOf(groupId));
+
+      // Tìm message cuối cùng đã nhận từ server (bỏ qua local_xxx)
       Map<String, dynamic>? lastServer;
-      for (var i = list.length - 1; i >= 0; i--) {
-        final m = list[i];
-        final idStr = '${m['id'] ?? ''}';
+      for (var i = current.length - 1; i >= 0; i--) {
+        final m = current[i];
+        final idStr = '${m['id'] ?? m['message_id'] ?? ''}';
         final isLocal = m['is_local'] == true;
         if (!isLocal && idStr.isNotEmpty && int.tryParse(idStr) != null) {
           lastServer = m;
@@ -201,20 +311,69 @@ class GroupChatController extends ChangeNotifier {
       final afterId = lastServer == null ? '' : '${lastServer['id']}';
       if (afterId.isEmpty) return;
 
+      // Gọi API lấy tin mới
       final newer = await repo.fetchNewerMessages(
         groupId,
         afterMessageId: afterId,
       );
       if (newer.isEmpty) return;
 
-      final normalized = newer.map(_normalizeServerMessage).toList();
-      final merged = [...list, ...normalized];
-      _setMessages(groupId, merged);
+      final normalizedNew = newer.map(_normalizeServerMessage).toList();
+
+      // Index các message hiện có theo id / message_hash_id để chống trùng
+      final byId = <String, int>{};
+      final byHash = <String, int>{};
+      for (var i = 0; i < current.length; i++) {
+        final m = current[i];
+        final idStr = '${m['id'] ?? m['message_id'] ?? ''}';
+        final hashStr = '${m['message_hash_id'] ?? ''}';
+        if (idStr.isNotEmpty) byId[idStr] = i;
+        if (hashStr.isNotEmpty) byHash[hashStr] = i;
+      }
+
+      // Merge từng message mới vào list, nếu trùng thì update, không add mới
+      for (final raw in normalizedNew) {
+        final idStr = '${raw['id'] ?? raw['message_id'] ?? ''}';
+        final hashStr = '${raw['message_hash_id'] ?? ''}';
+
+        int? idx;
+        if (hashStr.isNotEmpty && byHash.containsKey(hashStr)) {
+          idx = byHash[hashStr];
+        } else if (idStr.isNotEmpty && byId.containsKey(idStr)) {
+          idx = byId[idStr];
+        }
+
+        if (idx != null) {
+          // Update message cũ bằng dữ liệu server (xoá cờ local/uploading)
+          final merged = {
+            ...current[idx],
+            ...raw,
+            'is_local': false,
+            'uploading': false,
+            'failed': false,
+          };
+          current[idx] = merged;
+        } else {
+          // Tin nhắn hoàn toàn mới -> add vào cuối
+          current.add(raw);
+          final newIndex = current.length - 1;
+          if (idStr.isNotEmpty) byId[idStr] = newIndex;
+          if (hashStr.isNotEmpty) byHash[hashStr] = newIndex;
+        }
+      }
+
+      // Sắp xếp lại theo time cho chắc
+      current.sort((a, b) {
+        final ta = int.tryParse('${a['time'] ?? 0}') ?? 0;
+        final tb = int.tryParse('${b['time'] ?? 0}') ?? 0;
+        return ta.compareTo(tb);
+      });
+
+      _setMessages(groupId, current);
       notifyListeners();
-    } catch (e) {
-      // lỗi realtime thì bỏ qua, không làm vỡ UI
+    } catch (e, st) {
       if (kDebugMode) {
-        debugPrint('fetchNewMessages error: $e');
+        debugPrint('fetchNewMessages error: $e\n$st');
       }
     }
   }
@@ -290,20 +449,6 @@ class GroupChatController extends ChangeNotifier {
     Map<String, dynamic>? replyTo,
   }) async {
     lastError = null;
-    final msgHash = _tempHash();
-
-    // 1) Optimistic UI
-    final local = _makeLocalMessage(
-      groupId: groupId,
-      text: text,
-      file: file,
-      type: type,
-      msgHash: msgHash,
-      replyTo: replyTo,
-    );
-    final cur = [...messagesOf(groupId), local];
-    _setMessages(groupId, cur);
-    notifyListeners();
 
     try {
       String? replyId;
@@ -314,86 +459,19 @@ class GroupChatController extends ChangeNotifier {
         }
       }
 
-      final serverMsg = await repo.sendMessage(
+      // Gửi lên server, KHÔNG dùng optimistic local để tránh x2
+      await repo.sendMessage(
         groupId: groupId,
         text: text,
         file: file,
         type: type,
-        messageHashId: msgHash,
+        messageHashId: null,
         replyToMessageId: replyId,
       );
 
-      final list = _messagesByGroup[groupId];
-      if (list == null) {
-        notifyListeners();
-        return;
-      }
-
-      final idx = list.indexWhere(
-        (m) => m['is_local'] == true && m['message_hash_id'] == msgHash,
-      );
-
-      if (idx == -1) {
-        if (serverMsg != null) {
-          final normalized = _normalizeServerMessage(serverMsg);
-          list.add(normalized);
-          _setMessages(groupId, List<Map<String, dynamic>>.from(list));
-          notifyListeners();
-        }
-        return;
-      }
-
-      final currentLocal = Map<String, dynamic>.from(list[idx]);
-      currentLocal['uploading'] = false;
-      currentLocal['failed'] = false;
-      currentLocal['is_local'] = false;
-
-      if (serverMsg != null) {
-        final normalized = _normalizeServerMessage(serverMsg);
-        currentLocal
-          ..addAll({
-            'id': normalized['id'] ?? currentLocal['id'],
-            'display_text':
-                normalized['display_text'] ?? currentLocal['display_text'],
-            'text': normalized['text'] ?? currentLocal['text'],
-            'media': normalized['media']?.toString().isNotEmpty == true
-                ? normalized['media']
-                : currentLocal['media'],
-            'mediaFileName':
-                normalized['mediaFileName'] ?? currentLocal['mediaFileName'],
-            'type_two': normalized['type_two'] ?? currentLocal['type_two'],
-            'is_image': normalized['is_image'] ?? currentLocal['is_image'],
-            'is_video': normalized['is_video'] ?? currentLocal['is_video'],
-            'is_audio': normalized['is_audio'] ?? currentLocal['is_audio'],
-            'is_file': normalized['is_file'] ?? currentLocal['is_file'],
-            'time': normalized['time'] ?? currentLocal['time'],
-            'reply': normalized['reply'] ?? currentLocal['reply'],
-            'reply_id': normalized['reply_id'] ?? currentLocal['reply_id'],
-            'uploading': false,
-            'failed': false,
-            'is_local': false,
-          });
-      }
-
-      list[idx] = currentLocal;
-      _setMessages(groupId, List<Map<String, dynamic>>.from(list));
-      notifyListeners();
+      // Sau khi gửi xong: reload lại từ server cho chắc ăn
+      await loadMessages(groupId);
     } catch (e) {
-      final list = _messagesByGroup[groupId];
-      if (list != null) {
-        final idx = list.indexWhere(
-          (m) => m['is_local'] == true && m['message_hash_id'] == msgHash,
-        );
-        if (idx != -1) {
-          final failedMap = {
-            ...list[idx],
-            'uploading': false,
-            'failed': true,
-          };
-          list[idx] = failedMap;
-          _setMessages(groupId, List<Map<String, dynamic>>.from(list));
-        }
-      }
       lastError = e.toString();
       notifyListeners();
     }

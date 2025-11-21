@@ -285,107 +285,6 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
     super.dispose();
   }
 
-  // =============== REPLY META (dùng để hiển thị giống Messenger) ===============
-
-  /// Cố gắng lấy ra message mà tin nhắn này đang reply tới.
-  /// Ưu tiên field kiểu object (Map) để có đủ dữ liệu.
-  Map<String, dynamic>? _extractReplyMessage() {
-    final raw = message['reply_to'] ??
-        message['reply_message'] ??
-        message['reply'] ??
-        message['replied_message'];
-    if (raw is Map) {
-      return Map<String, dynamic>.from(raw);
-    }
-    // Nếu server chỉ trả về id thì thôi, không render UI
-    return null;
-  }
-
-  Widget _buildReplyInBubble(Map<String, dynamic> replied) {
-    final userData = (replied['user_data'] ?? {}) as Map? ?? {};
-    final name =
-        '${userData['name'] ?? userData['username'] ?? (replied['from_id'] ?? '')}';
-
-    final isImage = replied['is_image'] == true;
-    final isVideo = replied['is_video'] == true;
-    final isAudio = replied['is_audio'] == true ||
-        replied['type_two']?.toString() == 'voice';
-    final isFile = replied['is_file'] == true;
-
-    String label;
-    if (isImage) {
-      label = '[Ảnh]';
-    } else if (isVideo) {
-      label = '[Video]';
-    } else if (isAudio) {
-      label = '[Âm thanh]';
-    } else if (isFile) {
-      label = '[Tệp đính kèm]';
-    } else {
-      label = (replied['display_text'] ?? replied['text'] ?? '').toString();
-    }
-    if (label.length > 80) {
-      label = '${label.substring(0, 80)}…';
-    }
-
-    // màu nền reply nhỏ bên trong bubble
-    final bg = isMe
-        ? Colors.white.withOpacity(0.12)
-        : const Color(0xFFE4E6EB); // giống Messenger một chút
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 3,
-            height: 32,
-            decoration: BoxDecoration(
-              color: isMe ? Colors.white70 : Colors.blue.shade400,
-              borderRadius: BorderRadius.circular(4),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name.isEmpty ? 'Tin nhắn' : name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color:
-                        isMe ? Colors.white.withOpacity(0.9) : Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  label.isEmpty ? 'Tin nhắn' : label,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isMe
-                        ? Colors.white.withOpacity(0.95)
-                        : const Color(0xFF050505),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   // =============== REACTIONS UI ===============
 
   String? _emojiForReactionKey(String key) {
@@ -543,19 +442,6 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
       baseContent = _buildFile();
     } else {
       baseContent = _buildText();
-    }
-
-    // Nếu có reply -> chèn khối reply phía trên baseContent, bên trong bubble
-    final replied = _extractReplyMessage();
-    if (replied != null) {
-      baseContent = Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildReplyInBubble(replied),
-          baseContent,
-        ],
-      );
     }
 
     return Column(

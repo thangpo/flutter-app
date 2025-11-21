@@ -1,4 +1,4 @@
-// lib/features/social/screens/chat_screen.dart
+// G:\flutter-app\lib\features\social\screens\chat_screen.dart
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
