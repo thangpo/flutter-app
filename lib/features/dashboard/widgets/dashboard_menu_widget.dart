@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_sixvalley_ecommerce/features/cart/controllers/cart_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/responsive_helper.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
@@ -12,6 +12,8 @@ class CustomMenuWidget extends StatelessWidget {
   final String icon;
   final bool showCartCount;
   final VoidCallback onTap;
+  final Color? activeColorOverride;
+  final Color? inactiveColorOverride;
 
   const CustomMenuWidget({
     super.key,
@@ -20,14 +22,17 @@ class CustomMenuWidget extends StatelessWidget {
     required this.icon,
     required this.onTap,
     this.showCartCount = false,
+    this.activeColorOverride,
+    this.inactiveColorOverride,
   });
 
   @override
   Widget build(BuildContext context) {
-    final Color activeColor = Theme.of(context).primaryColor;
+    final Color activeColor =
+        activeColorOverride ?? Theme.of(context).primaryColor;
 
-    // 🔥 Màu icon + text khi chưa chọn → ĐEN
-    final Color inactiveColor = Colors.black;
+    // ðŸ”¥ MÃ u icon + text khi chÆ°a chá»n â†’ ÄEN
+    final Color inactiveColor = inactiveColorOverride ?? Colors.black;
 
     return InkWell(
       highlightColor: Colors.transparent,
@@ -60,7 +65,7 @@ class CustomMenuWidget extends StatelessWidget {
                     width: Dimensions.menuIconSize,
                     height: Dimensions.menuIconSize,
 
-                    // ⭐ CHỖ QUAN TRỌNG
+                    // â­ CHá»– QUAN TRá»ŒNG
                     color: isSelected ? activeColor : inactiveColor,
                   ),
                 ),
@@ -98,7 +103,7 @@ class CustomMenuWidget extends StatelessWidget {
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeInOut,
 
-              // ⭐ CHỖ QUAN TRỌNG
+              // â­ CHá»– QUAN TRá»ŒNG
               style: textRegular.copyWith(
                 color: isSelected ? activeColor : inactiveColor,
                 fontSize: Dimensions.fontSizeSmall,
@@ -117,3 +122,5 @@ class CustomMenuWidget extends StatelessWidget {
     );
   }
 }
+
+

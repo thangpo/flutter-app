@@ -1,5 +1,9 @@
-﻿import 'dart:math';
+﻿import 'dart:developer' as developer;
+import 'dart:math';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/cart/controllers/cart_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/cart/screens/cart_screen.dart';
@@ -49,6 +53,12 @@ class DashBoardScreenState extends State<DashBoardScreen> {
   bool _showBottomNav = true;
 
   bool singleVendor = false;
+  bool? _navBehindDark;
+  bool _samplingNav = false;
+  double _lastNavSampleOffset = 0.0;
+  DateTime _lastNavSampleTime = DateTime.fromMillisecondsSinceEpoch(0);
+  static const String _navLogName = "DashboardNav";
+  final GlobalKey _dashboardRepaintKey = GlobalKey();
 
   @override
   void initState() {
@@ -144,29 +154,41 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         _screens.indexWhere((element) => element.name == 'social');
 
     NetworkInfo.checkConnectivity(context);
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _sampleNavBackground());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _navBehindDark ??=
+        Theme.of(context).brightness == Brightness.dark; // default theo theme
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final bool isDarkTheme = theme.brightness == Brightness.dark;
     final mediaQuery = MediaQuery.of(context);
+    if (_navBehindDark == null) {
+      // Kích hoạt sample ở frame đầu nếu chưa có dữ liệu
+      WidgetsBinding.instance.addPostFrameCallback((_) => _sampleNavBackground());
+    }
 
-    // Chiß╗üu cao cß╗æ ─æß╗ïnh cß╗ºa thanh nav
+    // Nen phia sau dashboard quyet dinh sang/toi
+    final Color behindColor = theme.scaffoldBackgroundColor;
+    final bool navBehindDark = _navBehindDark ??
+        ((theme.brightness == Brightness.dark)
+            ? true
+            : behindColor.computeLuminance() < 0.5);
+
+    // Kich thuoc/nav inset
     const double navHeight = 60;
-
-    // Phß║ºn lß╗ü ph├¡a d╞░ß╗¢i do hß╗ç thß╗æng (thanh gesture / 3 n├║t ─æiß╗üu h╞░ß╗¢ng)
     final double bottomInset = mediaQuery.viewPadding.bottom;
 
-    // ≡ƒæë m├áu nß╗ün ph├¡a sau dashboard ─æß╗â quyß║┐t ─æß╗ïnh s├íng / tß╗æi
-    final Color behindColor = theme.scaffoldBackgroundColor;
-    final bool isBehindDark = behindColor.computeLuminance() < 0.5;
-
-    // ≡ƒö╣ Glass settings cho bottom bar
-    final LiquidGlassSettings bottomGlassSettings = isBehindDark
+    // Glass settings cho bottom bar
+    final LiquidGlassSettings bottomGlassSettings = navBehindDark
         ? const LiquidGlassSettings(
-            // nß╗ün tß╗æi -> k├¡nh s├íng
             blur: 6,
             thickness: 18,
             refractiveIndex: 1.25,
@@ -177,7 +199,6 @@ class DashBoardScreenState extends State<DashBoardScreen> {
             glassColor: Color(0x22FFFFFF),
           )
         : const LiquidGlassSettings(
-            // nß╗ün s├íng -> k├¡nh h╞íi tß╗æi
             blur: 6,
             thickness: 18,
             refractiveIndex: 1.25,
@@ -188,13 +209,18 @@ class DashBoardScreenState extends State<DashBoardScreen> {
             glassColor: Color(0x22000000),
           );
 
-    final Color bottomBorderColor = isBehindDark
+    final Color bottomBorderColor = navBehindDark
         ? Colors.white.withOpacity(0.70)
         : Colors.white.withOpacity(0.45);
 
-    final Color bottomFillColor = isBehindDark
+    final Color bottomFillColor = navBehindDark
         ? Colors.white.withOpacity(0.06)
         : Colors.black.withOpacity(0.05);
+    // Icon/text: inactive theo nền (trắng/đen), active luôn dùng primary
+    final Color navInactiveColor = navBehindDark
+        ? Colors.white.withOpacity(0.9)
+        : Colors.black.withOpacity(0.9);
+    final Color navActiveColor = cs.primary;
     final bool hideNav = (_socialTabIndex != null &&
         _pageIndex == _socialTabIndex &&
         !_showBottomNav);
@@ -220,9 +246,18 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         child: Scaffold(
           extendBody: true,
           key: _scaffoldKey,
-          body: PageStorage(
-            bucket: bucket,
-            child: _screens[_pageIndex].screen,
+          body: RepaintBoundary(
+            key: _dashboardRepaintKey,
+            child: ColoredBox(
+              color: theme.scaffoldBackgroundColor,
+              child: NotificationListener<ScrollNotification>(
+                onNotification: _handleScrollNotification,
+                child: PageStorage(
+                  bucket: bucket,
+                  child: _screens[_pageIndex].screen,
+                ),
+              ),
+            ),
           ),
           bottomNavigationBar: AnimatedSlide(
             duration: const Duration(milliseconds: 220),
@@ -254,7 +289,11 @@ class DashBoardScreenState extends State<DashBoardScreen> {
                         child: Center(
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: _getBottomWidget(singleVendor),
+                            children: _getBottomWidget(
+                              singleVendor,
+                              navActiveColor,
+                              navInactiveColor,
+                            ),
                           ),
                         ),
                       ),
@@ -267,6 +306,124 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         ));
   }
 
+  void _scheduleNavSample() {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _sampleNavBackground());
+  }
+
+  Future<void> _sampleNavBackground() async {
+    if (_samplingNav) {
+      developer.log(
+        'Skip nav sampling because previous run is in progress.',
+        name: _navLogName,
+      );
+      return;
+    }
+    _samplingNav = true;
+    try {
+      final BuildContext? ctx = _dashboardRepaintKey.currentContext;
+      if (ctx == null) {
+        developer.log('Nav sample skipped: context is null.', name: _navLogName);
+        return;
+      }
+      final RenderRepaintBoundary? boundary =
+          ctx.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null || boundary.debugNeedsPaint) {
+        developer.log(
+          'Nav boundary not ready (needsPaint=${boundary?.debugNeedsPaint ?? true}), retry next frame.',
+          name: _navLogName,
+        );
+        WidgetsBinding.instance
+            .addPostFrameCallback((_) => _sampleNavBackground());
+        return;
+      }
+
+      const double targetRatio = 0.2;
+      final double pixelRatio =
+          (targetRatio.clamp(0.05, 1.0) as num).toDouble();
+      final ui.Image image = await boundary.toImage(pixelRatio: pixelRatio);
+      final ByteData? data =
+          await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      if (data == null) {
+        developer.log('Nav sampling failed: no pixel buffer.', name: _navLogName);
+        image.dispose();
+        return;
+      }
+      if (!mounted) {
+        image.dispose();
+        return;
+      }
+
+      const double navHeight = 60;
+      final double bottomInset = MediaQuery.of(context).viewPadding.bottom;
+      final double sampleHeight = navHeight + max(8, bottomInset) + 12;
+      final int rows = max(
+        1,
+        min(image.height, (sampleHeight * pixelRatio).ceil()),
+      );
+      final int startRow = max(0, image.height - rows);
+      final int width = image.width;
+      final int height = image.height;
+
+      double luminanceSum = 0;
+      int count = 0;
+      for (int y = startRow; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+          final int offset = (y * width + x) * 4;
+          final int r = data.getUint8(offset);
+          final int g = data.getUint8(offset + 1);
+          final int b = data.getUint8(offset + 2);
+          luminanceSum += (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0;
+          count++;
+        }
+      }
+      image.dispose();
+      if (count == 0 || !mounted) return;
+
+      final double avgLum = luminanceSum / count;
+      final bool navDark = avgLum < 0.42;
+      final bool themeDark = Theme.of(context).brightness == Brightness.dark;
+      final bool useDarkChrome = navDark || themeDark;
+      developer.log(
+        'Sampled nav bg -> avgLum=${avgLum.toStringAsFixed(3)}, behindDark=$navDark, icons=${useDarkChrome ? 'white' : 'black'} (pixelRatio=$pixelRatio, rows=$rows, size=${width}x$height).',
+        name: _navLogName,
+      );
+      setState(() {
+        _navBehindDark = navDark;
+      });
+    } catch (e, st) {
+      developer.log(
+        'Nav sampling failed: $e',
+        name: _navLogName,
+        error: e,
+        stackTrace: st,
+      );
+    } finally {
+      _samplingNav = false;
+    }
+  }
+
+  bool _handleScrollNotification(ScrollNotification n) {
+    if (!_showBottomNav) return false;
+    final double offset = n.metrics.pixels;
+    const double offsetThreshold = 28.0;
+    const int timeMs = 140;
+    final DateTime now = DateTime.now();
+    final bool movedFar =
+        (offset - _lastNavSampleOffset).abs() >= offsetThreshold;
+    final bool enoughTime =
+        now.difference(_lastNavSampleTime).inMilliseconds >= timeMs;
+    if (movedFar || enoughTime) {
+      _lastNavSampleOffset = offset;
+      _lastNavSampleTime = now;
+      developer.log(
+        'Re-sample nav on scroll (offset=${offset.toStringAsFixed(1)}).',
+        name: _navLogName,
+      );
+      _scheduleNavSample();
+    }
+    return false;
+  }
+
   void _setPage(int pageIndex) {
     setState(() {
       _pageIndex = pageIndex;
@@ -274,6 +431,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         _showBottomNav = true;
       }
     });
+    _scheduleNavSample();
   }
 
   void _handleChromeVisibilityChanged(bool visible) {
@@ -282,6 +440,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     setState(() {
       _showBottomNav = visible;
     });
+    if (visible) _scheduleNavSample();
   }
 
   void _handleNavigationTap(NavigationModel item, int index) {
@@ -301,12 +460,16 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     _setPage(index);
   }
 
-  List<Widget> _getBottomWidget(bool isSingleVendor) {
+  List<Widget> _getBottomWidget(
+    bool isSingleVendor,
+    Color activeColor,
+    Color inactiveColor,
+  ) {
     List<Widget> list = [];
     for (int index = 0; index < _screens.length; index++) {
       final item = _screens[index];
 
-      // ≡ƒƒó Nß║┐u l├á tab Th├┤ng b├ío ΓåÆ hiß╗ân thß╗ï chß║Ñm ─æß╗Å khi c├│ th├┤ng b├ío ch╞░a ─æß╗ìc
+      // =ƒƒó Nß¦+u l+á tab Th+¦ng b+ío GåÆ hiß+ân thß+ï chß¦Ñm -æß+Å khi c+¦ th+¦ng b+ío ch¦¦a -æß+ìc
       if (item.name == 'notifications') {
         list.add(
           Expanded(
@@ -318,9 +481,11 @@ class DashBoardScreenState extends State<DashBoardScreen> {
                   name: item.name,
                   icon: item.icon,
                   showCartCount: item.showCartIcon ?? false,
+                  activeColorOverride: activeColor,
+                  inactiveColorOverride: inactiveColor,
                   onTap: () => _handleNavigationTap(item, index),
                 ),
-                // ≡ƒö┤ Chß║Ñm ─æß╗Å (d├╣ng Selector ─æß╗â tr├ính rebuild to├án bß╗Ö)
+                // =ƒö¦ Chß¦Ñm -æß+Å (d+¦ng Selector -æß+â tr+ính rebuild to+án bß+Ö)
                 Selector<SocialNotificationsController, bool>(
                   selector: (_, ctrl) =>
                       ctrl.notifications.any((n) => n.seen == "0"),
@@ -346,7 +511,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
           ),
         );
       } else {
-        // ≡ƒö╣ C├íc tab kh├íc giß╗» nguy├¬n
+        // =ƒö¦ C+íc tab kh+íc giß+» nguy+¬n
         list.add(
           Expanded(
             child: CustomMenuWidget(
@@ -354,6 +519,8 @@ class DashBoardScreenState extends State<DashBoardScreen> {
               name: item.name,
               icon: item.icon,
               showCartCount: item.showCartIcon ?? false,
+              activeColorOverride: activeColor,
+              inactiveColorOverride: inactiveColor,
               onTap: () => _handleNavigationTap(item, index),
             ),
           ),
@@ -364,3 +531,11 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     return list;
   }
 }
+
+
+
+
+
+
+
+
