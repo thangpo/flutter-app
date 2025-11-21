@@ -4,26 +4,28 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
-import 'package:flutter_sixvalley_ecommerce/features/address/screens/address_list_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/cart/controllers/cart_controller.dart';
+import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/cart/screens/cart_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/chat/screens/inbox_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/order/screens/order_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/coupon/screens/coupon_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/wallet/screens/wallet_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/profile/screens/profile_screen1.dart';
 import 'package:flutter_sixvalley_ecommerce/features/setting/screens/settings_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/loyaltyPoint/screens/loyalty_point_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/order/screens/order_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/profile/controllers/profile_contrroller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/splash/controllers/splash_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/splash/domain/models/config_model.dart';
-import 'package:flutter_sixvalley_ecommerce/features/wallet/screens/wallet_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/wishlist/controllers/wishlist_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/cart/controllers/cart_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/wishlist/screens/wishlist_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/splash/domain/models/config_model.dart';
+import 'package:flutter_sixvalley_ecommerce/features/address/screens/address_list_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/splash/controllers/splash_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/profile/controllers/profile_contrroller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/wishlist/controllers/wishlist_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/banner/screens/offers_product_list_screen.dart';
-import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
+import 'package:flutter_sixvalley_ecommerce/features/loyaltyPoint/screens/loyalty_point_screen.dart';
+
+
 
 
 class MenuWidget extends StatefulWidget {
@@ -106,8 +108,6 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
           final bool isDark = themeController.darkTheme;
           final bool isGuestMode = !Provider.of<AuthController>(context, listen: false).isLoggedIn();
           final ConfigModel? configModel = Provider.of<SplashController>(context, listen: false).configModel;
-
-          // Define LiquidGlassSettings
           final LiquidGlassSettings mainPanelSettings = isDark
               ? const LiquidGlassSettings(
             blur: 16,
@@ -117,7 +117,7 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
             lightIntensity: 1.8,
             ambientStrength: 0.4,
             saturation: 1.15,
-            glassColor: Color(0x1AFFFFFF), // white with opacity ~0.10
+            glassColor: Color(0x1AFFFFFF),
           )
               : const LiquidGlassSettings(
             blur: 14,
@@ -127,7 +127,7 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
             lightIntensity: 1.5,
             ambientStrength: 0.35,
             saturation: 1.08,
-            glassColor: Color(0x38FFFFFF), // white with opacity ~0.22
+            glassColor: Color(0x38FFFFFF),
           );
 
           final LiquidGlassSettings menuItemSettings = isDark
@@ -139,7 +139,7 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
             lightIntensity: 1.4,
             ambientStrength: 0.3,
             saturation: 1.05,
-            glassColor: Color(0x14FFFFFF), // white with opacity ~0.08
+            glassColor: Color(0x14FFFFFF),
           )
               : const LiquidGlassSettings(
             blur: 10,
@@ -149,7 +149,7 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
             lightIntensity: 1.2,
             ambientStrength: 0.35,
             saturation: 1.05,
-            glassColor: Color(0xD9FFFFFF), // white with opacity ~0.85
+            glassColor: Color(0xD9FFFFFF),
           );
 
           final List<Map<String, dynamic>> menuItems = [
@@ -459,7 +459,6 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              // Icon với Container gradient
               Container(
                 width: 48,
                 height: 48,
@@ -487,8 +486,6 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
                 ),
               ),
               const SizedBox(width: 16),
-
-              // Title & subtitle
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -518,7 +515,6 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
                 ),
               ),
 
-              // Badge với gradient
               if (item['hasCount'] == true && item['count'] > 0)
                 Container(
                   constraints: const BoxConstraints(minWidth: 28),
