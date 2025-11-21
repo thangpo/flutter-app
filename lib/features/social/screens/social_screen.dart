@@ -1,4 +1,8 @@
 ﻿import 'dart:math';
+import 'dart:ui' as ui;
+import 'dart:typed_data';
+import 'dart:developer' as developer;
+import 'package:flutter/rendering.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_sixvalley_ecommerce/features/ads/domain/models/ads_model.dart';
@@ -50,7 +54,8 @@ bool _isPrefix<T>(List<T> prefix, List<T> complete) {
 }
 
 class SocialFeedScreen extends StatefulWidget {
-  const SocialFeedScreen({super.key});
+  final ValueChanged<bool>? onChromeVisibilityChanged;
+  const SocialFeedScreen({super.key, this.onChromeVisibilityChanged});
 
   @override
   SocialFeedScreenState createState() => SocialFeedScreenState();
@@ -61,10 +66,19 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
   final ScrollController _scrollController = ScrollController();
   final GlobalKey<RefreshIndicatorState> _refreshKey =
       GlobalKey<RefreshIndicatorState>();
+  final GlobalKey _contentRepaintKey = GlobalKey();
   final Random _adsRandom = Random();
   List<int> _postAdSlots = <int>[];
   List<String> _eligiblePostSnapshot = <String>[];
   List<int?> _postAdIdSnapshot = <int?>[];
+  bool _chromeVisible = true;
+  double _lastScrollOffset = 0.0;
+  bool? _headerBehindDark;
+  bool _samplingHeader = false;
+  static const String _headerLogName = 'SocialFeedHeader';
+  DateTime _lastHeaderSampleTime =
+      DateTime.fromMillisecondsSinceEpoch(0); // theo dõi throttle log
+  double _lastHeaderSampleOffset = 0.0;
 
   @override
   bool get wantKeepAlive => true;
@@ -72,7 +86,9 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_handleScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _sampleBehindHeader();
       final sc = context.read<SocialController>();
       sc.loadCurrentUser();
       sc.loadPostBackgrounds();
@@ -84,6 +100,15 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
     });
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_headerBehindDark == null) {
+      final bool isDarkTheme = Theme.of(context).brightness == Brightness.dark;
+      _headerBehindDark = isDarkTheme;
+    }
+  }
+
   bool get isAtTop {
     if (!_scrollController.hasClients) return true;
     return _scrollController.position.pixels <= 8;
@@ -91,6 +116,7 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
 
   Future<void> scrollToTop() async {
     if (!_scrollController.hasClients) return;
+    _setChromeVisible(true);
     await _scrollController.animateTo(
       0,
       duration: const Duration(milliseconds: 350),
@@ -198,6 +224,7 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
 
   @override
   void dispose() {
+    _scrollController.removeListener(_handleScroll);
     _scrollController.dispose();
     super.dispose();
   }
@@ -206,6 +233,166 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
     _postAdSlots = <int>[];
     _eligiblePostSnapshot = <String>[];
     _postAdIdSnapshot = <int?>[];
+  }
+
+  void _setChromeVisible(bool visible) {
+    if (_chromeVisible == visible) return;
+    setState(() {
+      _chromeVisible = visible;
+    });
+    developer.log(
+      'Header ${visible ? 'shown' : 'hidden'} (offset=${_scrollController.hasClients ? _scrollController.position.pixels.toStringAsFixed(1) : 'n/a'})',
+      name: _headerLogName,
+    );
+    widget.onChromeVisibilityChanged?.call(visible);
+    if (visible) {
+      developer.log(
+        'Scheduling background sampling for header appearance.',
+        name: _headerLogName,
+      );
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _sampleBehindHeader());
+    }
+  }
+
+  void _handleScroll() {
+    if (!_scrollController.hasClients) return;
+    final double offset = _scrollController.position.pixels;
+    final double delta = offset - _lastScrollOffset;
+    _lastScrollOffset = offset;
+
+    if (offset <= 0) {
+      _setChromeVisible(true);
+      return;
+    }
+
+    const double threshold = 8.0;
+    if (delta > threshold) {
+      _setChromeVisible(false);
+    } else if (delta < -threshold) {
+      _setChromeVisible(true);
+    }
+
+    _maybeResampleHeader(offset);
+  }
+
+  void _maybeResampleHeader(double offset) {
+    if (!_chromeVisible || _samplingHeader) return;
+    const double offsetThreshold = 24.0; // chỉ resample khi nội dung đổi đủ đáng kể
+    const int timeMs = 140; // throttle
+    final DateTime now = DateTime.now();
+    final bool movedFar =
+        (offset - _lastHeaderSampleOffset).abs() >= offsetThreshold;
+    final bool enoughTime =
+        now.difference(_lastHeaderSampleTime).inMilliseconds >= timeMs;
+    if (!movedFar && !enoughTime) return;
+
+    _lastHeaderSampleOffset = offset;
+    _lastHeaderSampleTime = now;
+    developer.log(
+      'Re-sample requested while header visible (offset=${offset.toStringAsFixed(1)}).',
+      name: _headerLogName,
+    );
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _sampleBehindHeader());
+  }
+
+  Future<void> _sampleBehindHeader() async {
+    if (_samplingHeader) {
+      developer.log(
+        'Sampling skipped because a previous run is still in progress.',
+        name: _headerLogName,
+      );
+      return;
+    }
+    _samplingHeader = true;
+    developer.log('Begin sampling pixels behind header.', name: _headerLogName);
+    try {
+      final BuildContext? ctx = _contentRepaintKey.currentContext;
+      if (ctx == null) {
+        developer.log(
+          'Skip sampling: content context is null.',
+          name: _headerLogName,
+        );
+        return;
+      }
+      final RenderRepaintBoundary? boundary =
+          ctx.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null || boundary.debugNeedsPaint) {
+        developer.log(
+          'Boundary not ready (needsPaint=${boundary?.debugNeedsPaint ?? true}), retry next frame.',
+          name: _headerLogName,
+        );
+        WidgetsBinding.instance
+            .addPostFrameCallback((_) => _sampleBehindHeader());
+        return;
+      }
+
+      const double targetRatio = 0.15; // downscale mạnh cho nhẹ
+      final double pixelRatio =
+          (targetRatio.clamp(0.05, 1.0) as num).toDouble();
+      final ui.Image image =
+          await boundary.toImage(pixelRatio: pixelRatio);
+      final ByteData? data =
+          await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      if (data == null) {
+        developer.log(
+          'Sampling failed: could not read bytes from screenshot.',
+          name: _headerLogName,
+        );
+        image.dispose();
+        return;
+      }
+
+      final double headerHeight = _FacebookHeader.totalHeight(context);
+      final int sampleRows = headerHeight * pixelRatio < 1
+          ? 1
+          : (headerHeight * pixelRatio).ceil();
+      final int width = image.width;
+      final int height = image.height;
+      final int rows = sampleRows.clamp(1, height);
+
+      double luminanceSum = 0;
+      int count = 0;
+      for (int y = 0; y < rows; y++) {
+        for (int x = 0; x < width; x++) {
+          final int offset = (y * width + x) * 4;
+          final int r = data.getUint8(offset);
+          final int g = data.getUint8(offset + 1);
+          final int b = data.getUint8(offset + 2);
+          luminanceSum += (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0;
+          count++;
+        }
+      }
+      image.dispose();
+      if (count == 0) return;
+
+      final double avgLum = luminanceSum / count;
+      final bool newIsDark = avgLum < 0.42;
+      final bool isDarkTheme =
+          mounted ? Theme.of(context).brightness == Brightness.dark : false;
+      final bool useDarkChrome = newIsDark || isDarkTheme;
+      developer.log(
+        'Sampled header bg -> avgLum=${avgLum.toStringAsFixed(3)}, behindDark=$newIsDark, glass=${newIsDark ? 'light/white' : 'dark/black'}, icons=${useDarkChrome ? 'white' : 'black'} (pixelRatio=$pixelRatio, rows=$rows, size=${width}x$height).',
+        name: _headerLogName,
+      );
+      if (!mounted) return;
+      setState(() {
+        _headerBehindDark = newIsDark;
+      });
+      _lastHeaderSampleTime = DateTime.now();
+      _lastHeaderSampleOffset =
+          _scrollController.hasClients ? _scrollController.position.pixels : 0.0;
+    } catch (e, st) {
+      developer.log(
+        'Header sampling failed: $e',
+        name: _headerLogName,
+        error: e,
+        stackTrace: st,
+      );
+    } finally {
+      _samplingHeader = false;
+    }
   }
 
   @override
@@ -224,11 +411,15 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
       body: Stack(
         children: [
           Positioned.fill(
-            child: SafeArea(
-              top: false,
-              bottom: false,
-              child: Consumer<SocialController>(
-                builder: (context, sc, _) {
+            child: RepaintBoundary(
+              key: _contentRepaintKey,
+              child: ColoredBox(
+                color: pageBg, // giữ nền ngay cả khi content đang loading để sample header không bị đen
+                child: SafeArea(
+                  top: false,
+                  bottom: false,
+                  child: Consumer<SocialController>(
+                  builder: (context, sc, _) {
                   if (sc.loading && sc.posts.isEmpty) {
                     return const Center(child: CircularProgressIndicator());
                   }
@@ -237,24 +428,16 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
                   final List<SocialPost> posts = sc.posts;
                   final Set<String> eligibleIds = sc.postAdEligibleIds;
                   _ensurePostAdSlots(posts, postAds, eligibleIds);
-                  return RefreshIndicator(
-                    key: _refreshKey,
-                    onRefresh: () async {
-                      _resetPostAdSlots();
-                      await Future.wait([
-                        sc.refresh(),
-                        sc.fetchAdsForFeed(force: true),
-                        sc.refreshBirthdays(force: true),
-                      ]);
-                    },
-                    child: NotificationListener<ScrollNotification>(
-                      // onNotification: (n) {
-                      //   if (n.metrics.pixels >=
-                      //       n.metrics.maxScrollExtent - 200) {
-                      //     sc.loadMore();
-                      //   }
-                      //   return false;
-                      // },
+                    return RefreshIndicator(
+                      key: _refreshKey,
+                      onRefresh: () async {
+                        _resetPostAdSlots();
+                        await Future.wait([
+                          sc.refresh(),
+                          sc.fetchAdsForFeed(force: true),
+                          sc.refreshBirthdays(force: true),
+                        ]);
+                      },
                       child: ListView.builder(
                         controller: _scrollController,
                         padding: EdgeInsets.only(
@@ -320,13 +503,29 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
                           );
                         },
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
+              ),
               ),
             ),
           ),
-          Align(alignment: Alignment.topCenter, child: const _FacebookHeader()),
+          AnimatedSlide(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeInOut,
+            offset: _chromeVisible ? Offset.zero : const Offset(0, -1),
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 180),
+              opacity: _chromeVisible ? 1 : 0,
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: _FacebookHeader(
+                  isBehindDark:
+                      _headerBehindDark ?? (pageBg.computeLuminance() < 0.5),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -363,7 +562,8 @@ void _showAdLaunchError(BuildContext context) {
 }
 
 class _FacebookHeader extends StatelessWidget {
-  const _FacebookHeader();
+  final bool isBehindDark;
+  const _FacebookHeader({required this.isBehindDark});
 
   static const double _baseHeight = 68;
 
@@ -377,20 +577,16 @@ class _FacebookHeader extends StatelessWidget {
     final cs = theme.colorScheme;
     final bool isDarkTheme = theme.brightness == Brightness.dark;
 
+    final bool useDarkChrome = isBehindDark || isDarkTheme;
+
     final Color onAppBar =
-        isDarkTheme ? Colors.white : cs.onSurface.withOpacity(0.9);
-    final double bubbleOpacity = isDarkTheme ? 0.18 : 0.14;
+        useDarkChrome ? Colors.white : cs.onSurface.withOpacity(0.9);
+    final double bubbleOpacity = useDarkChrome ? 0.18 : 0.14;
 
     final BorderRadius borderRadius = BorderRadius.circular(32);
 
-    // 👉 Lấy màu nền phía sau để quyết định sáng / tối
-    final Color behindColor = Theme.of(context).scaffoldBackgroundColor;
-    final bool isBehindDark = behindColor.computeLuminance() < 0.5;
-
-    // Kính header: style khác khi nền sáng / tối
     final LiquidGlassSettings headerSettings = isBehindDark
         ? const LiquidGlassSettings(
-            // nền tối -> kính sáng
             blur: 2,
             thickness: 16,
             refractiveIndex: 1.25,
@@ -398,10 +594,9 @@ class _FacebookHeader extends StatelessWidget {
             lightIntensity: 1.1,
             ambientStrength: 0.35,
             saturation: 1.08,
-            glassColor: Color(0x22FFFFFF), // trắng mỏng
+            glassColor: Color(0x22FFFFFF),
           )
         : const LiquidGlassSettings(
-            // nền sáng -> kính hơi tối để tạo tương phản
             blur: 3,
             thickness: 16,
             refractiveIndex: 1.25,
@@ -409,7 +604,7 @@ class _FacebookHeader extends StatelessWidget {
             lightIntensity: 1.0,
             ambientStrength: 0.35,
             saturation: 1.02,
-            glassColor: Color(0x22000000), // đen mỏng
+            glassColor: Color(0x22000000),
           );
 
     final Color headerBorderColor = isBehindDark
@@ -425,7 +620,7 @@ class _FacebookHeader extends StatelessWidget {
     return SafeArea(
       bottom: false,
       child: SizedBox(
-        height: _baseHeight + MediaQuery.of(context).padding.top,
+        height: _baseHeight,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
           child: LiquidGlassLayer(
@@ -448,7 +643,6 @@ class _FacebookHeader extends StatelessWidget {
                   borderRadius: borderRadius,
                   child: Stack(
                     children: [
-                      // highlight dọc rất nhẹ
                       Positioned.fill(
                         child: DecoratedBox(
                           decoration: BoxDecoration(
@@ -464,7 +658,6 @@ class _FacebookHeader extends StatelessWidget {
                           ),
                         ),
                       ),
-
                       Center(
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
@@ -481,8 +674,6 @@ class _FacebookHeader extends StatelessWidget {
                                 height: 32,
                                 fit: BoxFit.contain,
                               ),
-
-                              // ❗ Không dùng BlendGroup nữa, để icon tự blur riêng
                               _HeaderActionsRow(
                                 iconColor: onAppBar,
                                 bubbleOpacity: bubbleOpacity,
@@ -680,7 +871,6 @@ class _WhatsOnYourMind extends StatelessWidget {
     final profileCtrl = context.watch<ProfileController>();
     final fallbackProfile = profileCtrl.userInfoModel;
 
-    // âš ï¸ Äá»•i .path -> .toString() Ä‘á»ƒ NetworkImage nháº­n URL Ä‘áº§y Ä‘á»§
     final String? avatarUrl = () {
       final candidates = [
         user?.avatarUrl?.trim(),
@@ -699,7 +889,6 @@ class _WhatsOnYourMind extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
-            // ===== Avatar: báº¥m -> ProfileScreen =====
             InkWell(
               onTap: () {
                 Navigator.of(context).push(
@@ -719,11 +908,8 @@ class _WhatsOnYourMind extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-
-            // ===== Ã” â€œBáº¡n Ä‘ang nghÄ© gÃ¬?â€: báº¥m -> táº¡o post =====
             Expanded(
               child: Material(
-                // Ä‘áº£m báº£o cÃ³ Material ancestor cho InkWell
                 color: Colors.transparent,
                 child: InkWell(
                   onTap: () {
@@ -739,7 +925,7 @@ class _WhatsOnYourMind extends StatelessWidget {
                     builder: (context) {
                       final cs = Theme.of(
                         context,
-                      ).colorScheme; // <-- thÃªm dÃ²ng nÃ y
+                      ).colorScheme;
                       return Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 12,
@@ -753,8 +939,7 @@ class _WhatsOnYourMind extends StatelessWidget {
                           getTranslated(
                                 'whats_on_your_mind',
                                 context,
-                              ) // <-- sá»­a key
-                              ??
+                              ) ??
                               "What's on your mind?",
                           style: TextStyle(
                             color: cs.onSurface.withOpacity(.7),
@@ -767,14 +952,9 @@ class _WhatsOnYourMind extends StatelessWidget {
                 ),
               ),
             ),
-
             const SizedBox(width: 12),
-
-            // (tuá»³ chá»n) nÃºt +
             InkWell(
-              onTap: () {
-                /* TODO: action khÃ¡c (vÃ­ dá»¥ táº¡o story) */
-              },
+              onTap: () {},
               customBorder: const CircleBorder(),
               child: Container(
                 padding: const EdgeInsets.all(8),
@@ -3106,3 +3286,4 @@ class _Story {
 class EdgeBox {
   static const zero = EdgeInsets.zero;
 }
+

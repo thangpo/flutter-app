@@ -24,6 +24,11 @@ class CustomMenuWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final Color activeColor = Theme.of(context).primaryColor;
+
+    // 🔥 Màu icon + text khi chưa chọn → ĐEN
+    final Color inactiveColor = Colors.black;
+
     return InkWell(
       highlightColor: Colors.transparent,
       hoverColor: Colors.transparent,
@@ -36,9 +41,8 @@ class CustomMenuWidget extends StatelessWidget {
           vertical: 6,
         ),
         decoration: BoxDecoration(
-          color: isSelected
-              ? Theme.of(context).primaryColor.withOpacity(0.15)
-              : Colors.transparent,
+          color:
+              isSelected ? activeColor.withOpacity(0.15) : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Column(
@@ -53,11 +57,11 @@ class CustomMenuWidget extends StatelessWidget {
                   curve: Curves.easeInOut,
                   child: Image.asset(
                     icon,
-                    color: isSelected
-                        ? Theme.of(context).primaryColor
-                        : Theme.of(context).hintColor.withOpacity(0.6),
                     width: Dimensions.menuIconSize,
                     height: Dimensions.menuIconSize,
+
+                    // ⭐ CHỖ QUAN TRỌNG
+                    color: isSelected ? activeColor : inactiveColor,
                   ),
                 ),
                 if (showCartCount)
@@ -70,11 +74,14 @@ class CustomMenuWidget extends StatelessWidget {
                           builder: (context, cart, child) {
                             return CircleAvatar(
                               radius: ResponsiveHelper.isTab(context) ? 10 : 7,
-                              backgroundColor: Theme.of(context).colorScheme.error,
+                              backgroundColor:
+                                  Theme.of(context).colorScheme.error,
                               child: Text(
                                 cart.cartList.length.toString(),
                                 style: titilliumSemiBold.copyWith(
-                                  color: Theme.of(context).colorScheme.secondaryContainer,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .secondaryContainer,
                                   fontSize: Dimensions.fontSizeExtraSmall,
                                 ),
                               ),
@@ -90,13 +97,14 @@ class CustomMenuWidget extends StatelessWidget {
             AnimatedDefaultTextStyle(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeInOut,
+
+              // ⭐ CHỖ QUAN TRỌNG
               style: textRegular.copyWith(
-                color: isSelected
-                    ? Theme.of(context).primaryColor
-                    : Theme.of(context).hintColor.withOpacity(0.6),
+                color: isSelected ? activeColor : inactiveColor,
                 fontSize: Dimensions.fontSizeSmall,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
               ),
+
               child: Text(
                 getTranslated(name, context)!,
                 maxLines: 1,

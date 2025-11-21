@@ -10,6 +10,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/services.dart';
 
 import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 
@@ -374,6 +375,18 @@ Future<void> _scheduleGroupCallInviteOpen(Map<String, dynamic> data) async {
 Future<void> main() async {
   HttpOverrides.global = MyHttpOverrides();
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Vẽ full edge-to-edge, không để system bar chiếm nền đen
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarDividerColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ),
+  );
 
   // =================== FIREBASE INITIALIZATION ===================
   try {
@@ -741,7 +754,11 @@ class MyApp extends StatelessWidget {
           return MediaQuery(
             data: MediaQuery.of(context)
                 .copyWith(textScaler: TextScaler.noScaling),
-            child: SafeArea(top: false, child: child!),
+            child: SafeArea(
+              top: false,
+              bottom: false,
+              child: child!,
+            ),
           );
         },
         supportedLocales: locals,

@@ -1,3 +1,4 @@
+﻿import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/cart/controllers/cart_controller.dart';
@@ -28,6 +29,8 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_scree
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/notifications_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/travel_screen.dart';
 import 'package:provider/provider.dart';
+import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
+import 'package:flutter/cupertino.dart';
 
 class DashBoardScreen extends StatefulWidget {
   const DashBoardScreen({super.key});
@@ -43,6 +46,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
   final GlobalKey<SocialFeedScreenState> _socialFeedKey =
       GlobalKey<SocialFeedScreenState>();
   int? _socialTabIndex;
+  bool _showBottomNav = true;
 
   bool singleVendor = false;
 
@@ -98,7 +102,10 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       NavigationModel(
         name: 'social',
         icon: Images.SocialIcon,
-        screen: SocialFeedScreen(key: _socialFeedKey),
+        screen: SocialFeedScreen(
+          key: _socialFeedKey,
+          onChromeVisibilityChanged: _handleChromeVisibilityChanged,
+        ),
       ),
 
       // NavigationModel(
@@ -141,6 +148,56 @@ class DashBoardScreenState extends State<DashBoardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final bool isDarkTheme = theme.brightness == Brightness.dark;
+    final mediaQuery = MediaQuery.of(context);
+
+    // Chiß╗üu cao cß╗æ ─æß╗ïnh cß╗ºa thanh nav
+    const double navHeight = 60;
+
+    // Phß║ºn lß╗ü ph├¡a d╞░ß╗¢i do hß╗ç thß╗æng (thanh gesture / 3 n├║t ─æiß╗üu h╞░ß╗¢ng)
+    final double bottomInset = mediaQuery.viewPadding.bottom;
+
+    // ≡ƒæë m├áu nß╗ün ph├¡a sau dashboard ─æß╗â quyß║┐t ─æß╗ïnh s├íng / tß╗æi
+    final Color behindColor = theme.scaffoldBackgroundColor;
+    final bool isBehindDark = behindColor.computeLuminance() < 0.5;
+
+    // ≡ƒö╣ Glass settings cho bottom bar
+    final LiquidGlassSettings bottomGlassSettings = isBehindDark
+        ? const LiquidGlassSettings(
+            // nß╗ün tß╗æi -> k├¡nh s├íng
+            blur: 6,
+            thickness: 18,
+            refractiveIndex: 1.25,
+            lightAngle: 0.5 * pi,
+            lightIntensity: 1.1,
+            ambientStrength: 0.35,
+            saturation: 1.06,
+            glassColor: Color(0x22FFFFFF),
+          )
+        : const LiquidGlassSettings(
+            // nß╗ün s├íng -> k├¡nh h╞íi tß╗æi
+            blur: 6,
+            thickness: 18,
+            refractiveIndex: 1.25,
+            lightAngle: 0.5 * pi,
+            lightIntensity: 1.0,
+            ambientStrength: 0.35,
+            saturation: 1.02,
+            glassColor: Color(0x22000000),
+          );
+
+    final Color bottomBorderColor = isBehindDark
+        ? Colors.white.withOpacity(0.70)
+        : Colors.white.withOpacity(0.45);
+
+    final Color bottomFillColor = isBehindDark
+        ? Colors.white.withOpacity(0.06)
+        : Colors.black.withOpacity(0.05);
+    final bool hideNav = (_socialTabIndex != null &&
+        _pageIndex == _socialTabIndex &&
+        !_showBottomNav);
     return PopScope(
         canPop: false,
         onPopInvokedWithResult: (didPop, _) async {
@@ -161,33 +218,69 @@ class DashBoardScreenState extends State<DashBoardScreen> {
           return;
         },
         child: Scaffold(
-            key: _scaffoldKey,
-            body:
-                PageStorage(bucket: bucket, child: _screens[_pageIndex].screen),
-            bottomNavigationBar: Container(
-                height: 68,
-                decoration: BoxDecoration(
-                  borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(Dimensions.paddingSizeLarge)),
-                  color: Theme.of(context).cardColor,
-                  boxShadow: [
-                    BoxShadow(
-                        offset: const Offset(1, 1),
-                        blurRadius: 2,
-                        spreadRadius: 1,
-                        color: Theme.of(context)
-                            .primaryColor
-                            .withValues(alpha: .125))
-                  ],
+          extendBody: true,
+          key: _scaffoldKey,
+          body: PageStorage(
+            bucket: bucket,
+            child: _screens[_pageIndex].screen,
+          ),
+          bottomNavigationBar: AnimatedSlide(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeInOut,
+            offset: hideNav ? const Offset(0, 1.2) : Offset.zero,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 180),
+              opacity: hideNav ? 0 : 1,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(12, 0, 12, max(8, bottomInset)),
+                child: LiquidGlassLayer(
+                  useBackdropGroup: true,
+                  settings: bottomGlassSettings,
+                  child: LiquidGlass(
+                    shape: const LiquidRoundedSuperellipse(borderRadius: 28),
+                    clipBehavior: Clip.antiAlias,
+                    glassContainsChild: false,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(28),
+                        border: Border.all(
+                          color: bottomBorderColor,
+                          width: 1.4,
+                        ),
+                        color: bottomFillColor,
+                      ),
+                      child: SizedBox(
+                        height: navHeight,
+                        child: Center(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: _getBottomWidget(singleVendor),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-                child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: _getBottomWidget(singleVendor)))));
+              ),
+            ),
+          ),
+        ));
   }
 
   void _setPage(int pageIndex) {
     setState(() {
       _pageIndex = pageIndex;
+      if (_socialTabIndex != null && pageIndex != _socialTabIndex) {
+        _showBottomNav = true;
+      }
+    });
+  }
+
+  void _handleChromeVisibilityChanged(bool visible) {
+    if (_pageIndex != _socialTabIndex) return;
+    if (_showBottomNav == visible) return;
+    setState(() {
+      _showBottomNav = visible;
     });
   }
 
@@ -213,7 +306,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     for (int index = 0; index < _screens.length; index++) {
       final item = _screens[index];
 
-      // 🟢 Nếu là tab Thông báo → hiển thị chấm đỏ khi có thông báo chưa đọc
+      // ≡ƒƒó Nß║┐u l├á tab Th├┤ng b├ío ΓåÆ hiß╗ân thß╗ï chß║Ñm ─æß╗Å khi c├│ th├┤ng b├ío ch╞░a ─æß╗ìc
       if (item.name == 'notifications') {
         list.add(
           Expanded(
@@ -227,7 +320,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
                   showCartCount: item.showCartIcon ?? false,
                   onTap: () => _handleNavigationTap(item, index),
                 ),
-                // 🔴 Chấm đỏ (dùng Selector để tránh rebuild toàn bộ)
+                // ≡ƒö┤ Chß║Ñm ─æß╗Å (d├╣ng Selector ─æß╗â tr├ính rebuild to├án bß╗Ö)
                 Selector<SocialNotificationsController, bool>(
                   selector: (_, ctrl) =>
                       ctrl.notifications.any((n) => n.seen == "0"),
@@ -253,7 +346,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
           ),
         );
       } else {
-        // 🔹 Các tab khác giữ nguyên
+        // ≡ƒö╣ C├íc tab kh├íc giß╗» nguy├¬n
         list.add(
           Expanded(
             child: CustomMenuWidget(
@@ -271,4 +364,3 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     return list;
   }
 }
-
