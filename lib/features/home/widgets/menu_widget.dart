@@ -1,27 +1,30 @@
 import 'dart:ui';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
 import 'package:flutter_sixvalley_ecommerce/features/address/screens/address_list_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/cart/controllers/cart_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/cart/screens/cart_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/chat/screens/inbox_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/coupon/screens/coupon_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/profile/screens/profile_screen1.dart';
+import 'package:flutter_sixvalley_ecommerce/features/setting/screens/settings_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/loyaltyPoint/screens/loyalty_point_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/order/screens/order_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/profile/controllers/profile_contrroller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/profile/screens/profile_screen1.dart';
-import 'package:flutter_sixvalley_ecommerce/features/setting/screens/settings_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/splash/controllers/splash_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/splash/domain/models/config_model.dart';
 import 'package:flutter_sixvalley_ecommerce/features/wallet/screens/wallet_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/wishlist/controllers/wishlist_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/wishlist/screens/wishlist_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/banner/screens/offers_product_list_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
-import 'package:provider/provider.dart';
+import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
+
 
 class MenuWidget extends StatefulWidget {
   const MenuWidget({super.key});
@@ -96,7 +99,6 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
     final menuWidth = screenWidth * 0.82;
-    final topPadding = MediaQuery.of(context).padding.top;
 
     return OverlayEntry(
       builder: (context) => Consumer2<ProfileController, ThemeController>(
@@ -104,6 +106,51 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
           final bool isDark = themeController.darkTheme;
           final bool isGuestMode = !Provider.of<AuthController>(context, listen: false).isLoggedIn();
           final ConfigModel? configModel = Provider.of<SplashController>(context, listen: false).configModel;
+
+          // Define LiquidGlassSettings
+          final LiquidGlassSettings mainPanelSettings = isDark
+              ? const LiquidGlassSettings(
+            blur: 16,
+            thickness: 20,
+            refractiveIndex: 1.28,
+            lightAngle: 0.5 * pi,
+            lightIntensity: 1.8,
+            ambientStrength: 0.4,
+            saturation: 1.15,
+            glassColor: Color(0x1AFFFFFF), // white with opacity ~0.10
+          )
+              : const LiquidGlassSettings(
+            blur: 14,
+            thickness: 18,
+            refractiveIndex: 1.25,
+            lightAngle: 0.5 * pi,
+            lightIntensity: 1.5,
+            ambientStrength: 0.35,
+            saturation: 1.08,
+            glassColor: Color(0x38FFFFFF), // white with opacity ~0.22
+          );
+
+          final LiquidGlassSettings menuItemSettings = isDark
+              ? const LiquidGlassSettings(
+            blur: 10,
+            thickness: 12,
+            refractiveIndex: 1.22,
+            lightAngle: 0.5 * pi,
+            lightIntensity: 1.4,
+            ambientStrength: 0.3,
+            saturation: 1.05,
+            glassColor: Color(0x14FFFFFF), // white with opacity ~0.08
+          )
+              : const LiquidGlassSettings(
+            blur: 10,
+            thickness: 12,
+            refractiveIndex: 1.25,
+            lightAngle: 0.5 * pi,
+            lightIntensity: 1.2,
+            ambientStrength: 0.35,
+            saturation: 1.05,
+            glassColor: Color(0xD9FFFFFF), // white with opacity ~0.85
+          );
 
           final List<Map<String, dynamic>> menuItems = [
             {
@@ -199,313 +246,316 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
           return AnimatedBuilder(
             animation: _animationController,
             builder: (context, child) {
-              return Stack(
-                children: [
-                  // Backdrop with blur
-                  Positioned.fill(
-                    child: GestureDetector(
-                      onTap: _hideMenu,
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(
-                          sigmaX: 12.0 * _fadeAnimation.value,
-                          sigmaY: 12.0 * _fadeAnimation.value,
-                        ),
-                        child: Container(
-                          color: (isDark ? Colors.black : Colors.black)
-                              .withOpacity(0.4 * _fadeAnimation.value),
-                        ),
-                      ),
-                    ),
-                  ),
-                  // Menu Panel
-                  Positioned(
-                    right: -(menuWidth * _slideAnimation.value),
-                    top: 0,
-                    width: menuWidth,
-                    height: screenHeight,
-                    child: Transform.scale(
-                      scale: _scaleAnimation.value,
-                      alignment: Alignment.centerRight,
-                      child: ClipRRect(
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(32),
-                          bottomLeft: Radius.circular(32),
-                        ),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: isDark
-                                    ? [
-                                  Colors.grey[900]!.withOpacity(0.85),
-                                  Colors.grey[850]!.withOpacity(0.85),
-                                ]
-                                    : [
-                                  Colors.white.withOpacity(0.85),
-                                  Colors.grey[50]!.withOpacity(0.85),
-                                ],
-                              ),
-                              borderRadius: const BorderRadius.only(
-                                topLeft: Radius.circular(32),
-                                bottomLeft: Radius.circular(32),
-                              ),
-                              border: Border.all(
-                                color: isDark
-                                    ? Colors.white.withOpacity(0.1)
-                                    : Colors.white.withOpacity(0.5),
-                                width: 1.5,
-                              ),
+              return LiquidGlassLayer(
+                useBackdropGroup: true,
+                settings: mainPanelSettings,
+                child: Stack(
+                  children: [
+                    Positioned(
+                      right: -(menuWidth * _slideAnimation.value),
+                      top: 0,
+                      width: menuWidth,
+                      height: screenHeight,
+                      child: Transform.scale(
+                        scale: _scaleAnimation.value,
+                        alignment: Alignment.centerRight,
+                        child: LiquidStretch(
+                          child: LiquidGlass(
+                            shape: const LiquidRoundedSuperellipse(
+                              borderRadius: 32,
                             ),
-                            child: SafeArea(
-                              child: Column(
-                                children: [
-                                  // Header
-                                  Padding(
-                                    padding: const EdgeInsets.all(24),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          'Menu',
-                                          style: TextStyle(
-                                            fontSize: 32,
-                                            fontWeight: FontWeight.w700,
-                                            color: isDark ? Colors.white : Colors.black87,
-                                            letterSpacing: -0.5,
-                                          ),
+                            clipBehavior: Clip.antiAlias,
+                            glassContainsChild: false,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: isDark
+                                      ? [
+                                    Colors.black.withOpacity(0.45),
+                                    Colors.grey[900]!.withOpacity(0.60),
+                                  ]
+                                      : [
+                                    Colors.white.withOpacity(0.70),
+                                    Colors.grey[100]!.withOpacity(0.80),
+                                  ],
+                                ),
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(32),
+                                  bottomLeft: Radius.circular(32),
+                                ),
+                              ),
+                              child: SafeArea(
+                                child: Column(
+                                  children: [
+                                    _buildHeader(isDark),
+                                    Expanded(
+                                      child: ListView.builder(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 8,
                                         ),
-                                        GestureDetector(
-                                          onTap: _hideMenu,
-                                          child: Container(
-                                            width: 40,
-                                            height: 40,
-                                            decoration: BoxDecoration(
-                                              color: (isDark ? Colors.white : Colors.black)
-                                                  .withOpacity(0.08),
-                                              borderRadius: BorderRadius.circular(12),
-                                            ),
-                                            child: Icon(
-                                              Icons.close_rounded,
-                                              size: 22,
-                                              color: isDark ? Colors.white : Colors.black87,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
+                                        itemCount: menuItems.length,
+                                        physics: const BouncingScrollPhysics(),
+                                        itemBuilder: (context, index) {
+                                          return _buildAnimatedMenuItem(
+                                            context,
+                                            menuItems[index],
+                                            isDark,
+                                            index,
+                                          );
+                                        },
+                                      ),
                                     ),
-                                  ),
-                                  // Menu Items
-                                  Expanded(
-                                    child: ListView.builder(
-                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                      itemCount: menuItems.length,
-                                      physics: const BouncingScrollPhysics(),
-                                      itemBuilder: (context, index) {
-                                        final item = menuItems[index];
-                                        return TweenAnimationBuilder<double>(
-                                          duration: Duration(milliseconds: 400 + (index * 40)),
-                                          tween: Tween(begin: 0.0, end: 1.0),
-                                          curve: Curves.easeOutCubic,
-                                          builder: (context, value, child) {
-                                            return Transform.translate(
-                                              offset: Offset(30 * (1 - value), 0),
-                                              child: Opacity(
-                                                opacity: value,
-                                                child: child,
-                                              ),
-                                            );
-                                          },
-                                          child: Padding(
-                                            padding: const EdgeInsets.only(bottom: 8),
-                                            child: ClipRRect(
-                                              borderRadius: BorderRadius.circular(16),
-                                              child: BackdropFilter(
-                                                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                                                child: Container(
-                                                  decoration: BoxDecoration(
-                                                    gradient: LinearGradient(
-                                                      begin: Alignment.topLeft,
-                                                      end: Alignment.bottomRight,
-                                                      colors: isDark
-                                                          ? [
-                                                        Colors.white.withOpacity(0.08),
-                                                        Colors.white.withOpacity(0.05),
-                                                      ]
-                                                          : [
-                                                        Colors.white.withOpacity(0.7),
-                                                        Colors.white.withOpacity(0.5),
-                                                      ],
-                                                    ),
-                                                    borderRadius: BorderRadius.circular(16),
-                                                    border: Border.all(
-                                                      color: isDark
-                                                          ? Colors.white.withOpacity(0.1)
-                                                          : Colors.white.withOpacity(0.5),
-                                                      width: 1,
-                                                    ),
-                                                  ),
-                                                  child: Material(
-                                                    color: Colors.transparent,
-                                                    child: InkWell(
-                                                      borderRadius: BorderRadius.circular(16),
-                                                      onTap: () {
-                                                        HapticFeedback.selectionClick();
-                                                        _hideMenu();
-                                                        Future.delayed(const Duration(milliseconds: 200), () {
-                                                          Navigator.push(
-                                                            context,
-                                                            PageRouteBuilder(
-                                                              pageBuilder: (context, animation, secondaryAnimation) =>
-                                                              item['navigateTo'],
-                                                              transitionsBuilder:
-                                                                  (context, animation, secondaryAnimation, child) {
-                                                                return FadeTransition(
-                                                                  opacity: animation,
-                                                                  child: SlideTransition(
-                                                                    position: Tween<Offset>(
-                                                                      begin: const Offset(0.05, 0),
-                                                                      end: Offset.zero,
-                                                                    ).animate(CurvedAnimation(
-                                                                      parent: animation,
-                                                                      curve: Curves.easeOutCubic,
-                                                                    )),
-                                                                    child: child,
-                                                                  ),
-                                                                );
-                                                              },
-                                                              transitionDuration: const Duration(milliseconds: 300),
-                                                            ),
-                                                          );
-                                                        });
-                                                      },
-                                                      child: Padding(
-                                                        padding: const EdgeInsets.all(16),
-                                                        child: Row(
-                                                          children: [
-                                                            // Icon Container
-                                                            Container(
-                                                              width: 48,
-                                                              height: 48,
-                                                              decoration: BoxDecoration(
-                                                                gradient: LinearGradient(
-                                                                  begin: Alignment.topLeft,
-                                                                  end: Alignment.bottomRight,
-                                                                  colors: isDark
-                                                                      ? [
-                                                                    Colors.blue[400]!.withOpacity(0.3),
-                                                                    Colors.blue[600]!.withOpacity(0.2),
-                                                                  ]
-                                                                      : [
-                                                                    Colors.blue[50]!,
-                                                                    Colors.blue[100]!,
-                                                                  ],
-                                                                ),
-                                                                borderRadius: BorderRadius.circular(14),
-                                                              ),
-                                                              child: Icon(
-                                                                item['iconData'],
-                                                                size: 24,
-                                                                color: isDark
-                                                                    ? Colors.blue[300]
-                                                                    : Colors.blue[700],
-                                                              ),
-                                                            ),
-                                                            const SizedBox(width: 16),
-                                                            // Title and Subtitle
-                                                            Expanded(
-                                                              child: Column(
-                                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                                children: [
-                                                                  Text(
-                                                                    item['title'],
-                                                                    style: TextStyle(
-                                                                      fontSize: 16,
-                                                                      fontWeight: FontWeight.w600,
-                                                                      color: isDark
-                                                                          ? Colors.white
-                                                                          : Colors.black87,
-                                                                      letterSpacing: -0.2,
-                                                                    ),
-                                                                  ),
-                                                                  if (item['subTitle'] != null)
-                                                                    Padding(
-                                                                      padding: const EdgeInsets.only(top: 4),
-                                                                      child: Text(
-                                                                        '${item['subTitle']}: ${item['balance']}',
-                                                                        style: TextStyle(
-                                                                          fontSize: 13,
-                                                                          fontWeight: FontWeight.w500,
-                                                                          color: isDark
-                                                                              ? Colors.grey[400]
-                                                                              : Colors.grey[600],
-                                                                        ),
-                                                                      ),
-                                                                    ),
-                                                                ],
-                                                              ),
-                                                            ),
-                                                            // Count Badge
-                                                            if (item['hasCount'] == true && item['count'] > 0)
-                                                              Container(
-                                                                constraints: const BoxConstraints(minWidth: 28),
-                                                                padding: const EdgeInsets.symmetric(
-                                                                    horizontal: 10, vertical: 6),
-                                                                decoration: BoxDecoration(
-                                                                  gradient: LinearGradient(
-                                                                    colors: [
-                                                                      Colors.blue[600]!,
-                                                                      Colors.blue[400]!,
-                                                                    ],
-                                                                  ),
-                                                                  borderRadius: BorderRadius.circular(14),
-                                                                  boxShadow: [
-                                                                    BoxShadow(
-                                                                      color: Colors.blue.withOpacity(0.3),
-                                                                      blurRadius: 8,
-                                                                      offset: const Offset(0, 2),
-                                                                    ),
-                                                                  ],
-                                                                ),
-                                                                child: Text(
-                                                                  item['count'].toString(),
-                                                                  textAlign: TextAlign.center,
-                                                                  style: const TextStyle(
-                                                                    color: Colors.white,
-                                                                    fontSize: 13,
-                                                                    fontWeight: FontWeight.w700,
-                                                                    letterSpacing: -0.2,
-                                                                  ),
-                                                                ),
-                                                              ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               );
             },
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildHeader(bool isDark) {
+    return GlassGlow(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Menu',
+              style: TextStyle(
+                fontSize: 32,
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white : Colors.black87,
+                letterSpacing: -0.5,
+              ),
+            ),
+            GestureDetector(
+              onTap: _hideMenu,
+              child: LiquidStretch(
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: (isDark ? Colors.white : Colors.black)
+                        .withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.close_rounded,
+                    size: 22,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAnimatedMenuItem(
+      BuildContext context,
+      Map<String, dynamic> item,
+      bool isDark,
+      int index,
+      ) {
+    return TweenAnimationBuilder<double>(
+      duration: Duration(milliseconds: 400 + (index * 40)),
+      tween: Tween(begin: 0.0, end: 1.0),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Transform.translate(
+          offset: Offset(30 * (1 - value), 0),
+          child: Opacity(
+            opacity: value,
+            child: child,
+          ),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: LiquidStretch(
+          child: GlassGlow(
+            glowColor: isDark ? Colors.blue[300]! : Colors.blue[500]!,
+            child: LiquidGlassBlendGroup(
+              child: LiquidGlass.grouped(
+                shape: const LiquidRoundedSuperellipse(
+                  borderRadius: 16,
+                ),
+                clipBehavior: Clip.antiAlias,
+                glassContainsChild: false,
+                child: _buildMenuItemRow(
+                  context,
+                  item: item,
+                  isDark: isDark,
+                  index: index,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMenuItemRow(
+      BuildContext context, {
+        required Map<String, dynamic> item,
+        required bool isDark,
+        required int index,
+      }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          HapticFeedback.selectionClick();
+          _hideMenu();
+          Future.delayed(const Duration(milliseconds: 200), () {
+            Navigator.push(
+              context,
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) =>
+                item['navigateTo'],
+                transitionsBuilder:
+                    (context, animation, secondaryAnimation, child) {
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0.05, 0),
+                        end: Offset.zero,
+                      ).animate(
+                        CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOutCubic,
+                        ),
+                      ),
+                      child: child,
+                    ),
+                  );
+                },
+                transitionDuration: const Duration(milliseconds: 300),
+              ),
+            );
+          });
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              // Icon với Container gradient
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: isDark
+                        ? [
+                      Colors.blue[400]!.withOpacity(0.25),
+                      Colors.blue[600]!.withOpacity(0.15),
+                    ]
+                        : [
+                      Colors.blue[50]!,
+                      Colors.blue[100]!,
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  item['iconData'],
+                  size: 24,
+                  color: isDark ? Colors.blue[300] : Colors.blue[700],
+                ),
+              ),
+              const SizedBox(width: 16),
+
+              // Title & subtitle
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item['title'],
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : Colors.black87,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    if (item['subTitle'] != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          '${item['subTitle']}: ${item['balance']}',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+
+              // Badge với gradient
+              if (item['hasCount'] == true && item['count'] > 0)
+                Container(
+                  constraints: const BoxConstraints(minWidth: 28),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.blue[600]!,
+                        Colors.blue[400]!,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.blue.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    item['count'].toString(),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -533,16 +583,18 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
           _showMenu();
         }
       },
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: (isDark ? Colors.white : Colors.black).withOpacity(0.05),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Icon(
-          _isMenuOpen ? Icons.close_rounded : Icons.menu_rounded,
-          size: 24,
-          color: isDark ? Colors.white : Colors.black87,
+      child: LiquidStretch(
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: (isDark ? Colors.white : Colors.black).withOpacity(0.08),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            _isMenuOpen ? Icons.close_rounded : Icons.menu_rounded,
+            size: 24,
+            color: isDark ? Colors.white : Colors.black87,
+          ),
         ),
       ),
     );
