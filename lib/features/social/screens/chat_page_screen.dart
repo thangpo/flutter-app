@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:encrypt/encrypt.dart' as enc;   // 👈 thêm thư viện decrypt
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -46,6 +49,45 @@ class _PageChatScreenState extends State<PageChatScreen> {
     super.dispose();
   }
 
+  // ============================================================
+  // 🔐 1) DECRYPT giống ChatScreen
+  // ============================================================
+
+  String _plainTextOf(SocialPageMessage m) {
+    final raw = m.text.trim();
+    final timeStr = m.time.toString();
+
+    if (raw.isEmpty) return "";
+    if (raw.startsWith("http")) return raw; // tránh decrypt media
+
+    final dec = _tryDecryptWoWonder(raw, timeStr);
+    return dec ?? raw;
+  }
+
+  String? _tryDecryptWoWonder(String base64Text, String timeStr) {
+    if (base64Text.isEmpty || timeStr.isEmpty) return null;
+
+    try {
+      final keyStr = timeStr.padRight(16, '0').substring(0, 16);
+
+      final data = base64.decode(base64.normalize(base64Text));
+      final aes = enc.Encrypter(enc.AES(
+        enc.Key(Uint8List.fromList(utf8.encode(keyStr))),
+        mode: enc.AESMode.ecb,
+        padding: 'PKCS7',
+      ));
+
+      final decrypted = aes.decrypt(enc.Encrypted(data));
+      return decrypted.replaceAll('\x00', '').trim();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ============================================================
+  // UI
+  // ============================================================
+
   @override
   Widget build(BuildContext context) {
     final pageCtrl = context.watch<SocialPageController>();
@@ -70,13 +112,9 @@ class _PageChatScreenState extends State<PageChatScreen> {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                widget.pageTitle,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 16,
-                ),
-              ),
+              child: Text(widget.pageTitle,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600, fontSize: 16)),
             ),
           ],
         ),
@@ -96,14 +134,14 @@ class _PageChatScreenState extends State<PageChatScreen> {
                 final bool isMe = msg.position == "right";
 
                 if (i == messages.length - 1) {
-                  WidgetsBinding.instance.addPostFrameCallback(
-                        (_) => _scrollToBottom(),
-                  );
+                  WidgetsBinding.instance
+                      .addPostFrameCallback((_) => _scrollToBottom());
                 }
 
                 return Column(
-                  crossAxisAlignment:
-                  isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                  crossAxisAlignment: isMe
+                      ? CrossAxisAlignment.end
+                      : CrossAxisAlignment.start,
                   children: [
                     if (msg.reply != null)
                       _buildReplyBubble(msg.reply!, isMe),
@@ -113,9 +151,8 @@ class _PageChatScreenState extends State<PageChatScreen> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color: isMe
-                            ? Colors.blue.shade600
-                            : Colors.grey.shade300,
+                        color:
+                        isMe ? Colors.blue.shade600 : Colors.grey.shade300,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: _buildMessageBody(msg, isMe),
@@ -125,7 +162,6 @@ class _PageChatScreenState extends State<PageChatScreen> {
               },
             ),
           ),
-
           _buildInputArea(pageCtrl),
         ],
       ),
@@ -133,17 +169,17 @@ class _PageChatScreenState extends State<PageChatScreen> {
   }
 
   // ============================================================
-  // MESSAGE BODY
+  // MESSAGE BODY (UPDATE để dùng decrypt)
   // ============================================================
 
   Widget _buildMessageBody(SocialPageMessage msg, bool isMe) {
-    // 1) Media: ảnh
+    // 1) Ảnh
     if (msg.media.isNotEmpty &&
-        (msg.media.endsWith('.jpg') ||
-            msg.media.endsWith('.jpeg') ||
-            msg.media.endsWith('.png') ||
-            msg.media.endsWith('.gif') ||
-            msg.media.endsWith('.webp'))) {
+        (msg.media.endsWith(".jpg") ||
+            msg.media.endsWith(".jpeg") ||
+            msg.media.endsWith(".png") ||
+            msg.media.endsWith(".gif") ||
+            msg.media.endsWith(".webp"))) {
       return Image.network(msg.media, width: 240, fit: BoxFit.cover);
     }
 
@@ -152,19 +188,17 @@ class _PageChatScreenState extends State<PageChatScreen> {
       return Image.network(msg.stickers, width: 160);
     }
 
-    // 3) Text (đã được repo decode sẵn)
-    final text = msg.text;
+    // 3) TEXT — dùng decrypt
+    final txt = _plainTextOf(msg);
 
     return Text(
-      text.isNotEmpty ? text : "[Media]",
-      style: TextStyle(
-        color: isMe ? Colors.white : Colors.black87,
-      ),
+      txt.isNotEmpty ? txt : "[Media]",
+      style: TextStyle(color: isMe ? Colors.white : Colors.black87),
     );
   }
 
   // ============================================================
-  // REPLY BUBBLE
+  // REPLY
   // ============================================================
 
   Widget _buildReplyBubble(SocialPageReplyMessage reply, bool isMe) {
@@ -180,16 +214,13 @@ class _PageChatScreenState extends State<PageChatScreen> {
       ),
       child: Text(
         replyText.isNotEmpty ? replyText : "[Media]",
-        style: const TextStyle(
-          fontSize: 12,
-          fontStyle: FontStyle.italic,
-        ),
+        style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
       ),
     );
   }
 
   // ============================================================
-  // INPUT FIELD
+  // INPUT
   // ============================================================
 
   Widget _buildInputArea(SocialPageController pageCtrl) {
@@ -208,10 +239,6 @@ class _PageChatScreenState extends State<PageChatScreen> {
                   hintText: "Nhập tin nhắn...",
                   filled: true,
                   fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -237,7 +264,7 @@ class _PageChatScreenState extends State<PageChatScreen> {
   }
 
   // ============================================================
-  // AUTO SCROLL
+  // SCROLL
   // ============================================================
 
   void _scrollToBottom() {

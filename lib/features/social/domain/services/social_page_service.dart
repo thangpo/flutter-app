@@ -567,7 +567,7 @@ class SocialPageService implements SocialPageServiceInterface {
   @override
   Future<List<SocialPageMessage>> sendPageMessage({
     required String pageId,
-    required String recipientId,
+    required String recipientId, // người nhận tin nhắn
     required String text,
     required String messageHashId,
     MultipartFile? file,
@@ -579,7 +579,7 @@ class SocialPageService implements SocialPageServiceInterface {
     final ApiResponseModel<Response> resp =
     await socialPageRepository.sendMessageToPage(
       pageId: pageId,
-      recipientId: recipientId,
+      recipientId: recipientId,  // Đảm bảo recipientId là đúng
       text: text,
       messageHashId: messageHashId,
       file: file,
@@ -590,13 +590,11 @@ class SocialPageService implements SocialPageServiceInterface {
     );
 
     if (resp.isSuccess && resp.response != null) {
-      // Dùng parser chung cho send + fetch
-      final messages = _parsePageMessages(resp.response!);
+      final messages = socialPageRepository.parsePageMessages(resp.response!);
       if (messages.isNotEmpty) {
         return messages;
       }
 
-      // Nếu api_status != 200 mà vẫn isSuccess, xử lý giống các hàm khác
       final dynamic data = resp.response!.data;
       final String message = (data?['errors']?['error_text'] ??
           data?['message'] ??
@@ -606,15 +604,19 @@ class SocialPageService implements SocialPageServiceInterface {
     }
 
     ApiChecker.checkApi(resp);
-    return <SocialPageMessage>[]; // fallback nếu checkApi không throw
+    return <SocialPageMessage>[];  // fallback nếu checkApi không throw
   }
+
+
+
+
 
 
   /// ───────────────── PAGE CHAT: FETCH MESSAGES ─────────────────
   @override
   Future<List<SocialPageMessage>> getPageMessages({
     required String pageId,
-    required String recipientId,
+    required String recipientId,  // recipientId là người nhận tin nhắn
     int? afterMessageId,
     int? beforeMessageId,
     int limit = 20,
@@ -622,20 +624,21 @@ class SocialPageService implements SocialPageServiceInterface {
     final ApiResponseModel<Response> resp =
     await socialPageRepository.fetchPageMessages(
       pageId: pageId,
-      recipientId: recipientId,
+      recipientId: recipientId,  // Truyền recipientId là người nhận tin nhắn
       after: afterMessageId,
       before: beforeMessageId,
       limit: limit,
     );
 
     if (resp.isSuccess && resp.response != null) {
-      final messages = _parsePageMessages(resp.response!);
+      final messages = socialPageRepository.parsePageMessages(resp.response!);
       return messages;
     }
 
     ApiChecker.checkApi(resp);
-    return <SocialPageMessage>[];
+    return <SocialPageMessage>[];  // fallback nếu checkApi không throw
   }
+
 
   /// Parse response page_chat -> List<SocialPageMessage>
   List<SocialPageMessage> _parsePageMessages(Response res) {
