@@ -97,16 +97,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_page_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_page_service_interface.dart';
 
+
 // =================== FIREBASE ANALYTICS INSTANCES ===================
 final FirebaseAnalytics analytics = FirebaseAnalytics.instance;
-final FirebaseAnalyticsObserver observer =
-    FirebaseAnalyticsObserver(analytics: analytics);
+final FirebaseAnalyticsObserver observer = FirebaseAnalyticsObserver(analytics: analytics);
+
 
 // tránh mở màn nhận cuộc gọi trùng
 bool _incomingCallRouting = false;
 
 const AndroidNotificationChannel _callInviteChannel =
-    AndroidNotificationChannel(
+AndroidNotificationChannel(
   'call_invite_channel',
   'Call Invites',
   description: 'Heads-up notifications for incoming calls',
@@ -139,8 +140,7 @@ Future<void> myBackgroundMessageHandler(RemoteMessage message) async {
     }
   } on FirebaseException catch (e) {
     if (e.code == 'duplicate-app') {
-      print(
-          '⚠️ [BG] Firebase duplicate-app in background, using existing app.');
+      print('⚠️ [BG] Firebase duplicate-app in background, using existing app.');
       Firebase.app();
     } else {
       print('❌ [BG] Firebase init error in background: $e');
@@ -159,7 +159,6 @@ Future<void> _debugPrintFcmToken() async {
     print('❌ Error getting FCM token: $e');
   }
 }
-
 // =================== ANALYTICS HELPER ===================
 class AnalyticsHelper {
   // Log khi app được mở
@@ -245,8 +244,7 @@ Future<void> _showIncomingCallNotification(Map<String, dynamic> data) async {
     fullScreenIntent: true,
     ticker: 'incoming_call',
     styleInformation: const DefaultStyleInformation(true, true),
-    sound: RawResourceAndroidNotificationSound(
-        'notification'), // Tên file âm thanh (không cần đuôi .mp3)
+    sound: RawResourceAndroidNotificationSound('notification'),  // Tên file âm thanh (không cần đuôi .mp3)
   );
 
   await flutterLocalNotificationsPlugin.show(
@@ -257,6 +255,7 @@ Future<void> _showIncomingCallNotification(Map<String, dynamic> data) async {
     payload: jsonEncode(data),
   );
 }
+
 
 void _handleCallInviteOpen(Map<String, dynamic> data) {
   if (_incomingCallRouting) return;
@@ -343,7 +342,6 @@ void _handleGroupCallInviteOpen(Map<String, dynamic> data) {
       )
       .whenComplete(() => _incomingCallRouting = false);
 }
-
 /// =========================
 /// Helpers: đảm bảo navigator sẵn sàng
 /// dùng cho getInitialMessage (terminated app)
@@ -374,6 +372,7 @@ Future<void> _scheduleGroupCallInviteOpen(Map<String, dynamic> data) async {
 Future<void> main() async {
   HttpOverrides.global = MyHttpOverrides();
   WidgetsFlutterBinding.ensureInitialized();
+
 
   // =================== FIREBASE INITIALIZATION ===================
   try {
@@ -407,6 +406,7 @@ Future<void> main() async {
     }
   }
 
+
   FcmChatHandler.initialize();
 
   // =================== APP LIFECYCLE OBSERVER ===================
@@ -418,8 +418,9 @@ Future<void> main() async {
     sound: true,
   );
 
+
   NotificationSettings settings =
-      await FirebaseMessaging.instance.requestPermission(
+  await FirebaseMessaging.instance.requestPermission(
     alert: true,
     announcement: false,
     badge: true,
@@ -443,7 +444,7 @@ Future<void> main() async {
   // tạo kênh heads-up
   await flutterLocalNotificationsPlugin
       .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
+      AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(_callInviteChannel);
 
   const androidInit = AndroidInitializationSettings('notification_icon');
@@ -595,7 +596,7 @@ Future<void> main() async {
     );
     await flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+        AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(channel);
   } catch (e, st) {
     debugPrint('❌ FCM wiring error in main(): $e');
@@ -658,14 +659,13 @@ Future<void> main() async {
       // Social
       ChangeNotifierProvider(
         create: (_) =>
-            SocialController(service: di.sl<SocialServiceInterface>())
-              ..refresh(),
+        SocialController(service: di.sl<SocialServiceInterface>())
+          ..refresh(),
       ),
       ChangeNotifierProvider(create: (_) => di.sl<SocialGroupController>()),
       ChangeNotifierProvider(
           create: (_) => GroupChatController(GroupChatRepository())),
-      ChangeNotifierProvider(
-          create: (context) => di.sl<SocialPageController>()),
+      ChangeNotifierProvider(create: (context) => di.sl<SocialPageController>()),
       ChangeNotifierProvider(
         create: (_) => SocialNotificationsController(
           repo: SocialNotificationsRepository(),
@@ -725,9 +725,9 @@ class MyApp extends StatelessWidget {
         theme: themeController.darkTheme
             ? dark
             : light(
-                primaryColor: themeController.selectedPrimaryColor,
-                secondaryColor: themeController.selectedPrimaryColor,
-              ),
+          primaryColor: themeController.selectedPrimaryColor,
+          secondaryColor: themeController.selectedPrimaryColor,
+        ),
         locale: Provider.of<LocalizationController>(context).locale,
         // KHÔNG đặt const vì có delegate runtime
         localizationsDelegates: [
