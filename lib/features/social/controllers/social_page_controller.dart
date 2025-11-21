@@ -7,14 +7,10 @@ import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_page_mess.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_page_chat.dart';
-
+import 'dart:convert';
 import 'dart:async'; // cho Timer realtime
-
 import 'package:dio/dio.dart'; // nếu Lữ Bố muốn gửi file/gif/image
 
-import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_feed_page.dart';
-// XOÁ DÒNG NÀY NẾU CÓ
-import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_service_interface.dart';
 
 class SocialPageController with ChangeNotifier {
   final SocialPageServiceInterface service;
@@ -187,6 +183,20 @@ class SocialPageController with ChangeNotifier {
       return;
     }
     await refreshSuggested();
+  }
+  String _tryDecodePageMessage(String text, int time) {
+    if (text.isEmpty) return text;
+
+    // kiểm tra xem có phải base64 không
+    final base64Regex = RegExp(r'^[A-Za-z0-9+/=]+$');
+    if (!base64Regex.hasMatch(text)) return text;
+
+    try {
+      final decoded = utf8.decode(base64.decode(text));
+      return decoded;
+    } catch (_) {
+      return text;
+    }
   }
 
   Future<void> refreshSuggested() async {
@@ -614,7 +624,6 @@ class SocialPageController with ChangeNotifier {
     required int pageId,
     required String recipientId,
   }) async {
-    // Hủy timer cũ nếu có
     _chatPollingTimer?.cancel();
 
     _currentChatPageId = pageId;
@@ -634,9 +643,39 @@ class SocialPageController with ChangeNotifier {
         limit: 20,
       );
 
-      _pageMessages = initial;
+      _pageMessages = initial.map((m) {
+        return SocialPageMessage(
+          id: m.id,
+          fromId: m.fromId,
+          toId: m.toId,
+          pageId: m.pageId,
+          text: _tryDecodePageMessage(m.text, m.time),
+          media: m.media,
+          stickers: m.stickers,
+          lng: m.lng,
+          lat: m.lat,
+          time: m.time,
+          timeText: m.timeText,
+          position: m.position,
+          type: m.type,
+          fileSize: m.fileSize,
+          messageHashId: m.messageHashId,
+          displayText: _tryDecodePageMessage(m.displayText, m.time),
+          user: m.user,
+          reply: m.reply == null
+              ? null
+              : m.reply!.copyWith(
+            text: _tryDecodePageMessage(m.reply!.text, m.reply!.time),
+            displayText: _tryDecodePageMessage(
+                m.reply!.displayText, m.reply!.time),
+          ),
+        );
+      }).toList();
+
+      // 🔥🔥🔥 QUAN TRỌNG NHẤT — SORT THEO THỜI GIAN
+      _pageMessages.sort((a, b) => a.time.compareTo(b.time));
+
       if (_pageMessages.isNotEmpty) {
-        // lấy id lớn nhất làm mốc
         _lastMessageId = _pageMessages
             .map((e) => e.id)
             .reduce((a, b) => a > b ? a : b);
@@ -649,7 +688,6 @@ class SocialPageController with ChangeNotifier {
       notifyListeners();
     }
 
-    // Bật polling 2s/lần
     _chatPollingTimer = Timer.periodic(
       const Duration(seconds: 2),
           (_) => _pollNewPageMessages(),
@@ -670,8 +708,7 @@ class SocialPageController with ChangeNotifier {
     }
 
     try {
-      final List<SocialPageMessage> newer =
-      await service.getPageMessages(
+      final List<SocialPageMessage> newer = await service.getPageMessages(
         pageId: _currentChatPageId!.toString(),
         recipientId: _currentChatRecipientId!,
         afterMessageId: _lastMessageId,
@@ -680,16 +717,36 @@ class SocialPageController with ChangeNotifier {
 
       if (newer.isEmpty) return;
 
-      _pageMessages.addAll(newer);
-      _lastMessageId = _pageMessages
-          .map((e) => e.id)
-          .reduce((a, b) => a > b ? a : b);
+      _pageMessages.addAll(
+        newer.map(
+              (m) => m.copyWith(
+            text: _tryDecodePageMessage(m.text, m.time),
+            displayText: _tryDecodePageMessage(m.displayText, m.time),
+            reply: m.reply == null
+                ? null
+                : m.reply!.copyWith(
+              text: _tryDecodePageMessage(m.reply!.text, m.reply!.time),
+              displayText: _tryDecodePageMessage(
+                  m.reply!.displayText, m.reply!.time),
+            ),
+          ),
+        ),
+      );
+
+      // 🔥 MUST HAVE — SORT THEO TIME
+      _pageMessages.sort((a, b) => a.time.compareTo(b.time));
+
+      // cập nhật last ID sau khi sort
+      _lastMessageId = _pageMessages.isNotEmpty
+          ? _pageMessages.map((e) => e.id).reduce((a, b) => a > b ? a : b)
+          : null;
+
       notifyListeners();
     } catch (e, st) {
       debugPrint('_pollNewPageMessages ERROR: $e\n$st');
-      // thường không show lỗi khi poll, tránh nhảy snackbar liên tục
     }
   }
+
 
   // ============================================================
   //                    PAGE CHAT: SEND MESSAGE
@@ -732,7 +789,23 @@ class SocialPageController with ChangeNotifier {
       );
 
       if (sent.isNotEmpty) {
-        _pageMessages.addAll(sent);
+        _pageMessages.addAll(
+          sent.map((m) => m.copyWith(
+            text: _tryDecodePageMessage(m.text, m.time),
+            displayText: _tryDecodePageMessage(m.displayText, m.time),
+            reply: m.reply == null
+                ? null
+                : m.reply!.copyWith(
+              text: _tryDecodePageMessage(m.reply!.text, m.reply!.time),
+              displayText: _tryDecodePageMessage(m.reply!.displayText, m.reply!.time),
+            ),
+          )),
+        );
+
+// 🔥 SORT THEO TIME ĐỂ ĐẢM BẢO TIN MỚI LUÔN XUỐNG DƯỚI
+        _pageMessages.sort((a, b) => a.time.compareTo(b.time));
+
+
         _lastMessageId = _pageMessages
             .map((e) => e.id)
             .reduce((a, b) => a > b ? a : b);
@@ -987,6 +1060,30 @@ class SocialPageController with ChangeNotifier {
       notifyListeners();
     }
   }
+  DateTime? _safeParseDate(String raw) {
+    if (raw.isEmpty) return null;
+
+    try {
+      // thử parse chuẩn ISO
+      return DateTime.parse(raw);
+    } catch (_) {}
+
+    try {
+      // Format HH:mm (không có ngày)
+      final parts = raw.split(':');
+      if (parts.length == 2) {
+        final now = DateTime.now();
+        final hour = int.tryParse(parts[0]);
+        final minute = int.tryParse(parts[1]);
+        if (hour != null && minute != null) {
+          return DateTime(now.year, now.month, now.day, hour, minute);
+        }
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
 
   Future<void> loadPageChatList({int limit = 50, int offset = 0}) async {
     _loadingPageChatList = true;
@@ -997,6 +1094,20 @@ class SocialPageController with ChangeNotifier {
       final List<PageChatThread> list =
       await service.getPageChatList(limit: limit, offset: offset);
 
+      // 🔥 Sort không bao giờ crash
+      list.sort((a, b) {
+        final da = _safeParseDate(a.lastMessageTime);
+        final db = _safeParseDate(b.lastMessageTime);
+
+        if (da == null && db == null) {
+          return b.lastMessageTime.compareTo(a.lastMessageTime);
+        }
+        if (da == null) return 1;
+        if (db == null) return -1;
+
+        return db.compareTo(da); // Mới nhất lên đầu
+      });
+
       _pageChatList = list;
     } catch (e, st) {
       debugPrint('loadPageChatList ERROR: $e\n$st');
@@ -1006,6 +1117,7 @@ class SocialPageController with ChangeNotifier {
       notifyListeners();
     }
   }
+
 
   Future<void> refreshPageChatList() async {
     return loadPageChatList(limit: 50, offset: 0);
@@ -1096,6 +1208,17 @@ class SocialPageController with ChangeNotifier {
       }
     }
   }
+  void bumpThreadToTop(String threadId) {
+    final list = List<PageChatThread>.from(_pageChatList);
+    final index = list.indexWhere((t) => t.pageId == threadId);
+    if (index == -1) return;
+
+    final item = list.removeAt(index);
+    list.insert(0, item);
+    _pageChatList = list;
+    notifyListeners();
+  }
+
 }
 
 // ============================================================
@@ -1121,5 +1244,4 @@ class _PageListState {
     this.error,
   }) : items = items ?? <SocialGetPage>[];
 }
-
 
