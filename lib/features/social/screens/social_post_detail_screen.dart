@@ -288,6 +288,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
     );
   }
 
+
   String _sharedSubtitleDetail(BuildContext context, SocialPost post) {
     final SocialPost? shared = post.sharedPost;
     if (shared == null) return '';

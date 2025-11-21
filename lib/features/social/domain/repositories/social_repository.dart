@@ -376,6 +376,7 @@ class SocialRepository {
       );
     }
   }
+  // Report comment
   Future<ApiResponseModel<Response>> reportComment({
     required String commentId,
   }) async {
@@ -389,6 +390,32 @@ class SocialRepository {
         'comment_id': commentId,
       });
 
+      final res = await dioClient.post(
+        url,
+        data: form,
+        options: Options(contentType: Headers.multipartFormDataContentType),
+      );
+      return ApiResponseModel<Response>.withSuccess(res);
+    } catch (e) {
+      return ApiResponseModel<Response>.withError(
+        ApiErrorHandler.getMessage(e),
+      );
+    }
+  }
+// Report post
+  Future<ApiResponseModel<Response>> reportPost({
+    required String postId,
+  }) async {
+    try {
+      final token = _getSocialAccessToken();
+      final url =
+          '${AppConstants.socialBaseUrl}/${AppConstants.socialReactUri}?access_token=$token';
+
+      final form = FormData.fromMap({
+        'server_key': AppConstants.socialServerKey,
+        'post_id': postId,
+        'action': 'report', // quan trọng
+      });
       final res = await dioClient.post(
         url,
         data: form,

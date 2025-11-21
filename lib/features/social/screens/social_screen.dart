@@ -30,6 +30,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_post_
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 
 bool _listsEqual<T>(List<T> a, List<T> b) {
   if (identical(a, b)) return true;
@@ -1167,8 +1168,7 @@ class _BirthdaySection extends StatelessWidget {
 
     // ===== TEXT MULTI-LANG =====
     final String birthdayTitle =
-        getTranslated('birthday_today_title', context) ??
-            'Sinh nhật hôm nay';
+        getTranslated('birthday_today_title', context) ?? 'Sinh nhật hôm nay';
 
     final String singleTemplate =
         getTranslated('birthday_single_template', context) ??
@@ -1183,12 +1183,10 @@ class _BirthdaySection extends StatelessWidget {
             'Hôm nay sinh nhật {first} và {count} người bạn khác';
 
     final String congratulateLabel =
-        getTranslated('birthday_congratulate', context) ??
-            'Chúc mừng';
+        getTranslated('birthday_congratulate', context) ?? 'Chúc mừng';
 
     final String fallbackFriend =
-        getTranslated('birthday_friend_fallback', context) ??
-            'bạn bè';
+        getTranslated('birthday_friend_fallback', context) ?? 'bạn bè';
 
     // ===== GHÉP CÂU =====
     final SocialUser first = users.first;
@@ -1346,6 +1344,7 @@ class _BirthdaySection extends StatelessWidget {
     );
   }
 }
+
 class _StackedBirthdayAvatars extends StatelessWidget {
   final List<SocialUser> users;
   const _StackedBirthdayAvatars({required this.users});
@@ -2051,11 +2050,54 @@ class SocialPostCard extends StatelessWidget {
         await controller.deletePost(post);
         break;
       case _PostOptionsAction.report:
-        await controller.reportPost(post);
+        await _handleReportPost(context, controller, post);
         break;
+
       case _PostOptionsAction.hide:
         await controller.hidePost(post);
         break;
+    }
+  }
+  Future<void> _handleReportPost(
+      BuildContext context,
+      SocialController controller,
+      SocialPost post,
+      ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(getTranslated('report_post', ctx) ?? 'Report post'),
+        content: Text(
+          getTranslated('report_post_confirm', ctx)
+              ?? 'Are you sure you want to report this post?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(getTranslated('cancel', ctx) ?? 'Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(getTranslated('report', ctx) ?? 'Report'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+
+    try {
+      await controller.reportPost(post);
+      if (!context.mounted) return;
+      showCustomSnackBar(
+        getTranslated('post_reported', context) ?? 'Post has been reported.',
+        context,
+        isError: false,
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      showCustomSnackBar(e.toString(), context, isError: true);
     }
   }
 
