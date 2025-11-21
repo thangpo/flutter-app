@@ -49,7 +49,8 @@ bool _isPrefix<T>(List<T> prefix, List<T> complete) {
 }
 
 class SocialFeedScreen extends StatefulWidget {
-  const SocialFeedScreen({super.key});
+  final ValueChanged<bool>? onChromeVisibilityChanged;
+  const SocialFeedScreen({super.key, this.onChromeVisibilityChanged});
 
   @override
   SocialFeedScreenState createState() => SocialFeedScreenState();
@@ -64,6 +65,8 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
   List<int> _postAdSlots = <int>[];
   List<String> _eligiblePostSnapshot = <String>[];
   List<int?> _postAdIdSnapshot = <int?>[];
+  bool _chromeVisible = true;
+  double _lastScrollOffset = 0.0;
 
   @override
   bool get wantKeepAlive => true;
@@ -71,6 +74,7 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_handleScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final sc = context.read<SocialController>();
       sc.loadCurrentUser();
@@ -90,6 +94,7 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
 
   Future<void> scrollToTop() async {
     if (!_scrollController.hasClients) return;
+    _setChromeVisible(true);
     await _scrollController.animateTo(
       0,
       duration: const Duration(milliseconds: 350),
@@ -197,6 +202,7 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
 
   @override
   void dispose() {
+    _scrollController.removeListener(_handleScroll);
     _scrollController.dispose();
     super.dispose();
   }
@@ -205,6 +211,33 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
     _postAdSlots = <int>[];
     _eligiblePostSnapshot = <String>[];
     _postAdIdSnapshot = <int?>[];
+  }
+
+  void _setChromeVisible(bool visible) {
+    if (_chromeVisible == visible) return;
+    setState(() {
+      _chromeVisible = visible;
+    });
+    widget.onChromeVisibilityChanged?.call(visible);
+  }
+
+  void _handleScroll() {
+    if (!_scrollController.hasClients) return;
+    final double offset = _scrollController.position.pixels;
+    final double delta = offset - _lastScrollOffset;
+    _lastScrollOffset = offset;
+
+    if (offset <= 0) {
+      _setChromeVisible(true);
+      return;
+    }
+
+    const double threshold = 8.0;
+    if (delta > threshold) {
+      _setChromeVisible(false);
+    } else if (delta < -threshold) {
+      _setChromeVisible(true);
+    }
   }
 
   @override
@@ -325,7 +358,17 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
               ),
             ),
           ),
-          Align(alignment: Alignment.topCenter, child: const _FacebookHeader()),
+          AnimatedSlide(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeInOut,
+            offset: _chromeVisible ? Offset.zero : const Offset(0, -1),
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 180),
+              opacity: _chromeVisible ? 1 : 0,
+              child:
+                  const Align(alignment: Alignment.topCenter, child: _FacebookHeader()),
+            ),
+          ),
         ],
       ),
     );
