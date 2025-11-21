@@ -382,14 +382,11 @@ class _FacebookHeader extends StatelessWidget {
 
     final BorderRadius borderRadius = BorderRadius.circular(32);
 
-    // 👉 Lấy màu nền phía sau để quyết định sáng / tối
     final Color behindColor = Theme.of(context).scaffoldBackgroundColor;
     final bool isBehindDark = behindColor.computeLuminance() < 0.5;
 
-    // Kính header: style khác khi nền sáng / tối
     final LiquidGlassSettings headerSettings = isBehindDark
         ? const LiquidGlassSettings(
-            // nền tối -> kính sáng
             blur: 2,
             thickness: 16,
             refractiveIndex: 1.25,
@@ -397,10 +394,9 @@ class _FacebookHeader extends StatelessWidget {
             lightIntensity: 1.1,
             ambientStrength: 0.35,
             saturation: 1.08,
-            glassColor: Color(0x22FFFFFF), // trắng mỏng
+            glassColor: Color(0x22FFFFFF),
           )
         : const LiquidGlassSettings(
-            // nền sáng -> kính hơi tối để tạo tương phản
             blur: 3,
             thickness: 16,
             refractiveIndex: 1.25,
@@ -408,7 +404,7 @@ class _FacebookHeader extends StatelessWidget {
             lightIntensity: 1.0,
             ambientStrength: 0.35,
             saturation: 1.02,
-            glassColor: Color(0x22000000), // đen mỏng
+            glassColor: Color(0x22000000),
           );
 
     final Color headerBorderColor = isBehindDark
@@ -424,7 +420,7 @@ class _FacebookHeader extends StatelessWidget {
     return SafeArea(
       bottom: false,
       child: SizedBox(
-        height: _baseHeight + MediaQuery.of(context).padding.top,
+        height: _baseHeight,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
           child: LiquidGlassLayer(
@@ -447,7 +443,6 @@ class _FacebookHeader extends StatelessWidget {
                   borderRadius: borderRadius,
                   child: Stack(
                     children: [
-                      // highlight dọc rất nhẹ
                       Positioned.fill(
                         child: DecoratedBox(
                           decoration: BoxDecoration(
@@ -463,7 +458,6 @@ class _FacebookHeader extends StatelessWidget {
                           ),
                         ),
                       ),
-
                       Center(
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
@@ -480,8 +474,6 @@ class _FacebookHeader extends StatelessWidget {
                                 height: 32,
                                 fit: BoxFit.contain,
                               ),
-
-                              // ❗ Không dùng BlendGroup nữa, để icon tự blur riêng
                               _HeaderActionsRow(
                                 iconColor: onAppBar,
                                 bubbleOpacity: bubbleOpacity,
@@ -679,7 +671,6 @@ class _WhatsOnYourMind extends StatelessWidget {
     final profileCtrl = context.watch<ProfileController>();
     final fallbackProfile = profileCtrl.userInfoModel;
 
-    // âš ï¸ Äá»•i .path -> .toString() Ä‘á»ƒ NetworkImage nháº­n URL Ä‘áº§y Ä‘á»§
     final String? avatarUrl = () {
       final candidates = [
         user?.avatarUrl?.trim(),
@@ -698,7 +689,6 @@ class _WhatsOnYourMind extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
-            // ===== Avatar: báº¥m -> ProfileScreen =====
             InkWell(
               onTap: () {
                 Navigator.of(context).push(
@@ -718,11 +708,8 @@ class _WhatsOnYourMind extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-
-            // ===== Ã” â€œBáº¡n Ä‘ang nghÄ© gÃ¬?â€: báº¥m -> táº¡o post =====
             Expanded(
               child: Material(
-                // Ä‘áº£m báº£o cÃ³ Material ancestor cho InkWell
                 color: Colors.transparent,
                 child: InkWell(
                   onTap: () {
@@ -738,7 +725,7 @@ class _WhatsOnYourMind extends StatelessWidget {
                     builder: (context) {
                       final cs = Theme.of(
                         context,
-                      ).colorScheme; // <-- thÃªm dÃ²ng nÃ y
+                      ).colorScheme;
                       return Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 12,
@@ -752,8 +739,7 @@ class _WhatsOnYourMind extends StatelessWidget {
                           getTranslated(
                                 'whats_on_your_mind',
                                 context,
-                              ) // <-- sá»­a key
-                              ??
+                              ) ??
                               "What's on your mind?",
                           style: TextStyle(
                             color: cs.onSurface.withOpacity(.7),
@@ -766,14 +752,9 @@ class _WhatsOnYourMind extends StatelessWidget {
                 ),
               ),
             ),
-
             const SizedBox(width: 12),
-
-            // (tuá»³ chá»n) nÃºt +
             InkWell(
-              onTap: () {
-                /* TODO: action khÃ¡c (vÃ­ dá»¥ táº¡o story) */
-              },
+              onTap: () {},
               customBorder: const CircleBorder(),
               child: Container(
                 padding: const EdgeInsets.all(8),
@@ -1167,8 +1148,7 @@ class _BirthdaySection extends StatelessWidget {
 
     // ===== TEXT MULTI-LANG =====
     final String birthdayTitle =
-        getTranslated('birthday_today_title', context) ??
-            'Sinh nhật hôm nay';
+        getTranslated('birthday_today_title', context) ?? 'Sinh nhật hôm nay';
 
     final String singleTemplate =
         getTranslated('birthday_single_template', context) ??
@@ -1183,12 +1163,10 @@ class _BirthdaySection extends StatelessWidget {
             'Hôm nay sinh nhật {first} và {count} người bạn khác';
 
     final String congratulateLabel =
-        getTranslated('birthday_congratulate', context) ??
-            'Chúc mừng';
+        getTranslated('birthday_congratulate', context) ?? 'Chúc mừng';
 
     final String fallbackFriend =
-        getTranslated('birthday_friend_fallback', context) ??
-            'bạn bè';
+        getTranslated('birthday_friend_fallback', context) ?? 'bạn bè';
 
     // ===== GHÉP CÂU =====
     final SocialUser first = users.first;
@@ -1346,6 +1324,7 @@ class _BirthdaySection extends StatelessWidget {
     );
   }
 }
+
 class _StackedBirthdayAvatars extends StatelessWidget {
   final List<SocialUser> users;
   const _StackedBirthdayAvatars({required this.users});
