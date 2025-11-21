@@ -1,6 +1,9 @@
 // G:\flutter-app\lib\features\social\screens\group_chat_screen.dart
 import 'dart:io';
 import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -669,10 +672,96 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   }
 
   Future<void> _leaveGroup() async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Tính năng rời nhóm: chờ kết nối API')),
+    // Hỏi confirm trước
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rời nhóm'),
+        content: const Text('Bạn chắc chắn muốn rời nhóm này?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Hủy'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Rời nhóm'),
+          ),
+        ],
+      ),
     );
+
+    if (confirm != true) return;
+
+    try {
+      // Lấy access_token lưu trong local
+      final sp = await SharedPreferences.getInstance();
+      final token = sp.getString(AppConstants.socialAccessToken) ?? '';
+
+      if (token.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content:
+                  Text('Không tìm thấy access token, vui lòng đăng nhập lại')),
+        );
+        return;
+      }
+
+     
+      final uri = Uri.parse(
+        '${AppConstants.socialBaseUrl}/api/group_chat?access_token=$token',
+      );
+
+      final req = http.MultipartRequest('POST', uri)
+        ..fields['server_key'] =
+            AppConstants.socialServerKey // nhớ đúng key hằng số
+        ..fields['type'] = 'leave'
+        ..fields['id'] = widget.groupId; // ví dụ "8"
+
+      final streamed = await req.send();
+      final body = await streamed.stream.bytesToString();
+
+      Map<String, dynamic>? json;
+      try {
+        json = jsonDecode(body) as Map<String, dynamic>;
+      } catch (_) {
+        json = null;
+      }
+
+      final success = streamed.statusCode == 200 &&
+          json != null &&
+          json!['api_status'] == 200;
+
+      if (!mounted) return;
+
+      if (success) {
+        // Option: reload list group trước khi pop, nếu bố muốn
+        // await context.read<GroupChatController>().loadGroups();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Bạn đã rời nhóm thành công')),
+        );
+
+        // Thoát khỏi màn chat nhóm
+        Navigator.of(context).pop();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Rời nhóm thất bại: ${json?['message_data'] ?? 'Vui lòng thử lại'}',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lỗi rời nhóm: $e')),
+      );
+    }
   }
+
 
   Future<void> _deleteConversation() async {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -830,10 +919,26 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     );
   }
 
-    void _openGroupInfoSheet() {
-    final avatarProvider =
-        _finalAvatarProvider(context.read<GroupChatController>());
-    final name = _finalTitle(context.read<GroupChatController>());
+  Future<void> _openGroupInfoSheet() async {
+    final gc = context.read<GroupChatController>();
+
+    // ---- Check mình có phải chủ nhóm không ----
+    bool isOwner = false;
+    try {
+      await gc.loadGroupMembers(widget.groupId);
+      final members = gc.membersOf(widget.groupId);
+      final meId = gc.currentUserId?.toString();
+
+      isOwner = members.any((m) {
+        final mIsOwner = '${m['is_owner']}' == '1';
+        final uid = '${m['user_id'] ?? m['id'] ?? ''}';
+        return mIsOwner && uid == meId;
+      });
+    } catch (_) {}
+
+    final avatarProvider = _finalAvatarProvider(gc);
+    final name = _finalTitle(gc);
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -889,42 +994,62 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                           default:
                         }
                       },
-                      itemBuilder: (ctx) => [
-                        PopupMenuItem(
-                          value: 'bubble',
-                          child:
-                              Text(getTranslated('open_chat_bubble', context)!),
-                        ),
-                        PopupMenuItem(
-                          value: 'change_photo',
-                          child: Text(
-                              getTranslated('change_group_photo', context)!),
-                        ),
-                        PopupMenuItem(
-                          value: 'change_name',
-                          child: Text(getTranslated('change_name', context)!),
-                        ),
-                        PopupMenuItem(
-                          value: 'delete',
-                          child: Text(
-                              getTranslated('delete_conversation', context)!),
-                        ),
-                        PopupMenuItem(
-                          value: 'leave',
-                          child: Text(getTranslated('leave_group', context)!),
-                        ),
-                        PopupMenuItem(
-                          value: 'report',
-                          child: Text(getTranslated(
-                              'report_technical_issue', context)!),
-                        ),
-                      ],
-                    )
+                      itemBuilder: (ctx) {
+                        final items = <PopupMenuEntry<String>>[
+                          
+                          // Nếu là chủ nhóm thì hiện "Đổi ảnh" và "Đổi tên", nếu không thì ẩn
+                          if (isOwner) ...[
+                            PopupMenuItem(
+                              value: 'change_photo',
+                              child: Text(
+                                getTranslated('change_group_photo', context)!,
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'change_name',
+                              child: Text(
+                                getTranslated('change_name', context)!,
+                              ),
+                            ),
+                          ],
+                          PopupMenuItem(
+                            value: 'delete',
+                            child: Text(
+                              getTranslated('delete_conversation', context)!,
+                            ),
+                          ),
+                        ];
+
+                        // 🚫 Nếu là chủ nhóm thì KHÔNG thêm menu "Rời nhóm"
+                        if (!isOwner) {
+                          items.add(
+                            PopupMenuItem(
+                              value: 'leave',
+                              child: Text(
+                                getTranslated('leave_group', context)!,
+                              ),
+                            ),
+                          );
+                        }
+
+                        items.add(
+                          PopupMenuItem(
+                            value: 'report',
+                            child: Text(
+                              getTranslated('report_technical_issue', context)!,
+                            ),
+                          ),
+                        );
+
+                        return items;
+                      },
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
 
-                // Avatar + name + online dot
+                // Tiếp theo là các phần khác của group info giữ nguyên.
+                // Avatar + tên nhóm + online status
                 Stack(
                   children: [
                     CircleAvatar(
