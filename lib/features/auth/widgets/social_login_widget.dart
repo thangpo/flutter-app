@@ -23,7 +23,7 @@ import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/features/dashboard/screens/dashboard_screen.dart';
 import 'package:provider/provider.dart';
-import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+// import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/firebase_token_updater.dart';
 
 class SocialLoginWidget extends StatefulWidget {
@@ -76,17 +76,17 @@ class SocialLoginWidgetState extends State<SocialLoginWidget> {
                 ),
               ),),
 
-            if(socialLoginConfig?.apple == 1 && defaultTargetPlatform == TargetPlatform.iOS)
-              Expanded(
-                child: InkWell(
-                  onTap: () => appleLogin(context),
-                  child: SocialLoginButtonWidget(
-                    text: getTranslated('continue_with_apple', context)!,
-                    image: Images.appleLogo,
-                    color: Theme.of(context).textTheme.bodyMedium?.color,
-                  ),
-                ),
-              ),
+            // if(socialLoginConfig?.apple == 1 && defaultTargetPlatform == TargetPlatform.iOS)
+            //   Expanded(
+            //     child: InkWell(
+            //       onTap: () => appleLogin(context),
+            //       child: SocialLoginButtonWidget(
+            //         text: getTranslated('continue_with_apple', context)!,
+            //         image: Images.appleLogo,
+            //         color: Theme.of(context).textTheme.bodyMedium?.color,
+            //       ),
+            //     ),
+            //   ),
           ]);
         } else if(socialLoginList.length == 2){
           return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -117,18 +117,18 @@ class SocialLoginWidgetState extends State<SocialLoginWidget> {
                   : const SizedBox.shrink(),
             ],
 
-            if(socialLoginConfig?.apple == 1 && defaultTargetPlatform == TargetPlatform.iOS)...[
-              Expanded(
-                child: InkWell(
-                  onTap: () => appleLogin(context),
-                  child: SocialLoginButtonWidget(
-                    text: getTranslated('continue_with_apple', context)!,
-                    image: Images.appleLogo,
-                    color: Theme.of(context).textTheme.bodyMedium?.color,
-                  ),
-                ),
-              ),
-            ],
+            // if(socialLoginConfig?.apple == 1 && defaultTargetPlatform == TargetPlatform.iOS)...[
+            //   Expanded(
+            //     child: InkWell(
+            //       onTap: () => appleLogin(context),
+            //       child: SocialLoginButtonWidget(
+            //         text: getTranslated('continue_with_apple', context)!,
+            //         image: Images.appleLogo,
+            //         color: Theme.of(context).textTheme.bodyMedium?.color,
+            //       ),
+            //     ),
+            //   ),
+            // ],
 
           ]);
         }   else if(socialLoginList.length == 3){
@@ -153,17 +153,17 @@ class SocialLoginWidgetState extends State<SocialLoginWidget> {
             ),
             const SizedBox(width: Dimensions.paddingSizeLarge),
           ],
-          if (socialLoginConfig?.apple == 1 &&
-              defaultTargetPlatform == TargetPlatform.iOS) ...[
-            InkWell(
-              onTap: () => appleLogin(context),
-              child: SocialLoginButtonWidget(
-                image: Images.appleLogo,
-                color: Theme.of(context).textTheme.bodyMedium?.color,
-                padding: const EdgeInsets.all(Dimensions.paddingSizeSmall),
-              ),
-            ),
-          ],
+          // if (socialLoginConfig?.apple == 1 &&
+          //     defaultTargetPlatform == TargetPlatform.iOS) ...[
+          //   InkWell(
+          //     onTap: () => appleLogin(context),
+          //     child: SocialLoginButtonWidget(
+          //       image: Images.appleLogo,
+          //       color: Theme.of(context).textTheme.bodyMedium?.color,
+          //       padding: const EdgeInsets.all(Dimensions.paddingSizeSmall),
+          //     ),
+          //   ),
+          // ],
         ]);
       } else {
         return Container(
@@ -392,34 +392,34 @@ Future<void> facebookLogin(BuildContext context) async {
   }
 }
 
-Future<void> appleLogin(BuildContext context) async {
-  SocialLoginModel socialLogin = SocialLoginModel();
-  try {
-    String? id, token, email, medium;
-    final credential = await SignInWithApple.getAppleIDCredential(scopes: [
-      AppleIDAuthorizationScopes.email,
-      AppleIDAuthorizationScopes.fullName
-    ]);
-
-
-
-    id = credential.authorizationCode;
-    email = await Provider.of<AuthController>(Get.context!, listen: false).onConfigurationAppleEmail(credential);
-
-    token = credential.authorizationCode;
-    medium = 'apple';
-    socialLogin.email = email;
-    socialLogin.medium = medium;
-    socialLogin.token = token;
-    socialLogin.uniqueId = id;
-    socialLogin.name = credential.givenName ?? '';
-    await Provider.of<AuthController>(Get.context!, listen: false).socialLogin(socialLogin, route);
-
-    log('id token =>${credential.identityToken}\n===> Identifier${credential.userIdentifier}\n==>Given Name ${credential.familyName}');
-  } catch (er) {
-    debugPrint('access token error is : $er');
-  }
-}
+// Future<void> appleLogin(BuildContext context) async {
+//   SocialLoginModel socialLogin = SocialLoginModel();
+//   try {
+//     String? id, token, email, medium;
+//     final credential = await SignInWithApple.getAppleIDCredential(scopes: [
+//       AppleIDAuthorizationScopes.email,
+//       AppleIDAuthorizationScopes.fullName
+//     ]);
+//
+//
+//
+//     id = credential.authorizationCode;
+//     email = await Provider.of<AuthController>(Get.context!, listen: false).onConfigurationAppleEmail(credential);
+//
+//     token = credential.authorizationCode;
+//     medium = 'apple';
+//     socialLogin.email = email;
+//     socialLogin.medium = medium;
+//     socialLogin.token = token;
+//     socialLogin.uniqueId = id;
+//     socialLogin.name = credential.givenName ?? '';
+//     await Provider.of<AuthController>(Get.context!, listen: false).socialLogin(socialLogin, route);
+//
+//     log('id token =>${credential.identityToken}\n===> Identifier${credential.userIdentifier}\n==>Given Name ${credential.familyName}');
+//   } catch (er) {
+//     debugPrint('access token error is : $er');
+//   }
+// }
 
 class SocialLoginButtonWidget extends StatelessWidget {
   final String? text;

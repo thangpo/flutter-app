@@ -34,7 +34,7 @@ import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakba
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
-import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+// import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/firebase_token_updater.dart';
 
 class AuthController with ChangeNotifier {
@@ -189,17 +189,17 @@ class AuthController with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<String> onConfigurationAppleEmail(
-      AuthorizationCredentialAppleID credential) async {
-    final email = credential.email;
-
-    if (email != null && email.isNotEmpty && email != 'null') {
-      await authServiceInterface.setAppleLoginEmail(email);
-      return email;
-    }
-
-    return authServiceInterface.getAppleLoginEmail();
-  }
+  // Future<String> onConfigurationAppleEmail(
+  //     AuthorizationCredentialAppleID credential) async {
+  //   final email = credential.email;
+  //
+  //   if (email != null && email.isNotEmpty && email != 'null') {
+  //     await authServiceInterface.setAppleLoginEmail(email);
+  //     return email;
+  //   }
+  //
+  //   return authServiceInterface.getAppleLoginEmail();
+  // }
 
   Future registration(
       RegisterModel register, Function callback, ConfigModel config) async {

@@ -211,39 +211,39 @@ class _OnlySocialLoginWidgetState extends State<OnlySocialLoginWidget> {
 
                     Expanded(child: Container()),
 
-                    Expanded(flex: 4,
-                      child: Consumer<AuthController>(
-                          builder: (context, authProvider, child) {
-                            return InkWell(
-                              onTap: () => appleLogin(context),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: Dimensions.paddingSizeDefault),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).hintColor.withValues(alpha:0.08),
-                                  borderRadius: BorderRadius.circular(Dimensions.radiusSmall),
-                                  border: Border.all(color: Theme.of(context).primaryColor.withValues(alpha:0.1)),
-                                ),
-                                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-
-                                  Image.asset(
-                                    Images.appleLogo, color: Theme.of(context).textTheme.bodyMedium?.color,
-                                    height: ResponsiveHelper.isTab(context) ? 20 : 15,
-                                    width: ResponsiveHelper.isTab(context) ? 20 : 15,
-                                  ),
-                                  const SizedBox(width: Dimensions.paddingSizeExtraSmall),
-
-
-                                  Text(getTranslated("continue_with_apple", context)!, style: robotoBold.copyWith(
-                                    fontSize: Dimensions.fontSizeDefault,
-                                    color: Theme.of(context).textTheme.bodyMedium?.color,
-                                  )),
-
-                                ],),
-                              ),
-                            );
-                          }
-                      ),
-                    ),
+                    // Expanded(flex: 4,
+                    //   child: Consumer<AuthController>(
+                    //       builder: (context, authProvider, child) {
+                    //         return InkWell(
+                    //           onTap: () => appleLogin(context),
+                    //           child: Container(
+                    //             padding: const EdgeInsets.symmetric(vertical: Dimensions.paddingSizeDefault),
+                    //             decoration: BoxDecoration(
+                    //               color: Theme.of(context).hintColor.withValues(alpha:0.08),
+                    //               borderRadius: BorderRadius.circular(Dimensions.radiusSmall),
+                    //               border: Border.all(color: Theme.of(context).primaryColor.withValues(alpha:0.1)),
+                    //             ),
+                    //             child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    //
+                    //               Image.asset(
+                    //                 Images.appleLogo, color: Theme.of(context).textTheme.bodyMedium?.color,
+                    //                 height: ResponsiveHelper.isTab(context) ? 20 : 15,
+                    //                 width: ResponsiveHelper.isTab(context) ? 20 : 15,
+                    //               ),
+                    //               const SizedBox(width: Dimensions.paddingSizeExtraSmall),
+                    //
+                    //
+                    //               Text(getTranslated("continue_with_apple", context)!, style: robotoBold.copyWith(
+                    //                 fontSize: Dimensions.fontSizeDefault,
+                    //                 color: Theme.of(context).textTheme.bodyMedium?.color,
+                    //               )),
+                    //
+                    //             ],),
+                    //           ),
+                    //         );
+                    //       }
+                    //   ),
+                    // ),
 
                     Expanded(child: Container()),
 
