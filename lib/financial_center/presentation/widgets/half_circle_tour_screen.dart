@@ -1,11 +1,13 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/services/tour_service.dart';
-import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/tours_list_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
 import 'package:provider/provider.dart';
 import '../services/location_service.dart';
 import '../screens/tour_detail_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/services/tour_service.dart';
+import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/tours_list_screen.dart';
+
+
 
 class HalfCircleTourScreen extends StatefulWidget {
   final LocationModel location;
