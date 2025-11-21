@@ -17,6 +17,15 @@ import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dar
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/add_group_members_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_call_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/group_call_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_chat_repository.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:video_player/video_player.dart';
+
+
 
 class GroupChatScreen extends StatefulWidget {
   final String groupId;
@@ -821,7 +830,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     );
   }
 
-  void _openGroupInfoSheet() {
+    void _openGroupInfoSheet() {
     final avatarProvider =
         _finalAvatarProvider(context.read<GroupChatController>());
     final name = _finalTitle(context.read<GroupChatController>());
@@ -833,198 +842,248 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Top bar with menu
-              Row(
-                children: [
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Center(
-                      child: Text(
-                        getTranslated('chat_info', context)!,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
+        return DefaultTabController(
+          length: 3, // Ảnh/Video, File, Link
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Top bar with menu
+                Row(
+                  children: [
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          getTranslated('chat_info', context)!,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert),
-                    onSelected: (v) async {
-                      switch (v) {
-                        case 'change_photo':
-                          await _pickNewAvatar();
-                          break;
-                        case 'change_name':
-                          await _changeGroupName();
-                          break;
-                        case 'delete':
-                          await _deleteConversation();
-                          break;
-                        case 'leave':
-                          await _leaveGroup();
-                          break;
-                        case 'report':
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text('Đã ghi nhận báo cáo')),
-                          );
-                          break;
-                        default:
-                      }
-                    },
-                    itemBuilder: (ctx) => [
-                      PopupMenuItem(
-                        value: 'bubble',
-                        child:
-                            Text(getTranslated('open_chat_bubble', context)!),
-                      ),
-                      PopupMenuItem(
-                        value: 'change_photo',
-                        child:
-                            Text(getTranslated('change_group_photo', context)!),
-                      ),
-                      PopupMenuItem(
-                        value: 'change_name',
-                        child: Text(getTranslated('change_name', context)!),
-                      ),
-                      PopupMenuItem(
-                        value: 'delete',
-                        child: Text(
-                            getTranslated('delete_conversation', context)!),
-                      ),
-                      PopupMenuItem(
-                        value: 'leave',
-                        child: Text(getTranslated('leave_group', context)!),
-                      ),
-                      PopupMenuItem(
-                        value: 'report',
-                        child: Text(
-                            getTranslated('report_technical_issue', context)!),
-                      ),
-                    ],
-                  )
-                ],
-              ),
-              const SizedBox(height: 8),
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert),
+                      onSelected: (v) async {
+                        switch (v) {
+                          case 'change_photo':
+                            await _pickNewAvatar();
+                            break;
+                          case 'change_name':
+                            await _changeGroupName();
+                            break;
+                          case 'delete':
+                            await _deleteConversation();
+                            break;
+                          case 'leave':
+                            await _leaveGroup();
+                            break;
+                          case 'report':
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text('Đã ghi nhận báo cáo')),
+                            );
+                            break;
+                          default:
+                        }
+                      },
+                      itemBuilder: (ctx) => [
+                        PopupMenuItem(
+                          value: 'bubble',
+                          child:
+                              Text(getTranslated('open_chat_bubble', context)!),
+                        ),
+                        PopupMenuItem(
+                          value: 'change_photo',
+                          child: Text(
+                              getTranslated('change_group_photo', context)!),
+                        ),
+                        PopupMenuItem(
+                          value: 'change_name',
+                          child: Text(getTranslated('change_name', context)!),
+                        ),
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: Text(
+                              getTranslated('delete_conversation', context)!),
+                        ),
+                        PopupMenuItem(
+                          value: 'leave',
+                          child: Text(getTranslated('leave_group', context)!),
+                        ),
+                        PopupMenuItem(
+                          value: 'report',
+                          child: Text(getTranslated(
+                              'report_technical_issue', context)!),
+                        ),
+                      ],
+                    )
+                  ],
+                ),
+                const SizedBox(height: 8),
 
-              // Avatar + name + online dot
-              Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 42,
-                    backgroundImage: avatarProvider,
-                    child: avatarProvider == null
-                        ? const Icon(Icons.group, size: 40)
-                        : null,
-                  ),
-                  Positioned(
-                    right: 2,
-                    bottom: 2,
-                    child: Container(
-                      width: 14,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        color: Colors.green,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
+                // Avatar + name + online dot
+                Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 42,
+                      backgroundImage: avatarProvider,
+                      child: avatarProvider == null
+                          ? const Icon(Icons.group, size: 40)
+                          : null,
+                    ),
+                    Positioned(
+                      right: 2,
+                      bottom: 2,
+                      child: Container(
+                        width: 14,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: Colors.green,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(name,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w600, fontSize: 18)),
-              const SizedBox(height: 12),
-
-              // Row actions: call / video / add / mute
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _circleAction(
-                    icon: Icons.call,
-                    label: getTranslated('voice_call', context)!,
-                    onTap: () => _startGroupCall(isVideo: false),
-                  ),
-                  _circleAction(
-                    icon: Icons.videocam,
-                    label: getTranslated('video_call', context)!,
-                    onTap: () => _startGroupCall(isVideo: true),
-                  ),
-                  _circleAction(
-                    icon: Icons.group_add,
-                    label: getTranslated('add_members', context)!,
-                    onTap: _openAddMembersPicker,
-                  ),
-                  _circleAction(
-                    icon: Icons.group,
-                    label: getTranslated('members', context)!,
-                    onTap: _openMembersSheet,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              // Hiển thị danh sách thành viên trong sheet
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 12, bottom: 6),
-                  child: Text(
-                    getTranslated('group_members', context)!,
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(name,
                     style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
+                        fontWeight: FontWeight.w600, fontSize: 18)),
+                const SizedBox(height: 12),
+
+                // Row actions: call / video / add / mute
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _circleAction(
+                      icon: Icons.call,
+                      label: getTranslated('voice_call', context)!,
+                      onTap: () => _startGroupCall(isVideo: false),
+                    ),
+                    _circleAction(
+                      icon: Icons.videocam,
+                      label: getTranslated('video_call', context)!,
+                      onTap: () => _startGroupCall(isVideo: true),
+                    ),
+                    _circleAction(
+                      icon: Icons.group_add,
+                      label: getTranslated('add_members', context)!,
+                      onTap: _openAddMembersPicker,
+                    ),
+                    _circleAction(
+                      icon: Icons.group,
+                      label: getTranslated('members', context)!,
+                      onTap: _openMembersSheet,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // Tiêu đề "group_members" + chủ nhóm (giữ nguyên)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 12, bottom: 6),
+                    child: Text(
+                      getTranslated('group_members', context)!,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              FutureBuilder(
-                future: context
-                    .read<GroupChatController>()
-                    .loadGroupMembers(widget.groupId),
-                builder: (ctx2, snapshot) {
-                  final ctrl = context.read<GroupChatController>();
-                  final members = ctrl.membersOf(widget.groupId);
-                  // Lấy ra chủ nhóm
-                  final owners =
-                      members.where((m) => '${m['is_owner']}' == '1').toList();
+                FutureBuilder(
+                  future: context
+                      .read<GroupChatController>()
+                      .loadGroupMembers(widget.groupId),
+                  builder: (ctx2, snapshot) {
+                    final ctrl = context.read<GroupChatController>();
+                    final members = ctrl.membersOf(widget.groupId);
+                    final owners = members
+                        .where((m) => '${m['is_owner']}' == '1')
+                        .toList();
 
-                  if (owners.isEmpty) {
-                    return Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Text(
-                        getTranslated('no_group_owner_found', context)!,
+                    if (owners.isEmpty) {
+                      return Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Text(
+                          getTranslated('no_group_owner_found', context)!,
+                        ),
+                      );
+                    }
+
+                    final m = owners.first;
+                    final name =
+                        '${m['name'] ?? m['username'] ?? 'Người dùng'}';
+                    final avatar = '${m['avatar'] ?? ''}';
+
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundImage:
+                            avatar.isNotEmpty ? NetworkImage(avatar) : null,
+                        child: avatar.isEmpty
+                            ? const Icon(Icons.person, size: 22)
+                            : null,
                       ),
+                      title: Text(name,
+                          style: const TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle:
+                          Text('👑 ${getTranslated('group_owner', context)!}'),
                     );
-                  }
+                  },
+                ),
 
-                  final m = owners.first;
-                  final name = '${m['name'] ?? m['username'] ?? 'Người dùng'}';
-                  final avatar = '${m['avatar'] ?? ''}';
+                const SizedBox(height: 12),
 
-                  return ListTile(
-                    leading: CircleAvatar(
-                      backgroundImage:
-                          avatar.isNotEmpty ? NetworkImage(avatar) : null,
-                      child: avatar.isEmpty
-                          ? const Icon(Icons.person, size: 22)
-                          : null,
-                    ),
-                    title: Text(name,
-                        style: const TextStyle(fontWeight: FontWeight.w600)),
-                    subtitle:
-                        Text('👑 ${getTranslated('group_owner', context)!}'),
-                  );
-                },
-              ),
-            ],
+                // ====== TAB MEDIA ======
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TabBar(
+                    isScrollable: true,
+                    labelColor: Theme.of(context).primaryColor,
+                    unselectedLabelColor: Colors.black54,
+                    indicatorColor: Theme.of(context).primaryColor,
+                    tabs: const [
+                      Tab(text: 'Ảnh / Video'),
+                      Tab(text: 'File'),
+                      Tab(text: 'Link'),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                SizedBox(
+                  height: 260,
+                  child: TabBarView(
+                    children: [
+                      _GroupMediaTab(
+                        groupId: widget.groupId,
+                        mediaType: 'images',
+                        labelEmpty: 'Chưa có ảnh / video',
+                        isFileLike: false,
+                      ),
+                      _GroupMediaTab(
+                        groupId: widget.groupId,
+                        mediaType: 'docs',
+                        labelEmpty: 'Chưa có tệp nào',
+                        isFileLike: true,
+                      ),
+                      _GroupMediaTab(
+                        groupId: widget.groupId,
+                        mediaType: 'links',
+                        labelEmpty: 'Chưa có link nào',
+                        isFileLike: true,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -1918,6 +1977,632 @@ class _SwipeReplyWrapperState extends State<_SwipeReplyWrapper> {
             child: widget.child,
           ),
         ],
+      ),
+    );
+  }
+
+
+
+  
+}
+
+
+class _GroupMediaTab extends StatefulWidget {
+  final String groupId;
+  final String mediaType; // images | videos | audio | links | docs
+  final String labelEmpty;
+  final bool isFileLike; // true = ListTile (file/link), false = grid
+
+  const _GroupMediaTab({
+    required this.groupId,
+    required this.mediaType,
+    required this.labelEmpty,
+    required this.isFileLike,
+  });
+
+  @override
+  State<_GroupMediaTab> createState() => _GroupMediaTabState();
+}
+
+class _GroupMediaTabState extends State<_GroupMediaTab> {
+  final SocialChatRepository _repo = SocialChatRepository();
+
+  bool _loading = false;
+  List<Map<String, dynamic>> _items = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAll();
+  }
+
+  // ============= LOAD DATA =============
+
+  Future<void> _loadAll() async {
+    setState(() {
+      _loading = true;
+      _items = [];
+    });
+
+    try {
+      final sp = await SharedPreferences.getInstance();
+      final token = sp.getString(AppConstants.socialAccessToken) ?? '';
+      if (token.isEmpty) {
+        setState(() => _loading = false);
+        return;
+      }
+
+      final List<String> types;
+      if (widget.mediaType == 'images') {
+        // Tab 1: Ảnh / Video
+        types = ['images', 'videos'];
+      } else if (widget.mediaType == 'docs') {
+        // Tab 2: File -> gộp cả docs + audio (voice, nhạc...)
+        types = ['docs', 'audio'];
+      } else {
+        // Tab 3: links (hoặc loại khác nếu sau này thêm)
+        types = [widget.mediaType];
+      }
+
+      final List<Map<String, dynamic>> fetched = [];
+      for (final t in types) {
+        final list = await _repo.getChatMedia(
+          token: token,
+          groupId: widget.groupId,
+          mediaType: t,
+          limit: 50,
+          offset: 0,
+        );
+        fetched.addAll(list);
+      }
+
+      // Dedupe theo (id + media_url)
+      final seen = <String>{};
+      final result = <Map<String, dynamic>>[];
+
+      for (final raw in fetched) {
+        final m = Map<String, dynamic>.from(raw);
+        final id = '${m['id'] ?? m['message_id'] ?? ''}';
+        final mediaUrl = _getMediaUrl(m);
+        final key = '$id|$mediaUrl';
+        if (key.trim().isEmpty) continue;
+        if (seen.add(key)) {
+          result.add(m);
+        }
+      }
+
+
+      if (!mounted) return;
+      setState(() {
+        _items = result;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _items = [];
+      });
+    }
+  }
+
+  // ============= HELPERS =============
+
+  String _string(dynamic v) => v?.toString() ?? '';
+
+  /// URL media chính (đã được SocialChatRepository hydrate sẵn)
+  String _getMediaUrl(Map<String, dynamic> m) {
+    final v = _string(m['media_url']);
+    if (v.isNotEmpty) return v;
+    return _string(m['media']);
+  }
+
+  String _resolveUrl(String? raw) {
+    if (raw == null) return '';
+    var url = raw.trim();
+    if (url.isEmpty) return '';
+
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+
+    final base = AppConstants.socialBaseUrl;
+    if (url.startsWith('/')) {
+      return '$base$url';
+    }
+    return '$base/$url';
+  }
+
+  String _getKind(Map<String, dynamic> m) {
+    return _string(m['type'] ?? m['media_type'] ?? m['file_type'])
+        .toLowerCase();
+  }
+
+  String _getFileName(Map<String, dynamic> m) {
+    final cands = [
+      'file_name',
+      'filename',
+      'name',
+      'title',
+      'text',
+    ];
+    for (final k in cands) {
+      final v = _string(m[k]);
+      if (v.isNotEmpty) return v;
+    }
+    final url = _getMediaUrl(m);
+    if (url.isNotEmpty) {
+      final path = url.split('?').first;
+      final segs = path.split('/');
+      if (segs.isNotEmpty) return segs.last;
+    }
+    return 'File';
+  }
+
+  String _extFrom(Map<String, dynamic> m) {
+    final url = _getMediaUrl(m);
+    final name = url.isNotEmpty ? url : _getFileName(m);
+    final path = name.split('?').first;
+    final dot = path.lastIndexOf('.');
+    if (dot != -1 && dot != path.length - 1) {
+      return path.substring(dot + 1).toLowerCase();
+    }
+    return '';
+  }
+
+  // Theo list bố đưa
+  bool _isImageExt(String ext) =>
+      ['jpg', 'jpeg', 'png', 'gif'].contains(ext);
+
+  bool _isVideoExt(String ext) =>
+      ['mkv', 'mp4', 'flv', 'mov', 'avi', 'webm', 'mpeg'].contains(ext);
+
+  bool _isAudioExt(String ext) =>
+      ['mp3', 'm4a', 'aac', 'ogg', 'wav'].contains(ext);
+
+  IconData _fileIcon(String ext, Map<String, dynamic> m) {
+    final kind = _getKind(m);
+
+    if (_isImageExt(ext) ||
+        kind == 'image' ||
+        kind == 'photo' ||
+        kind == 'photos' ||
+        m['is_image'] == true) {
+      return Icons.image;
+    }
+    if (_isVideoExt(ext) || kind == 'video' || m['is_video'] == true) {
+      return Icons.movie;
+    }
+    if (_isAudioExt(ext) ||
+        kind == 'audio' ||
+        kind == 'sound' ||
+        m['is_audio'] == true) {
+      return Icons.audiotrack;
+    }
+
+    if (ext == 'apk') return Icons.android;
+    if (ext == 'pdf') return Icons.picture_as_pdf;
+    if (['doc', 'docx', 'txt'].contains(ext)) return Icons.description;
+    if (['zip', 'rar'].contains(ext)) return Icons.archive;
+
+    return Icons.insert_drive_file;
+  }
+
+  String _formatUnix(String s) {
+    final n = int.tryParse(s);
+    if (n == null) return s;
+    final dt =
+        DateTime.fromMillisecondsSinceEpoch(n * 1000, isUtc: true).toLocal();
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${two(dt.day)}/${two(dt.month)}/${dt.year}  ${two(dt.hour)}:${two(dt.minute)}';
+  }
+
+  String _getTimeText(Map<String, dynamic> m) {
+    final v = _string(m['time_text'] ?? m['date'] ?? m['time']);
+    if (v.isEmpty) return '';
+    if (RegExp(r'^\d{9,}$').hasMatch(v)) {
+      return _formatUnix(v);
+    }
+    return v;
+  }
+
+  String _getFileSize(Map<String, dynamic> m) {
+    final raw = _string(
+      m['file_size'] ?? m['size'] ?? m['file_size_formatted'],
+    );
+    if (raw.isEmpty) return '';
+    // nếu server đã format sẵn thì trả luôn
+    if (raw.contains('KB') || raw.contains('MB') || raw.contains('GB')) {
+      return raw;
+    }
+    final n = double.tryParse(raw);
+    if (n == null) return '';
+    double bytes = n;
+    if (bytes < 1024) return '${bytes.toStringAsFixed(0)} B';
+    double kb = bytes / 1024;
+    if (kb < 1024) return '${kb.toStringAsFixed(1)} KB';
+    double mb = kb / 1024;
+    if (mb < 1024) return '${mb.toStringAsFixed(1)} MB';
+    double gb = mb / 1024;
+    return '${gb.toStringAsFixed(1)} GB';
+  }
+
+  Map<String, String> _parseHtmlLink(String text) {
+    final result = <String, String>{'url': '', 'label': ''};
+    if (text.isEmpty) return result;
+
+    final hrefRe = RegExp(r'href="([^"]+)"', caseSensitive: false);
+    final labelRe = RegExp(r'>([^<]+)<\/a>', caseSensitive: false);
+
+    final hrefMatch = hrefRe.firstMatch(text);
+    final labelMatch = labelRe.firstMatch(text);
+
+    if (hrefMatch != null) {
+      result['url'] = hrefMatch.group(1) ?? '';
+    }
+    if (labelMatch != null) {
+      result['label'] = labelMatch.group(1) ?? '';
+    }
+
+    if (result['url']!.isEmpty) {
+      final urlRe = RegExp(r'https?:\/\/\S+');
+      final m = urlRe.firstMatch(text);
+      if (m != null) result['url'] = m.group(0) ?? '';
+    }
+    if (result['label']!.isEmpty && result['url']!.isNotEmpty) {
+      result['label'] = result['url']!;
+    }
+    return result;
+  }
+
+  String _getHost(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return '';
+    return uri.host;
+  }
+
+  Future<void> _openUrl(String url) async {
+    if (url.isEmpty) return;
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  // ============= BUILD =============
+
+  @override
+  Widget build(BuildContext context) {
+    if (_items.isEmpty && _loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_items.isEmpty) {
+      return Center(
+        child: Text(
+          widget.labelEmpty,
+          style: const TextStyle(color: Colors.grey),
+        ),
+      );
+    }
+
+    // ---------- TAB 1: ẢNH / VIDEO (GRID) ----------
+    if (!widget.isFileLike) {
+      return GridView.builder(
+        padding: const EdgeInsets.only(top: 4),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          crossAxisSpacing: 4,
+          mainAxisSpacing: 4,
+        ),
+        itemCount: _items.length,
+        itemBuilder: (ctx, i) {
+          final m = _items[i];
+          final url = _resolveUrl(_getMediaUrl(m));
+          final ext = _extFrom(m);
+          final kind = _getKind(m);
+
+          final isImage = m['is_image'] == true ||
+              _isImageExt(ext) ||
+              kind == 'image' ||
+              kind == 'photo' ||
+              kind == 'photos';
+
+          final isVideo =
+              m['is_video'] == true || _isVideoExt(ext) || kind == 'video';
+
+          if (url.isEmpty) {
+            return Container(
+              color: Colors.grey.shade200,
+              child: const Icon(Icons.image_not_supported),
+            );
+          }
+
+          return GestureDetector(
+            onTap: () {
+              if (isImage) {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => _FullScreenImagePage(url: url),
+                  ),
+                );
+              } else if (isVideo) {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => _FullScreenVideoPage(url: url),
+                  ),
+                );
+              } else {
+                _openUrl(url);
+              }
+            },
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (isImage)
+                    Image.network(
+                      url,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: Colors.grey.shade200,
+                        alignment: Alignment.center,
+                        child: const Icon(
+                          Icons.image_not_supported,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    )
+                  else
+                    Container(
+                      color: Colors.grey.shade300,
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.play_circle_fill,
+                        size: 36,
+                        color: Colors.white70,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    // ---------- TAB 3: LINK ----------
+    if (widget.mediaType == 'links') {
+      return ListView.builder(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        itemCount: _items.length,
+        itemBuilder: (ctx, i) {
+          final m = _items[i];
+
+          final rawTitle = _string(m['title'] ?? m['text'] ?? '');
+          final rawUrlField =
+              _string(m['link'] ?? m['url'] ?? m['full'] ?? m['file']);
+
+          String url = '';
+          String title = '';
+
+          if (rawUrlField.isNotEmpty) {
+            url = _resolveUrl(rawUrlField);
+            title = rawTitle.isNotEmpty ? rawTitle : url;
+          } else {
+            final parsed = _parseHtmlLink(rawTitle);
+            url = _resolveUrl(parsed['url'] ?? '');
+            title = parsed['label'] ?? '';
+          }
+
+          final host = _getHost(url);
+          final subtitle = host.isNotEmpty ? host : url;
+
+          return ListTile(
+            dense: true,
+            leading: const Icon(Icons.link),
+            title: Text(
+              title.isNotEmpty ? title : '(link)',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: subtitle.isNotEmpty
+                ? Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  )
+                : null,
+            onTap: url.isNotEmpty ? () => _openUrl(url) : null,
+          );
+        },
+      );
+    }
+
+    // ---------- TAB 2: FILE ----------
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      itemCount: _items.length,
+      itemBuilder: (ctx, i) {
+        final m = _items[i];
+        final rawUrl = _getMediaUrl(m);
+        final url = _resolveUrl(rawUrl);
+
+        final name = _getFileName(m);
+        final ext = _extFrom(m);
+        final size = _getFileSize(m);
+        final time = _getTimeText(m);
+        final icon = _fileIcon(ext, m);
+
+        final subtitleParts = <String>[];
+        if (size.isNotEmpty) subtitleParts.add(size);
+        if (time.isNotEmpty) subtitleParts.add(time);
+        final subtitle = subtitleParts.join(' · ');
+
+        return ListTile(
+          dense: true,
+          leading: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              icon,
+              size: 22,
+              color: Colors.grey.shade800,
+            ),
+          ),
+          title: Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          subtitle: subtitle.isNotEmpty
+              ? Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                  ),
+                )
+              : null,
+          onTap: url.isNotEmpty ? () => _openUrl(url) : null,
+        );
+      },
+    );
+  }
+}
+
+
+class _FullScreenImagePage extends StatelessWidget {
+  final String url;
+
+  const _FullScreenImagePage({required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: const Text(
+          'Ảnh',
+          style: TextStyle(color: Colors.white),
+        ),
+      ),
+      body: Center(
+        child: InteractiveViewer(
+          child: Image.network(url),
+        ),
+      ),
+    );
+  }
+}
+
+class _FullScreenVideoPage extends StatefulWidget {
+  final String url;
+
+  const _FullScreenVideoPage({required this.url});
+
+  @override
+  State<_FullScreenVideoPage> createState() => _FullScreenVideoPageState();
+}
+
+class _FullScreenVideoPageState extends State<_FullScreenVideoPage> {
+  late VideoPlayerController _controller;
+  bool _initing = true;
+  bool _error = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url));
+    _controller.initialize().then((_) {
+      if (!mounted) return;
+      setState(() {
+        _initing = false;
+      });
+      _controller.play();
+    }).catchError((e) {
+      debugPrint('video init error: $e');
+      if (!mounted) return;
+      setState(() {
+        _initing = false;
+        _error = true;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _togglePlay() {
+    if (!_controller.value.isInitialized) return;
+    setState(() {
+      if (_controller.value.isPlaying) {
+        _controller.pause();
+      } else {
+        _controller.play();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isPlaying =
+        _controller.value.isInitialized && _controller.value.isPlaying;
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: const Text(
+          'Video',
+          style: TextStyle(color: Colors.white),
+        ),
+      ),
+      body: Center(
+        child: _initing
+            ? const CircularProgressIndicator(color: Colors.white)
+            : _error || !_controller.value.isInitialized
+                ? const Text(
+                    'Không phát được video',
+                    style: TextStyle(color: Colors.white),
+                  )
+                : Stack(
+                    alignment: Alignment.bottomCenter,
+                    children: [
+                      AspectRatio(
+                        aspectRatio: _controller.value.aspectRatio,
+                        child: VideoPlayer(_controller),
+                      ),
+                      Positioned(
+                        bottom: 32,
+                        child: IconButton(
+                          iconSize: 48,
+                          color: Colors.white,
+                          icon: Icon(
+                            isPlaying ? Icons.pause_circle : Icons.play_circle,
+                          ),
+                          onPressed: _togglePlay,
+                        ),
+                      ),
+                    ],
+                  ),
       ),
     );
   }

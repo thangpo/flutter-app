@@ -378,6 +378,76 @@ class GroupChatController extends ChangeNotifier {
     }
   }
 
+  
+
+
+
+  // ---------- Media by group + type ----------
+  // key = '$groupId|$mediaType'
+  final Map<String, List<Map<String, dynamic>>> _mediaByGroupAndType = {};
+  final Map<String, bool> _mediaLoading = {};
+  final Map<String, bool> _mediaHasMore = {};
+  final Map<String, int> _mediaOffset = {};
+
+  String _mediaKey(String groupId, String mediaType) => '$groupId|$mediaType';
+
+  List<Map<String, dynamic>> mediaOf(String groupId, String mediaType) {
+    return _mediaByGroupAndType[_mediaKey(groupId, mediaType)] ?? const [];
+  }
+
+  bool mediaLoading(String groupId, String mediaType) {
+    return _mediaLoading[_mediaKey(groupId, mediaType)] == true;
+  }
+
+  bool mediaHasMore(String groupId, String mediaType) {
+    return _mediaHasMore[_mediaKey(groupId, mediaType)] ?? true;
+  }
+
+  Future<void> loadGroupMedia(
+    String groupId,
+    String mediaType, {
+    bool loadMore = false,
+    int limit = 30,
+  }) async {
+    final key = _mediaKey(groupId, mediaType);
+    if (_mediaLoading[key] == true) return;
+
+    _mediaLoading[key] = true;
+    lastError = null;
+    notifyListeners();
+
+    try {
+      int offset = 0;
+      if (loadMore) {
+        offset = _mediaOffset[key] ?? 0;
+      }
+
+      final list = await repo.fetchGroupMedia(
+        groupId,
+        mediaType: mediaType,
+        limit: limit,
+        offset: offset,
+      );
+
+      final current = loadMore
+          ? (_mediaByGroupAndType[key] ?? <Map<String, dynamic>>[])
+          : <Map<String, dynamic>>[];
+
+      final merged = [...current, ...list];
+
+      _mediaByGroupAndType[key] = merged;
+      _mediaOffset[key] = merged.length;
+      _mediaHasMore[key] = list.length >= limit;
+    } catch (e) {
+      lastError = e.toString();
+      _mediaHasMore[key] = false;
+    } finally {
+      _mediaLoading[key] = false;
+      notifyListeners();
+    }
+  }
+
+
   // ---------- Send message (text / image / video / voice / file) ----------
   final _rng = Random();
   String _tempId() =>
