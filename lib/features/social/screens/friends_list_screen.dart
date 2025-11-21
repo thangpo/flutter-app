@@ -9,6 +9,8 @@ import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_f
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_friends_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_friend.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/chat_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_page_mess.dart';
+
 
 // 👇 nhóm chat
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_chat_controller.dart';
@@ -90,7 +92,19 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
         showNotifDot: notifDot,
         onTap: (i) {
           setState(() => _tabIndex = i);
-          if (i == 2) {
+
+          if (i == 1) {
+            // 👈 Tab STORIES → mở màn Trang / Tin nhắn Page
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                // trong onTap của tab Stories
+                builder: (_) => PageMessagesScreen(accessToken: widget.accessToken),
+
+              ),
+            );
+          } else if (i == 2) {
+            // Group chat như cũ
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -101,6 +115,7 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
           }
         },
       ),
+
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

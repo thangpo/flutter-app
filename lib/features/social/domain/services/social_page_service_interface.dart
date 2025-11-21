@@ -1,38 +1,42 @@
-import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_get_page.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'dart:io';
 
+import 'package:dio/dio.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_get_page.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_page_mess.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_page_chat.dart';
+
+
 abstract class SocialPageServiceInterface {
-  /// Lấy danh sách Page gợi ý cho user hiện tại
+  /// Lấy danh sách Page gợi ý
   Future<List<SocialGetPage>> getRecommendedPages({
     int limit,
   });
-  Future<List<SocialGetPage>> getMyPages({
-    int limit = 20,
+
+  /// Lấy page của tôi
+  Future<List<SocialGetPage>> getMyPages({int limit = 20});
+
+  /// Liked pages
+  Future<List<SocialGetPage>> getLikedPages({
+    int limit,
+    required String userId,
   });
+
+  /// Like / Unlike page
+  Future<bool> toggleLikePage({required String pageId});
+
+  /// Danh mục bài viết
   Future<List<SocialArticleCategory>> getArticleCategories();
+
+  /// Tạo Page
   Future<SocialGetPage> createPage({
     required String pageName,
     required String pageTitle,
     required int categoryId,
     String? description,
   });
-  Future<List<SocialGetPage>> getLikedPages({int limit = 20, required String userId});
-  Future<bool> toggleLikePage({required String pageId});
 
-  /// Update page dùng luôn payload (map) từ EditPageScreen pop ra
-  ///
-  /// payload ví dụ:
-  /// {
-  ///   'page_id': '123',
-  ///   'page_name': 'abc',
-  ///   'page_title': 'Title',
-  ///   'page_description': '...',
-  ///   'avatar': File,
-  ///   'cover': File,
-  ///   ...
-  /// }
-  /// UPDATE: có thể ko trả về page_data → dùng SocialGetPage? (nullable)
+  /// Update Page (cách cũ)
   Future<SocialGetPage?> updatePage({
     required int pageId,
     String? pageName,
@@ -44,13 +48,46 @@ abstract class SocialPageServiceInterface {
     Map<String, dynamic>? extraFields,
   });
 
-  /// UPDATE dùng payload Map (từ EditPageScreen pop ra)
+  /// Update Page (payload từ UI)
   Future<SocialGetPage?> updatePageFromPayload(
       Map<String, dynamic> payload,
       );
+
+  /// Lấy bài viết của Page
   Future<List<SocialPost>> getPagePosts({
     required int pageId,
-    int limit = 10,
+    int limit,
     int? afterPostId,
   });
+
+  // ────────────────────────────────────────────────
+  // 🔥 PAGE CHAT
+  // ────────────────────────────────────────────────
+
+  /// Gửi tin nhắn đến Page (owner)
+  Future<List<SocialPageMessage>> sendPageMessage({
+    required String pageId,
+    required String recipientId,
+    required String text,
+    required String messageHashId,
+    MultipartFile? file,
+    String? gif,
+    String? imageUrl,
+    String? lng,
+    String? lat,
+  });
+
+  /// Lấy lịch sử chat (fetch old/new message)
+  Future<List<SocialPageMessage>> getPageMessages({
+    required String pageId,
+    required String recipientId,
+    int? afterMessageId,
+    int? beforeMessageId,
+    int limit,
+  });
+  Future<List<PageChatThread>> getPageChatList({
+    int limit,
+    int offset,
+  });
+
 }
