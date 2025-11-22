@@ -31,7 +31,7 @@ class CustomMenuWidget extends StatelessWidget {
     final Color activeColor =
         activeColorOverride ?? Theme.of(context).primaryColor;
 
-    // ðŸ”¥ MÃ u icon + text khi chÆ°a chá»n â†’ ÄEN
+    // Màu icon + text khi chưa chọn
     final Color inactiveColor = inactiveColorOverride ?? Colors.black;
 
     return InkWell(
@@ -39,16 +39,16 @@ class CustomMenuWidget extends StatelessWidget {
       hoverColor: Colors.transparent,
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
         padding: EdgeInsets.symmetric(
           horizontal: isSelected ? 16 : 12,
           vertical: 6,
         ),
         decoration: BoxDecoration(
           color:
-              isSelected ? activeColor.withOpacity(0.15) : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
+              isSelected ? activeColor.withOpacity(0.10) : Colors.transparent,
+          borderRadius: BorderRadius.circular(18),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -56,19 +56,25 @@ class CustomMenuWidget extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Stack(
+              clipBehavior: Clip.none,
               children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                  child: Image.asset(
-                    icon,
-                    width: Dimensions.menuIconSize,
-                    height: Dimensions.menuIconSize,
-
-                    // â­ CHá»– QUAN TRá»ŒNG
-                    color: isSelected ? activeColor : inactiveColor,
+                // Hiệu ứng bounce / scale giống iOS tab bar
+                AnimatedScale(
+                  scale: isSelected ? 1.08 : 0.96,
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOutBack,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 260),
+                    curve: Curves.easeOutCubic,
+                    child: Image.asset(
+                      icon,
+                      width: Dimensions.menuIconSize,
+                      height: Dimensions.menuIconSize,
+                      color: isSelected ? activeColor : inactiveColor,
+                    ),
                   ),
                 ),
+
                 if (showCartCount)
                   Positioned.fill(
                     child: Container(
@@ -99,17 +105,16 @@ class CustomMenuWidget extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 2),
-            AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOut,
 
-              // â­ CHá»– QUAN TRá»ŒNG
+            // Text cũng animate màu + weight
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOutCubic,
               style: textRegular.copyWith(
                 color: isSelected ? activeColor : inactiveColor,
                 fontSize: Dimensions.fontSizeSmall,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
               ),
-
               child: Text(
                 getTranslated(name, context)!,
                 maxLines: 1,
@@ -122,5 +127,3 @@ class CustomMenuWidget extends StatelessWidget {
     );
   }
 }
-
-

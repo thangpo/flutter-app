@@ -44,6 +44,8 @@ class DashBoardScreen extends StatefulWidget {
 
 class DashBoardScreenState extends State<DashBoardScreen> {
   int _pageIndex = 1;
+  // Hướng chuyển tab: -1 = sang trái, 1 = sang phải, 0 = không anim
+  int _pageDirection = 0;
   late List<NavigationModel> _screens;
   final GlobalKey<ScaffoldMessengerState> _scaffoldKey = GlobalKey();
   final PageStorageBucket bucket = PageStorageBucket();
@@ -154,8 +156,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         _screens.indexWhere((element) => element.name == 'social');
 
     NetworkInfo.checkConnectivity(context);
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => _sampleNavBackground());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _sampleNavBackground());
   }
 
   @override
@@ -172,7 +173,8 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     final mediaQuery = MediaQuery.of(context);
     if (_navBehindDark == null) {
       // Kích hoạt sample ở frame đầu nếu chưa có dữ liệu
-      WidgetsBinding.instance.addPostFrameCallback((_) => _sampleNavBackground());
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _sampleNavBackground());
     }
 
     // Nen phia sau dashboard quyet dinh sang/toi
@@ -252,9 +254,53 @@ class DashBoardScreenState extends State<DashBoardScreen> {
               color: theme.scaffoldBackgroundColor,
               child: NotificationListener<ScrollNotification>(
                 onNotification: _handleScrollNotification,
-                child: PageStorage(
-                  bucket: bucket,
-                  child: _screens[_pageIndex].screen,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 280),
+                  reverseDuration: const Duration(milliseconds: 220),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  layoutBuilder: (currentChild, previousChildren) {
+                    // Giữ previousChild lại trong Stack để out-animation mượt
+                    return Stack(
+                      alignment: Alignment.center,
+                      children: <Widget>[
+                        ...previousChildren,
+                        if (currentChild != null) currentChild,
+                      ],
+                    );
+                  },
+                  transitionBuilder: (child, animation) {
+                    // Nếu lần đầu hoặc không xác định hướng thì chỉ fade
+                    if (_pageDirection == 0) {
+                      return FadeTransition(
+                        opacity: animation,
+                        child: child,
+                      );
+                    }
+
+                    final offsetTween = Tween<Offset>(
+                      begin: Offset(0.14 * _pageDirection * -1.0, 0),
+                      end: Offset.zero,
+                    );
+
+                    final fade = CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutQuad,
+                    );
+
+                    return FadeTransition(
+                      opacity: fade,
+                      child: SlideTransition(
+                        position: offsetTween.animate(animation),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: PageStorage(
+                    key: ValueKey<int>(_pageIndex),
+                    bucket: bucket,
+                    child: _screens[_pageIndex].screen,
+                  ),
                 ),
               ),
             ),
@@ -322,7 +368,8 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     try {
       final BuildContext? ctx = _dashboardRepaintKey.currentContext;
       if (ctx == null) {
-        developer.log('Nav sample skipped: context is null.', name: _navLogName);
+        developer.log('Nav sample skipped: context is null.',
+            name: _navLogName);
         return;
       }
       final RenderRepaintBoundary? boundary =
@@ -344,7 +391,8 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       final ByteData? data =
           await image.toByteData(format: ui.ImageByteFormat.rawRgba);
       if (data == null) {
-        developer.log('Nav sampling failed: no pixel buffer.', name: _navLogName);
+        developer.log('Nav sampling failed: no pixel buffer.',
+            name: _navLogName);
         image.dispose();
         return;
       }
@@ -425,12 +473,28 @@ class DashBoardScreenState extends State<DashBoardScreen> {
   }
 
   void _setPage(int pageIndex) {
+    // Nếu bấm lại cùng tab thì thôi, tránh trigger animation
+    if (pageIndex == _pageIndex) {
+      return;
+    }
+
     setState(() {
+      // Xác định hướng để làm slide trái/phải giống iOS
+      if (pageIndex > _pageIndex) {
+        _pageDirection = 1;
+      } else if (pageIndex < _pageIndex) {
+        _pageDirection = -1;
+      } else {
+        _pageDirection = 0;
+      }
+
       _pageIndex = pageIndex;
+
       if (_socialTabIndex != null && pageIndex != _socialTabIndex) {
         _showBottomNav = true;
       }
     });
+
     _scheduleNavSample();
   }
 
@@ -531,11 +595,3 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     return list;
   }
 }
-
-
-
-
-
-
-
-
