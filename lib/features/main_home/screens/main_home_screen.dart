@@ -110,10 +110,13 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
   Widget build(BuildContext context) {
     final splash = Provider.of<SplashController>(context, listen: false);
     final announcementEnabled = splash.configModel?.announcement?.status == '1';
+    final double bottomGlassGap =
+        MediaQuery.of(context).viewPadding.bottom + 80.0; // keep space for glass nav
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
       body: SafeArea(
+        bottom: false,
         child: RefreshIndicator(
           onRefresh: _onRefresh,
           child: CustomScrollView(
@@ -190,6 +193,9 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                     ],
                   ),
                 ),
+              ),
+              SliverPadding(
+                padding: EdgeInsets.only(bottom: bottomGlassGap),
               ),
             ],
           ),
