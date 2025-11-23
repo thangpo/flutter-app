@@ -188,10 +188,13 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     final ConfigModel? configModel =
         Provider.of<SplashController>(context, listen: false).configModel;
+    final double bottomGlassGap =
+        MediaQuery.of(context).viewPadding.bottom + 80.0; // keep space for glass nav
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
       body: SafeArea(
+        bottom: false,
         child: RefreshIndicator(
           onRefresh: () async {
             await HomePage.loadData(true);
@@ -516,6 +519,9 @@ class _HomePageState extends State<HomePage> {
                     ),
                   )),
               HomeProductListWidget(scrollController: _scrollController),
+              SliverPadding(
+                padding: EdgeInsets.only(bottom: bottomGlassGap),
+              ),
             ],
           ),
         ),
