@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'dart:convert';
 
 import 'package:firebase_core/firebase_core.dart';
@@ -78,6 +78,8 @@ import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_n
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_notifications_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/firebase_token_updater.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/push_navigation_helper.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/push/call_invite_stream_listener.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/push/push_call_handler.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/incoming_call_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/call_screen.dart';
@@ -421,6 +423,9 @@ Future<void> main() async {
   }
 
   FcmChatHandler.initialize();
+  CallInviteForegroundListener.start();
+  SocialCallPushHandler.I.initLocalNotifications();
+  SocialCallPushHandler.I.bindForegroundListener();
 
   // =================== APP LIFECYCLE OBSERVER ===================
   WidgetsBinding.instance.addObserver(AppLifecycleObserver());

@@ -32,6 +32,58 @@ class GroupChatRepository {
     return '$base/api/group_chat';
   }
 
+  /// Lấy media trong group chat (ảnh, video, file, link...)
+  ///
+  /// [mediaType]: images | videos | audio | links | docs
+  Future<List<Map<String, dynamic>>> fetchGroupMedia(
+    String groupId, {
+    String mediaType = 'images',
+    int limit = 30,
+    int offset = 0,
+  }) async {
+    final token = await _getAccessTokenOrThrow();
+
+    // WoWonder get_media dùng endpoint /api/chat
+    final uri = Uri.parse(
+      '${AppConstants.socialBaseUrl}/api/chat?access_token=$token',
+    );
+
+    final res = await http.post(
+      uri,
+      body: {
+        'server_key': AppConstants.socialServerKey,
+        'type': 'get_media',
+        'group_id': groupId,
+        'media_type': mediaType, // images | videos | audio | links | docs
+        'limit': '$limit',
+        'offset': '$offset',
+      },
+    ).timeout(const Duration(seconds: 25));
+
+    if (res.statusCode != 200) {
+      throw Exception('Không lấy được media (HTTP ${res.statusCode})');
+    }
+
+    final json = jsonDecode(res.body) as Map<String, dynamic>;
+    if (!_isOk(json)) {
+      throw Exception('Không lấy được media: ${json['errors'] ?? res.body}');
+    }
+
+    // Tuỳ version WoWonder, data có thể nằm ở: data / media / messages
+    final rawList = (json['data'] ??
+        json['media'] ??
+        json['messages'] ??
+        <dynamic>[]) as List;
+
+    return rawList
+        .where((e) => e is Map)
+        .map<Map<String, dynamic>>(
+          (e) => _normalizeMsg(Map<String, dynamic>.from(e as Map)),
+        )
+        .toList();
+  }
+
+
   // -------------------- Content Type --------------------
   MediaType? _contentTypeFor(String filePath) {
     final ext = p.extension(filePath).toLowerCase();
@@ -664,4 +716,57 @@ class GroupChatRepository {
     }
     return [];
   }
+
+
+  /// Lấy media trong group (giống 1-1 dùng /api/chat type=get_media)
+  ///
+  /// mediaType: images | videos | audio | docs | links
+  Future<List<Map<String, dynamic>>> getGroupMedia({
+    required String groupId,
+    required String mediaType,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    // Lấy access_token giống các hàm khác
+    final token = await _getAccessTokenOrThrow();
+
+    final url = Uri.parse(
+      '${AppConstants.socialBaseUrl}/api/chat?access_token=$token',
+    );
+
+    final req = http.MultipartRequest("POST", url)
+      ..fields["server_key"] = AppConstants.socialServerKey
+      ..fields["type"] = "get_media"
+      ..fields["group_id"] = groupId
+      ..fields["media_type"] = mediaType
+      ..fields["limit"] = "$limit"
+      ..fields["offset"] = "$offset";
+
+    final streamed = await req.send();
+    final body = await streamed.stream.bytesToString();
+
+    if (streamed.statusCode != 200) {
+      throw Exception(
+        'getGroupMedia($mediaType) HTTP ${streamed.statusCode}: $body',
+      );
+    }
+
+    final map = jsonDecode(body) as Map<String, dynamic>;
+    final status = map["api_status"] ?? map["status"] ?? map["code"];
+
+    if ('$status' != '200') {
+      throw Exception('getGroupMedia($mediaType) api_status != 200: $body');
+    }
+
+    final rawList =
+        (map["data"] ?? map["media"] ?? map["messages"] ?? <dynamic>[]) as List;
+
+    return rawList
+        .whereType<Map>()
+        .map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
+
+
 }
