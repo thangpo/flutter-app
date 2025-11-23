@@ -31,6 +31,7 @@ import 'package:flutter_sixvalley_ecommerce/features/setting/screens/settings_sc
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/saved_posts_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_groups_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_page_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/event_screen.dart';
 
 import 'package:provider/provider.dart';
 import 'faq_screen_view.dart';
@@ -188,6 +189,11 @@ class _MoreScreenState extends State<MoreScreen> {
                             ),
                             isNotification: true,
                             navigateTo: const NotificationScreen(),
+                          ),
+                          MenuButtonWidget(
+                            image: Images.event, // hoặc Images.category nếu chưa có icon calendar
+                            title: getTranslated('events', context),
+                            navigateTo: const EventScreen(),
                           ),
                           MenuButtonWidget(
                             image: Images.friendImage,

@@ -41,6 +41,7 @@ class Images {
   static const String preference = 'assets/images/preference.png';
   static const String privacyPolicy = 'assets/images/privacy_policy.png';
   static const String settings = 'assets/images/settings.png';
+  static const String event = 'assets/images/event.png';
   static const String wishlist = 'assets/images/wishlist.png';
   static const String morePageHeader = 'assets/images/more_page_header.png';
   static const String visa = 'assets/images/visa.png';

@@ -8,6 +8,7 @@ environment:
   sdk: ^3.6.2
 
 dependencies:
+  liquid_pull_to_refresh: ^3.0.0
   flutter:
     sdk: flutter
   flutter_localizations:
