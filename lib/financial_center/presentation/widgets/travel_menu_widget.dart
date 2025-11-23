@@ -1,12 +1,13 @@
-import 'package:flutter/material.dart';
 import 'dart:ui';
-import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-import 'package:flutter_sixvalley_ecommerce/utill/dimensions.dart';
-import 'package:flutter_sixvalley_ecommerce/utill/styles.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_sixvalley_ecommerce/utill/styles.dart';
+import 'package:flutter_sixvalley_ecommerce/utill/dimensions.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/flight_booking_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/tour_list_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/flight_booking_screen.dart';
+
 
 class IOSAppLaunchPageRoute extends PageRouteBuilder {
   final Widget page;
