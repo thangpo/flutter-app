@@ -1,8 +1,10 @@
 ﻿import 'dart:developer' as developer;
 import 'dart:math';
+import 'dart:io' show Platform;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/cart/controllers/cart_controller.dart';
@@ -44,7 +46,10 @@ class DashBoardScreen extends StatefulWidget {
 
 class DashBoardScreenState extends State<DashBoardScreen> {
   int _pageIndex = 1;
-  // Hướng chuyển tab: -1 = sang trái, 1 = sang phải, 0 = không anim
+  int _previousPageIndex = 1;
+  int? _draggingIndex;
+  bool _isDragging = false;
+  // Hu?ng chuy?n tab: -1 = sang trái, 1 = sang ph?i, 0 = không anim
   int _pageDirection = 0;
   late List<NavigationModel> _screens;
   final GlobalKey<ScaffoldMessengerState> _scaffoldKey = GlobalKey();
@@ -172,7 +177,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     final cs = theme.colorScheme;
     final mediaQuery = MediaQuery.of(context);
     if (_navBehindDark == null) {
-      // Kích hoạt sample ở frame đầu nếu chưa có dữ liệu
+      // Kích ho?t sample ? frame d?u n?u chua có d? li?u
       WidgetsBinding.instance
           .addPostFrameCallback((_) => _sampleNavBackground());
     }
@@ -218,7 +223,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     final Color bottomFillColor = navBehindDark
         ? Colors.white.withOpacity(0.06)
         : Colors.black.withOpacity(0.05);
-    // Icon/text: inactive theo nền (trắng/đen), active luôn dùng primary
+    // Icon/text: inactive theo n?n (tr?ng/den), active luôn dùng primary
     final Color navInactiveColor = navBehindDark
         ? Colors.white.withOpacity(0.9)
         : Colors.black.withOpacity(0.9);
@@ -260,7 +265,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
                   switchInCurve: Curves.easeOutCubic,
                   switchOutCurve: Curves.easeInCubic,
                   layoutBuilder: (currentChild, previousChildren) {
-                    // Giữ previousChild lại trong Stack để out-animation mượt
+                    // Gi? previousChild l?i trong Stack d? out-animation mu?t
                     return Stack(
                       alignment: Alignment.center,
                       children: <Widget>[
@@ -270,7 +275,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
                     );
                   },
                   transitionBuilder: (child, animation) {
-                    // Nếu lần đầu hoặc không xác định hướng thì chỉ fade
+                    // N?u l?n d?u ho?c không xác d?nh hu?ng thì ch? fade
                     if (_pageDirection == 0) {
                       return FadeTransition(
                         opacity: animation,
@@ -332,15 +337,205 @@ class DashBoardScreenState extends State<DashBoardScreen> {
                       ),
                       child: SizedBox(
                         height: navHeight,
-                        child: Center(
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: _getBottomWidget(
-                              singleVendor,
-                              navActiveColor,
-                              navInactiveColor,
-                            ),
-                          ),
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final double itemWidth =
+                                constraints.maxWidth / _screens.length;
+                            final int currentIndicatorIndex =
+                                _draggingIndex ?? _pageIndex;
+                            final int travelDistance =
+                                (currentIndicatorIndex - _previousPageIndex).abs();
+                            const double indicatorTop = 6;
+                            final double baseWidth =
+                                min(itemWidth * 1.40, itemWidth * 1.82);
+                            final bool isEdgeTab =
+                                _pageIndex == 0 || _pageIndex == _screens.length - 1;
+                            // Thu nhỏ nhẹ ở tab rìa để không tràn quá xa ra ngoài
+                            final double baseWidthFactor =
+                                isEdgeTab ? 0.78 : 1.0;
+                            final double sweepBonus = travelDistance > 0
+                                ? min(itemWidth * (travelDistance - 0.2),
+                                    itemWidth * 0.9)
+                                : 0;
+                            final double indicatorWidth = min(
+                              (baseWidth * baseWidthFactor) + sweepBonus,
+                              itemWidth * (isEdgeTab ? 2.0 : 2.6),
+                            );
+                            final double indicatorLeft = max(
+                              0,
+                              (itemWidth * currentIndicatorIndex) +
+                                  (itemWidth - indicatorWidth) / 2,
+                            );
+                            final bool useGlassIndicator =
+                                !kIsWeb && Platform.isIOS;
+                            return GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onPanStart: (_) {
+                                setState(() {
+                                  _isDragging = true;
+                                  _draggingIndex = _pageIndex;
+                                  _previousPageIndex = _pageIndex;
+                                });
+                              },
+                              onPanUpdate: (details) => _handleNavDragUpdate(
+                                details,
+                                constraints.maxWidth,
+                              ),
+                              onPanEnd: (_) => _handleNavDragEnd(),
+                              onPanCancel: () => _handleNavDragEnd(),
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  AnimatedPositioned(
+                                    duration: const Duration(milliseconds: 420),
+                                    curve: Curves.easeOutQuint,
+                                    left: indicatorLeft,
+                                    top: indicatorTop,
+                                    child: IgnorePointer(
+                                      ignoring: true,
+                                      child: useGlassIndicator
+                                          ? LiquidGlassLayer(
+                                              settings: navBehindDark
+                                                  ? const LiquidGlassSettings(
+                                                      blur: 12,
+                                                      thickness: 18,
+                                                      refractiveIndex: 1.18,
+                                                      lightAngle: 0.6 * pi,
+                                                      lightIntensity: 1.1,
+                                                      ambientStrength: 0.4,
+                                                      saturation: 1.05,
+                                                      glassColor:
+                                                          Color(0x1AFFFFFF),
+                                                    )
+                                                  : const LiquidGlassSettings(
+                                                      blur: 12,
+                                                      thickness: 18,
+                                                      refractiveIndex: 1.18,
+                                                      lightAngle: 0.6 * pi,
+                                                      lightIntensity: 1.0,
+                                                      ambientStrength: 0.42,
+                                                      saturation: 1.03,
+                                                      glassColor:
+                                                          Color(0x14000000),
+                                                    ),
+                                              child: LiquidGlass(
+                                                shape:
+                                                    const LiquidRoundedSuperellipse(
+                                                        borderRadius: 28),
+                                                glassContainsChild: false,
+                                                clipBehavior: Clip.antiAlias,
+                                                child: AnimatedContainer(
+                                                  duration: const Duration(
+                                                      milliseconds: 420),
+                                                  curve: Curves.easeOutQuint,
+                                                  width: indicatorWidth,
+                                                  height: navHeight -
+                                                      (indicatorTop * 2),
+                                                  decoration: BoxDecoration(
+                                                    color: navBehindDark
+                                                        ? Colors.white
+                                                            .withOpacity(0.10)
+                                                        : Colors.black
+                                                            .withOpacity(0.04),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            28),
+                                                    border: Border.all(
+                                                      color: navBehindDark
+                                                          ? Colors.white
+                                                              .withOpacity(
+                                                                  0.32)
+                                                          : Colors.black
+                                                              .withOpacity(
+                                                                  0.16),
+                                                      width: 1,
+                                                    ),
+                                                    boxShadow: [
+                                                      BoxShadow(
+                                                        color: navBehindDark
+                                                            ? Colors.white
+                                                                .withOpacity(
+                                                                    0.18)
+                                                            : Colors.black
+                                                                .withOpacity(
+                                                                    0.12),
+                                                        blurRadius: 14,
+                                                        spreadRadius: 1,
+                                                        offset: const Offset(
+                                                            0, 7),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            )
+                                          : ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(28),
+                                              child: BackdropFilter(
+                                                filter: ui.ImageFilter.blur(
+                                                    sigmaX: 10, sigmaY: 10),
+                                                child: AnimatedContainer(
+                                                  duration: const Duration(
+                                                      milliseconds: 360),
+                                                  curve: Curves.easeOutQuint,
+                                                  width: indicatorWidth,
+                                                  height: navHeight -
+                                                      (indicatorTop * 2),
+                                                  decoration: BoxDecoration(
+                                                    color: navBehindDark
+                                                        ? Colors.white
+                                                            .withOpacity(0.12)
+                                                        : Colors.black
+                                                            .withOpacity(0.06),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            28),
+                                                    border: Border.all(
+                                                      color: navBehindDark
+                                                          ? Colors.white
+                                                              .withOpacity(
+                                                                  0.22)
+                                                          : Colors.black
+                                                              .withOpacity(
+                                                                  0.14),
+                                                      width: 1,
+                                                    ),
+                                                    boxShadow: [
+                                                      BoxShadow(
+                                                        color: navBehindDark
+                                                            ? Colors.white
+                                                                .withOpacity(
+                                                                    0.12)
+                                                            : Colors.black
+                                                                .withOpacity(
+                                                                    0.10),
+                                                        blurRadius: 12,
+                                                        spreadRadius: 1,
+                                                        offset: const Offset(
+                                                            0, 6),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                    ),
+                                  ),
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceEvenly,
+                                    children: _getBottomWidget(
+                                      singleVendor,
+                                      navActiveColor,
+                                      navInactiveColor,
+                                      usePillBackground: false,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
                         ),
                       ),
                     ),
@@ -473,13 +668,16 @@ class DashBoardScreenState extends State<DashBoardScreen> {
   }
 
   void _setPage(int pageIndex) {
-    // Nếu bấm lại cùng tab thì thôi, tránh trigger animation
+    // N?u b?m l?i cùng tab thì thôi, tránh trigger animation
     if (pageIndex == _pageIndex) {
       return;
     }
 
     setState(() {
-      // Xác định hướng để làm slide trái/phải giống iOS
+      _previousPageIndex = _pageIndex;
+      _draggingIndex = null;
+      _isDragging = false;
+      // Xác d?nh hu?ng d? làm slide trái/ph?i gi?ng iOS
       if (pageIndex > _pageIndex) {
         _pageDirection = 1;
       } else if (pageIndex < _pageIndex) {
@@ -496,6 +694,17 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     });
 
     _scheduleNavSample();
+
+    // Co giãn pill rồi thu hẹp lại sau frame để chỉ quét khi di chuyển xa
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_pageIndex != pageIndex) return;
+      setState(() {
+      _previousPageIndex = _pageIndex;
+      _draggingIndex = null;
+      _isDragging = false;
+      });
+    });
   }
 
   void _handleChromeVisibilityChanged(bool visible) {
@@ -524,11 +733,35 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     _setPage(index);
   }
 
+  void _handleNavDragUpdate(DragUpdateDetails details, double maxWidth) {
+    final double dx = details.localPosition.dx.clamp(0, maxWidth - 0.01);
+    final double itemWidth = maxWidth / _screens.length;
+    final int targetIndex = (dx / itemWidth).floor().clamp(0, _screens.length - 1);
+    if (targetIndex != _draggingIndex) {
+      setState(() {
+        _draggingIndex = targetIndex;
+      });
+    }
+  }
+
+  void _handleNavDragEnd() {
+    final int? target = _draggingIndex;
+    setState(() {
+      _isDragging = false;
+      _draggingIndex = null;
+    });
+    if (target != null && target != _pageIndex) {
+      _setPage(target);
+    }
+  }
+
   List<Widget> _getBottomWidget(
     bool isSingleVendor,
     Color activeColor,
-    Color inactiveColor,
-  ) {
+    Color inactiveColor, {
+    bool usePillBackground = true,
+  }) {
+    final int currentIndicatorIndex = _draggingIndex ?? _pageIndex;
     List<Widget> list = [];
     for (int index = 0; index < _screens.length; index++) {
       final item = _screens[index];
@@ -541,12 +774,13 @@ class DashBoardScreenState extends State<DashBoardScreen> {
               alignment: Alignment.center,
               children: [
                 CustomMenuWidget(
-                  isSelected: _pageIndex == index,
+                  isSelected: currentIndicatorIndex == index,
                   name: item.name,
                   icon: item.icon,
                   showCartCount: item.showCartIcon ?? false,
                   activeColorOverride: activeColor,
                   inactiveColorOverride: inactiveColor,
+                  usePillBackground: usePillBackground,
                   onTap: () => _handleNavigationTap(item, index),
                 ),
                 // =ƒö¦ Chß¦Ñm -æß+Å (d+¦ng Selector -æß+â tr+ính rebuild to+án bß+Ö)
@@ -579,12 +813,13 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         list.add(
           Expanded(
             child: CustomMenuWidget(
-              isSelected: _pageIndex == index,
+              isSelected: currentIndicatorIndex == index,
               name: item.name,
               icon: item.icon,
               showCartCount: item.showCartIcon ?? false,
               activeColorOverride: activeColor,
               inactiveColorOverride: inactiveColor,
+              usePillBackground: usePillBackground,
               onTap: () => _handleNavigationTap(item, index),
             ),
           ),
@@ -595,3 +830,4 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     return list;
   }
 }
+

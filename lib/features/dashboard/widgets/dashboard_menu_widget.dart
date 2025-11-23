@@ -14,6 +14,7 @@ class CustomMenuWidget extends StatelessWidget {
   final VoidCallback onTap;
   final Color? activeColorOverride;
   final Color? inactiveColorOverride;
+  final bool usePillBackground;
 
   const CustomMenuWidget({
     super.key,
@@ -24,6 +25,7 @@ class CustomMenuWidget extends StatelessWidget {
     this.showCartCount = false,
     this.activeColorOverride,
     this.inactiveColorOverride,
+    this.usePillBackground = true,
   });
 
   @override
@@ -34,6 +36,8 @@ class CustomMenuWidget extends StatelessWidget {
     // Màu icon + text khi chưa chọn
     final Color inactiveColor = inactiveColorOverride ?? Colors.black;
 
+    final bool showPill = usePillBackground && isSelected;
+
     return InkWell(
       highlightColor: Colors.transparent,
       hoverColor: Colors.transparent,
@@ -42,12 +46,11 @@ class CustomMenuWidget extends StatelessWidget {
         duration: const Duration(milliseconds: 260),
         curve: Curves.easeOutCubic,
         padding: EdgeInsets.symmetric(
-          horizontal: isSelected ? 16 : 12,
+          horizontal: showPill ? 16 : 12,
           vertical: 6,
         ),
         decoration: BoxDecoration(
-          color:
-              isSelected ? activeColor.withOpacity(0.10) : Colors.transparent,
+          color: showPill ? activeColor.withOpacity(0.10) : Colors.transparent,
           borderRadius: BorderRadius.circular(18),
         ),
         child: Column(
