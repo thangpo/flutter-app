@@ -284,7 +284,9 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
 
   void _maybeResampleHeader(double offset) {
     if (!_chromeVisible || _samplingHeader) return;
-    const double offsetThreshold = 24.0; // ch? resample khi n?i dung d?i d? dng k?
+
+    const double offsetThreshold =
+        24.0; // chỉ resample khi nội dung đổi đủ đáng kể
     const int timeMs = 140; // throttle
     final DateTime now = DateTime.now();
     final bool movedFar =
@@ -299,8 +301,7 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
       'Re-sample requested while header visible (offset=${offset.toStringAsFixed(1)}).',
       name: _headerLogName,
     );
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => _sampleBehindHeader());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _sampleBehindHeader());
   }
 
   Future<void> _sampleBehindHeader() async {
@@ -337,8 +338,7 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
       const double targetRatio = 0.15; // downscale m?nh cho nh?
       final double pixelRatio =
           (targetRatio.clamp(0.05, 1.0) as num).toDouble();
-      final ui.Image image =
-          await boundary.toImage(pixelRatio: pixelRatio);
+      final ui.Image image = await boundary.toImage(pixelRatio: pixelRatio);
       final ByteData? data =
           await image.toByteData(format: ui.ImageByteFormat.rawRgba);
       if (data == null) {
@@ -387,8 +387,9 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
         _headerBehindDark = newIsDark;
       });
       _lastHeaderSampleTime = DateTime.now();
-      _lastHeaderSampleOffset =
-          _scrollController.hasClients ? _scrollController.position.pixels : 0.0;
+      _lastHeaderSampleOffset = _scrollController.hasClients
+          ? _scrollController.position.pixels
+          : 0.0;
     } catch (e, st) {
       developer.log(
         'Header sampling failed: $e',
@@ -411,6 +412,8 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
     final Color pageBg = isLightTheme ? cs.surface : cs.background;
     final double listTopPadding = _FacebookHeader.totalHeight(context) + 12;
     final double listBottomPadding = mediaQuery.padding.bottom + 16;
+    final double overlayHeight = _FacebookHeader.totalHeight(context) + 30;
+    const Color appBlue = Colors.white;
 
     return Scaffold(
       backgroundColor: pageBg,
@@ -420,99 +423,129 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
             child: RepaintBoundary(
               key: _contentRepaintKey,
               child: ColoredBox(
-                color: pageBg, // gi? n?n ngay c? khi content dang loading d? sample header khng b? den
+                color:
+                    pageBg, // giữ nền ngay cả khi content đang loading để sample header không bị đen
                 child: SafeArea(
                   top: false,
                   bottom: false,
                   child: Consumer<SocialController>(
-                  builder: (context, sc, _) {
-                  if (sc.loading && sc.posts.isEmpty) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  const int headerCount = 3;
-                  final List<AdsModel> postAds = sc.postAds;
-                  final List<SocialPost> posts = sc.posts;
-                  final Set<String> eligibleIds = sc.postAdEligibleIds;
-                  _ensurePostAdSlots(posts, postAds, eligibleIds);
-                    return RefreshIndicator(
-                      key: _refreshKey,
-                      onRefresh: () async {
-                        _resetPostAdSlots();
-                        await Future.wait([
-                          sc.refresh(),
-                          sc.fetchAdsForFeed(force: true),
-                          sc.refreshBirthdays(force: true),
-                        ]);
-                      },
-                      child: ListView.builder(
-                        controller: _scrollController,
-                        padding: EdgeInsets.only(
-                          top: listTopPadding,
-                          bottom: listBottomPadding,
-                        ),
-                        itemCount: posts.length + headerCount,
-                        itemBuilder: (ctx, i) {
-                          if (i == 0) {
-                            // Block "B?n dang nghi gì?"
+                    builder: (context, sc, _) {
+                      if (sc.loading && sc.posts.isEmpty) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      const int headerCount = 3;
+                      final List<AdsModel> postAds = sc.postAds;
+                      final List<SocialPost> posts = sc.posts;
+                      final Set<String> eligibleIds = sc.postAdEligibleIds;
+                      _ensurePostAdSlots(posts, postAds, eligibleIds);
+                      return RefreshIndicator(
+                        key: _refreshKey,
+                        onRefresh: () async {
+                          _resetPostAdSlots();
+                          await Future.wait([
+                            sc.refresh(),
+                            sc.fetchAdsForFeed(force: true),
+                            sc.refreshBirthdays(force: true),
+                          ]);
+                        },
+                        child: ListView.builder(
+                          controller: _scrollController,
+                          padding: EdgeInsets.only(
+                            top: listTopPadding,
+                            bottom: listBottomPadding,
+                          ),
+                          itemCount: posts.length + headerCount,
+                          itemBuilder: (ctx, i) {
+                            if (i == 0) {
+                              // Block "B?n dang nghi gÃ¬?"
+                              return Column(
+                                children: [
+                                  _WhatsOnYourMind(),
+                                  const _SectionSeparator(), // tÃ¡ch v?i Stories
+                                ],
+                              );
+                            }
+                            if (i == 1) {
+                              // Block Stories + separator
+                              return Consumer<SocialController>(
+                                builder: (context, sc2, __) {
+                                  return Column(
+                                    children: [
+                                      _StoriesSectionFromApi(
+                                        stories: sc2.stories,
+                                      ),
+                                    ],
+                                  );
+                                },
+                              );
+                            }
+                            if (i == 2) {
+                              return _BirthdaySection(
+                                users: sc
+                                    .birthdayUsers, // ⭐ dùng list từ controller
+                              );
+                            }
+
+                            final int postIndex = i - headerCount;
+                            if (postIndex < 0 || postIndex >= posts.length) {
+                              return const SizedBox.shrink();
+                            }
+
+                            final SocialPost p = posts[postIndex];
+                            const int pageSize = 10;
+                            const int prefetchAt = pageSize ~/ 2;
+
+                            if (!sc.loading &&
+                                postIndex >= posts.length - prefetchAt) {
+                              sc.loadMore();
+                            }
+
+                            final AdsModel? inlineAd = _postAdForIndex(
+                              postIndex,
+                              postAds,
+                            );
+
                             return Column(
                               children: [
-                                _WhatsOnYourMind(),
-                                const _SectionSeparator(), // tách v?i Stories
+                                SocialPostCard(post: p),
+                                if (inlineAd != null) _PostAdCard(ad: inlineAd),
                               ],
                             );
-                          }
-                          if (i == 1) {
-                            // Block Stories + separator
-                            return Consumer<SocialController>(
-                              builder: (context, sc2, __) {
-                                return Column(
-                                  children: [
-                                    _StoriesSectionFromApi(
-                                      stories: sc2.stories,
-                                    ),
-                                  ],
-                                );
-                              },
-                            );
-                          }
-                          if (i == 2) {
-                            return _BirthdaySection(
-                              users:
-                                  sc.birthdayUsers, // ? dng list t? controller
-                            );
-                          }
-
-                          final int postIndex = i - headerCount;
-                          if (postIndex < 0 || postIndex >= posts.length) {
-                            return const SizedBox.shrink();
-                          }
-
-                          final SocialPost p = posts[postIndex];
-                          const int pageSize = 10;
-                          const int prefetchAt = pageSize ~/ 2;
-
-                          if (!sc.loading &&
-                              postIndex >= posts.length - prefetchAt) {
-                            sc.loadMore();
-                          }
-
-                          final AdsModel? inlineAd = _postAdForIndex(
-                            postIndex,
-                            postAds,
-                          );
-
-                          return Column(
-                            children: [
-                              SocialPostCard(post: p),
-                              if (inlineAd != null) _PostAdCard(ad: inlineAd),
-                            ],
-                          );
-                        },
-                      ),
-                    );
-                  },
+                          },
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
+            ),
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: AnimatedSlide(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeInOut,
+              offset: _chromeVisible ? Offset.zero : const Offset(0, -1),
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 180),
+                opacity: _chromeVisible ? 1 : 0,
+                child: IgnorePointer(
+                  child: Container(
+                    height: overlayHeight,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: [
+                          appBlue.withOpacity(0),
+                          appBlue,
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -567,6 +600,25 @@ void _showAdLaunchError(BuildContext context) {
   ).showSnackBar(const SnackBar(content: Text('Khng th?y qu?ng co')));
 }
 
+LiquidGlassSettings _socialGlassSettings(
+  bool isBehindDark, {
+  double thickness = 16,
+}) {
+  return LiquidGlassSettings(
+    blur: 3,
+    // thickness: thickness,
+    // refractiveIndex: 1.22,
+    lightAngle: 0.2 * pi,
+    // lightIntensity: isBehindDark ? 1.05 : 1.0,
+    ambientStrength: 0.5,
+    // saturation: 1.04,
+    glassColor: isBehindDark ? Colors.white12 : Colors.black12,
+  );
+// blur: 3,
+// ambientStrength: 0.5,
+// lightAngle: 0.2 * math.pi,
+}
+
 class _FacebookHeader extends StatelessWidget {
   final bool isBehindDark;
   const _FacebookHeader({required this.isBehindDark});
@@ -591,35 +643,16 @@ class _FacebookHeader extends StatelessWidget {
 
     final BorderRadius borderRadius = BorderRadius.circular(32);
 
-    final LiquidGlassSettings headerSettings = isBehindDark
-        ? const LiquidGlassSettings(
-            blur: 2,
-            thickness: 16,
-            refractiveIndex: 1.25,
-            lightAngle: 0.5 * pi,
-            lightIntensity: 1.1,
-            ambientStrength: 0.35,
-            saturation: 1.08,
-            glassColor: Color(0x22FFFFFF),
-          )
-        : const LiquidGlassSettings(
-            blur: 3,
-            thickness: 16,
-            refractiveIndex: 1.25,
-            lightAngle: 0.5 * pi,
-            lightIntensity: 1.0,
-            ambientStrength: 0.35,
-            saturation: 1.02,
-            glassColor: Color(0x22000000),
-          );
+    final LiquidGlassSettings headerSettings =
+        _socialGlassSettings(isBehindDark, thickness: 18);
 
     final Color headerBorderColor = isBehindDark
-        ? Colors.white.withOpacity(0.70)
-        : Colors.white.withOpacity(0.45);
+        ? Colors.white.withOpacity(0.36)
+        : Colors.white.withOpacity(0.26);
 
     final Color headerFillColor = isBehindDark
-        ? Colors.white.withOpacity(0.05)
-        : Colors.black.withOpacity(0.04);
+        ? Colors.white.withOpacity(0.12)
+        : Colors.black.withOpacity(0.10);
 
     final sc = context.read<SocialController>();
 
@@ -629,94 +662,96 @@ class _FacebookHeader extends StatelessWidget {
         height: _baseHeight,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-          child: LiquidGlassLayer(
-            useBackdropGroup: true,
-            settings: headerSettings,
-            child: LiquidGlass(
-              shape: const LiquidRoundedSuperellipse(borderRadius: 32),
-              clipBehavior: Clip.antiAlias,
-              glassContainsChild: false,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: borderRadius,
-                  border: Border.all(
-                    color: headerBorderColor,
-                    width: 1.6,
-                  ),
-                  color: headerFillColor,
-                ),
-                child: ClipRRect(
-                  borderRadius: borderRadius,
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.white
-                                    .withOpacity(isDarkTheme ? 0.03 : 0.05),
-                                Colors.white.withOpacity(0.0),
-                              ],
-                            ),
-                          ),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: borderRadius,
+              // border: Border.all(
+              //   color: headerBorderColor,
+              //   width: 1.6,
+              // ),
+              // color: headerFillColor,
+            ),
+            child: ClipRRect(
+              borderRadius: borderRadius,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                          ],
                         ),
                       ),
-                      Center(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 2,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Image.asset(
+                    ),
+                  ),
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 2,
+                        vertical: 2,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          LiquidGlass.withOwnLayer(
+                            settings: _socialGlassSettings(isBehindDark,
+                                thickness: 30),
+                            shape: const LiquidRoundedSuperellipse(
+                                borderRadius: 40),
+                            glassContainsChild: false,
+                            clipBehavior: Clip.antiAlias,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              child: Image.asset(
                                 isDarkTheme
                                     ? Images.logoWithNameSocialImageWhite
                                     : Images.logoWithNameSocialImage,
-                                height: 32,
+                                height: 60,
                                 fit: BoxFit.contain,
                               ),
-                              _HeaderActionsRow(
-                                iconColor: onAppBar,
-                                bubbleOpacity: bubbleOpacity,
-                                onSearch: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          const SocialSearchScreen(),
-                                    ),
-                                  );
-                                },
-                                onFriends: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => FriendsScreen(),
-                                    ),
-                                  );
-                                },
-                                onMessages: () {
-                                  final token = sc.accessToken;
-                                  if (token == null || token.isEmpty) return;
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => FriendsListScreen(
-                                        accessToken: token,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ],
+                            ),
                           ),
-                        ),
+                          _HeaderActionsRow(
+                            iconColor: onAppBar,
+                            bubbleOpacity: bubbleOpacity,
+                            onSearch: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const SocialSearchScreen(),
+                                ),
+                              );
+                            },
+                            onFriends: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => FriendsScreen(),
+                                ),
+                              );
+                            },
+                            onMessages: () {
+                              final token = sc.accessToken;
+                              if (token == null || token.isEmpty) return;
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => FriendsListScreen(
+                                    accessToken: token,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
@@ -746,69 +781,23 @@ class _HeaderIcon extends StatelessWidget {
     final Color baseIconColor =
         iconColor ?? (isDark ? Colors.white : cs.onSurface.withOpacity(0.95));
 
-    // dng cng logic n?n sng/t?i nhu header (n?u mu?n)
     final Color behindColor = Theme.of(context).scaffoldBackgroundColor;
     final bool isBehindDark = behindColor.computeLuminance() < 0.5;
 
-    final Color iconBorderColor = isBehindDark
-        ? Colors.white.withOpacity(0.7)
-        : Colors.white.withOpacity(0.5);
+    final LiquidGlassSettings iconGlass =
+        _socialGlassSettings(isBehindDark, thickness: 30);
 
-    final Color iconFillColor = isBehindDark
-        ? Colors.white.withOpacity(0.06)
-        : Colors.black.withOpacity(0.06);
-
-    Widget glass = SizedBox(
-      width: 40,
-      height: 40,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: iconBorderColor,
-            width: 1.1,
-          ),
-          // knh gi?: n?n m? + cht gradient sng pha trn
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.white.withOpacity(isDark ? 0.20 : 0.30),
-              Colors.white.withOpacity(isDark ? 0.02 : 0.06),
-            ],
-          ),
-          color: iconFillColor,
-        ),
-        child: Stack(
-          children: [
-            // highlight nh? pha trn
-            Positioned(
-              top: 2,
-              left: 6,
-              right: 6,
-              child: Container(
-                height: 10,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.white.withOpacity(isDark ? 0.25 : 0.4),
-                      Colors.white.withOpacity(0.0),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            Center(
-              child: Icon(
-                icon,
-                size: 19,
-                color: baseIconColor,
-              ),
-            ),
-          ],
+    Widget glass = LiquidGlass.withOwnLayer(
+      settings: iconGlass,
+      shape: const LiquidRoundedSuperellipse(borderRadius: 40),
+      glassContainsChild: false,
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(10.0),
+        child: Icon(
+          icon,
+          size: 24,
+          color: baseIconColor,
         ),
       ),
     );
@@ -850,13 +839,13 @@ class _HeaderActionsRow extends StatelessWidget {
           iconColor: iconColor,
           onTap: onSearch,
         ),
-        const SizedBox(width: 14),
+        const SizedBox(width: 8),
         _HeaderIcon(
           icon: CupertinoIcons.person_2,
           iconColor: iconColor,
           onTap: onFriends,
         ),
-        const SizedBox(width: 14),
+        const SizedBox(width: 8),
         _HeaderIcon(
           icon: CupertinoIcons.chat_bubble_2,
           iconColor: iconColor,
@@ -2340,18 +2329,19 @@ class SocialPostCard extends StatelessWidget {
         break;
     }
   }
+
   Future<void> _handleReportPost(
-      BuildContext context,
-      SocialController controller,
-      SocialPost post,
-      ) async {
+    BuildContext context,
+    SocialController controller,
+    SocialPost post,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(getTranslated('report_post', ctx) ?? 'Report post'),
         content: Text(
-          getTranslated('report_post_confirm', ctx)
-              ?? 'Are you sure you want to report this post?',
+          getTranslated('report_post_confirm', ctx) ??
+              'Are you sure you want to report this post?',
         ),
         actions: [
           TextButton(
@@ -3388,5 +3378,4 @@ class _Story {
 class EdgeBox {
   static const zero = EdgeInsets.zero;
 }
-
 
