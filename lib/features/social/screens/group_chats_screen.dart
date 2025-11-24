@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../controllers/group_chat_controller.dart';
 import 'group_chat_screen.dart';
 import 'create_group_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_list_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_page_mess.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 
 class GroupChatsScreen extends StatefulWidget {
@@ -273,7 +275,19 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
                   return;
                 }
 
-                // TODO: gắn màn “Tin nhắn với pages” (i == 1) và “Menu” (i == 3)
+                if (i == 1) {
+                  // Điều hướng sang “Tin nhắn với pages”
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          PageMessagesScreen(accessToken: widget.accessToken),
+                    ),
+                  );
+                  return;
+                }
+
+                // TODO: gắn màn “Menu” (i == 3)
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('Chưa gắn điều hướng cho tab $i')),
                 );
