@@ -253,61 +253,94 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         child: Scaffold(
           extendBody: true,
           key: _scaffoldKey,
-          body: RepaintBoundary(
-            key: _dashboardRepaintKey,
-            child: ColoredBox(
-              color: theme.scaffoldBackgroundColor,
-              child: NotificationListener<ScrollNotification>(
-                onNotification: _handleScrollNotification,
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 280),
-                  reverseDuration: const Duration(milliseconds: 220),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  layoutBuilder: (currentChild, previousChildren) {
-                    // Gi? previousChild l?i trong Stack d? out-animation mu?t
-                    return Stack(
-                      alignment: Alignment.center,
-                      children: <Widget>[
-                        ...previousChildren,
-                        if (currentChild != null) currentChild,
-                      ],
-                    );
-                  },
-                  transitionBuilder: (child, animation) {
-                    // N?u l?n d?u ho?c không xác d?nh hu?ng thì ch? fade
-                    if (_pageDirection == 0) {
-                      return FadeTransition(
-                        opacity: animation,
-                        child: child,
-                      );
-                    }
+          body: ColoredBox(
+            color: theme.scaffoldBackgroundColor,
+            child: Stack(
+              children: [
+                RepaintBoundary(
+                  key: _dashboardRepaintKey,
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: _handleScrollNotification,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 280),
+                      reverseDuration: const Duration(milliseconds: 220),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      layoutBuilder: (currentChild, previousChildren) {
+                        // Gi? previousChild l?i trong Stack d? out-animation mu?t
+                        return Stack(
+                          alignment: Alignment.center,
+                          children: <Widget>[
+                            ...previousChildren,
+                            if (currentChild != null) currentChild,
+                          ],
+                        );
+                      },
+                      transitionBuilder: (child, animation) {
+                        // N?u l?n d?u ho?c không xác d?nh hu?ng thì ch? fade
+                        if (_pageDirection == 0) {
+                          return FadeTransition(
+                            opacity: animation,
+                            child: child,
+                          );
+                        }
 
-                    final offsetTween = Tween<Offset>(
-                      begin: Offset(0.14 * _pageDirection * -1.0, 0),
-                      end: Offset.zero,
-                    );
+                        final offsetTween = Tween<Offset>(
+                          begin: Offset(0.14 * _pageDirection * -1.0, 0),
+                          end: Offset.zero,
+                        );
 
-                    final fade = CurvedAnimation(
-                      parent: animation,
-                      curve: Curves.easeOutQuad,
-                    );
+                        final fade = CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOutQuad,
+                        );
 
-                    return FadeTransition(
-                      opacity: fade,
-                      child: SlideTransition(
-                        position: offsetTween.animate(animation),
-                        child: child,
+                        return FadeTransition(
+                          opacity: fade,
+                          child: SlideTransition(
+                            position: offsetTween.animate(animation),
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: PageStorage(
+                        key: ValueKey<int>(_pageIndex),
+                        bucket: bucket,
+                        child: _screens[_pageIndex].screen,
                       ),
-                    );
-                  },
-                  child: PageStorage(
-                    key: ValueKey<int>(_pageIndex),
-                    bucket: bucket,
-                    child: _screens[_pageIndex].screen,
+                    ),
                   ),
                 ),
-              ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: AnimatedSlide(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeInOut,
+                    offset: hideNav ? const Offset(0, 1.2) : Offset.zero,
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 180),
+                      opacity: hideNav ? 0 : 1,
+                      child: IgnorePointer(
+                        child: Container(
+                          height: navHeight + 20,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.white.withOpacity(0),
+                                Colors.white,
+                              ],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           bottomNavigationBar: AnimatedSlide(
@@ -830,4 +863,5 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     return list;
   }
 }
+
 
