@@ -31,6 +31,38 @@ class PageChatThread {
     required this.lastMessageType,
   });
 
+  PageChatThread copyWith({
+    String? pageId,
+    String? userId,
+    String? ownerId,
+    String? peerName,
+    String? peerAvatar,
+    String? pageName,
+    String? pageTitle,
+    bool? isMyPage,
+    String? lastMessage,
+    String? lastMessageTime,
+    int? unreadCount,
+    String? avatar,
+    String? lastMessageType,
+  }) {
+    return PageChatThread(
+      pageId: pageId ?? this.pageId,
+      userId: userId ?? this.userId,
+      ownerId: ownerId ?? this.ownerId,
+      peerName: peerName ?? this.peerName,
+      peerAvatar: peerAvatar ?? this.peerAvatar,
+      pageName: pageName ?? this.pageName,
+      pageTitle: pageTitle ?? this.pageTitle,
+      isMyPage: isMyPage ?? this.isMyPage,
+      lastMessage: lastMessage ?? this.lastMessage,
+      lastMessageTime: lastMessageTime ?? this.lastMessageTime,
+      unreadCount: unreadCount ?? this.unreadCount,
+      avatar: avatar ?? this.avatar,
+      lastMessageType: lastMessageType ?? this.lastMessageType,
+    );
+  }
+
   factory PageChatThread.fromJson(Map<String, dynamic> json) {
     final Map<String, dynamic> lastMsg = json['last_message'] ?? {};
     final Map<String, dynamic> userData = lastMsg['user_data'] ?? {};

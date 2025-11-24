@@ -12,6 +12,7 @@ import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dar
 import 'package:flutter_sixvalley_ecommerce/utill/dimensions.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_page_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/custom_themes.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/edit_page_screen.dart';
 
 class SocialPageDetailScreen extends StatefulWidget {
   final SocialGetPage page;
@@ -106,8 +107,38 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
     _showToast(getTranslated('feature_coming_soon', context) ?? 'Sắp ra mắt');
   }
 
-  void _onEditPage() {
-    _showToast('Tính năng chỉnh sửa đang phát triển');
+  Future<void> _onEditPage() async {
+    final payload = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(
+        builder: (_) => EditPageScreen(
+          pageId: _page.pageId,
+          initialPageName: _page.pageName,
+          initialPageTitle: _page.name,
+          initialDescription: _page.description,
+          initialCategoryName: _page.category,
+          initialAvatarUrl: _page.avatarUrl,
+          initialCoverUrl: _page.coverUrl,
+        ),
+      ),
+    );
+
+    if (!mounted || payload == null) return;
+
+    final ctrl = context.read<SocialPageController>();
+    final ok = await ctrl.updatePageFromPayload(payload);
+
+    if (!mounted) return;
+
+    if (ok && ctrl.lastUpdatedPage != null) {
+      setState(() {
+        _page = ctrl.lastUpdatedPage!;
+      });
+      _showToast(getTranslated('page_updated', context) ?? 'Đã cập nhật trang');
+    } else if (ok) {
+      _showToast(getTranslated('page_updated', context) ?? 'Đã cập nhật trang');
+    } else {
+      _showToast(getTranslated('update_failed', context) ?? 'Cập nhật thất bại');
+    }
   }
 
   void _onAdvertise() {
@@ -492,7 +523,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                         children: [
                           Icon(
                             Icons.post_add,
-                            size: 50,
+                            size: 50,git
                             color: theme.disabledColor,
                           ),
                           const SizedBox(height: 10),
