@@ -523,7 +523,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                         children: [
                           Icon(
                             Icons.post_add,
-                            size: 50,git
+                            size: 50,
                             color: theme.disabledColor,
                           ),
                           const SizedBox(height: 10),
