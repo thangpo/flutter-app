@@ -20,12 +20,16 @@ class SocialCreatePostScreen extends StatefulWidget {
   final String? groupId;
   final String? groupName;
   final String? groupTitle;
+  final String? pageId;
+  final String? pageName;
 
   const SocialCreatePostScreen({
     super.key,
     this.groupId,
     this.groupName,
     this.groupTitle,
+    this.pageId,
+    this.pageName,
   });
 
   @override
@@ -502,6 +506,7 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
         feelingType: _selectedFeelingType,
         feelingValue: _selectedFeelingValue?.trim(),
         groupId: widget.groupId,
+        pageId: widget.pageId,
         postMap: _selectedLocation?.trim(),
         backgroundColorId: _selectedBackgroundId,
       );

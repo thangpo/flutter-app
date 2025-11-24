@@ -1513,6 +1513,7 @@ class SocialRepository {
     String? feelingType,
     String? feelingValue,
     String? groupId,
+    String? pageId,
     String? postMap,
   }) async {
     try {
@@ -1548,6 +1549,9 @@ class SocialRepository {
 
       if (groupId != null && groupId.trim().isNotEmpty) {
         fields['group_id'] = groupId.trim();
+      }
+      if (pageId != null && pageId.trim().isNotEmpty) {
+        fields['page_id'] = pageId.trim();
       }
 
       if (postMap != null && postMap.trim().isNotEmpty) {

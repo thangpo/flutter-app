@@ -1743,6 +1743,7 @@ class SocialService implements SocialServiceInterface {
     String? feelingType,
     String? feelingValue,
     String? groupId,
+    String? pageId,
     String? postMap,
   }) async {
     final resp = await socialRepository.createPost(
@@ -1755,6 +1756,7 @@ class SocialService implements SocialServiceInterface {
       feelingType: feelingType,
       feelingValue: feelingValue,
       groupId: groupId,
+      pageId: pageId,
       postMap: postMap,
     );
     if (resp.isSuccess && resp.response != null) {

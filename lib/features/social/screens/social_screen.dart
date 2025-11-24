@@ -28,6 +28,12 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_scre
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_group_detail_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_page_controller.dart'
+    as page_ctrl;
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_get_page.dart'
+    as page_models;
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_page_detail.dart'
+    as page_screens;
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/social_post_text_block.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/social_feeling_helper.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_post_full_with_screen.dart';
@@ -1747,10 +1753,30 @@ class SocialPostCard extends StatelessWidget {
               padding: const EdgeInsets.all(12),
               child: Row(
                 children: [
-                  // ==== Avatar (báº¥m Ä‘á»ƒ má»Ÿ ProfileScreen) ====
+                  // ==== Avatar (page post -> PageDetail, otherwise Profile) ====
                   InkWell(
                     borderRadius: BorderRadius.circular(40),
                     onTap: () {
+                      final String? pageIdStr = post.pageId?.trim();
+                      if (pageIdStr != null && pageIdStr.isNotEmpty) {
+                        try {
+                          final pageCtrl = context.read<page_ctrl.SocialPageController>();
+                          final page_models.SocialGetPage? page =
+                              pageCtrl.findPageByIdString(pageIdStr);
+                          if (page != null) {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    page_screens.SocialPageDetailScreen(page: page),
+                              ),
+                            );
+                            return;
+                          }
+                        } catch (_) {
+                          // no page controller in tree -> fall back
+                        }
+                      }
+
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) =>
@@ -1782,11 +1808,31 @@ class SocialPostCard extends StatelessWidget {
 
                   const SizedBox(width: 10),
 
-                  // ==== Cá»™t tÃªn + time (báº¥m Ä‘á»ƒ má»Ÿ ProfileScreen) ====
+                  // ==== Cột tên + time (ưu tiên mở Page nếu là page post) ====
                   Expanded(
                     child: InkWell(
                       borderRadius: BorderRadius.circular(6),
                       onTap: () {
+                        final String? pageIdStr = post.pageId?.trim();
+                        if (pageIdStr != null && pageIdStr.isNotEmpty) {
+                          try {
+                            final pageCtrl = context.read<page_ctrl.SocialPageController>();
+                            final page_models.SocialGetPage? page =
+                                pageCtrl.findPageByIdString(pageIdStr);
+                            if (page != null) {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      page_screens.SocialPageDetailScreen(page: page),
+                                ),
+                              );
+                              return;
+                            }
+                          } catch (_) {
+                            // ignore and fall back
+                          }
+                        }
+
                         Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) =>

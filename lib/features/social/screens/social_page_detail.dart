@@ -7,6 +7,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_screen.dart'
     show SocialPostCard;
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_post_screen.dart';
 
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/dimensions.dart';
@@ -145,8 +146,31 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
     _showToast('Tính năng quảng cáo đang phát triển');
   }
 
-  void _onCreatePost() {
-    _showToast(getTranslated('feature_coming_soon', context) ?? 'Sắp ra mắt');
+  Future<void> _onCreatePost() async {
+    if (!_page.isPageOwner) {
+      _showToast(
+        getTranslated('only_page_owner_can_post', context) ??
+            'Chỉ chủ trang mới có thể đăng bài.',
+      );
+      return;
+    }
+
+    final SocialPost? created = await Navigator.of(context).push<SocialPost>(
+      MaterialPageRoute(
+        builder: (_) => SocialCreatePostScreen(
+          pageId: _page.pageId.toString(),
+          pageName: _page.name,
+        ),
+        fullscreenDialog: true,
+      ),
+    );
+
+    if (!mounted || created == null) return;
+
+    final SocialPost resolved =
+        created.copyWith(pageId: created.pageId ?? _page.pageId.toString());
+
+    context.read<SocialPageController>().prependPagePost(resolved);
   }
 
   void _showToast(String msg) {
@@ -452,41 +476,42 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                         const SizedBox(height: 16),
                       ],
 
-                      InkWell(
-                        onTap: _onCreatePost,
-                        borderRadius: BorderRadius.circular(30),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: theme.cardColor,
-                            borderRadius: BorderRadius.circular(30),
-                            border: Border.all(color: theme.dividerColor),
-                          ),
-                          child: Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 16,
-                                backgroundImage: NetworkImage(page.avatarUrl),
-                              ),
-                              const SizedBox(width: 12),
-                              Text(
-                                "Bạn đang nghĩ gì?",
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: theme.hintColor,
+                      if (isPageOwner)
+                        InkWell(
+                          onTap: _onCreatePost,
+                          borderRadius: BorderRadius.circular(30),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: theme.cardColor,
+                              borderRadius: BorderRadius.circular(30),
+                              border: Border.all(color: theme.dividerColor),
+                            ),
+                            child: Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 16,
+                                  backgroundImage: NetworkImage(page.avatarUrl),
                                 ),
-                              ),
-                              const Spacer(),
-                              Icon(
-                                Icons.image_outlined,
-                                color: Colors.green.shade400,
-                              ),
-                            ],
+                                const SizedBox(width: 12),
+                                Text(
+                                  "Bạn đang nghĩ gì?",
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: theme.hintColor,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Icon(
+                                  Icons.image_outlined,
+                                  color: Colors.green.shade400,
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
                     ],
                   ),
                 ),

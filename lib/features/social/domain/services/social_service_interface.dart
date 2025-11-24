@@ -100,6 +100,7 @@ abstract class SocialServiceInterface {
     String? feelingType,
     String? feelingValue,
     String? groupId,
+    String? pageId,
     String? postMap,
   });
   Future<SocialPost> sharePost({required String postId, String? text});

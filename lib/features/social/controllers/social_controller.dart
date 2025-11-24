@@ -1309,6 +1309,7 @@ class SocialController with ChangeNotifier {
     String? feelingType,
     String? feelingValue,
     String? groupId,
+    String? pageId,
     String? postMap,
   }) async {
     if (_creatingPost) return null;
@@ -1325,6 +1326,7 @@ class SocialController with ChangeNotifier {
         feelingType: feelingType,
         feelingValue: feelingValue,
         groupId: groupId,
+        pageId: pageId,
         postMap: postMap,
       );
       final SocialPost normalized = groupId != null
@@ -1332,7 +1334,9 @@ class SocialController with ChangeNotifier {
               isGroupPost: true,
               groupId: groupId,
             )
-          : post;
+          : post.copyWith(
+              pageId: pageId ?? post.pageId,
+            );
       _posts.insert(0, normalized);
       final String? colorId = backgroundColorId ?? normalized.backgroundColorId;
       if (colorId != null && colorId.isNotEmpty) {

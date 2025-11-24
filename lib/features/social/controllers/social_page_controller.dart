@@ -1174,6 +1174,28 @@ class SocialPageController with ChangeNotifier {
     notifyListeners();
   }
 
+  /// Chèn một bài viết mới vào đầu danh sách bài viết của page.
+  void prependPagePost(SocialPost post) {
+    _pagePosts = <SocialPost>[post, ..._pagePosts];
+    _pagePostsInitialized = true;
+    notifyListeners();
+  }
+
+  /// Tìm page theo id (string) trong các danh sách đã tải.
+  SocialGetPage? findPageByIdString(String pageId) {
+    final String needle = pageId.trim();
+    if (needle.isEmpty) return null;
+    for (final _PageListState state
+        in <_PageListState>[_recommendedState, _myPagesState, _likedPagesState]) {
+      try {
+        return state.items.firstWhere((p) => p.pageId.toString() == needle);
+      } catch (_) {
+        continue;
+      }
+    }
+    return null;
+  }
+
 
 
 
