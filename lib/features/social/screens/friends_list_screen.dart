@@ -11,7 +11,6 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/chat_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_page_mess.dart';
 
-
 // 👇 nhóm chat
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_chat_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_group_screen.dart';
@@ -65,6 +64,7 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final bottomInset = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -86,34 +86,42 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
         ),
       ),
       floatingActionButton: null,
-      bottomNavigationBar: _MessengerFooter(
-        currentIndex: _tabIndex,
-        chatBadgeCount: chatBadgeCount,
-        showNotifDot: notifDot,
-        onTap: (i) {
-          setState(() => _tabIndex = i);
 
-          if (i == 1) {
-            // 👈 Tab STORIES → mở màn Trang / Tin nhắn Page
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                // trong onTap của tab Stories
-                builder: (_) => PageMessagesScreen(accessToken: widget.accessToken),
+      /// ✅ Thanh tab bar dạng "floating capsule"
+      bottomNavigationBar: Padding(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          bottom: 8 + bottomInset, // chừa chỗ cho thanh điều hướng hệ thống
+        ),
+        child: _MessengerFooter(
+          currentIndex: _tabIndex,
+          chatBadgeCount: chatBadgeCount,
+          showNotifDot: notifDot,
+          onTap: (i) {
+            setState(() => _tabIndex = i);
 
-              ),
-            );
-          } else if (i == 2) {
-            // Group chat như cũ
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) =>
-                    GroupChatsScreen(accessToken: widget.accessToken),
-              ),
-            );
-          }
-        },
+            if (i == 1) {
+              // 👈 Tab STORIES → mở màn Trang / Tin nhắn Page
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      PageMessagesScreen(accessToken: widget.accessToken),
+                ),
+              );
+            } else if (i == 2) {
+              // Group chat như cũ
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      GroupChatsScreen(accessToken: widget.accessToken),
+                ),
+              );
+            }
+          },
+        ),
       ),
 
       body: Column(
@@ -267,12 +275,6 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                                       ],
                                     ),
                                   ),
-                                  // const SizedBox(width: 8),
-                                  // Icon(
-                                  //   Icons.volume_off,
-                                  //   size: 18,
-                                  //   color: cs.onSurface.withOpacity(.35),
-                                  // ),
                                 ],
                               ),
                             ),
@@ -313,7 +315,7 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
   }
 }
 
-/* ===== FOOTER (Messenger style) ===== */
+/* ===== FOOTER (Messenger style – floating iOS-like) ===== */
 class _MessengerFooter extends StatelessWidget {
   final int currentIndex;
   final int chatBadgeCount;
@@ -344,6 +346,7 @@ class _MessengerFooter extends StatelessWidget {
 
       return Expanded(
         child: InkWell(
+          borderRadius: BorderRadius.circular(999),
           onTap: () => onTap(index),
           child: SizedBox(
             height: 56,
@@ -381,13 +384,24 @@ class _MessengerFooter extends StatelessWidget {
     }
 
     return Material(
-      elevation: 6,
+      color: Colors.transparent,
+      elevation: 0,
       child: Container(
+        height: 64,
         decoration: BoxDecoration(
-          color: Theme.of(context).scaffoldBackgroundColor,
-          border: Border(
-            top: BorderSide(color: cs.outlineVariant, width: .5),
+          color: cs.surface.withOpacity(0.95),
+          borderRadius: BorderRadius.circular(32),
+          border: Border.all(
+            color: cs.outlineVariant.withOpacity(0.5),
+            width: 0.8,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.10),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Row(
           children: [
@@ -399,8 +413,8 @@ class _MessengerFooter extends StatelessWidget {
             ),
             item(
               index: 1,
-              icon: Icons.video_collection,
-              label: getTranslated('stories', context)!,
+              icon: Icons.flag_outlined, 
+              label: 'Pages',
             ),
             item(
               index: 2,

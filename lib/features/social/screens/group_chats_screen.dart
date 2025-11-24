@@ -109,6 +109,7 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final bottomInset = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
       appBar: AppBar(
@@ -241,36 +242,43 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
         ],
       ),
 
-      // === FOOTER NAV ===
+      // === FOOTER NAV (floating iOS style) ===
       bottomNavigationBar: Consumer<GroupChatController>(
         builder: (context, ctrl, _) {
           final totalGroupUnread =
               ctrl.groups.fold<int>(0, (sum, g) => sum + _unread(g));
 
-          return _FooterNav(
-            currentIndex: 2, // Màn hình Nhóm Chat
-            chatBadgeCount: 0, // có thể map từ màn Đoạn chat nếu cần
-            showNotifDot: totalGroupUnread > 0,
-            onTap: (i) {
-              if (i == 2) return; // đang ở Nhóm Chat rồi
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              bottom: 8 + bottomInset,
+            ),
+            child: _GroupFooterNav(
+              currentIndex: 2, // Màn hình Nhóm Chat
+              chatBadgeCount: 0, // có thể map từ màn Đoạn chat nếu cần
+              showNotifDot: totalGroupUnread > 0,
+              onTap: (i) {
+                if (i == 2) return; // đang ở Nhóm Chat rồi
 
-              if (i == 0) {
-                // Điều hướng về màn “Đoạn chat”
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        FriendsListScreen(accessToken: widget.accessToken),
-                  ),
+                if (i == 0) {
+                  // Điều hướng về màn “Đoạn chat”
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          FriendsListScreen(accessToken: widget.accessToken),
+                    ),
+                  );
+                  return;
+                }
+
+                // TODO: gắn màn “Tin nhắn với pages” (i == 1) và “Menu” (i == 3)
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Chưa gắn điều hướng cho tab $i')),
                 );
-                return;
-              }
-
-              // TODO: gắn màn “Tin” (i == 1) và “Menu” (i == 3)
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Chưa gắn điều hướng cho tab $i')),
-              );
-            },
+              },
+            ),
           );
         },
       ),
@@ -335,23 +343,6 @@ class _GroupTile extends StatelessWidget {
                         )
                       : null,
                 ),
-                // Nếu sau này muốn dot online cho group thì bật lên
-                // Positioned(
-                //   right: 0,
-                //   bottom: 0,
-                //   child: Container(
-                //     width: 16,
-                //     height: 16,
-                //     decoration: BoxDecoration(
-                //       color: online ? Colors.green : cs.surfaceVariant,
-                //       shape: BoxShape.circle,
-                //       border: Border.all(
-                //         color: Theme.of(context).scaffoldBackgroundColor,
-                //         width: 2,
-                //       ),
-                //     ),
-                //   ),
-                // ),
               ],
             ),
             const SizedBox(width: 12),
@@ -411,15 +402,15 @@ class _GroupTile extends StatelessWidget {
 }
 
 /// =====================
-/// Footer Nav (custom, gần giống _MessengerFooter)
+/// Footer Nav (floating, iOS-like)
 /// =====================
-class _FooterNav extends StatelessWidget {
+class _GroupFooterNav extends StatelessWidget {
   final int currentIndex;
   final int chatBadgeCount;
   final bool showNotifDot;
   final ValueChanged<int> onTap;
 
-  const _FooterNav({
+  const _GroupFooterNav({
     required this.currentIndex,
     required this.chatBadgeCount,
     required this.showNotifDot,
@@ -434,14 +425,16 @@ class _FooterNav extends StatelessWidget {
       required int index,
       required IconData icon,
       required String label,
-      int badge = 0,
+      int? badge,
       bool dot = false,
     }) {
-      final active = currentIndex == index;
-      final color = active ? Colors.blue : Colors.grey.shade700;
+      final bool active = currentIndex == index;
+      final Color iconColor = active ? Colors.blue : Colors.grey.shade700;
+      final Color textColor = active ? Colors.blue : Colors.grey.shade700;
 
       return Expanded(
         child: InkWell(
+          borderRadius: BorderRadius.circular(999),
           onTap: () => onTap(index),
           child: SizedBox(
             height: 56,
@@ -451,51 +444,25 @@ class _FooterNav extends StatelessWidget {
                 Stack(
                   clipBehavior: Clip.none,
                   children: [
-                    Icon(icon, size: 24, color: color),
-                    if (badge > 0)
+                    Icon(icon, size: 24, color: iconColor),
+                    if ((badge ?? 0) > 0)
                       Positioned(
                         right: -10,
-                        top: -8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.red,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            badge > 99 ? '99+' : '$badge',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
+                        top: -6,
+                        child: _Badge(text: (badge!).toString()),
                       ),
-                    if (badge == 0 && dot)
+                    if (dot)
                       Positioned(
-                        right: -2,
-                        top: -2,
-                        child: Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
+                        right: -6,
+                        top: -4,
+                        child: _Dot(color: Colors.red),
                       ),
                   ],
                 ),
                 const SizedBox(height: 4),
                 Text(
                   label,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 12,
-                    fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                  ),
+                  style: TextStyle(fontSize: 12, color: textColor),
                 ),
               ],
             ),
@@ -505,44 +472,88 @@ class _FooterNav extends StatelessWidget {
     }
 
     return Material(
-      elevation: 6,
-      child: SafeArea(
-        top: false,
-        child: Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            border: Border(
-              top: BorderSide(color: cs.outlineVariant, width: .5),
+      color: Colors.transparent,
+      elevation: 0,
+      child: Container(
+        height: 64,
+        decoration: BoxDecoration(
+          color: cs.surface.withOpacity(0.95),
+          borderRadius: BorderRadius.circular(32),
+          border: Border.all(
+            color: cs.outlineVariant.withOpacity(0.5),
+            width: 0.8,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.10),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
             ),
-          ),
-          child: Row(
-            children: [
-              item(
-                index: 0,
-                icon: Icons.chat_bubble,
-                label: getTranslated('chat_section', context)!,
-                badge: chatBadgeCount,
-              ),
-              item(
-                index: 1,
-                icon: Icons.video_collection,
-                label: getTranslated('stories', context)!,
-              ),
-              item(
-                index: 2,
-                icon: Icons.groups,
-                label: getTranslated('group_chat', context)!,
-                dot: showNotifDot,
-              ),
-              item(
-                index: 3,
-                icon: Icons.menu,
-                label: getTranslated('menu', context)!,
-              ),
-            ],
-          ),
+          ],
+        ),
+        child: Row(
+          children: [
+            item(
+              index: 0,
+              icon: Icons.chat_bubble,
+              label: getTranslated('chat_section', context)!,
+              badge: chatBadgeCount,
+            ),
+            item(
+              index: 1,
+              icon: Icons.flag_outlined,
+              label: 'Pages',
+            ),
+            item(
+              index: 2,
+              icon: Icons.groups,
+              label: getTranslated('group_chat', context)!,
+              dot: showNotifDot,
+            ),
+            item(
+              index: 3,
+              icon: Icons.menu,
+              label: getTranslated('menu', context)!,
+            ),
+          ],
         ),
       ),
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  final String text;
+  const _Badge({required this.text});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+      decoration: BoxDecoration(
+        color: Colors.red,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _Dot extends StatelessWidget {
+  final Color color;
+  const _Dot({required this.color});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 8,
+      height: 8,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     );
   }
 }
