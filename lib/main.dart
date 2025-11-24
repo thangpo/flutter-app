@@ -95,10 +95,6 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/group_call_s
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/webrtc_group_signaling_repository.dart';
 
 import 'di_container.dart' as di;
-import 'package:flutter_sixvalley_ecommerce/features/notification/screens/notification_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_call_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/webrtc_group_signaling_repository.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_page_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_page_service_interface.dart';
 
@@ -427,7 +423,7 @@ Future<void> main() async {
   FcmChatHandler.initialize();
   CallInviteForegroundListener.start();
   SocialCallPushHandler.I.initLocalNotifications();
-  SocialCallPushHandler.I.bindForegroundListener();
+  // SocialCallPushHandler.I.bindForegroundListener();
 
   // =================== APP LIFECYCLE OBSERVER ===================
   WidgetsBinding.instance.addObserver(AppLifecycleObserver());
@@ -552,24 +548,8 @@ Future<void> main() async {
       final data = message.data;
       debugPrint('🔥 onMessage(foreground) data= $data');
 
-      final type = (data['type'] ?? '').toString();
-
-      // ưu tiên cuộc gọi: mở UI ngay
-      // 1-1
-      if (type == 'call_invite' ||
-          (data.containsKey('call_id') &&
-              data.containsKey('media') &&
-              !data.containsKey('group_id'))) {
-        _handleCallInviteOpen(data);
-        return;
-      }
-
-      // GROUP
-      if (type == 'call_invite_group' ||
-          (data.containsKey('call_id') && data.containsKey('group_id'))) {
-        _handleGroupCallInviteOpen(data);
-        return;
-      }
+      // Ở đây KHÔNG xử lý call nữa.
+      // Incoming call đã được handle bởi CallInviteForegroundListener._handleFcmDirect.
 
       // social notif mặc định
       String? title = message.notification?.title;
