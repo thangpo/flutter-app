@@ -548,10 +548,25 @@ Future<void> main() async {
       final data = message.data;
       debugPrint('🔥 onMessage(foreground) data= $data');
 
-      // Ở đây KHÔNG xử lý call nữa.
-      // Incoming call đã được handle bởi CallInviteForegroundListener._handleFcmDirect.
+      // ---- BỎ QUA TẤT CẢ THÔNG ĐIỆP LIÊN QUAN ĐẾN CUỘC GỌI ----
+      final type = (data['type'] ?? '').toString();
+      final hasCallId = data.containsKey('call_id');
 
-      // social notif mặc định
+      final isOneToOneCall = type == 'call_invite' ||
+          (hasCallId &&
+              data.containsKey('media') &&
+              !data.containsKey('group_id'));
+
+      final isGroupCall = type == 'call_invite_group' ||
+          (hasCallId && data.containsKey('group_id'));
+
+      if (isOneToOneCall || isGroupCall) {
+        // Incoming call đã được xử lý bởi CallInviteForegroundListener,
+        // không cần show notification thường nữa.
+        return;
+      }
+
+      // ---- CÁC THÔNG BÁO BÌNH THƯỜNG (ORDER, SOCIAL, ...) ----
       String? title = message.notification?.title;
       String? bodyText = message.notification?.body;
       title ??= (data['title'] ?? data['notification_title'] ?? 'VNShop247')
@@ -584,6 +599,7 @@ Future<void> main() async {
         payload: jsonEncode(data),
       );
     });
+
 
     const AndroidNotificationChannel channel = AndroidNotificationChannel(
       'high_importance_channel',
