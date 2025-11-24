@@ -16,42 +16,63 @@ import '../fcm/fcm_chat_handler.dart';
 import '../screens/incoming_call_screen.dart';
 import '../screens/group_call_screen.dart';
 
-/// Listen to chat FCM stream and show the incoming-call UI immediately on call_invite.
+/// ===========================================
+/// CallInviteForegroundListener
+/// - Lắng nghe:
+///   1) Stream chat (FcmChatHandler.messagesStream)
+///   2) FirebaseMessaging.onMessage (direct)
+/// - Khi detect call_invite:
+///   → attachCall + mở IncomingCallScreen / GroupCallScreen
+/// - Có cơ chế chống trùng (callId, groupId)
+///   để tránh mở UI 2 lần.
+/// ===========================================
 class CallInviteForegroundListener {
   CallInviteForegroundListener._();
 
   static StreamSubscription? _chatSub;
   static StreamSubscription? _fcmSub;
+
   static final Set<int> _handledCallIds = <int>{};
   static final Set<String> _handledGroupCalls =
       <String>{}; // key: callId|groupId
+
   static bool _routing = false;
 
+  /// Gọi hàm này sau khi app đã khởi tạo navigatorKey + Provider
+  /// (thường sau MultiProvider trong main.dart)
   static void start() {
-    // Chat socket / custom FCM stream (tin nhắn chat)
+    // 1) Chat socket / custom FCM stream (tin nhắn chat)
     if (_chatSub == null) {
       _chatSub = FcmChatHandler.messagesStream.listen(_handleChatEvent);
     }
-    // FCM trực tiếp (push của FirebaseMessaging.onMessage)
+
+    // 2) FCM trực tiếp (push của FirebaseMessaging.onMessage)
     if (_fcmSub == null) {
       _fcmSub = FirebaseMessaging.onMessage.listen(_handleFcmDirect);
     }
   }
 
-  // ===================== CHAT STREAM (socket) =====================
+  // =====================================================
+  // ============== 1. CHAT STREAM (socket) ==============
+  // =====================================================
   static Future<void> _handleChatEvent(FcmChatEvent evt) async {
     final raw = evt.text ?? '';
     if (raw.isEmpty) return;
+
     // tin chat thường thì bỏ, chỉ xử lý khi có call_invite
     if (!raw.contains('call_invite')) return;
+
     final inv = _parseLooseCallInvite(raw);
     if (inv == null || inv.isExpired()) return;
+
     if (!_handledCallIds.add(inv.callId)) return;
 
     _openIncoming(inv);
   }
 
-  // ===================== FCM TRỰC TIẾP =====================
+  // =====================================================
+  // ============== 2. FCM TRỰC TIẾP (onMessage) =========
+  // =====================================================
   static Future<void> _handleFcmDirect(RemoteMessage msg) async {
     final data = msg.data;
     if (data.isEmpty) return;
@@ -73,12 +94,17 @@ class CallInviteForegroundListener {
     final callerAvatar =
         data['sender_avatar']?.toString() ?? data['caller_avatar']?.toString();
 
-    // Trường hợp Wo_RegisterMessage gửi type = chat_message nhưng text là payload call
+    // Trường hợp Wo_RegisterMessage gửi type = chat_message
+    // nhưng text là payload call
     if (raw.isNotEmpty && raw.contains('call_invite')) {
       final inv = _parseLooseCallInvite(raw);
       if (inv != null && !inv.isExpired()) {
         if (!_handledCallIds.add(inv.callId)) return;
-        _openIncoming(inv, callerName: callerName, callerAvatar: callerAvatar);
+        _openIncoming(
+          inv,
+          callerName: callerName,
+          callerAvatar: callerAvatar,
+        );
         return;
       }
     }
@@ -92,6 +118,7 @@ class CallInviteForegroundListener {
 
     final callId = int.tryParse('${data['call_id'] ?? ''}') ?? 0;
     if (callId <= 0) return;
+
     final media = (data['media']?.toString() == 'video') ? 'video' : 'audio';
     final ts = int.tryParse('${data['ts'] ?? 0}') ??
         DateTime.now().millisecondsSinceEpoch ~/ 1000;
@@ -104,10 +131,16 @@ class CallInviteForegroundListener {
     if (inv.isExpired()) return;
     if (!_handledCallIds.add(inv.callId)) return;
 
-    _openIncoming(inv, callerName: callerName, callerAvatar: callerAvatar);
+    _openIncoming(
+      inv,
+      callerName: callerName,
+      callerAvatar: callerAvatar,
+    );
   }
 
-  // ===================== PARSER PAYLOAD CALL (TỪ TEXT) =====================
+  // =====================================================
+  // ============== PARSER PAYLOAD CALL (TỪ TEXT) ========
+  // =====================================================
 
   /// Text kiểu:
   ///   {'type':'call_invite','call_id':'173','media':'video','ts':1763955418}
@@ -180,7 +213,9 @@ class CallInviteForegroundListener {
     return raw.substring(start, end);
   }
 
-  // ===================== GROUP CALL HELPERS =====================
+  // =====================================================
+  // ================= GROUP CALL HELPERS ================
+  // =====================================================
   static void _openGroupFromData(Map<String, dynamic> data) {
     final callId = int.tryParse('${data['call_id'] ?? ''}') ?? 0;
     final groupId = '${data['group_id'] ?? ''}';
@@ -200,7 +235,9 @@ class CallInviteForegroundListener {
     );
   }
 
-  // ===================== OPEN UI: 1-1 =====================
+  // =====================================================
+  // ================= OPEN UI: 1-1 ======================
+  // =====================================================
   static void _openIncoming(
     CallInvite inv, {
     String? callerName,
@@ -214,8 +251,11 @@ class CallInviteForegroundListener {
     if (nav == null || ctx == null || !ctx.mounted) {
       // navigator chưa sẵn sàng -> đợi frame sau
       WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _openIncoming(inv,
-            callerName: callerName, callerAvatar: callerAvatar),
+        (_) => _openIncoming(
+          inv,
+          callerName: callerName,
+          callerAvatar: callerAvatar,
+        ),
       );
       return;
     }
@@ -246,7 +286,9 @@ class CallInviteForegroundListener {
     });
   }
 
-  // ===================== OPEN UI: GROUP =====================
+  // =====================================================
+  // ================= OPEN UI: GROUP ====================
+  // =====================================================
   static void _openGroupIncoming({
     required int callId,
     required String groupId,

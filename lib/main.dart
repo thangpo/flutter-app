@@ -149,7 +149,19 @@ Future<void> myBackgroundMessageHandler(RemoteMessage message) async {
   } catch (e) {
     print('❌ [BG] Firebase init error in background: $e');
   }
-  // nếu sau này cần xử lý message ở background thì làm tiếp ở đây
+
+  // ==== XỬ LÝ CUỘC GỌI 1-1 Ở BACKGROUND (data-only FCM) ====
+  try {
+    final data = message.data;
+    final type = (data['type'] ?? '').toString();
+
+    if (type == 'call_invite') {
+      await SocialCallPushHandler.I.showIncomingCallNotification(data);
+      print('📞 [BG] Show incoming call notification (1-1)');
+    }
+  } catch (e) {
+    print('❌ [BG] Error handling background call_invite: $e');
+  }
 }
 
 Future<void> _debugPrintFcmToken() async {
@@ -420,10 +432,14 @@ Future<void> main() async {
     }
   }
 
-  FcmChatHandler.initialize();
-  CallInviteForegroundListener.start();
-  SocialCallPushHandler.I.initLocalNotifications();
-  // SocialCallPushHandler.I.bindForegroundListener();
+  // ==== SOCIAL FCM / CALL WIRING ====
+  FcmChatHandler.initialize(); // stream chat FCM
+  CallInviteForegroundListener
+      .start(); // mở màn IncomingCall khi đang trong app
+  SocialCallPushHandler.I
+      .initLocalNotifications(); // local notif cho cuộc gọi (background)
+
+  // SocialCallPushHandler.I.bindForegroundListener(); // KHÔNG cần dùng nữa
 
   // =================== APP LIFECYCLE OBSERVER ===================
   WidgetsBinding.instance.addObserver(AppLifecycleObserver());
@@ -456,7 +472,7 @@ Future<void> main() async {
     await _debugPrintFcmToken();
   });
 
-  // tạo kênh heads-up
+  // tạo kênh heads-up cho call_invite (cũ, dùng chung plugin global nếu cần)
   await flutterLocalNotificationsPlugin
       .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>()
@@ -497,6 +513,7 @@ Future<void> main() async {
     },
   );
 
+  // Background handler (gồm cả call_invite đã xử lý ở trên)
   FirebaseMessaging.onBackgroundMessage(myBackgroundMessageHandler);
 
   NotificationBody? body;
@@ -599,7 +616,6 @@ Future<void> main() async {
         payload: jsonEncode(data),
       );
     });
-
 
     const AndroidNotificationChannel channel = AndroidNotificationChannel(
       'high_importance_channel',

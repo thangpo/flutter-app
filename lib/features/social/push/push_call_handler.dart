@@ -8,16 +8,19 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'package:provider/provider.dart';
-import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart' show navigatorKey;
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart'
+    show navigatorKey;
 
 import '../screens/incoming_call_screen.dart';
 import '../controllers/call_controller.dart';
 
 /// ===============================
 ///  SocialCallPushHandler
-///  - Xử lý FCM data `type=call_invite`
-///  - Foreground: nhảy thẳng IncomingCallScreen
-///  - Background/terminated: hiện full-screen notif (tap → mở screen)
+///  - Xử lý FCM data `type=call_invite` ở chế độ
+///    background / terminated (data-only).
+///  - Foreground: UI incoming call sẽ do
+///    CallInviteForegroundListener xử lý,
+///    KHÔNG còn xử lý onMessage ở đây nữa.
 /// ===============================
 class SocialCallPushHandler {
   SocialCallPushHandler._();
@@ -59,45 +62,17 @@ class SocialCallPushHandler {
         ?.createNotificationChannel(androidChannel);
   }
 
-  /// Đăng ký lắng nghe FCM khi app foreground.
-  /// Gọi hàm này sau khi Firebase.init xong (trong main.dart).
+  /// Trước đây dùng để đăng ký FCM onMessage foreground.
+  /// Giờ **KHÔNG dùng nữa** (foreground sẽ do
+  /// CallInviteForegroundListener xử lý).
+  ///
+  /// Bố có thể:
+  /// - bỏ không gọi hàm này trong main.dart, hoặc
+  /// - vẫn gọi nhưng nó không làm gì (no-op).
   void bindForegroundListener() {
-    FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-  }
-
-  /// Foreground: nhận call_invite → attachCall + mở IncomingCallScreen
-  Future<void> _handleForegroundMessage(RemoteMessage message) async {
-    final data = message.data;
-    if (data['type'] != 'call_invite') return;
-
-    final callId = int.tryParse('${data['call_id']}') ?? 0;
-    if (callId <= 0) return;
-
-    final media = (data['media'] == 'video') ? 'video' : 'audio';
-    final callerName = data['caller_name'];
-    final callerAvatar = data['caller_avatar'];
-
-    // Nếu có context hiện tại → điều hướng ngay
-    final ctx = navigatorKey.currentContext;
-    if (ctx != null && ctx.mounted) {
-      try {
-        ctx.read<CallController>().attachCall(
-              callId: callId,
-              mediaType: media,
-              initialStatus: 'ringing',
-            );
-      } catch (_) {}
-      _openIncomingScreen(
-        callId: callId,
-        media: media,
-        callerName: callerName,
-        peerAvatar: callerAvatar,
-      );
-      return;
-    }
-
-    // Fallback: show full-screen notif
-    await showIncomingCallNotification(data);
+    // Foreground call_invite được xử lý bởi:
+    // - CallInviteForegroundListener.start()
+    // -> qua FirebaseMessaging.onMessage.listen trong đó.
   }
 
   /// Hiển thị full-screen notification (Android)
@@ -264,4 +239,3 @@ Future<void> socialCallFirebaseBgHandler(RemoteMessage message) async {
   // Không điều hướng ở background isolate → chỉ hiện full-screen notif
   await SocialCallPushHandler.I.showIncomingCallNotification(data);
 }
-
