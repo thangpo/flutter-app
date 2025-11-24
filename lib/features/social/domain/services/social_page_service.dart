@@ -537,6 +537,18 @@ class SocialPageService implements SocialPageServiceInterface {
     final int shareCount =
         int.tryParse('${j['post_shares'] ?? j['shares'] ?? 0}') ?? 0;
 
+    // Page id: ưu tiên field page_id, fallback từ publisher khi có
+    String? _resolvePageId() {
+      final String? raw = j['page_id']?.toString();
+      final String? norm = raw?.trim();
+      if (norm != null && norm.isNotEmpty && norm != '0') return norm;
+
+      final String? pubPage = pub['page_id']?.toString() ?? pub['id']?.toString();
+      final String? normPub = pubPage?.trim();
+      if (normPub != null && normPub.isNotEmpty && normPub != '0') return normPub;
+      return null;
+    }
+
     return SocialPost(
       id: (j['post_id'] ?? j['id'] ?? '').toString(),
       publisherId: (pub['user_id'] ?? pub['id'] ?? '').toString(),
@@ -545,7 +557,7 @@ class SocialPageService implements SocialPageServiceInterface {
       userName: (pub['name'] ?? pub['username'] ?? '').toString(),
       userAvatar: pub['avatar']?.toString(),
       timeText: j['time_text']?.toString(),
-      pageId: j['page_id']?.toString(),
+      pageId: _resolvePageId(),
       postType: j['postType']?.toString(),
       imageUrls: imageUrls,
       imageUrl: imageUrls.isNotEmpty ? imageUrls.first : null,
@@ -567,7 +579,7 @@ class SocialPageService implements SocialPageServiceInterface {
   @override
   Future<List<SocialPageMessage>> sendPageMessage({
     required String pageId,
-    required String recipientId,
+    required String recipientId, // người nhận tin nhắn
     required String text,
     required String messageHashId,
     MultipartFile? file,
@@ -579,7 +591,7 @@ class SocialPageService implements SocialPageServiceInterface {
     final ApiResponseModel<Response> resp =
     await socialPageRepository.sendMessageToPage(
       pageId: pageId,
-      recipientId: recipientId,
+      recipientId: recipientId,  // Đảm bảo recipientId là đúng
       text: text,
       messageHashId: messageHashId,
       file: file,
@@ -590,13 +602,11 @@ class SocialPageService implements SocialPageServiceInterface {
     );
 
     if (resp.isSuccess && resp.response != null) {
-      // Dùng parser chung cho send + fetch
-      final messages = _parsePageMessages(resp.response!);
+      final messages = socialPageRepository.parsePageMessages(resp.response!);
       if (messages.isNotEmpty) {
         return messages;
       }
 
-      // Nếu api_status != 200 mà vẫn isSuccess, xử lý giống các hàm khác
       final dynamic data = resp.response!.data;
       final String message = (data?['errors']?['error_text'] ??
           data?['message'] ??
@@ -606,15 +616,19 @@ class SocialPageService implements SocialPageServiceInterface {
     }
 
     ApiChecker.checkApi(resp);
-    return <SocialPageMessage>[]; // fallback nếu checkApi không throw
+    return <SocialPageMessage>[];  // fallback nếu checkApi không throw
   }
+
+
+
+
 
 
   /// ───────────────── PAGE CHAT: FETCH MESSAGES ─────────────────
   @override
   Future<List<SocialPageMessage>> getPageMessages({
     required String pageId,
-    required String recipientId,
+    required String recipientId,  // recipientId là người nhận tin nhắn
     int? afterMessageId,
     int? beforeMessageId,
     int limit = 20,
@@ -622,20 +636,21 @@ class SocialPageService implements SocialPageServiceInterface {
     final ApiResponseModel<Response> resp =
     await socialPageRepository.fetchPageMessages(
       pageId: pageId,
-      recipientId: recipientId,
+      recipientId: recipientId,  // Truyền recipientId là người nhận tin nhắn
       after: afterMessageId,
       before: beforeMessageId,
       limit: limit,
     );
 
     if (resp.isSuccess && resp.response != null) {
-      final messages = _parsePageMessages(resp.response!);
+      final messages = socialPageRepository.parsePageMessages(resp.response!);
       return messages;
     }
 
     ApiChecker.checkApi(resp);
-    return <SocialPageMessage>[];
+    return <SocialPageMessage>[];  // fallback nếu checkApi không throw
   }
+
 
   /// Parse response page_chat -> List<SocialPageMessage>
   List<SocialPageMessage> _parsePageMessages(Response res) {

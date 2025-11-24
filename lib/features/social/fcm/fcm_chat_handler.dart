@@ -1,21 +1,29 @@
 // lib/features/social/fcm/fcm_chat_handler.dart
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 /// ------------------------------------------------------------
 /// REALTIME CHAT HANDLER for WoWonder 1-1 chat
 /// ------------------------------------------------------------
 /// - Không dùng polling
-/// - Chỉ nhận FCM của tin nhắn mới
+/// - Chỉ nhận FCM của tin nhắn mới / event chat
 /// - ChatScreen lắng nghe stream để reload tin nhắn
 /// ------------------------------------------------------------
 
 class FcmChatEvent {
-  final String peerId; // người gửi / người chat với mình
-  final String messageId; // id tin nhắn mới
-  final String? text; // nội dung tin
-  final String? rawData; // toàn payload
+  /// Id người đối thoại (thường là sender_id)
+  final String peerId;
+
+  /// Id tin nhắn / event mới
+  final String messageId;
+
+  /// Nội dung text (nếu có) – có thể là JSON (call_invite)
+  final String? text;
+
+  /// Toàn bộ payload data dạng JSON string
+  final String? rawData;
 
   FcmChatEvent({
     required this.peerId,
@@ -62,25 +70,36 @@ class FcmChatHandler {
       final data = msg.data;
       if (data.isEmpty) return;
 
-      // Chỉ xử lý loại tin WoWonder gửi khi chat 1-1
-      // Thường có `message_id`, `from_id`, `to_id`
-      if (!data.containsKey("from_id")) return;
-      if (!data.containsKey("message_id")) return;
+      // Debug (nếu cần)
+      // print("🔥 [FcmChatHandler][$source] data = $data");
 
-      final fromId = data["from_id"].toString();
-      final msgId = data["message_id"].toString();
-      final text = data["text"]?.toString();
+      // Hỗ trợ cả key cũ (from_id) lẫn key mới (sender_id)
+      final senderRaw = (data['sender_id'] ?? data['from_id']);
+      if (senderRaw == null || senderRaw.toString().isEmpty) {
+        return;
+      }
+      final peerId = senderRaw.toString();
+
+      // Lấy message_id (bắt buộc)
+      final msgIdRaw = (data['message_id'] ?? data['id']);
+      if (msgIdRaw == null || msgIdRaw.toString().isEmpty) {
+        return;
+      }
+      final messageId = msgIdRaw.toString();
+
+      // Text có thể là nội dung chat, hoặc JSON call_invite
+      final text = data['text']?.toString();
 
       final evt = FcmChatEvent(
-        peerId: fromId,
-        messageId: msgId,
+        peerId: peerId,
+        messageId: messageId,
         text: text,
         rawData: jsonEncode(data),
       );
 
       _controller.add(evt);
     } catch (e) {
-      print("FCM Chat parse error: $e");
+      print("❌ FCM Chat parse error: $e");
     }
   }
 }

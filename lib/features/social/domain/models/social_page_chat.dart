@@ -1,23 +1,26 @@
 class PageChatThread {
-  final String pageId;
-  final String chatId;
+  final String pageId;    // ID of the Page
+  final String userId;    // Peer ID (use as recipient_id when fetch/send)
+  final String ownerId;   // Page owner ID
+  final String peerName;  // Peer display name
+  final String peerAvatar;
   final String pageName;
   final String pageTitle;
   final bool isMyPage;
+
   final String lastMessage;
   final String lastMessageTime;
   final int unreadCount;
+
   final String avatar;
-
-  // MUST HAVE to open chat
-  final String recipientId;
-
-  // Nice to have (UI hiển thị icon)
   final String lastMessageType;
 
   PageChatThread({
     required this.pageId,
-    required this.chatId,
+    required this.userId,
+    required this.ownerId,
+    required this.peerName,
+    required this.peerAvatar,
     required this.pageName,
     required this.pageTitle,
     required this.isMyPage,
@@ -25,26 +28,85 @@ class PageChatThread {
     required this.lastMessageTime,
     required this.unreadCount,
     required this.avatar,
-    required this.recipientId,
     required this.lastMessageType,
   });
 
+  PageChatThread copyWith({
+    String? pageId,
+    String? userId,
+    String? ownerId,
+    String? peerName,
+    String? peerAvatar,
+    String? pageName,
+    String? pageTitle,
+    bool? isMyPage,
+    String? lastMessage,
+    String? lastMessageTime,
+    int? unreadCount,
+    String? avatar,
+    String? lastMessageType,
+  }) {
+    return PageChatThread(
+      pageId: pageId ?? this.pageId,
+      userId: userId ?? this.userId,
+      ownerId: ownerId ?? this.ownerId,
+      peerName: peerName ?? this.peerName,
+      peerAvatar: peerAvatar ?? this.peerAvatar,
+      pageName: pageName ?? this.pageName,
+      pageTitle: pageTitle ?? this.pageTitle,
+      isMyPage: isMyPage ?? this.isMyPage,
+      lastMessage: lastMessage ?? this.lastMessage,
+      lastMessageTime: lastMessageTime ?? this.lastMessageTime,
+      unreadCount: unreadCount ?? this.unreadCount,
+      avatar: avatar ?? this.avatar,
+      lastMessageType: lastMessageType ?? this.lastMessageType,
+    );
+  }
+
   factory PageChatThread.fromJson(Map<String, dynamic> json) {
-    final isMyPage = json['is_page_onwer'] == true || json['is_page_onwer'] == 1;
-    final lastMsg = json['last_message'] ?? {};
+    final Map<String, dynamic> lastMsg = json['last_message'] ?? {};
+    final Map<String, dynamic> userData = lastMsg['user_data'] ?? {};
+    final String ownerId = (json['user_id'] ?? '').toString();
+    final String peerName =
+        (userData['name'] ?? userData['username'] ?? '').toString();
+    final String peerAvatar = (userData['avatar'] ?? '').toString();
+
+    // Peer = the other end of the conversation (recipient_id to use).
+    final String fromId = (lastMsg['from_id'] ?? '').toString();
+    final String toId = (lastMsg['to_id'] ?? '').toString();
+    final String userDataId = (userData['user_id'] ?? '').toString();
+
+    String peerId = '';
+    if (fromId.isNotEmpty && toId.isNotEmpty) {
+      if (fromId == ownerId) {
+        peerId = toId;
+      } else if (toId == ownerId) {
+        peerId = fromId;
+      }
+    }
+
+    if (peerId.isEmpty && userDataId.isNotEmpty && userDataId != ownerId) {
+      peerId = userDataId;
+    }
+
+    if (peerId.isEmpty) {
+      peerId = fromId.isNotEmpty ? fromId : toId;
+    }
 
     return PageChatThread(
       pageId: json['page_id']?.toString() ?? '',
-      chatId: json['chat_id']?.toString() ?? '',
-      recipientId: json['recipient_id']?.toString() ?? '',      // <-- thêm
-      pageName: json['page_name'] ?? '',
-      pageTitle: json['name'] ?? '',
-      isMyPage: isMyPage,
-      lastMessage: lastMsg['text'] ?? '',
-      lastMessageTime: lastMsg['date_time'] ?? '',
-      unreadCount: (lastMsg['seen'] == "0") ? 1 : 0,
-      avatar: json['avatar'] ?? '',
-      lastMessageType: lastMsg['type']?.toString() ?? '',        // <-- thêm
+      userId: peerId,
+      ownerId: ownerId,
+      peerName: peerName,
+      peerAvatar: peerAvatar,
+      pageName: json['page_name']?.toString() ?? '',
+      pageTitle: json['name']?.toString() ?? '',
+      isMyPage: json['is_page_onwer'] == 1 || json['is_page_onwer'] == true,
+      lastMessage: lastMsg['text']?.toString() ?? '',
+      lastMessageTime: lastMsg['date_time']?.toString() ?? '',
+      unreadCount: (lastMsg['seen']?.toString() == "0") ? 1 : 0,
+      avatar: json['avatar']?.toString() ?? '',
+      lastMessageType: lastMsg['type']?.toString() ?? '',
     );
   }
 }

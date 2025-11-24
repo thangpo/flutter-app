@@ -1,4 +1,4 @@
-﻿import 'dart:math';
+import 'dart:math';
 import 'dart:ui' as ui;
 import 'dart:typed_data';
 import 'dart:developer' as developer;
@@ -28,6 +28,12 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_scre
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_group_detail_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_page_controller.dart'
+    as page_ctrl;
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_get_page.dart'
+    as page_models;
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_page_detail.dart'
+    as page_screens;
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/social_post_text_block.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/social_feeling_helper.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_post_full_with_screen.dart';
@@ -77,7 +83,7 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
   bool _samplingHeader = false;
   static const String _headerLogName = 'SocialFeedHeader';
   DateTime _lastHeaderSampleTime =
-      DateTime.fromMillisecondsSinceEpoch(0); // theo dõi throttle log
+      DateTime.fromMillisecondsSinceEpoch(0); // theo di throttle log
   double _lastHeaderSampleOffset = 0.0;
 
   @override
@@ -278,6 +284,7 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
 
   void _maybeResampleHeader(double offset) {
     if (!_chromeVisible || _samplingHeader) return;
+
     const double offsetThreshold =
         24.0; // chỉ resample khi nội dung đổi đủ đáng kể
     const int timeMs = 140; // throttle
@@ -328,7 +335,7 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
         return;
       }
 
-      const double targetRatio = 0.15; // downscale mạnh cho nhẹ
+      const double targetRatio = 0.15; // downscale m?nh cho nh?
       final double pixelRatio =
           (targetRatio.clamp(0.05, 1.0) as num).toDouble();
       final ui.Image image = await boundary.toImage(pixelRatio: pixelRatio);
@@ -590,7 +597,7 @@ Future<void> _launchAdUrl(BuildContext context, String? url) async {
 void _showAdLaunchError(BuildContext context) {
   ScaffoldMessenger.of(
     context,
-  ).showSnackBar(const SnackBar(content: Text('Không thấy quảng cáo')));
+  ).showSnackBar(const SnackBar(content: Text('Khng th?y qu?ng co')));
 }
 
 LiquidGlassSettings _socialGlassSettings(
@@ -810,7 +817,7 @@ class _HeaderIcon extends StatelessWidget {
 
 class _HeaderActionsRow extends StatelessWidget {
   final Color iconColor;
-  final double bubbleOpacity; // vẫn giữ để không phải sửa nơi khác
+  final double bubbleOpacity; // v?n gi? d? khng ph?i s?a noi khc
   final VoidCallback onSearch;
   final VoidCallback onFriends;
   final VoidCallback onMessages;
@@ -1336,27 +1343,27 @@ class _BirthdaySection extends StatelessWidget {
 
     // ===== TEXT MULTI-LANG =====
     final String birthdayTitle =
-        getTranslated('birthday_today_title', context) ?? 'Sinh nhật hôm nay';
+        getTranslated('birthday_today_title', context) ?? 'Sinh nh?t hm nay';
 
     final String singleTemplate =
         getTranslated('birthday_single_template', context) ??
-            'Hôm nay là sinh nhật của {name}';
+            'Hm nay l sinh nh?t c?a {name}';
 
     final String doubleTemplate =
         getTranslated('birthday_double_template', context) ??
-            'Hôm nay sinh nhật {first} và {second}';
+            'Hm nay sinh nh?t {first} v {second}';
 
     final String multiTemplate =
         getTranslated('birthday_multi_template', context) ??
-            'Hôm nay sinh nhật {first} và {count} người bạn khác';
+            'Hm nay sinh nh?t {first} v {count} ngu?i b?n khc';
 
     final String congratulateLabel =
-        getTranslated('birthday_congratulate', context) ?? 'Chúc mừng';
+        getTranslated('birthday_congratulate', context) ?? 'Chc m?ng';
 
     final String fallbackFriend =
-        getTranslated('birthday_friend_fallback', context) ?? 'bạn bè';
+        getTranslated('birthday_friend_fallback', context) ?? 'b?n b';
 
-    // ===== GHÉP CÂU =====
+    // ===== GHP CU =====
     final SocialUser first = users.first;
 
     String pickName(SocialUser u) {
@@ -1427,13 +1434,13 @@ class _BirthdaySection extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // avatar chồng
+              // avatar ch?ng
               _StackedBirthdayAvatars(
                 users: users.take(3).toList(),
               ),
               const SizedBox(width: 8),
 
-              // text co giãn
+              // text co gin
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1477,7 +1484,7 @@ class _BirthdaySection extends StatelessWidget {
 
               const SizedBox(width: 8),
 
-              // nút co lại cho vừa hàng
+              // nt co l?i cho v?a hng
               Flexible(
                 flex: 0,
                 child: FittedBox(
@@ -1565,7 +1572,7 @@ class _StackedBirthdayAvatars extends StatelessWidget {
   }
 }
 
-// tiện cho .firstOrNull
+// ti?n cho .firstOrNull
 extension _IterableFirstOrNull<E> on Iterable<E> {
   E? get firstOrNull => isEmpty ? null : first;
 }
@@ -1662,6 +1669,39 @@ class SocialPostCard extends StatelessWidget {
   final ValueChanged<SocialPost>? onPostUpdated;
   const SocialPostCard({required this.post, this.onPostUpdated});
 
+  page_models.SocialGetPage _buildStubPage(
+      SocialPost post, String pageIdStr) {
+    final int id = int.tryParse(pageIdStr) ?? 0;
+    final String name = (post.userName ?? '').trim();
+    final String avatar = post.userAvatar ?? '';
+    return page_models.SocialGetPage(
+      pageId: id,
+      ownerUserId: 0,
+      username: name.isNotEmpty ? name : pageIdStr,
+      name: name.isNotEmpty ? name : 'Page $pageIdStr',
+      pageName: pageIdStr,
+      description: null,
+      avatarUrl: avatar,
+      coverUrl: avatar,
+      url: '',
+      category: '',
+      subCategory: null,
+      usersPost: 0,
+      likesCount: 0,
+      rating: 0,
+      isVerified: false,
+      isPageOwner: false,
+      isLiked: false,
+      isReported: false,
+      registered: null,
+      type: null,
+      website: null,
+      facebook: null,
+      instagram: null,
+      youtube: null,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final SocialPost post = context.select<SocialController, SocialPost?>(
@@ -1703,7 +1743,7 @@ class SocialPostCard extends StatelessWidget {
 
     final int reactionCount = post.reactionCount;
     final int commentCount = post.commentCount;
-    // shareCount Ä‘Ã£ cÃ³ á»Ÿ trÃªn
+    // shareCount đã có ở trên
 
     final bool showReactions = reactionCount > 0;
     final bool showComments = commentCount > 0;
@@ -1735,10 +1775,42 @@ class SocialPostCard extends StatelessWidget {
               padding: const EdgeInsets.all(12),
               child: Row(
                 children: [
-                  // ==== Avatar (báº¥m Ä‘á»ƒ má»Ÿ ProfileScreen) ====
+                  // ==== Avatar (page post -> PageDetail, otherwise Profile) ====
                   InkWell(
                     borderRadius: BorderRadius.circular(40),
                     onTap: () {
+                      final String? pageIdStr = (post.pageId?.trim().isNotEmpty ?? false)
+                          ? post.pageId!.trim()
+                          : post.sharedPost?.pageId?.trim();
+                      if (pageIdStr != null && pageIdStr.isNotEmpty) {
+                        try {
+                          final pageCtrl = context.read<page_ctrl.SocialPageController>();
+                          final page_models.SocialGetPage? page =
+                              pageCtrl.findPageByIdString(pageIdStr);
+                          if (page != null) {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    page_screens.SocialPageDetailScreen(page: page),
+                              ),
+                            );
+                            return;
+                          }
+                        } catch (_) {
+                          // no page controller in tree -> fall back
+                        }
+                        // fallback: chưa cache page -> dùng stub để mở PageDetail, controller sẽ fetch
+                        final page_models.SocialGetPage stub =
+                            _buildStubPage(post, pageIdStr);
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                page_screens.SocialPageDetailScreen(page: stub),
+                          ),
+                        );
+                        return;
+                      }
+
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) =>
@@ -1770,11 +1842,42 @@ class SocialPostCard extends StatelessWidget {
 
                   const SizedBox(width: 10),
 
-                  // ==== Cá»™t tÃªn + time (báº¥m Ä‘á»ƒ má»Ÿ ProfileScreen) ====
+                  // ==== C?t tn + time (uu tin m? Page n?u l page post) ====
                   Expanded(
                     child: InkWell(
                       borderRadius: BorderRadius.circular(6),
                       onTap: () {
+                        final String? pageIdStr = (post.pageId?.trim().isNotEmpty ?? false)
+                            ? post.pageId!.trim()
+                            : post.sharedPost?.pageId?.trim();
+                        if (pageIdStr != null && pageIdStr.isNotEmpty) {
+                          try {
+                            final pageCtrl = context.read<page_ctrl.SocialPageController>();
+                            final page_models.SocialGetPage? page =
+                                pageCtrl.findPageByIdString(pageIdStr);
+                            if (page != null) {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      page_screens.SocialPageDetailScreen(page: page),
+                                ),
+                              );
+                              return;
+                            }
+                          } catch (_) {
+                            // ignore and fall back
+                          }
+                          final page_models.SocialGetPage stub =
+                              _buildStubPage(post, pageIdStr);
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  page_screens.SocialPageDetailScreen(page: stub),
+                            ),
+                          );
+                          return;
+                        }
+
                         Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) =>
@@ -1785,7 +1888,7 @@ class SocialPostCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // userName + postType cÃ¹ng 1 dÃ²ng
+                          // userName + postType cùng 1 dòng
                           Row(
                             children: [
                               Flexible(
@@ -2384,7 +2487,7 @@ class _PostAdCardState extends State<_PostAdCard> {
 
   String _title(BuildContext context) {
     final String defaultTitle =
-        getTranslated('ad_default_title', context) ?? 'Quảng cáo';
+        getTranslated('ad_default_title', context) ?? 'Qu?ng co';
 
     if (widget.ad.headline?.trim().isNotEmpty ?? false) {
       return widget.ad.headline!.trim();
@@ -2442,9 +2545,9 @@ class _PostAdCardState extends State<_PostAdCard> {
     final String? description = _description();
 
     final String sponsoredLabel =
-        getTranslated('ad_sponsored', context) ?? 'Được tài trợ';
+        getTranslated('ad_sponsored', context) ?? 'u?c ti tr?';
     final String learnMoreLabel =
-        getTranslated('ad_learn_more', context) ?? 'Tìm hiểu thêm';
+        getTranslated('ad_learn_more', context) ?? 'Tm hi?u thm';
 
     return Padding(
       padding: const EdgeInsets.only(top: 8),
@@ -2836,7 +2939,7 @@ class _ImageGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Ã©p kÃ­ch thu?c t?ng th? con bÃ¡m trong c?t/rÃ ng bu?c
+    // ép kích thu?c t?ng th? con bám trong c?t/ràng bu?c
     final double aspect = urls.length == 1 ? (16 / 9) : (16 / 9);
     return AspectRatio(
       aspectRatio: aspect,
@@ -2923,7 +3026,7 @@ class _ImageGrid extends StatelessWidget {
     }
   }
 
-  // ?nh vuÃ´ng dÃ¹ng bÃªn trong grid
+  // ?nh vuông dùng bên trong grid
   Widget _square(String u) => AspectRatio(aspectRatio: 1, child: _tile(u));
 
   Widget _tile(String u) => Image(
@@ -3009,7 +3112,7 @@ String _reactionActionLabel(BuildContext context, String reaction) {
     case 'Wow':
       return getTranslated('wow', context) ?? 'Wow';
     case 'Sad':
-      return getTranslated('sad', context) ?? 'Buồn';
+      return getTranslated('sad', context) ?? 'Bu?n';
     case 'Angry':
       return getTranslated('angry', context) ?? 'Angry';
     default:
@@ -3123,13 +3226,13 @@ void _showReactionsOverlay(
           overlay.context.findRenderObject() as RenderBox;
       final Offset local = overlayBox.globalToLocal(globalPos);
 
-      // KÃ­ch thu?c khung popup, canh n?m ngay trÃªn nÃºt
+      // Kích thu?c khung popup, canh n?m ngay trên nút
       const double popupWidth = 300;
       const double popupHeight = 56;
 
       return Stack(
         children: [
-          // Tap ra ngoÃ i d? t?t
+          // Tap ra ngoài d? t?t
           Positioned.fill(child: GestureDetector(onTap: () => entry.remove())),
           Positioned(
             left: (local.dx - popupWidth / 2).clamp(
@@ -3275,3 +3378,4 @@ class _Story {
 class EdgeBox {
   static const zero = EdgeInsets.zero;
 }
+

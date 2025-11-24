@@ -17,7 +17,12 @@ class EventController extends ChangeNotifier {
   List<SocialEvent> interested = [];
   List<SocialEvent> invited = [];
   List<SocialEvent> past = [];
+  String _currentFetch = 'events';
+  String get currentFetch => _currentFetch;
+  SocialEvent? currentEventDetail;
+  bool detailLoading = false;
   bool creating = false;
+  bool deleting = false;
   String? error;
   String? _accessToken;
 
@@ -30,6 +35,8 @@ class EventController extends ChangeNotifier {
 
   Future<void> getEvents({String fetch = 'events'}) async {
     loading = true;
+    error = null;
+    _currentFetch = fetch;
     notifyListeners();
 
     await _ensureToken();
@@ -47,30 +54,54 @@ class EventController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> toggleInterest(String eventId) async {
-    loading = true;
+  Future<SocialEvent?> fetchEventById(String id) async {
+    detailLoading = true;
     notifyListeners();
 
-    try {
-      final interestStatus = await repo.toggleInterestEvent(
-        accessToken: _accessToken!,
-        eventId: eventId,
-      );
+    await _ensureToken();
+    if (_accessToken == null) {
+      detailLoading = false;
+      notifyListeners();
+      return null;
+    }
 
-      if (interestStatus != null) {
-        // Cập nhật trạng thái sự kiện (thích / không thích)
-        final event = events.firstWhere((e) => e.id == eventId);
-        event.isInterested = interestStatus == '1';
-        notifyListeners();
-      } else {
-        error = 'Lỗi khi cập nhật trạng thái thích sự kiện';
-      }
-    } catch (e) {
-      error = e.toString();
-    } finally {
-      loading = false;
+    final event = await repo.getEventById(_accessToken!, id);
+    currentEventDetail = event;
+
+    detailLoading = false;
+    notifyListeners();
+    return event;
+  }
+
+  Future<bool> toggleInterestEvent(String eventId) async {
+    await _ensureToken();
+    final success = await repo.interestEvent(_accessToken!, eventId);
+    if (!success) {
+      error = 'Lỗi khi cập nhật sự kiện';
+      return false;
+    }
+    // Tìm vị trí event — KHÔNG TẠO THÊM HÀM
+    final index = events.indexWhere((e) => e.id == eventId);
+    if (index != -1) {
+      events[index].isInterested = !events[index].isInterested;
       notifyListeners();
     }
+    return true;
+  }
+
+  Future<bool> toggleEventGoing(String eventId) async {
+    await _ensureToken();
+    final success = await repo.goToEvent(_accessToken!, eventId);
+    if (!success) {
+      error = 'Lỗi khi tham gia sự kiện';
+      return false;
+    }
+    final index = events.indexWhere((e) => e.id == eventId);
+    if (index != -1) {
+      events[index].isGoing = !events[index].isGoing;
+      notifyListeners();
+    }
+    return true;
   }
 
   Future<SocialEvent?> createEvent({
@@ -121,10 +152,109 @@ class EventController extends ChangeNotifier {
       rethrow;
     }
   }
+  Future<bool> editEvent({
+    required String id,
+    required String name,
+    required String location,
+    required String description,
+    required String startDate,
+    required String endDate,
+    required String startTime,
+    required String endTime,
+    File? coverFile,
+  }) async {
+    if (name.trim().length < 5) {
+      error = 'Tiêu đề phải nhiều hơn 5 ký tự';
+      notifyListeners();
+      return false;
+    }
+    if (description.trim().length < 10) {
+      error = 'Mô tả phải nhiều hơn 10 ký tự';
+      notifyListeners();
+      return false;
+    }
 
+    creating = true;
+    notifyListeners();
+
+    try {
+      await _ensureToken();
+      if (_accessToken == null) {
+        creating = false;
+        error = 'Chưa có access token';
+        notifyListeners();
+        return false;
+      }
+
+      final ok = await repo.editEvent(
+        accessToken: _accessToken!,
+        eventId: id,
+        name: name.trim(),
+        location: location.trim(),
+        description: description.trim(),
+        startDate: startDate.trim(),
+        endDate: endDate.trim(),
+        startTime: startTime.trim(),
+        endTime: endTime.trim(),
+        coverFile: coverFile,
+      );
+
+      creating = false;
+
+      if (!ok) {
+        error = 'Sửa sự kiện thất bại';
+      }
+
+      // Nếu muốn sau khi sửa tự refresh list:
+      if (ok) {
+        await getEvents(fetch: _currentFetch);
+      }
+
+      notifyListeners();
+      return ok;
+    } catch (e) {
+      creating = false;
+      error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+  Future<bool> deleteEvent(String eventId) async {
+    await _ensureToken();
+    if (_accessToken == null) return false;
+
+    deleting = true;
+    error = null;
+    notifyListeners();
+
+    final ok = await repo.deleteEvent(
+      accessToken: _accessToken!,
+      id: eventId,
+    );
+
+    deleting = false;
+
+    if (ok) {
+      events.removeWhere((e) => e.id == eventId);
+      myEvents.removeWhere((e) => e.id == eventId);
+      going.removeWhere((e) => e.id == eventId);
+      interested.removeWhere((e) => e.id == eventId);
+      invited.removeWhere((e) => e.id == eventId);
+      past.removeWhere((e) => e.id == eventId);
+      if (currentEventDetail?.id == eventId) {
+        currentEventDetail = null;
+      }
+      notifyListeners();
+      return true;
+    } else {
+      error = 'Xóa sự kiện thất bại';
+      notifyListeners();
+      return false;
+    }
+  }
   Future<void> refresh() async {
     _accessToken = null;
-    await getEvents();
+    await getEvents(fetch: _currentFetch);
   }
 }
 

@@ -40,6 +40,24 @@ class _CreatePageScreenState extends State<CreatePageScreen> {
     super.dispose();
   }
 
+  String get _previewTitle {
+    final t = _pageTitleCtrl.text.trim();
+    return t.isEmpty ? 'Tên trang của bạn' : t;
+  }
+
+  String get _previewUsername {
+    final t = _pageNameCtrl.text.trim();
+    return t.isEmpty ? 'ten-nguoi-dung' : t;
+  }
+
+  String _previewCategoryName(BuildContext context) {
+    final pageCtrl = context.read<SocialPageController>();
+    final list = pageCtrl.articleCategories;
+    final c = list.where((e) => e.id == _selectedCategoryId).toList();
+    if (c.isEmpty) return '';
+    return c.first.name;
+  }
+
   Future<void> _onSubmit() async {
     final pageCtrl = context.read<SocialPageController>();
 
@@ -82,7 +100,6 @@ class _CreatePageScreenState extends State<CreatePageScreen> {
           ),
         ),
       );
-      // pop về SocialPagesScreen với kết quả true
       Navigator.pop(context, true);
     } else {
       final msg = pageCtrl.createPageError ??
@@ -105,29 +122,39 @@ class _CreatePageScreenState extends State<CreatePageScreen> {
     final String? categoryError = pageCtrl.categoriesError;
     final bool creating = pageCtrl.creatingPage;
 
+    final String previewCategory = _previewCategoryName(context);
+
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
+        elevation: 0,
+        backgroundColor: theme.scaffoldBackgroundColor,
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: Text(
           getTranslated('create_page', context) ?? 'Tạo trang',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
+        centerTitle: false,
         actions: [
           TextButton(
             onPressed: creating ? null : _onSubmit,
             child: creating
                 ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : Text(
-              getTranslated('create_msg', context) ?? 'Tạo',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.blue,
-                fontSize: 16,
-              ),
-            ),
+                    getTranslated('create_msg', context) ?? 'TẠO',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: cs.primary,
+                      fontSize: 16,
+                    ),
+                  ),
           ),
         ],
       ),
@@ -135,129 +162,263 @@ class _CreatePageScreenState extends State<CreatePageScreen> {
         child: Form(
           key: _formKey,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             children: [
-              // ───────── PAGE NAME (slug) ─────────
-              Text(
-                getTranslated('page_name', context) ??
-                    'Tên người dùng của trang (page_name)',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: cs.onSurface.withValues(alpha: 0.8),
-                ),
-              ),
-              const SizedBox(height: 4),
-              TextFormField(
-                controller: _pageNameCtrl,
-                decoration: InputDecoration(
-                  hintText: getTranslated('page_name_hint', context) ??
-                      'Ví dụ: vnshop_official',
-                  prefixText: '@',
-                  filled: true,
-                  fillColor: theme.cardColor,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                ),
-                validator: (value) {
-                  final v = (value ?? '').trim();
-                  if (v.isEmpty) {
-                    return getTranslated('page_name_required', context) ??
-                        'Vui lòng nhập page_name.';
-                  }
-                  // slug đơn giản: chữ, số, dấu gạch dưới hoặc chấm
-                  final slugReg = RegExp(r'^[a-zA-Z0-9_.]+$');
-                  if (!slugReg.hasMatch(v)) {
-                    return getTranslated('page_name_invalid', context) ??
-                        'Chỉ được chứa chữ, số, dấu chấm và gạch dưới.';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // ───────── PAGE TITLE ─────────
-              Text(
-                getTranslated('page_title', context) ?? 'Tên trang (page_title)',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: cs.onSurface.withValues(alpha: 0.8),
-                ),
-              ),
-              const SizedBox(height: 4),
-              TextFormField(
-                controller: _pageTitleCtrl,
-                decoration: InputDecoration(
-                  hintText: getTranslated('page_title_hint', context) ??
-                      'Ví dụ: VNSHOP VIETNAM',
-                  filled: true,
-                  fillColor: theme.cardColor,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                ),
-                validator: (value) {
-                  final v = (value ?? '').trim();
-                  if (v.isEmpty) {
-                    return getTranslated('page_title_required', context) ??
-                        'Vui lòng nhập tên trang.';
-                  }
-                  if (v.length < 3) {
-                    return getTranslated('page_title_too_short', context) ??
-                        'Tên trang phải có ít nhất 3 ký tự.';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // ───────── PAGE CATEGORY ─────────
-              Text(
-                getTranslated('page_category', context) ?? 'Danh mục trang',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: cs.onSurface.withValues(alpha: 0.8),
-                ),
-              ),
-              const SizedBox(height: 4),
-              if (loadingCategories && categories.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: LinearProgressIndicator(minHeight: 2),
-                )
-              else if (categoryError != null && categories.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Text(
-                    categoryError,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: cs.error,
+              // ───────── PREVIEW CARD GIỐNG TRANG ─────────
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: theme.cardColor,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
                     ),
-                  ),
-                )
-              else
-                DropdownButtonFormField<int>(
-                  value: _selectedCategoryId,
-                  isExpanded: true,
-                  items: categories
-                      .map(
-                        (c) => DropdownMenuItem<int>(
-                      value: c.id,
-                      child: Text(c.name),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 26,
+                      backgroundColor: cs.primary.withOpacity(0.1),
+                      child: Icon(
+                        Icons.flag_rounded,
+                        color: cs.primary,
+                        size: 24,
+                      ),
                     ),
-                  )
-                      .toList(),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _previewTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '@$_previewUsername'
+                            '${previewCategory.isNotEmpty ? ' • $previewCategory' : ''}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.hintColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // ───────── NHÃN SECTION 1 ─────────
+              Text(
+                'Thông tin cơ bản',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              // ───────── CARD THÔNG TIN CƠ BẢN ─────────
+              Container(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                decoration: BoxDecoration(
+                  color: theme.cardColor,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.02),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // PAGE NAME
+                    Text(
+                      'Tên người dùng của trang',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    TextFormField(
+                      controller: _pageNameCtrl,
+                      onChanged: (_) => setState(() {}),
+                      decoration: InputDecoration(
+                        hintText: 'Ví dụ: vnshop_official',
+                        prefixIcon: const Icon(Icons.alternate_email),
+                        filled: true,
+                        fillColor: theme.cardColor,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                      ),
+                      validator: (value) {
+                        final v = (value ?? '').trim();
+                        if (v.isEmpty) {
+                          return 'Vui lòng nhập tên người dùng.';
+                        }
+                        final slugReg = RegExp(r'^[a-zA-Z0-9_.]+$');
+                        if (!slugReg.hasMatch(v)) {
+                          return 'Chỉ được chứa chữ, số, dấu chấm và gạch dưới.';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+
+                    // PAGE TITLE
+                    Text(
+                      'Tên trang',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    TextFormField(
+                      controller: _pageTitleCtrl,
+                      onChanged: (_) => setState(() {}),
+                      decoration: InputDecoration(
+                        hintText: 'Ví dụ: VNSHOP VIETNAM',
+                        prefixIcon: const Icon(Icons.flag_outlined),
+                        filled: true,
+                        fillColor: theme.cardColor,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                      ),
+                      validator: (value) {
+                        final v = (value ?? '').trim();
+                        if (v.isEmpty) {
+                          return 'Vui lòng nhập tên trang.';
+                        }
+                        if (v.length < 3) {
+                          return 'Tên trang phải có ít nhất 3 ký tự.';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+
+                    // PAGE CATEGORY
+                    Text(
+                      'Danh mục trang',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    if (loadingCategories && categories.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: LinearProgressIndicator(minHeight: 2),
+                      )
+                    else if (categoryError != null && categories.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Text(
+                          categoryError,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: cs.error,
+                          ),
+                        ),
+                      )
+                    else
+                      DropdownButtonFormField<int>(
+                        value: _selectedCategoryId,
+                        isExpanded: true,
+                        items: categories
+                            .map(
+                              (c) => DropdownMenuItem<int>(
+                                value: c.id,
+                                child: Text(c.name),
+                              ),
+                            )
+                            .toList(),
+                        decoration: InputDecoration(
+                          hintText: 'Chọn danh mục',
+                          prefixIcon: const Icon(Icons.category_outlined),
+                          filled: true,
+                          fillColor: theme.cardColor,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                        ),
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedCategoryId = value;
+                          });
+                        },
+                        validator: (value) {
+                          if (value == null) {
+                            return 'Vui lòng chọn danh mục.';
+                          }
+                          return null;
+                        },
+                      ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // ───────── NHÃN SECTION 2 ─────────
+              Text(
+                'Mô tả trang',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              // ───────── CARD MÔ TẢ ─────────
+              Container(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                decoration: BoxDecoration(
+                  color: theme.cardColor,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.02),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: TextFormField(
+                  controller: _pageDescriptionCtrl,
+                  maxLines: 4,
+                  minLines: 3,
                   decoration: InputDecoration(
-                    hintText: getTranslated('select_category', context) ??
-                        'Chọn danh mục',
+                    hintText: 'Giới thiệu ngắn về trang, nội dung, dịch vụ...',
+                    alignLabelWithHint: true,
                     filled: true,
                     fillColor: theme.cardColor,
                     border: OutlineInputBorder(
@@ -268,48 +429,42 @@ class _CreatePageScreenState extends State<CreatePageScreen> {
                       vertical: 10,
                     ),
                   ),
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedCategoryId = value;
-                    });
-                  },
-                  validator: (value) {
-                    if (value == null) {
-                      return getTranslated(
-                          'page_category_required', context) ??
-                          'Vui lòng chọn danh mục.';
-                    }
-                    return null;
-                  },
-                ),
-              const SizedBox(height: 16),
-
-              // ───────── PAGE DESCRIPTION ─────────
-              Text(
-                getTranslated('page_description', context) ?? 'Mô tả trang',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: cs.onSurface.withValues(alpha: 0.8),
                 ),
               ),
-              const SizedBox(height: 4),
-              TextFormField(
-                controller: _pageDescriptionCtrl,
-                maxLines: 4,
-                minLines: 3,
-                decoration: InputDecoration(
-                  hintText: getTranslated(
-                      'page_description_hint', context) ??
-                      'Giới thiệu ngắn về trang, nội dung, dịch vụ...',
-                  filled: true,
-                  fillColor: theme.cardColor,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
+
+              const SizedBox(height: 32),
+
+              // ───────── NÚT TẠO TRANG DƯỚI CÙNG ─────────
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: creating ? null : _onSubmit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: cs.primary.withOpacity(0.08),
+                    foregroundColor: cs.primary,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999),
+                    ),
                   ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
+                  child: creating
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.blue),
+                          ),
+                        )
+                      : Text(
+                          getTranslated('create_msg', context) ?? 'TẠO TRANG',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                          ),
+                        ),
                 ),
               ),
             ],

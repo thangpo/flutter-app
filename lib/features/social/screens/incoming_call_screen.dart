@@ -61,7 +61,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
 
     final st = _cc.callStatus;
 
-    // ❌ KHÔNG tự đẩy sang CallScreen khi 'answered' nữa
+    // Không auto sang CallScreen khi 'answered' nữa
     // -> chỉ xử lý trường hợp đối phương cúp trước
     if (st == 'declined' || st == 'ended') {
       await _safeDetachAndPop();
@@ -196,7 +196,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
                         heroTag: 'accept',
                         backgroundColor: Colors.green,
                         onPressed: _onAccept,
-                        child: Icon(isVideo ? Icons.videocam : Icons.call),
+                        child: Icon(
+                          isVideo ? Icons.videocam : Icons.call,
+                        ),
                       ),
                     ],
                   ),
