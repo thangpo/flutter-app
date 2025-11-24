@@ -1513,6 +1513,7 @@ class SocialRepository {
     String? feelingType,
     String? feelingValue,
     String? groupId,
+    String? pageId,
     String? postMap,
   }) async {
     try {
@@ -1548,6 +1549,9 @@ class SocialRepository {
 
       if (groupId != null && groupId.trim().isNotEmpty) {
         fields['group_id'] = groupId.trim();
+      }
+      if (pageId != null && pageId.trim().isNotEmpty) {
+        fields['page_id'] = pageId.trim();
       }
 
       if (postMap != null && postMap.trim().isNotEmpty) {
@@ -1913,7 +1917,17 @@ class SocialRepository {
         isLivePost ? _normalizeString(map['agora_sid'] ?? map['sid']) : null;
 
     final String? pageId = () {
-      final String? normalized = _normalizeString(map['page_id']);
+      String? normalized = _normalizeString(map['page_id']);
+      if (normalized == null || normalized == '0') {
+        // fallback: page_id có thể nằm trong publisher khi là page post/share
+        normalized = _normalizeString(
+          (map['publisher'] is Map)
+              ? (map['publisher']['page_id'] ??
+                  map['publisher']['id'] ??
+                  map['publisher']['pageId'])
+              : null,
+        );
+      }
       if (normalized == null || normalized == '0') return null;
       return normalized;
     }();

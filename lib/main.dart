@@ -95,10 +95,6 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/group_call_s
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/webrtc_group_signaling_repository.dart';
 
 import 'di_container.dart' as di;
-import 'package:flutter_sixvalley_ecommerce/features/notification/screens/notification_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_call_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/webrtc_group_signaling_repository.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_page_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_page_service_interface.dart';
 
@@ -153,7 +149,19 @@ Future<void> myBackgroundMessageHandler(RemoteMessage message) async {
   } catch (e) {
     print('❌ [BG] Firebase init error in background: $e');
   }
-  // nếu sau này cần xử lý message ở background thì làm tiếp ở đây
+
+  // ==== XỬ LÝ CUỘC GỌI 1-1 Ở BACKGROUND (data-only FCM) ====
+  try {
+    final data = message.data;
+    final type = (data['type'] ?? '').toString();
+
+    if (type == 'call_invite') {
+      await SocialCallPushHandler.I.showIncomingCallNotification(data);
+      print('📞 [BG] Show incoming call notification (1-1)');
+    }
+  } catch (e) {
+    print('❌ [BG] Error handling background call_invite: $e');
+  }
 }
 
 Future<void> _debugPrintFcmToken() async {
@@ -424,10 +432,14 @@ Future<void> main() async {
     }
   }
 
-  FcmChatHandler.initialize();
-  CallInviteForegroundListener.start();
-  SocialCallPushHandler.I.initLocalNotifications();
-  SocialCallPushHandler.I.bindForegroundListener();
+  // ==== SOCIAL FCM / CALL WIRING ====
+  FcmChatHandler.initialize(); // stream chat FCM
+  CallInviteForegroundListener
+      .start(); // mở màn IncomingCall khi đang trong app
+  SocialCallPushHandler.I
+      .initLocalNotifications(); // local notif cho cuộc gọi (background)
+
+  // SocialCallPushHandler.I.bindForegroundListener(); // KHÔNG cần dùng nữa
 
   // =================== APP LIFECYCLE OBSERVER ===================
   WidgetsBinding.instance.addObserver(AppLifecycleObserver());
@@ -460,7 +472,7 @@ Future<void> main() async {
     await _debugPrintFcmToken();
   });
 
-  // tạo kênh heads-up
+  // tạo kênh heads-up cho call_invite (cũ, dùng chung plugin global nếu cần)
   await flutterLocalNotificationsPlugin
       .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>()
@@ -501,6 +513,7 @@ Future<void> main() async {
     },
   );
 
+  // Background handler (gồm cả call_invite đã xử lý ở trên)
   FirebaseMessaging.onBackgroundMessage(myBackgroundMessageHandler);
 
   NotificationBody? body;
@@ -552,26 +565,25 @@ Future<void> main() async {
       final data = message.data;
       debugPrint('🔥 onMessage(foreground) data= $data');
 
+      // ---- BỎ QUA TẤT CẢ THÔNG ĐIỆP LIÊN QUAN ĐẾN CUỘC GỌI ----
       final type = (data['type'] ?? '').toString();
+      final hasCallId = data.containsKey('call_id');
 
-      // ưu tiên cuộc gọi: mở UI ngay
-      // 1-1
-      if (type == 'call_invite' ||
-          (data.containsKey('call_id') &&
+      final isOneToOneCall = type == 'call_invite' ||
+          (hasCallId &&
               data.containsKey('media') &&
-              !data.containsKey('group_id'))) {
-        _handleCallInviteOpen(data);
+              !data.containsKey('group_id'));
+
+      final isGroupCall = type == 'call_invite_group' ||
+          (hasCallId && data.containsKey('group_id'));
+
+      if (isOneToOneCall || isGroupCall) {
+        // Incoming call đã được xử lý bởi CallInviteForegroundListener,
+        // không cần show notification thường nữa.
         return;
       }
 
-      // GROUP
-      if (type == 'call_invite_group' ||
-          (data.containsKey('call_id') && data.containsKey('group_id'))) {
-        _handleGroupCallInviteOpen(data);
-        return;
-      }
-
-      // social notif mặc định
+      // ---- CÁC THÔNG BÁO BÌNH THƯỜNG (ORDER, SOCIAL, ...) ----
       String? title = message.notification?.title;
       String? bodyText = message.notification?.body;
       title ??= (data['title'] ?? data['notification_title'] ?? 'VNShop247')

@@ -1514,7 +1514,22 @@
   "haha": "Haha",
   "wow": "Wow",
   "sad": "Sad",
-  "angry": "Angry"
+  "angry": "Angry",
 
+
+  "your_pages":"Your Pages",
+  "liked_pages":"Like Pages",
+  "like_page":"Like Page",
+  "create_page":"Create Page",
+  "no_likes_yet":"No Like Yet",
+  "no_liked_pages_yet":"No Liked Pages Yet",
+  "page_name":"Page Name",
+  "page_name_hint":"Page Name Hint",
+  "page_title_hint":"Page Name Hint",
+  "page_title":"Page Title",
+  "page_category":"Page Category",
+  "select_category":"Select Category",
+  "page_description":"Page Description",
+  "page_description_hint":"Page Description Hint"
 
 }

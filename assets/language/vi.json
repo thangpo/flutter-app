@@ -1509,8 +1509,22 @@
   "haha": "Haha",
   "wow": "Wow",
   "sad": "Buồn",
-  "angry": "Phẫn nộ"
+  "angry": "Phẫn nộ",
 
+"your_pages": "Trang của bạn",
+"liked_pages": "Thích Trang",
+"like_page": "Thích Trang",
+"create_page": "Tạo Trang",
+"no_likes_yet": "Chưa có lượt thích nào",
+"no_liked_pages_yet": "Chưa có lượt thích nào",
+"page_name": "Tên trang",
+"page_name_hint": "Gợi ý tên trang",
+"page_title_hint": "Gợi ý tiêu đề trang",
+"page_title": "Tiêu đề trang",
+"page_category": "Danh mục trang",
+"select_category": "Chọn danh mục",
+"page_description": "Mô tả trang",
+"page_description_hint": "Gợi ý mô tả trang"
 
 }
 
