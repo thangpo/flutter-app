@@ -168,6 +168,17 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                 ),
                 itemBuilder: (_, index) {
                   final item = threads[index];
+                  final bool isOwner = item.isMyPage;
+                  final String displayName = isOwner
+                      ? (item.peerName.isNotEmpty ? item.peerName : item.pageTitle)
+                      : item.pageTitle;
+                  final String subtitle =
+                      isOwner ? '(${item.pageName})' : '@${item.pageName}';
+                  final String avatarUrl = isOwner && item.peerAvatar.isNotEmpty
+                      ? item.peerAvatar
+                      : item.avatar;
+                  final String avatarFallback =
+                      displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
 
                   // TAB FILTER
                   if (_tabIndex == 1 && !item.isMyPage) {
@@ -176,12 +187,15 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
 
                   return InkWell(
                     onTap: () {
+                      final recipientId =
+                          item.isMyPage ? item.userId : item.ownerId;
+
                       Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (_) => PageChatScreen(
                             pageId: int.parse(item.pageId),
-                            recipientId: item.chatId,          // chính là user nhắn với page
+                            recipientId: recipientId,
                             pageTitle: item.pageTitle,
                             pageAvatar: item.avatar,
                           ),
@@ -190,8 +204,7 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                     },
 
                     child: Padding(
-                      padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       child: Row(
                         children: [
                           // AVATAR
@@ -199,19 +212,16 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                             children: [
                               CircleAvatar(
                                 radius: 24,
-                                backgroundImage: item.avatar.isNotEmpty
-                                    ? NetworkImage(item.avatar)
-                                    : null,
+                                backgroundImage:
+                                    avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
                                 backgroundColor: cs.surfaceVariant,
-                                child: item.avatar.isEmpty
+                                child: avatarUrl.isEmpty
                                     ? Text(
-                                  item.pageTitle.isNotEmpty
-                                      ? item.pageTitle[0].toUpperCase()
-                                      : "?",
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                )
+                                        avatarFallback,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      )
                                     : null,
                               ),
                               if (item.isMyPage)
@@ -224,8 +234,7 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                                       color: cs.primary,
                                       shape: BoxShape.circle,
                                       border: Border.all(
-                                        color: Theme.of(context)
-                                            .scaffoldBackgroundColor,
+                                        color: Theme.of(context).scaffoldBackgroundColor,
                                         width: 2,
                                       ),
                                     ),
@@ -251,7 +260,7 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                                   children: [
                                     Expanded(
                                       child: Text(
-                                        item.pageTitle,
+                                        displayName,
                                         style: const TextStyle(
                                           fontSize: 15,
                                           fontWeight: FontWeight.w600,
@@ -275,7 +284,7 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
 
                                 // USERNAME
                                 Text(
-                                  '@${item.pageName}',
+                                  subtitle,
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: cs.onSurface.withOpacity(.7),
@@ -296,8 +305,7 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
                                           fontSize: 12.5,
-                                          color: cs.onSurface
-                                              .withOpacity(.75),
+                                          color: cs.onSurface.withOpacity(.75),
                                         ),
                                       ),
                                     ),

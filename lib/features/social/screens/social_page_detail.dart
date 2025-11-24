@@ -7,11 +7,13 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_screen.dart'
     show SocialPostCard;
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_post_screen.dart';
 
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/dimensions.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_page_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/custom_themes.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/edit_page_screen.dart';
 
 class SocialPageDetailScreen extends StatefulWidget {
   final SocialGetPage page;
@@ -30,6 +32,9 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
   bool _showTitle = false;
   late SocialGetPage _page;
 
+  // Tab đang chọn (Trang chủ, Giới thiệu, Video, Ảnh, Xem thêm)
+  String _selectedTab = 'home';
+
   @override
   void initState() {
     super.initState();
@@ -42,7 +47,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
       pageCtrl.loadInitialPagePosts(_page.pageId);
     });
 
-    // Lắng nghe scroll để:
+    // Lắng nghe scroll:
     // - Hiện/ẩn Title trên AppBar
     // - Tự động load more khi gần đáy
     _scrollController.addListener(_onScroll);
@@ -99,23 +104,73 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
     });
   }
 
-
-
-
   void _onMessage() {
     _showToast(getTranslated('feature_coming_soon', context) ?? 'Sắp ra mắt');
   }
 
-  void _onEditPage() {
-    _showToast('Tính năng chỉnh sửa đang phát triển');
+  Future<void> _onEditPage() async {
+    final payload = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(
+        builder: (_) => EditPageScreen(
+          pageId: _page.pageId,
+          initialPageName: _page.pageName,
+          initialPageTitle: _page.name,
+          initialDescription: _page.description,
+          initialCategoryName: _page.category,
+          initialAvatarUrl: _page.avatarUrl,
+          initialCoverUrl: _page.coverUrl,
+        ),
+      ),
+    );
+
+    if (!mounted || payload == null) return;
+
+    final ctrl = context.read<SocialPageController>();
+    final ok = await ctrl.updatePageFromPayload(payload);
+
+    if (!mounted) return;
+
+    if (ok && ctrl.lastUpdatedPage != null) {
+      setState(() {
+        _page = ctrl.lastUpdatedPage!;
+      });
+      _showToast(getTranslated('page_updated', context) ?? 'Đã cập nhật trang');
+    } else if (ok) {
+      _showToast(getTranslated('page_updated', context) ?? 'Đã cập nhật trang');
+    } else {
+      _showToast(getTranslated('update_failed', context) ?? 'Cập nhật thất bại');
+    }
   }
 
   void _onAdvertise() {
     _showToast('Tính năng quảng cáo đang phát triển');
   }
 
-  void _onCreatePost() {
-    _showToast(getTranslated('feature_coming_soon', context) ?? 'Sắp ra mắt');
+  Future<void> _onCreatePost() async {
+    if (!_page.isPageOwner) {
+      _showToast(
+        getTranslated('only_page_owner_can_post', context) ??
+            'Chỉ chủ trang mới có thể đăng bài.',
+      );
+      return;
+    }
+
+    final SocialPost? created = await Navigator.of(context).push<SocialPost>(
+      MaterialPageRoute(
+        builder: (_) => SocialCreatePostScreen(
+          pageId: _page.pageId.toString(),
+          pageName: _page.name,
+        ),
+        fullscreenDialog: true,
+      ),
+    );
+
+    if (!mounted || created == null) return;
+
+    final SocialPost resolved =
+    created.copyWith(pageId: created.pageId ?? _page.pageId.toString());
+
+    context.read<SocialPageController>().prependPagePost(resolved);
   }
 
   void _showToast(String msg) {
@@ -126,6 +181,15 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
         duration: const Duration(seconds: 1),
       ),
     );
+  }
+
+  void _onSelectTab(String id) {
+    if (_selectedTab == id) return;
+    setState(() {
+      _selectedTab = id;
+    });
+    // Hiện tại tab chỉ để UI giống React, không filter posts.
+    // Nếu sau này muốn tách nội dung theo tab thì xử lý thêm ở đây.
   }
 
   // ---------------- UI -----------------
@@ -150,7 +214,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
             controller: _scrollController,
             physics: const BouncingScrollPhysics(),
             slivers: [
-              // -------- APP BAR --------
+              // -------- APP BAR / COVER --------
               SliverAppBar(
                 expandedHeight: 220.0,
                 floating: false,
@@ -167,7 +231,8 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                   IconButton(
                     icon: const CircleAvatar(
                       backgroundColor: Colors.black38,
-                      child: Icon(Icons.more_horiz, color: Colors.white, size: 20),
+                      child:
+                      Icon(Icons.more_horiz, color: Colors.white, size: 20),
                     ),
                     onPressed: () {},
                   ),
@@ -196,7 +261,10 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
-                            colors: [Colors.black26, Colors.transparent],
+                            colors: [
+                              Colors.black38,
+                              Colors.transparent,
+                            ],
                           ),
                         ),
                       ),
@@ -212,7 +280,8 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                   alignment: Alignment.topCenter,
                   children: [
                     Container(
-                      margin: const EdgeInsets.only(top: topMargin - avatarRadius),
+                      margin:
+                      const EdgeInsets.only(top: topMargin - avatarRadius),
                       padding: const EdgeInsets.only(
                         top: avatarRadius + 10,
                         bottom: 20,
@@ -248,9 +317,45 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                                   ?.copyWith(color: theme.hintColor),
                             ),
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 12),
 
-                          // Stats
+                          // Rating + followers/likes giống kiểu React (simple)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Column(
+                              children: [
+                                if (page.rating > 0)
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.star,
+                                        size: 18,
+                                        color: Colors.orange.shade400,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        page.rating.toStringAsFixed(1),
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  '${page.likesCount} người theo dõi',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.hintColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Stats: followers / posts
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 16),
                             child: IntrinsicHeight(
@@ -283,7 +388,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                           ),
                           const SizedBox(height: 20),
 
-                          // Buttons
+                          // Buttons: giống React (Nhắn tin / Theo dõi / More)
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 16),
                             child: isPageOwner
@@ -377,7 +482,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                 ),
               ),
 
-              // -------- INTRO + CREATE POST --------
+              // -------- INTRO + CREATE POST (HOME TAB) --------
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -421,42 +526,83 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                         const SizedBox(height: 16),
                       ],
 
-                      InkWell(
-                        onTap: _onCreatePost,
-                        borderRadius: BorderRadius.circular(30),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: theme.cardColor,
-                            borderRadius: BorderRadius.circular(30),
-                            border: Border.all(color: theme.dividerColor),
-                          ),
-                          child: Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 16,
-                                backgroundImage: NetworkImage(page.avatarUrl),
-                              ),
-                              const SizedBox(width: 12),
-                              Text(
-                                "Bạn đang nghĩ gì?",
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: theme.hintColor,
+                      if (isPageOwner)
+                        InkWell(
+                          onTap: _onCreatePost,
+                          borderRadius: BorderRadius.circular(30),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: theme.cardColor,
+                              borderRadius: BorderRadius.circular(30),
+                              border: Border.all(color: theme.dividerColor),
+                            ),
+                            child: Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 16,
+                                  backgroundImage: NetworkImage(page.avatarUrl),
                                 ),
-                              ),
-                              const Spacer(),
-                              Icon(
-                                Icons.image_outlined,
-                                color: Colors.green.shade400,
-                              ),
-                            ],
+                                const SizedBox(width: 12),
+                                Text(
+                                  "Bạn đang nghĩ gì?",
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: theme.hintColor,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Icon(
+                                  Icons.image_outlined,
+                                  color: Colors.green.shade400,
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
                     ],
+                  ),
+                ),
+              ),
+
+              // -------- TAB NAVIGATION (Trang chủ / Giới thiệu / Video / Ảnh / Xem thêm) --------
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _buildTabItem(
+                          context,
+                          id: 'home',
+                          label: 'Trang chủ',
+                        ),
+                        _buildTabItem(
+                          context,
+                          id: 'about',
+                          label: 'Giới thiệu',
+                        ),
+                        _buildTabItem(
+                          context,
+                          id: 'video',
+                          label: 'Video',
+                        ),
+                        _buildTabItem(
+                          context,
+                          id: 'photos',
+                          label: 'Ảnh',
+                        ),
+                        _buildTabItem(
+                          context,
+                          id: 'more',
+                          label: 'Xem thêm',
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -539,7 +685,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                           },
                         ),
                       );
-                        },
+                    },
                     childCount: posts.length + 1,
                   ),
                 ),
@@ -655,6 +801,46 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
             color: color,
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTabItem(
+      BuildContext context, {
+        required String id,
+        required String label,
+      }) {
+    final theme = Theme.of(context);
+    final bool selected = _selectedTab == id;
+    final Color activeColor = theme.primaryColor;
+    final Color inactiveColor = theme.hintColor;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: () => _onSelectTab(id),
+      child: Padding(
+        padding: const EdgeInsets.only(right: 20, top: 4, bottom: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: selected ? activeColor : inactiveColor,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Container(
+              height: 2,
+              width: 34,
+              decoration: BoxDecoration(
+                color: selected ? activeColor : Colors.transparent,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

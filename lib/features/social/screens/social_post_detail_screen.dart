@@ -32,6 +32,12 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/live_screen.
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/social_post_text_block.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/report_comment_dialog.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_page_controller.dart'
+    as page_ctrl;
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_get_page.dart'
+    as page_models;
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_page_detail.dart'
+    as page_screens;
 
 enum CommentSortOrder { newest, oldest }
 
@@ -644,12 +650,20 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
             final String? location = displayPost.postMap?.trim();
             final bool hasLocation = location != null && location.isNotEmpty;
             final String? profileOwnerId = displayPost.publisherId;
+            final String? headerPageId =
+                (displayPost.pageId?.trim().isNotEmpty ?? false)
+                    ? displayPost.pageId!.trim()
+                    : displayPost.sharedPost?.pageId?.trim();
 
             return Row(
               children: [
                 InkWell(
                   borderRadius: BorderRadius.circular(24),
-                  onTap: () => _navigateToProfile(ctx, profileOwnerId),
+                  onTap: () => _navigateToProfile(
+                    ctx,
+                    profileOwnerId,
+                    pageId: headerPageId,
+                  ),
                   child: CircleAvatar(
                     radius: 18,
                     backgroundImage: (displayPost.userAvatar != null &&
@@ -666,7 +680,11 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                 Expanded(
                   child: InkWell(
                     borderRadius: BorderRadius.circular(6),
-                    onTap: () => _navigateToProfile(ctx, profileOwnerId),
+                    onTap: () => _navigateToProfile(
+                      ctx,
+                      profileOwnerId,
+                      pageId: headerPageId,
+                    ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -3215,7 +3233,62 @@ class _ReactionIconStack extends StatelessWidget {
   }
 }
 
-void _navigateToProfile(BuildContext context, String? userId) {
+void _navigateToProfile(BuildContext context, String? userId,
+    {String? pageId}) {
+  final String? pageIdStr = pageId?.trim();
+  if (pageIdStr != null && pageIdStr.isNotEmpty) {
+    try {
+      final pageCtrl = context.read<page_ctrl.SocialPageController>();
+      final page_models.SocialGetPage? page =
+          pageCtrl.findPageByIdString(pageIdStr);
+      if (page != null) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => page_screens.SocialPageDetailScreen(page: page),
+          ),
+        );
+        return;
+      }
+    } catch (_) {
+      // Page controller not available; fall back to profile
+    }
+
+    // fallback: dựng stub page để vẫn mở Page detail
+    final int id = int.tryParse(pageIdStr) ?? 0;
+    final page_models.SocialGetPage stub = page_models.SocialGetPage(
+      pageId: id,
+      ownerUserId: 0,
+      username: pageIdStr,
+      name: pageIdStr,
+      pageName: pageIdStr,
+      description: null,
+      avatarUrl: '',
+      coverUrl: '',
+      url: '',
+      category: '',
+      subCategory: null,
+      usersPost: 0,
+      likesCount: 0,
+      rating: 0,
+      isVerified: false,
+      isPageOwner: false,
+      isLiked: false,
+      isReported: false,
+      registered: null,
+      type: null,
+      website: null,
+      facebook: null,
+      instagram: null,
+      youtube: null,
+    );
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => page_screens.SocialPageDetailScreen(page: stub),
+      ),
+    );
+    return;
+  }
+
   if (userId == null || userId.isEmpty) return;
   Navigator.of(context).push(
     MaterialPageRoute(
