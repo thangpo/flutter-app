@@ -537,6 +537,18 @@ class SocialPageService implements SocialPageServiceInterface {
     final int shareCount =
         int.tryParse('${j['post_shares'] ?? j['shares'] ?? 0}') ?? 0;
 
+    // Page id: ưu tiên field page_id, fallback từ publisher khi có
+    String? _resolvePageId() {
+      final String? raw = j['page_id']?.toString();
+      final String? norm = raw?.trim();
+      if (norm != null && norm.isNotEmpty && norm != '0') return norm;
+
+      final String? pubPage = pub['page_id']?.toString() ?? pub['id']?.toString();
+      final String? normPub = pubPage?.trim();
+      if (normPub != null && normPub.isNotEmpty && normPub != '0') return normPub;
+      return null;
+    }
+
     return SocialPost(
       id: (j['post_id'] ?? j['id'] ?? '').toString(),
       publisherId: (pub['user_id'] ?? pub['id'] ?? '').toString(),
@@ -545,7 +557,7 @@ class SocialPageService implements SocialPageServiceInterface {
       userName: (pub['name'] ?? pub['username'] ?? '').toString(),
       userAvatar: pub['avatar']?.toString(),
       timeText: j['time_text']?.toString(),
-      pageId: j['page_id']?.toString(),
+      pageId: _resolvePageId(),
       postType: j['postType']?.toString(),
       imageUrls: imageUrls,
       imageUrl: imageUrls.isNotEmpty ? imageUrls.first : null,

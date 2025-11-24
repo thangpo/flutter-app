@@ -1917,7 +1917,17 @@ class SocialRepository {
         isLivePost ? _normalizeString(map['agora_sid'] ?? map['sid']) : null;
 
     final String? pageId = () {
-      final String? normalized = _normalizeString(map['page_id']);
+      String? normalized = _normalizeString(map['page_id']);
+      if (normalized == null || normalized == '0') {
+        // fallback: page_id có thể nằm trong publisher khi là page post/share
+        normalized = _normalizeString(
+          (map['publisher'] is Map)
+              ? (map['publisher']['page_id'] ??
+                  map['publisher']['id'] ??
+                  map['publisher']['pageId'])
+              : null,
+        );
+      }
       if (normalized == null || normalized == '0') return null;
       return normalized;
     }();
