@@ -1,3 +1,4 @@
+//G:\flutter-app\lib\features\social\screens\social_page_detail.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
