@@ -1,8 +1,8 @@
 class PageChatThread {
-  final String pageId;    // ID of the Page
-  final String userId;    // Peer ID (use as recipient_id when fetch/send)
-  final String ownerId;   // Page owner ID
-  final String peerName;  // Peer display name
+  final String pageId; // Page id
+  final String userId; // Customer/peer id
+  final String ownerId; // Page owner id
+  final String peerName; // Customer display name
   final String peerAvatar;
   final String pageName;
   final String pageTitle;
@@ -64,48 +64,104 @@ class PageChatThread {
   }
 
   factory PageChatThread.fromJson(Map<String, dynamic> json) {
-    final Map<String, dynamic> lastMsg = json['last_message'] ?? {};
-    final Map<String, dynamic> userData = lastMsg['user_data'] ?? {};
-    final String ownerId = (json['user_id'] ?? '').toString();
-    final String peerName =
-        (userData['name'] ?? userData['username'] ?? '').toString();
-    final String peerAvatar = (userData['avatar'] ?? '').toString();
+    final Map<String, dynamic> lastMsg =
+        (json['last_message'] ?? const <String, dynamic>{})
+            as Map<String, dynamic>;
 
-    // Peer = the other end of the conversation (recipient_id to use).
+    // owner/page ids
+    final String ownerId = [
+      lastMsg['owner_id'],
+      lastMsg['page_owner_id'],
+      json['page_owner_id'],
+      json['owner_id'],
+      json['page_user_id'],
+      json['user_id'],
+    ]
+        .map((e) => (e ?? '').toString())
+        .firstWhere((e) => e.isNotEmpty, orElse: () => '');
+
+    final String pageId = (json['page_id'] ?? '').toString();
+    final String pageTitle = (json['name'] ?? '').toString();
+    final String pageName = (json['page_name'] ?? '').toString();
+
     final String fromId = (lastMsg['from_id'] ?? '').toString();
     final String toId = (lastMsg['to_id'] ?? '').toString();
-    final String userDataId = (userData['user_id'] ?? '').toString();
+    final bool fromIsOwner =
+        ownerId.isNotEmpty && fromId.isNotEmpty && fromId == ownerId;
+    final bool toIsOwner =
+        ownerId.isNotEmpty && toId.isNotEmpty && toId == ownerId;
 
+    // Decide peerId as "other side" (customer)
     String peerId = '';
-    if (fromId.isNotEmpty && toId.isNotEmpty) {
-      if (fromId == ownerId) {
-        peerId = toId;
-      } else if (toId == ownerId) {
-        peerId = fromId;
+    if (fromIsOwner && toId.isNotEmpty) {
+      peerId = toId;
+    } else if (toIsOwner && fromId.isNotEmpty) {
+      peerId = fromId;
+    } else if (!fromIsOwner && fromId.isNotEmpty) {
+      peerId = fromId;
+    } else if (!toIsOwner && toId.isNotEmpty) {
+      peerId = toId;
+    }
+
+    Map<String, dynamic> _toMap(dynamic src) =>
+        src is Map<String, dynamic> ? Map<String, dynamic>.from(src) : <String, dynamic>{};
+
+    String _pickName(String id) {
+      if (id.isEmpty) return '';
+      if (id == fromId) {
+        final n = (lastMsg['from_name'] ?? lastMsg['from_username'] ?? '').toString();
+        if (n.isNotEmpty) return n;
       }
+      if (id == toId) {
+        final n = (lastMsg['to_name'] ?? lastMsg['to_username'] ?? '').toString();
+        if (n.isNotEmpty) return n;
+      }
+      for (final candidate in [json['user_data'], lastMsg['user_data']]) {
+        final m = _toMap(candidate);
+        if ((m['user_id'] ?? '').toString() == id) {
+          final n = (m['name'] ?? m['username'] ?? '').toString();
+          if (n.isNotEmpty) return n;
+        }
+      }
+      return '';
     }
 
-    if (peerId.isEmpty && userDataId.isNotEmpty && userDataId != ownerId) {
-      peerId = userDataId;
+    String _pickAvatar(String id) {
+      if (id.isEmpty) return '';
+      if (id == fromId) {
+        final a = (lastMsg['from_avatar'] ?? '').toString();
+        if (a.isNotEmpty) return a;
+      }
+      if (id == toId) {
+        final a = (lastMsg['to_avatar'] ?? '').toString();
+        if (a.isNotEmpty) return a;
+      }
+      for (final candidate in [json['user_data'], lastMsg['user_data']]) {
+        final m = _toMap(candidate);
+        if ((m['user_id'] ?? '').toString() == id) {
+          final a = (m['avatar'] ?? '').toString();
+          if (a.isNotEmpty) return a;
+        }
+      }
+      return '';
     }
 
-    if (peerId.isEmpty) {
-      peerId = fromId.isNotEmpty ? fromId : toId;
-    }
+    final String peerName = _pickName(peerId);
+    final String peerAvatar = _pickAvatar(peerId);
 
     return PageChatThread(
-      pageId: json['page_id']?.toString() ?? '',
+      pageId: pageId,
       userId: peerId,
       ownerId: ownerId,
-      peerName: peerName,
+      peerName: peerName.isNotEmpty ? peerName : peerId,
       peerAvatar: peerAvatar,
-      pageName: json['page_name']?.toString() ?? '',
-      pageTitle: json['name']?.toString() ?? '',
+      pageName: pageName,
+      pageTitle: pageTitle,
       isMyPage: json['is_page_onwer'] == 1 || json['is_page_onwer'] == true,
       lastMessage: lastMsg['text']?.toString() ?? '',
       lastMessageTime: lastMsg['date_time']?.toString() ?? '',
       unreadCount: (lastMsg['seen']?.toString() == "0") ? 1 : 0,
-      avatar: json['avatar']?.toString() ?? '',
+      avatar: peerAvatar.isNotEmpty ? peerAvatar : (json['avatar']?.toString() ?? ''),
       lastMessageType: lastMsg['type']?.toString() ?? '',
     );
   }
