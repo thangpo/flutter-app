@@ -696,24 +696,48 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
       lastDate: lastDate,
     );
 
-    if (picked != null) {
+    if (picked == null) return;
+
+    if (isStart) {
+      if (_endDate != null && picked.isAfter(_endDate!)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+                'Ngày nhận phòng không được sau ngày trả phòng'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+        return;
+      }
+
       setState(() {
-        if (isStart) {
-          _startDate = picked;
-          if (_endDate != null &&
-              _endDate!.isBefore(_startDate!)) {
-            _endDate = null;
-          }
-        } else {
-          _endDate = picked;
-          if (_startDate != null &&
-              _endDate!.isBefore(_startDate!)) {
-            _startDate = null;
-          }
-        }
+        _startDate = picked;
       });
-      _notifyBookingSummaryChanged();
+    } else {
+      if (_startDate != null && picked.isBefore(_startDate!)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+                'Ngày trả phòng không được trước ngày nhận phòng'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+        return;
+      }
+      setState(() {
+        _endDate = picked;
+      });
     }
+
+    _notifyBookingSummaryChanged();
   }
 
   Future<void> _checkAvailability() async {
