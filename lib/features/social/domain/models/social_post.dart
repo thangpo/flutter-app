@@ -1,4 +1,5 @@
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/post_mention.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_event.dart';
 
 class SocialPost {
   final String id;
@@ -26,7 +27,7 @@ class SocialPost {
   final String? liveResourceId;
   final String? liveSid;
   final SocialPost? sharedPost;
-
+  final SocialEvent? attachedEvent;
   // Group
   final bool isGroupPost;
   final bool isGroupAdmin;
@@ -96,6 +97,7 @@ class SocialPost {
     this.sharedPost,
     this.isGroupPost = false,
     this.isGroupAdmin = false,
+    this.attachedEvent,
     this.groupId,
     this.groupName,
     this.groupTitle,
@@ -177,6 +179,7 @@ class SocialPost {
     String? feelingIconName,
     String? postMap,
     String? backgroundColorId,
+    SocialEvent? attachedEvent,
   }) {
     return SocialPost(
       id: id ?? this.id,
@@ -231,6 +234,7 @@ class SocialPost {
       feelingIconName: feelingIconName ?? this.feelingIconName,
       postMap: postMap ?? this.postMap,
       backgroundColorId: backgroundColorId ?? this.backgroundColorId,
+      attachedEvent: attachedEvent ?? this.attachedEvent,
     );
   }
 

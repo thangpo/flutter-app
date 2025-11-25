@@ -46,7 +46,16 @@ class SocialEvent {
     this.endEditDate,
     this.url,
   });
+  String? get timeText {
+    final hasDate = startDate != null && startDate!.trim().isNotEmpty;
+    final hasTime = startTime != null && startTime!.trim().isNotEmpty;
+    if (!hasDate && !hasTime) return null;
 
+    final parts = <String>[];
+    if (hasDate) parts.add(startDate!.trim());
+    if (hasTime) parts.add(startTime!.trim());
+    return parts.join(' ');
+  }
   factory SocialEvent.fromJson(Map<String, dynamic> json) {
     return SocialEvent(
       id: json['id']?.toString(),

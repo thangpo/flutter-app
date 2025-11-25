@@ -11,6 +11,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/edit_event_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_post_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final String eventId;
@@ -28,86 +29,77 @@ class EventDetailScreen extends StatefulWidget {
 
 class _EventDetailScreenState extends State<EventDetailScreen> {
   late Future<SocialEvent?> _future;
-  SocialEvent? _titleEvent;
 
   @override
   void initState() {
     super.initState();
-    _titleEvent = widget.initialEvent;
     _future = context.read<EventController>().fetchEventById(widget.eventId);
   }
 
-  /// Build URL sự kiện theo id (dạng show-event/id)
   String _buildEventUrl(SocialEvent event) {
-    final id = event.id?.toString() ?? widget.eventId;
+    final String id = (event.id ?? widget.eventId).toString();
     if (id.isEmpty) return AppConstants.socialBaseUrl;
-    final base = AppConstants.socialBaseUrl;
-    if (base.endsWith('/')) {
-      return '${base}show-event/$id';
-    }
-    return '$base/show-event/$id';
+    final String base = AppConstants.socialBaseUrl;
+    final String normalizedBase =
+    base.endsWith('/') ? base.substring(0, base.length - 1) : base;
+    return '$normalizedBase/events/$id/';
   }
 
-  /// Bottom sheet chia sẻ: share lên profile + copy link
   Future<void> _showShareSheet(SocialEvent event) async {
-    final theme = Theme.of(context);
-
-    // build đúng link detail như web
-    final String eventId = (event.id ?? widget.eventId).toString();
-    final String link = '${AppConstants.socialBaseUrl}/events/$eventId/';
-
+    final String link = _buildEventUrl(event);
     await showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.post_add_outlined),
-                title: const Text('Chia sẻ lên trang cá nhân'),
-                subtitle: const Text('Link sự kiện sẽ được sao chép'),
-                onTap: () async {
-                  // 1) copy link
-                  await Clipboard.setData(ClipboardData(text: link));
-
-                  // 2) đóng bottom sheet
-                  Navigator.of(ctx).pop();
-
-                  // 3) mở màn tạo bài viết bình thường (không sửa code gốc)
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const SocialCreatePostScreen(),
-                    ),
-                  );
-
-                  // 4) thông báo
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Đã sao chép liên kết sự kiện, hãy dán vào bài viết mới.',
+        return ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              color: Theme.of(context).cardColor.withOpacity(0.8),
+              child: SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ListTile(
+                      leading: const Icon(Icons.post_add_outlined),
+                      title: Text(
+                        getTranslated('share_on_profile', context) ??
+                            'Chia sẻ lên trang cá nhân',
                       ),
+                      onTap: () async {
+                        Navigator.of(ctx).pop();
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                SocialCreatePostScreen(attachedEvent: event),
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.link),
-                title: const Text('Sao chép liên kết'),
-                onTap: () async {
-                  await Clipboard.setData(ClipboardData(text: link));
-                  Navigator.of(ctx).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Đã sao chép liên kết sự kiện'),
+                    ListTile(
+                      leading: const Icon(Icons.link),
+                      title: Text(
+                        getTranslated('copy_link', context) ??
+                            'Sao chép liên kết',
+                      ),
+                      onTap: () async {
+                        await Clipboard.setData(ClipboardData(text: link));
+                        Navigator.of(ctx).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              getTranslated('copied_event_link', context) ??
+                                  'Đã sao chép liên kết sự kiện',
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
         );
       },
@@ -116,62 +108,60 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final tEventNotFound = getTranslated('event_not_found', context) ??
+        'Không tìm thấy sự kiện';
 
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: Text(_titleEvent?.name ?? 'Sự kiện'),
-        elevation: 0,
-        backgroundColor: theme.scaffoldBackgroundColor,
-        actions: [
-          if (_titleEvent != null)
-            IconButton(
-              icon: const Icon(Icons.share),
-              onPressed: () {
-                final ev = _titleEvent;
-                if (ev != null) {
-                  _showShareSheet(ev); // 👈 gọi hàm mới
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        extendBodyBehindAppBar: true,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: const _AppBarButton(child: BackButton(color: Colors.white)),
+          actions: [
+            FutureBuilder<SocialEvent?>(
+              future: _future,
+              builder: (context, snapshot) {
+                if (snapshot.hasData) {
+                  return _AppBarButton(
+                    child: IconButton(
+                      icon: const Icon(Icons.share_outlined,
+                          color: Colors.white),
+                      onPressed: () => _showShareSheet(snapshot.data!),
+                    ),
+                  );
                 }
+                return const SizedBox.shrink();
               },
             ),
-        ],
-      ),
-      body: FutureBuilder<SocialEvent?>(
-        future: _future,
-        builder: (context, snapshot) {
-          final isLoading = snapshot.connectionState == ConnectionState.waiting;
-          final event = snapshot.data ?? widget.initialEvent;
+          ],
+        ),
+        body: FutureBuilder<SocialEvent?>(
+          future: _future,
+          builder: (context, snapshot) {
+            final isLoading =
+                snapshot.connectionState == ConnectionState.waiting;
+            final event = snapshot.data ?? widget.initialEvent;
 
-          if (event != null &&
-              (_titleEvent == null ||
-                  _titleEvent!.id != event.id ||
-                  _titleEvent!.name != event.name)) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!mounted) return;
-              setState(() {
-                _titleEvent = event;
-              });
-            });
-          }
+            if (event == null && isLoading) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-          if (event == null && isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
+            if (event == null) {
+              return Center(
+                child: Text(tEventNotFound),
+              );
+            }
 
-          if (event == null) {
-            return const Center(child: Text('Không tìm thấy sự kiện'));
-          }
-
-          return _buildBody(context, event, isLoading);
-        },
+            return _buildBody(context, event);
+          },
+        ),
       ),
     );
   }
 
-  Widget _buildBody(BuildContext context, SocialEvent event, bool isLoading) {
-    final theme = Theme.of(context);
-
+  Widget _buildBody(BuildContext context, SocialEvent event) {
     final socialCtrl = context.read<SocialController>();
     final currentUserId = socialCtrl.currentUser?.id?.toString();
     final posterId = event.posterId?.toString();
@@ -180,550 +170,471 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             posterId != null &&
             posterId == currentUserId);
 
-    return SingleChildScrollView(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).padding.bottom + 24,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildCover(event, isOwner),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  event.name ?? '',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.place_outlined, size: 18),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        event.location ?? '',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    const Icon(Icons.schedule, size: 18),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        '${event.startDate ?? ''} - ${event.endDate ?? ''}',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                _buildDateRow(event),
-                const SizedBox(height: 16),
-                _buildStatsCard(event, theme),
-                const SizedBox(height: 16),
-                if (!isOwner) _buildActionButtons(context, event, isOwner),
-                const SizedBox(height: 24),
-                Text(
-                  'Mô tả',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  event.description ?? '',
-                  style: theme.textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 24),
-                if (event.user != null) ...[
-                  Text(
-                    'Người tổ chức',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 18,
-                        backgroundImage:
-                        NetworkImage(event.user!.avatar ?? ''),
-                        backgroundColor: Colors.grey.shade300,
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        event.user!.name ?? event.user!.username ?? '',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                    ],
-                  ),
-                ],
-                if (isLoading) ...[
-                  const SizedBox(height: 24),
-                  const Center(
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+    final tNameEmpty =
+        getTranslated('event_name_empty', context) ?? '(Chưa có tên)';
 
-  Widget _buildCover(SocialEvent event, bool isOwner) {
-    final theme = Theme.of(context);
-    final coverUrl = event.cover;
+    return Stack(
+      children: [
+        // Lớp 1: Ảnh bìa tràn viền
+        Positioned.fill(child: _buildCover(event)),
 
-    return SizedBox(
-      height: 220,
-      width: double.infinity,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Positioned.fill(
-            child: coverUrl != null && coverUrl.isNotEmpty
-                ? Image.network(
-              coverUrl,
-              fit: BoxFit.cover,
-            )
-                : Container(color: theme.primaryColor.withOpacity(0.2)),
-          ),
-          Positioned.fill(
-            child: Container(
+        // Lớp 2: Sheet kéo lên
+        DraggableScrollableSheet(
+          initialChildSize: 0.65,
+          minChildSize: 0.65,
+          maxChildSize: 0.9,
+          builder: (BuildContext context, ScrollController scrollController) {
+            return Container(
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withOpacity(0.15),
-                    Colors.black.withOpacity(0.7),
+                color: Theme.of(context).scaffoldBackgroundColor,
+                borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(32)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.15),
+                    blurRadius: 20,
+                    spreadRadius: 5,
+                  )
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(32)),
+                child: ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.all(20),
+                  children: [
+                    // Tên sự kiện
+                    Text(
+                      event.name ?? tNameEmpty,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context)
+                          .textTheme
+                          .headlineSmall
+                          ?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Khu vực hành động + “thống kê”
+                    _buildActionsAndStatsSection(context, event, isOwner),
+
+                    const Divider(height: 40),
+
+                    // Thời gian + địa điểm
+                    _buildDetailsSection(context, event),
+
+                    const Divider(height: 40),
+
+                    // Mô tả
+                    _buildDescriptionSection(context, event),
+
+                    // Người tổ chức
+                    if (event.user != null) ...[
+                      const Divider(height: 40),
+                      _buildOrganizerSection(context, event),
+                    ],
+
+                    const SizedBox(height: 40),
                   ],
                 ),
               ),
-            ),
-          ),
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 16,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        event.name ?? '',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                if (isOwner)
-                  Row(
-                    children: [
-                      _OwnerActionButton(
-                        icon: Icons.edit_outlined,
-                        label: 'Chỉnh sửa sự kiện',
-                        onTap: () async {
-                          final result = await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => EditEventScreen(event: event),
-                            ),
-                          );
-                          if (result == true && mounted) {
-                            setState(() {
-                              _future = context
-                                  .read<EventController>()
-                                  .fetchEventById(widget.eventId);
-                            });
-                          }
-                        },
-                      ),
-                      const SizedBox(width: 10),
-                      _OwnerActionButton(
-                        icon: Icons.delete_outline,
-                        label: 'Xóa bỏ',
-                        onTap: () async {
-                          final confirm = await showDialog<bool>(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              title: const Text('Xóa sự kiện'),
-                              content: const Text(
-                                  'Sau khi xóa không thể khôi phục!'),
-                              actions: [
-                                TextButton(
-                                  onPressed: () =>
-                                      Navigator.of(ctx).pop(false),
-                                  child: const Text('Hủy'),
-                                ),
-                                TextButton(
-                                  onPressed: () =>
-                                      Navigator.of(ctx).pop(true),
-                                  child: const Text(
-                                    'Xóa',
-                                    style: TextStyle(color: Colors.red),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-
-                          if (confirm != true) return;
-
-                          final ctrl = context.read<EventController>();
-                          final id =
-                              event.id?.toString() ?? widget.eventId;
-                          final ok = await ctrl.deleteEvent(id);
-
-                          if (!mounted) return;
-
-                          if (ok) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Đã xóa sự kiện'),
-                              ),
-                            );
-                            Navigator.pop(context, true);
-                          } else {
-                            final msg = ctrl.error ??
-                                'Xóa sự kiện thất bại, vui lòng thử lại.';
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(msg)),
-                            );
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDateRow(SocialEvent event) {
-    String dayStart = '';
-    String monthStart = '';
-    String dayEnd = '';
-    String monthEnd = '';
-
-    const months = [
-      'JAN',
-      'FEB',
-      'MAR',
-      'APR',
-      'MAY',
-      'JUN',
-      'JUL',
-      'AUG',
-      'SEP',
-      'OCT',
-      'NOV',
-      'DEC',
-    ];
-
-    if (event.startDate != null) {
-      final parts = event.startDate!.split('-');
-      if (parts.length >= 2) {
-        dayStart = parts[0];
-        final m = int.tryParse(parts[1]) ?? 1;
-        monthStart = months[(m - 1).clamp(0, 11)];
-      }
-    }
-    if (event.endDate != null) {
-      final parts = event.endDate!.split('-');
-      if (parts.length >= 2) {
-        dayEnd = parts[0];
-        final m = int.tryParse(parts[1]) ?? 1;
-        monthEnd = months[(m - 1).clamp(0, 11)];
-      }
-    }
-
-    final startFull =
-    '${event.startDate ?? ''} - ${event.startTime ?? ''}'.trim();
-    final endFull =
-    '${event.endDate ?? ''} - ${event.endTime ?? ''}'.trim();
-
-    return Row(
-      children: [
-        Expanded(
-          child: _DateCard(
-            day: dayStart,
-            month: monthStart,
-            title: 'NGÀY BẮT ĐẦU',
-            value: startFull,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _DateCard(
-            day: dayEnd,
-            month: monthEnd,
-            title: 'NGÀY CUỐI',
-            value: endFull,
-          ),
+            );
+          },
         ),
       ],
     );
   }
 
-  Widget _buildStatsCard(SocialEvent event, ThemeData theme) {
-    final goingText = event.isGoing ? 'Bạn sẽ đi' : '0 Đi mọi người';
-    final interestedText =
-    event.isInterested ? 'Bạn quan tâm' : '0 Những người quan tâm';
+  // --- WIDGET CON ---
 
+  Widget _buildCover(SocialEvent event) {
+    final coverUrl = event.cover;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: Theme.of(context).primaryColor.withOpacity(0.2),
+        image: coverUrl != null && coverUrl.isNotEmpty
+            ? DecorationImage(
+          image: NetworkImage(coverUrl),
+          fit: BoxFit.cover,
+        )
+            : null,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _StatRow(
-            icon: Icons.emoji_people_outlined,
-            text: goingText,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            stops: const [0.0, 0.4, 1.0],
+            colors: [
+              Colors.black.withOpacity(0.5),
+              Colors.transparent,
+              Colors.black.withOpacity(0.7),
+            ],
           ),
-          const SizedBox(height: 8),
-          _StatRow(
-            icon: Icons.favorite_border,
-            text: interestedText,
-          ),
-          const SizedBox(height: 8),
-          _StatRow(
-            icon: Icons.place_outlined,
-            text: event.location ?? '',
-          ),
-          const SizedBox(height: 12),
-          if ((event.description ?? '').isNotEmpty)
-            Text(
-              event.description!,
-              style: theme.textTheme.bodyMedium,
-            ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildActionButtons(
+  Widget _buildActionsAndStatsSection(
       BuildContext context, SocialEvent event, bool isOwner) {
     final theme = Theme.of(context);
 
+    final tGoing = getTranslated('going', context) ?? 'Sẽ đi';
+    final tInterested =
+        getTranslated('interested', context) ?? 'Quan tâm';
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.primaryColor.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        children: [
+          // “Thống kê” trạng thái của chính mình
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _StatItem(
+                // Dùng ✓ / – thay cho số, vì backend không trả count
+                count: event.isGoing ? '✓' : '–',
+                label: tGoing,
+              ),
+              Container(
+                width: 1,
+                height: 30,
+                color: theme.dividerColor,
+              ),
+              _StatItem(
+                count: event.isInterested ? '✓' : '–',
+                label: tInterested,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Nút hành động
+          isOwner
+              ? _buildOwnerActions(context, event)
+              : _buildGuestActions(context, event),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGuestActions(BuildContext context, SocialEvent event) {
+    final theme = Theme.of(context);
+
+    final tJoined =
+        getTranslated('event_joined', context) ?? 'Đã tham gia';
+    final tJoin = getTranslated('event_join', context) ?? 'Tham gia';
+
     return Row(
       children: [
         Expanded(
-          child: TextButton(
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 10),
+          child: ElevatedButton.icon(
+            icon: Icon(
+              event.isGoing ? Icons.check_circle : Icons.add_circle_outline,
+            ),
+            label: Text(event.isGoing ? tJoined : tJoin),
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 12),
               backgroundColor:
-              theme.primaryColor.withOpacity(isOwner ? 0.4 : 0.95),
+              event.isGoing ? Colors.green.shade600 : theme.primaryColor,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: BorderRadius.circular(12),
               ),
             ),
-            onPressed: isOwner
-                ? null
-                : () async {
-              final ok = await context
-                  .read<EventController>()
-                  .toggleInterestEvent(event.id!);
-              if (ok && mounted) {
-                setState(() {
-                  event.isInterested = !event.isInterested;
-                });
-              }
-            },
-            child: Text(
-              isOwner
-                  ? 'Sự kiện của tôi'
-                  : (event.isInterested ? 'Đã quan tâm' : 'Quan tâm'),
-              style: const TextStyle(fontSize: 13),
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: TextButton(
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              backgroundColor:
-              theme.primaryColor.withOpacity(isOwner ? 0.4 : 0.95),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(999),
-              ),
-            ),
-            onPressed: isOwner
-                ? null
-                : () async {
+            onPressed: () async {
               final ok = await context
                   .read<EventController>()
                   .toggleEventGoing(event.id!);
-              if (ok && mounted) {
+
+              if (!mounted) return;
+              if (!ok) return;
+
+              setState(() {
+                event.isGoing = !event.isGoing;
+              });
+            },
+          ),
+        ),
+        const SizedBox(width: 10),
+        IconButton(
+          icon: Icon(
+            event.isInterested ? Icons.star : Icons.star_border,
+          ),
+          color: event.isInterested ? Colors.amber.shade700 : theme.hintColor,
+          iconSize: 28,
+          onPressed: () async {
+            final ok = await context
+                .read<EventController>()
+                .toggleInterestEvent(event.id!);
+
+            if (!mounted) return;
+            if (!ok) return;
+
+            setState(() {
+              event.isInterested = !event.isInterested;
+            });
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOwnerActions(BuildContext context, SocialEvent event) {
+    final tEdit = getTranslated('edit', context) ?? 'Chỉnh sửa';
+    final tDelete = getTranslated('delete', context) ?? 'Xóa';
+    final tDeleteTitle =
+        getTranslated('delete_event_title', context) ?? 'Xóa sự kiện';
+    final tDeleteConfirm = getTranslated('delete_event_confirm', context) ??
+        'Bạn có chắc muốn xóa? Hành động này không thể hoàn tác.';
+    final tCancel = getTranslated('cancel', context) ?? 'Hủy';
+    final tDeleteSuccess =
+        getTranslated('event_delete_success', context) ??
+            'Đã xóa sự kiện';
+    final tDeleteFailed =
+        getTranslated('event_delete_failed', context) ??
+            'Xóa sự kiện thất bại.';
+
+    return Row(
+      children: [
+        Expanded(
+          child: _ActionButton(
+            icon: Icons.edit_outlined,
+            label: tEdit,
+            onTap: () async {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => EditEventScreen(event: event),
+                ),
+              );
+              if (result == true && mounted) {
                 setState(() {
-                  event.isGoing = !event.isGoing;
+                  _future = context
+                      .read<EventController>()
+                      .fetchEventById(widget.eventId);
                 });
               }
             },
-            child: Text(
-              isOwner
-                  ? 'Chỉnh sửa'
-                  : (event.isGoing ? 'Đã tham gia' : 'Tham gia'),
-              style: const TextStyle(fontSize: 13),
-            ),
           ),
         ),
-      ],
-    );
-  }
-}
-
-// ================== WIDGET PHỤ ==================
-
-class _DateCard extends StatelessWidget {
-  final String day;
-  final String month;
-  final String title;
-  final String value;
-
-  const _DateCard({
-    required this.day,
-    required this.month,
-    required this.title,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            decoration: BoxDecoration(
-              color: theme.primaryColor.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  day,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16,
-                  ),
-                ),
-                Text(
-                  month,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatRow extends StatelessWidget {
-  final IconData icon;
-  final String text;
-
-  const _StatRow({
-    required this.icon,
-    required this.text,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Icon(icon, size: 18, color: theme.primaryColor),
-        const SizedBox(width: 8),
+        const SizedBox(width: 10),
         Expanded(
-          child: Text(
-            text,
-            style: theme.textTheme.bodyMedium,
+          child: _ActionButton(
+            icon: Icons.delete_outline,
+            label: tDelete,
+            color: Colors.red.shade400,
+            onTap: () async {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: Text(tDeleteTitle),
+                  content: Text(tDeleteConfirm),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(false),
+                      child: Text(tCancel),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(true),
+                      child: Text(
+                        tDelete,
+                        style: const TextStyle(color: Colors.red),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+              if (confirm != true) return;
+
+              final ctrl = context.read<EventController>();
+              final id = event.id?.toString() ?? widget.eventId;
+              final ok = await ctrl.deleteEvent(id);
+
+              if (!mounted) return;
+
+              if (ok) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(tDeleteSuccess)),
+                );
+                Navigator.pop(context, true);
+              } else {
+                final msg = ctrl.error ?? tDeleteFailed;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(msg)),
+                );
+              }
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDetailsSection(BuildContext context, SocialEvent event) {
+    final tTime = getTranslated('event_time', context) ?? 'Thời gian';
+    final tLocation =
+        getTranslated('event_location', context) ?? 'Địa điểm';
+    final tLocationEmpty =
+        getTranslated('event_location_empty', context) ??
+            'Chưa có địa điểm';
+
+    final timeText = event.timeText ??
+        '${event.startDate ?? ''}${event.startTime != null ? ' ${event.startTime}' : ''}';
+
+    return Column(
+      children: [
+        _InfoRow(
+          icon: Icons.calendar_today_outlined,
+          title: tTime,
+          subtitle: timeText,
+        ),
+        const SizedBox(height: 16),
+        _InfoRow(
+          icon: Icons.location_on_outlined,
+          title: tLocation,
+          subtitle: event.location ?? tLocationEmpty,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDescriptionSection(BuildContext context, SocialEvent event) {
+    final tDescription =
+        getTranslated('description', context) ?? 'Mô tả';
+    final tDescEmpty =
+        getTranslated('event_description_empty', context) ??
+            '(Chưa có mô tả)';
+
+    final desc = event.description ?? tDescEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          tDescription,
+          style: Theme.of(context)
+              .textTheme
+              .titleLarge
+              ?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          desc,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: Theme.of(context).hintColor,
+            height: 1.6,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOrganizerSection(BuildContext context, SocialEvent event) {
+    final tOrganizer =
+        getTranslated('organizer', context) ?? 'Người tổ chức';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          tOrganizer,
+          style: Theme.of(context)
+              .textTheme
+              .titleLarge
+              ?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            CircleAvatar(
+              radius: 24,
+              backgroundImage: NetworkImage(event.user!.avatar ?? ''),
+              backgroundColor: Colors.grey.shade300,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                event.user!.name ?? event.user!.username ?? '',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+// --- HELPER WIDGETS ---
+
+class _AppBarButton extends StatelessWidget {
+  final Widget child;
+  const _AppBarButton({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.all(Radius.circular(30)),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.2),
+              shape: BoxShape.circle,
+            ),
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _InfoRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 24, color: theme.primaryColor),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: theme.hintColor),
+              ),
+            ],
           ),
         ),
       ],
@@ -731,36 +642,64 @@ class _StatRow extends StatelessWidget {
   }
 }
 
-class _OwnerActionButton extends StatelessWidget {
+class _ActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final Color? color;
 
-  const _OwnerActionButton({
+  const _ActionButton({
     required this.icon,
     required this.label,
     required this.onTap,
+    this.color,
   });
 
   @override
   Widget build(BuildContext context) {
-    return TextButton.icon(
-      style: TextButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        backgroundColor: Colors.white.withOpacity(0.15),
-        foregroundColor: Colors.white,
+    final theme = Theme.of(context);
+    final buttonColor = color ?? theme.primaryColor;
+    return OutlinedButton.icon(
+      icon: Icon(icon),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: buttonColor,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        side: BorderSide(color: buttonColor.withOpacity(0.5)),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(999),
-          side: BorderSide(color: Colors.white.withOpacity(0.4)),
+          borderRadius: BorderRadius.circular(12),
         ),
       ),
       onPressed: onTap,
-      icon: Icon(icon, size: 16),
-      label: Text(
-        label,
-        style: const TextStyle(fontSize: 12),
-        overflow: TextOverflow.ellipsis,
-      ),
+    );
+  }
+}
+
+class _StatItem extends StatelessWidget {
+  final String count;
+  final String label;
+  const _StatItem({required this.count, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          count,
+          style: Theme.of(context)
+              .textTheme
+              .titleLarge
+              ?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: Theme.of(context)
+              .textTheme
+              .bodySmall
+              ?.copyWith(color: Theme.of(context).hintColor),
+        ),
+      ],
     );
   }
 }
