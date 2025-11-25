@@ -26,6 +26,7 @@ import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
 import 'package:flutter_sixvalley_ecommerce/features/home/screens/aster_theme_home_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/home/screens/fashion_theme_home_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/home/screens/home_screens.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/more/screens/more_screen_view.dart';
 import 'package:flutter_sixvalley_ecommerce/features/order/screens/order_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/main_home/screens/main_home_screen.dart';
@@ -37,6 +38,7 @@ import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screen
 import 'package:provider/provider.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 
 class DashBoardScreen extends StatefulWidget {
   const DashBoardScreen({super.key});
@@ -176,6 +178,103 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final mediaQuery = MediaQuery.of(context);
+    final platformBrightness = MediaQuery.platformBrightnessOf(context);
+    final bool isIOSPlatform = !kIsWeb && Platform.isIOS;
+    final bool hideNav = (_socialTabIndex != null &&
+        _pageIndex == _socialTabIndex &&
+        !_showBottomNav);
+
+    // iOS dùng adaptive_platform_ui bottom bar, Android giữ nguyên UI hiện tại
+    if (isIOSPlatform) {
+      final int unreadNotifications =
+          context.select<SocialNotificationsController, int>(
+        (ctrl) => ctrl.notifications.where((n) => n.seen == "0").length,
+      );
+
+      String t(String key) => getTranslated(key, context) ?? key;
+
+      Color navActiveColor = cs.primary;
+      if (platformBrightness == Brightness.dark) {
+        navActiveColor = _boostLightness(navActiveColor, 0.20);
+      }
+
+      final List<AdaptiveNavigationDestination> destinations = [
+        AdaptiveNavigationDestination(
+          icon: 'house.fill',
+          selectedIcon: 'house',
+          label: t('home'),
+        ),
+        AdaptiveNavigationDestination(
+          icon: 'map.fill',
+          selectedIcon: 'airplane',
+          label: t('travel'),
+        ),
+        AdaptiveNavigationDestination(
+          icon: 'globe.fill',
+          selectedIcon: 'person.2.fill',
+          label: t('social'),
+        ),
+        AdaptiveNavigationDestination(
+          icon: 'basket.fill',
+          selectedIcon: 'bag.fill',
+          label: t('shop'),
+        ),
+        AdaptiveNavigationDestination(
+          icon: 'bell.fill',
+          selectedIcon: 'bell.fill',
+          label: t('notifications'),
+          badgeCount: unreadNotifications > 0 ? unreadNotifications : null,
+        ),
+        AdaptiveNavigationDestination(
+          icon: 'ellipsis.circle.fill',
+          selectedIcon: 'ellipsis.circle.fill',
+          label: t('more'),
+        ),
+      ];
+
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) async {
+          if (_pageIndex != 0) {
+            _setPage(0);
+            return;
+          } else {
+            await Future.delayed(const Duration(milliseconds: 150));
+            if (context.mounted) {
+              if (!Navigator.of(context).canPop()) {
+                showModalBottomSheet(
+                    backgroundColor: Colors.transparent,
+                    context: Get.context!,
+                    builder: (_) => const AppExitCard());
+              }
+            }
+          }
+          return;
+        },
+        child: AdaptiveScaffold(
+          minimizeBehavior: TabBarMinimizeBehavior.never,
+          enableBlur: true,
+          bottomNavigationBar: hideNav
+              ? null
+              : AdaptiveBottomNavigationBar(
+                  items: destinations,
+                  selectedIndex: _pageIndex,
+                  onTap: (index) => _handleNavigationTap(
+                    _screens[index],
+                    index,
+                  ),
+                  useNativeBottomBar: true,
+                  selectedItemColor: navActiveColor,
+                ),
+          body: PageStorage(
+            key: ValueKey<int>(_pageIndex),
+            bucket: bucket,
+            child: _screens[_pageIndex].screen,
+          ),
+        ),
+      );
+    }
+
     if (_navBehindDark == null) {
       // Kích ho?t sample ? frame d?u n?u chua có d? li?u
       WidgetsBinding.instance
@@ -228,9 +327,6 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         ? Colors.white.withOpacity(0.9)
         : Colors.black.withOpacity(0.9);
     final Color navActiveColor = cs.primary;
-    final bool hideNav = (_socialTabIndex != null &&
-        _pageIndex == _socialTabIndex &&
-        !_showBottomNav);
     return PopScope(
         canPop: false,
         onPopInvokedWithResult: (didPop, _) async {
@@ -788,6 +884,12 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     }
   }
 
+  Color _boostLightness(Color color, double amount) {
+    final hsl = HSLColor.fromColor(color);
+    final double newLightness = (hsl.lightness + amount).clamp(0.0, 1.0);
+    return hsl.withLightness(newLightness).toColor();
+  }
+
   List<Widget> _getBottomWidget(
     bool isSingleVendor,
     Color activeColor,
@@ -863,5 +965,3 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     return list;
   }
 }
-
-

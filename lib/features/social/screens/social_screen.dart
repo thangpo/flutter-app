@@ -2,9 +2,11 @@ import 'dart:math';
 import 'dart:ui' as ui;
 import 'dart:typed_data';
 import 'dart:developer' as developer;
+import 'dart:io' show Platform;
 import 'package:flutter/rendering.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_sixvalley_ecommerce/features/ads/domain/models/ads_model.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
 import 'package:provider/provider.dart';
@@ -41,6 +43,7 @@ import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 
 bool _listsEqual<T>(List<T> a, List<T> b) {
   if (identical(a, b)) return true;
@@ -408,118 +411,122 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final bool isLightTheme = theme.brightness == Brightness.light;
+    final bool isDarkTheme = theme.brightness == Brightness.dark;
     final mediaQuery = MediaQuery.of(context);
+    final bool isIOSPlatform = !kIsWeb && Platform.isIOS;
+    final bool showHeaderOverlay = !isIOSPlatform;
     final Color pageBg = isLightTheme ? cs.surface : cs.background;
-    final double listTopPadding = _FacebookHeader.totalHeight(context) + 12;
+    final double listTopPadding = showHeaderOverlay
+        ? _FacebookHeader.totalHeight(context) + 12
+        : mediaQuery.padding.top + 12;
     final double listBottomPadding = mediaQuery.padding.bottom + 16;
-    final double overlayHeight = _FacebookHeader.totalHeight(context) + 30;
+    final double overlayHeight =
+        showHeaderOverlay ? _FacebookHeader.totalHeight(context) + 30 : 0;
     const Color appBlue = Colors.white;
 
-    return Scaffold(
-      backgroundColor: pageBg,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: RepaintBoundary(
-              key: _contentRepaintKey,
-              child: ColoredBox(
-                color:
-                    pageBg, // giữ nền ngay cả khi content đang loading để sample header không bị đen
-                child: SafeArea(
-                  top: false,
-                  bottom: false,
-                  child: Consumer<SocialController>(
-                    builder: (context, sc, _) {
-                      if (sc.loading && sc.posts.isEmpty) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-                      const int headerCount = 3;
-                      final List<AdsModel> postAds = sc.postAds;
-                      final List<SocialPost> posts = sc.posts;
-                      final Set<String> eligibleIds = sc.postAdEligibleIds;
-                      _ensurePostAdSlots(posts, postAds, eligibleIds);
-                      return RefreshIndicator(
-                        key: _refreshKey,
-                        onRefresh: () async {
-                          _resetPostAdSlots();
-                          await Future.wait([
-                            sc.refresh(),
-                            sc.fetchAdsForFeed(force: true),
-                            sc.refreshBirthdays(force: true),
-                          ]);
-                        },
-                        child: ListView.builder(
-                          controller: _scrollController,
-                          padding: EdgeInsets.only(
-                            top: listTopPadding,
-                            bottom: listBottomPadding,
-                          ),
-                          itemCount: posts.length + headerCount,
-                          itemBuilder: (ctx, i) {
-                            if (i == 0) {
-                              // Block "B?n dang nghi gÃ¬?"
-                              return Column(
-                                children: [
-                                  _WhatsOnYourMind(),
-                                  const _SectionSeparator(), // tÃ¡ch v?i Stories
-                                ],
-                              );
-                            }
-                            if (i == 1) {
-                              // Block Stories + separator
-                              return Consumer<SocialController>(
-                                builder: (context, sc2, __) {
-                                  return Column(
-                                    children: [
-                                      _StoriesSectionFromApi(
-                                        stories: sc2.stories,
-                                      ),
-                                    ],
-                                  );
-                                },
-                              );
-                            }
-                            if (i == 2) {
-                              return _BirthdaySection(
-                                users: sc
-                                    .birthdayUsers, // ⭐ dùng list từ controller
-                              );
-                            }
-
-                            final int postIndex = i - headerCount;
-                            if (postIndex < 0 || postIndex >= posts.length) {
-                              return const SizedBox.shrink();
-                            }
-
-                            final SocialPost p = posts[postIndex];
-                            const int pageSize = 10;
-                            const int prefetchAt = pageSize ~/ 2;
-
-                            if (!sc.loading &&
-                                postIndex >= posts.length - prefetchAt) {
-                              sc.loadMore();
-                            }
-
-                            final AdsModel? inlineAd = _postAdForIndex(
-                              postIndex,
-                              postAds,
-                            );
-
+    final Widget feedContent = Stack(
+      children: [
+        Positioned.fill(
+          child: RepaintBoundary(
+            key: _contentRepaintKey,
+            child: ColoredBox(
+              color:
+                  pageBg, // giữ nền ngay cả khi content đang loading để sample header không bị đen
+              child: SafeArea(
+                top: false,
+                bottom: false,
+                child: Consumer<SocialController>(
+                  builder: (context, sc, _) {
+                    if (sc.loading && sc.posts.isEmpty) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    const int headerCount = 3;
+                    final List<AdsModel> postAds = sc.postAds;
+                    final List<SocialPost> posts = sc.posts;
+                    final Set<String> eligibleIds = sc.postAdEligibleIds;
+                    _ensurePostAdSlots(posts, postAds, eligibleIds);
+                    return RefreshIndicator(
+                      key: _refreshKey,
+                      onRefresh: () async {
+                        _resetPostAdSlots();
+                        await Future.wait([
+                          sc.refresh(),
+                          sc.fetchAdsForFeed(force: true),
+                          sc.refreshBirthdays(force: true),
+                        ]);
+                      },
+                      child: ListView.builder(
+                        controller: _scrollController,
+                        padding: EdgeInsets.only(
+                          top: listTopPadding,
+                          bottom: listBottomPadding,
+                        ),
+                        itemCount: posts.length + headerCount,
+                        itemBuilder: (ctx, i) {
+                          if (i == 0) {
+                            // Block "B?n dang nghi gÃ¬?"
                             return Column(
                               children: [
-                                SocialPostCard(post: p),
-                                if (inlineAd != null) _PostAdCard(ad: inlineAd),
+                                _WhatsOnYourMind(),
+                                const _SectionSeparator(), // tÃ¡ch v?i Stories
                               ],
                             );
-                          },
-                        ),
-                      );
-                    },
-                  ),
+                          }
+                          if (i == 1) {
+                            // Block Stories + separator
+                            return Consumer<SocialController>(
+                              builder: (context, sc2, __) {
+                                return Column(
+                                  children: [
+                                    _StoriesSectionFromApi(
+                                      stories: sc2.stories,
+                                    ),
+                                  ],
+                                );
+                              },
+                            );
+                          }
+                          if (i == 2) {
+                            return _BirthdaySection(
+                              users: sc.birthdayUsers, // ⭐ dùng list từ controller
+                            );
+                          }
+
+                          final int postIndex = i - headerCount;
+                          if (postIndex < 0 || postIndex >= posts.length) {
+                            return const SizedBox.shrink();
+                          }
+
+                          final SocialPost p = posts[postIndex];
+                          const int pageSize = 10;
+                          const int prefetchAt = pageSize ~/ 2;
+
+                          if (!sc.loading &&
+                              postIndex >= posts.length - prefetchAt) {
+                            sc.loadMore();
+                          }
+
+                          final AdsModel? inlineAd = _postAdForIndex(
+                            postIndex,
+                            postAds,
+                          );
+
+                          return Column(
+                            children: [
+                              SocialPostCard(post: p),
+                              if (inlineAd != null) _PostAdCard(ad: inlineAd),
+                            ],
+                          );
+                        },
+                      ),
+                    );
+                  },
                 ),
               ),
             ),
           ),
+        ),
+        if (showHeaderOverlay)
           Positioned(
             top: 0,
             left: 0,
@@ -549,6 +556,7 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
               ),
             ),
           ),
+        if (showHeaderOverlay)
           AnimatedSlide(
             duration: const Duration(milliseconds: 220),
             curve: Curves.easeInOut,
@@ -565,8 +573,74 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
               ),
             ),
           ),
-        ],
-      ),
+      ],
+    );
+
+    if (isIOSPlatform) {
+      final sc = context.read<SocialController>();
+      final String logoAsset = isDarkTheme
+          ? Images.logoWithNameSocialImageWhite
+          : Images.logoWithNameSocialImage;
+
+      return AdaptiveScaffold(
+        appBar: AdaptiveAppBar(
+          useNativeToolbar: true,
+          title: null,
+          leading: Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: Image.asset(
+              logoAsset,
+              height: 34,
+              fit: BoxFit.contain,
+            ),
+          ),
+          actions: [
+            AdaptiveAppBarAction(
+              iosSymbol: 'magnifyingglass',
+              icon: Icons.search,
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const SocialSearchScreen(),
+                  ),
+                );
+              },
+            ),
+            AdaptiveAppBarAction(
+              iosSymbol: 'person.2',
+              icon: Icons.people_alt_outlined,
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => FriendsScreen(),
+                  ),
+                );
+              },
+            ),
+            AdaptiveAppBarAction(
+              iosSymbol: 'message',
+              icon: Icons.message_outlined,
+              onPressed: () {
+                final token = sc.accessToken;
+                if (token == null || token.isEmpty) return;
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => FriendsListScreen(
+                      accessToken: token,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+        body: feedContent,
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: pageBg,
+      body: feedContent,
     );
   }
 }
@@ -3378,4 +3452,3 @@ class _Story {
 class EdgeBox {
   static const zero = EdgeInsets.zero;
 }
-
