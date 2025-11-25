@@ -420,7 +420,41 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                 goToStep(currentStep + 1);
               }
             }
+
             void onConfirmBooking() {
+              if (start == null || end == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text(
+                      'Vui lòng chọn ngày nhận và trả phòng trước khi đặt.',
+                    ),
+                    behavior: SnackBarBehavior.floating,
+                    margin: const EdgeInsets.all(16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                );
+                return;
+              }
+
+              final int diff = end!.difference(start!).inDays;
+              if (diff < 1) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text(
+                      'Ngày trả phòng phải sau ngày nhận phòng ít nhất 1 ngày.',
+                    ),
+                    behavior: SnackBarBehavior.floating,
+                    margin: const EdgeInsets.all(16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                );
+                return;
+              }
+
               if (rooms.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
