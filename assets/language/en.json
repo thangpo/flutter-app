@@ -1488,7 +1488,6 @@
   "current_image": "Current image",
   "update_ad": "Update ad",
   "select_country": "Select country",
-
   "fill_all_fields": "Fill all fields",
   "select_image": "Select image",
   "select_dates": "Select dates",
@@ -1502,11 +1501,9 @@
   "select_date": "Select date",
   "select_countries": "Select countries",
   "enter_city_or_province": "Enter city or province",
-
   "reactions": "Reactions",
   "comment_reactions": "Comment reactions",
   "mutual_friends": "Mutual frends",
-
   "ad_default_title": "Sponsored ad",
   "ad_sponsored": "Sponsored",
   "ad_learn_more": "Learn more",
@@ -1515,8 +1512,6 @@
   "wow": "Wow",
   "sad": "Sad",
   "angry": "Angry",
-
-
   "your_pages":"Your Pages",
   "liked_pages":"Like Pages",
   "like_page":"Like Page",
@@ -1530,6 +1525,14 @@
   "page_category":"Page Category",
   "select_category":"Select Category",
   "page_description":"Page Description",
-  "page_description_hint":"Page Description Hint"
+  "page_description_hint":"Page Description Hint",
+
+  "rooms_available": "Rooms available",
+  "beds": "Beds",
+  "guests": "Guests",
+  "night": "Night",
+  "number_of_rooms": "Number of rooms",
+  "selected_room": "Selected room",
+  "select_room": "Select room"
 
 }

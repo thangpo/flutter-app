@@ -31,8 +31,6 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
   int _adults = 2;
   int _children = 0;
   bool _loading = false;
-
-  /// roomId -> selectedRooms
   final Map<int, int> _selectedRooms = {};
 
   @override
@@ -159,9 +157,6 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // FILTER BAR
-  // ---------------------------------------------------------------------------
   Widget _buildFilterBar(BuildContext context, bool isDark) {
     final dateFmt = DateFormat('dd/MM/yyyy');
 
@@ -476,9 +471,6 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // WRAPPER SECTION
-  // ---------------------------------------------------------------------------
   Widget _buildSection({
     required BuildContext context,
     required String title,
