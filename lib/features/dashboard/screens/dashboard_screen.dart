@@ -362,10 +362,10 @@ class DashBoardScreenState extends State<DashBoardScreen> {
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(28),
-                        border: Border.all(
-                          color: bottomBorderColor,
-                          width: 1.4,
-                        ),
+                        // border: Border.all(
+                        //   color: bottomBorderColor,
+                        //   width: 1.4,
+                        // ),
                         color: bottomFillColor,
                       ),
                       child: SizedBox(

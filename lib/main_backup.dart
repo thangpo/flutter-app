@@ -448,7 +448,9 @@ Future<void> main() async {
       ?.createNotificationChannel(_callInviteChannel);
 
   const androidInit = AndroidInitializationSettings('notification_icon');
-  const initSettings = InitializationSettings(android: androidInit);
+  const iosInit = DarwinInitializationSettings();
+  const initSettings =
+      InitializationSettings(android: androidInit, iOS: iosInit);
 
   await flutterLocalNotificationsPlugin.initialize(
     initSettings,
