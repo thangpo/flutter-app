@@ -110,22 +110,20 @@ class CallInviteForegroundListener {
     }
 
     // Fallback: nếu server gửi type = call_invite + call_id + media ở root
+    final mediaRaw = _extractMedia(data);
     final looksLikeCallInvite = type == 'call_invite' ||
-        (data.containsKey('call_id') &&
-            data.containsKey('media') &&
-            !data.containsKey('group_id'));
+        (data.containsKey('call_id') && mediaRaw != null && !data.containsKey('group_id'));
     if (!looksLikeCallInvite) return;
 
     final callId = int.tryParse('${data['call_id'] ?? ''}') ?? 0;
     if (callId <= 0) return;
 
-    final media = (data['media']?.toString() == 'video') ? 'video' : 'audio';
     final ts = int.tryParse('${data['ts'] ?? 0}') ??
         DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
     final inv = CallInvite(
       callId: callId,
-      media: media,
+      media: mediaRaw ?? 'audio',
       issuedAt: DateTime.fromMillisecondsSinceEpoch(ts * 1000),
     );
     if (inv.isExpired()) return;
@@ -213,6 +211,18 @@ class CallInviteForegroundListener {
     return raw.substring(start, end);
   }
 
+  /// Chuẩn hóa media từ payload (media | call_type | type_two | call_media)
+  static String? _extractMedia(Map<String, dynamic> data) {
+    final raw = (data['media'] ??
+            data['call_type'] ??
+            data['type_two'] ??
+            data['call_media'])
+        ?.toString()
+        .toLowerCase();
+    if (raw == 'video' || raw == 'audio') return raw;
+    return null;
+  }
+
   // =====================================================
   // ================= GROUP CALL HELPERS ================
   // =====================================================
@@ -221,7 +231,7 @@ class CallInviteForegroundListener {
     final groupId = '${data['group_id'] ?? ''}';
     if (callId <= 0 || groupId.isEmpty) return;
 
-    final media = (data['media']?.toString() == 'video') ? 'video' : 'audio';
+    final media = _extractMedia(data) ?? 'audio';
     final name = data['group_name']?.toString();
 
     final key = '$callId|$groupId';
