@@ -1,4 +1,5 @@
-﻿import 'dart:io';
+﻿
+import 'dart:io';
 import 'dart:convert';
 
 import 'package:firebase_core/firebase_core.dart';
@@ -479,7 +480,9 @@ Future<void> main() async {
       ?.createNotificationChannel(_callInviteChannel);
 
   const androidInit = AndroidInitializationSettings('notification_icon');
-  const initSettings = InitializationSettings(android: androidInit);
+  const iosInit = DarwinInitializationSettings();
+  const initSettings =
+      InitializationSettings(android: androidInit, iOS: iosInit);
 
   await flutterLocalNotificationsPlugin.initialize(
     initSettings,
