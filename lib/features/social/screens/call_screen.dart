@@ -110,12 +110,18 @@ class _CallScreenState extends State<CallScreen> {
 
       // remote track
       _pc!.onTrack = (e) async {
-        if (e.streams.isNotEmpty) {
-          try {
-            _remoteRenderer.srcObject = e.streams.first;
-          } catch (_) {}
-          if (mounted) setState(() {});
+        MediaStream? stream = e.streams.isNotEmpty ? e.streams.first : null;
+
+        // fallback khi unified-plan không gắn stream
+        if (stream == null) {
+          stream = await createLocalMediaStream('remote_peer');
+          await stream.addTrack(e.track);
         }
+
+        try {
+          _remoteRenderer.srcObject = stream;
+        } catch (_) {}
+        if (mounted) setState(() {});
       };
 
       // ICE local
@@ -135,6 +141,14 @@ class _CallScreenState extends State<CallScreen> {
             s == RTCPeerConnectionState.RTCPeerConnectionStateClosed) {
           _hangup();
         }
+      };
+
+      // Plan-B fallback (một số thiết bị Android gửi addStream)
+      _pc!.onAddStream = (MediaStream stream) async {
+        try {
+          _remoteRenderer.srcObject = stream;
+        } catch (_) {}
+        if (mounted) setState(() {});
       };
 
       // lấy local media — tăng chất lượng video
@@ -158,6 +172,18 @@ class _CallScreenState extends State<CallScreen> {
       _localStream = await navigator.mediaDevices.getUserMedia(constraints);
       try {
         _localRenderer.srcObject = _localStream;
+      } catch (_) {}
+
+      // Thêm sẵn transceiver recv-only để chắc chắn nhận remote (unified-plan iOS)
+      try {
+        await _pc!.addTransceiver(
+          kind: RTCRtpMediaType.RTCRtpMediaTypeAudio,
+          init: RTCRtpTransceiverInit(direction: TransceiverDirection.RecvOnly),
+        );
+        await _pc!.addTransceiver(
+          kind: RTCRtpMediaType.RTCRtpMediaTypeVideo,
+          init: RTCRtpTransceiverInit(direction: TransceiverDirection.RecvOnly),
+        );
       } catch (_) {}
 
       // add local track vào PC
@@ -185,7 +211,10 @@ class _CallScreenState extends State<CallScreen> {
 
       // Caller tạo OFFER → gửi
       if (widget.isCaller) {
-        final offer = await _pc!.createOffer();
+        final offer = await _pc!.createOffer({
+          'offerToReceiveAudio': 1,
+          'offerToReceiveVideo': 1,
+        });
         await _pc!.setLocalDescription(offer);
         await _cc.sendOffer(offer.sdp!);
       }
@@ -232,7 +261,10 @@ class _CallScreenState extends State<CallScreen> {
       if (_remoteDescSet && !_offerHandled) {
         _offerHandled = true; // đánh dấu đã xử lý để tránh lặp
         try {
-          final answer = await _pc!.createAnswer();
+          final answer = await _pc!.createAnswer({
+            'offerToReceiveAudio': 1,
+            'offerToReceiveVideo': 1,
+          });
           await _pc!.setLocalDescription(answer);
           await _cc.sendAnswer(answer.sdp!);
         } catch (e) {
