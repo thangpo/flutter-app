@@ -67,79 +67,87 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
       ),
       body: Column(
         children: [
-          // SEARCH BOX
+          // Header + search + tabs
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-            child: TextField(
-              controller: _searchCtrl,
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                hintText: 'Tìm kiếm hội thoại hoặc tên Page',
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: cs.surfaceVariant.withOpacity(.5),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(999),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-          ),
-
-          // HEADER + TABS
-          Container(
-            margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: cs.surfaceVariant.withOpacity(.3),
-              borderRadius: BorderRadius.circular(16),
-            ),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: cs.primary.withOpacity(.12),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Icon(Icons.flag, size: 18, color: cs.primary),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [cs.primary.withOpacity(.15), cs.surfaceVariant],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Tin nhắn Page',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                              color: cs.onSurface,
-                            ),
-                          ),
-                          Text(
-                            'Quản lý tin nhắn khách hàng cho các Page của bạn',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: cs.onSurface.withOpacity(.6),
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: cs.primary.withOpacity(.18),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(Icons.chat_bubble_outline, color: cs.primary),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Tin nhắn Page',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15,
+                              ),
+                            ),
+                            Text(
+                              'Theo dõi hội thoại khách hàng và Page của bạn',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: cs.onSurface.withOpacity(.65),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 12),
+                TextField(
+                  controller: _searchCtrl,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    hintText: 'Tìm kiếm hội thoại hoặc tên Page',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _searchCtrl.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () {
+                              _searchCtrl.clear();
+                              setState(() {});
+                            },
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: cs.surfaceVariant.withOpacity(.35),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
                 Row(
                   children: [
                     _MiniTabChip(
-                      label: 'Tất cả tin nhắn',
+                      label: 'Tất cả',
                       selected: _tabIndex == 0,
                       onTap: () => setState(() => _tabIndex = 0),
                     ),
@@ -156,208 +164,180 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
           ),
 
           // LIST
+          // LIST - ĐÃ BỎ BO GÓC + ĐƯỜNG KẺ + NỀN TRẮNG KHI CÓ TIN NHẮN MỚI
           Expanded(
             child: pageCtrl.loadingPageChatList
                 ? const Center(child: CircularProgressIndicator())
                 : RefreshIndicator(
-                    onRefresh: () => pageCtrl.refreshPageChatList(),
-                    child: ListView.separated(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      itemCount: threads.length,
-                      separatorBuilder: (_, __) => Divider(
-                        height: 1,
-                        color: cs.outlineVariant.withOpacity(.5),
-                      ),
-                      itemBuilder: (_, index) {
-                        final item = threads[index];
-                        final bool isOwner = item.isMyPage;
-                        final String displayName = isOwner
-                            ? (item.peerName.isNotEmpty
-                                ? item.peerName
-                                : item.pageTitle)
-                            : item.pageTitle;
-                        final String subtitle = isOwner
-                            ? '(${item.pageName})'
-                            : '@${item.pageName}';
-                        final String avatarUrl =
-                            isOwner && item.peerAvatar.isNotEmpty
-                                ? item.peerAvatar
-                                : item.avatar;
-                        final String avatarFallback = displayName.isNotEmpty
-                            ? displayName[0].toUpperCase()
-                            : '?';
+              onRefresh: () => pageCtrl.refreshPageChatList(),
+              child: ListView.builder(  // Đổi từ separated → builder để không có divider
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                itemCount: threads.length,
+                itemBuilder: (_, index) {
+                  final item = threads[index];
 
-                        // TAB FILTER
-                        if (_tabIndex == 1 && !item.isMyPage) {
-                          return const SizedBox.shrink();
-                        }
+                  // === TAB FILTER: Chỉ hiển thị "Page của tôi" khi chọn tab đó ===
+                  if (_tabIndex == 1 && !item.isMyPage) {
+                    return const SizedBox.shrink();
+                  }
 
-                        final String chatTitle = item.isMyPage
-                            ? (item.peerName.isNotEmpty
-                                ? item.peerName
-                                : item.pageTitle)
-                            : item.pageTitle;
-                        final String chatAvatar = item.isMyPage &&
-                                item.peerAvatar.isNotEmpty
-                            ? item.peerAvatar
-                            : item.avatar;
+                  final bool isOwner = item.isMyPage;
+                  final String displayName = isOwner
+                      ? (item.peerName.isNotEmpty ? item.peerName : item.pageTitle)
+                      : item.pageTitle;
+                  final String subtitle = isOwner ? '(${item.pageName})' : '@${item.pageName}';
+                  final String avatarUrl = isOwner && item.peerAvatar.isNotEmpty
+                      ? item.peerAvatar
+                      : item.avatar;
+                  final String avatarFallback = displayName.isNotEmpty
+                      ? displayName[0].toUpperCase()
+                      : '?';
 
-                        return InkWell(
-                          onTap: () {
-                            final recipientId =
-                                item.isMyPage ? item.userId : item.ownerId;
+                  final String chatTitle = item.isMyPage
+                      ? (item.peerName.isNotEmpty ? item.peerName : item.pageTitle)
+                      : item.pageTitle;
+                  final String chatAvatar = item.isMyPage && item.peerAvatar.isNotEmpty
+                      ? item.peerAvatar
+                      : item.avatar;
 
-                            // Mark thread as read when opening chat
-                            context
-                                .read<SocialPageController>()
-                                .markPageThreadRead(item.pageId,
-                                    peerId: recipientId);
+                  return InkWell(
+                    onTap: () {
+                      final recipientId = item.isMyPage ? item.userId : item.ownerId;
 
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => PageChatScreen(
-                                  pageId: int.parse(item.pageId),
-                                  recipientId: recipientId,
-                                  pageTitle: chatTitle,
-                                  pageAvatar: chatAvatar,
-                                  pageSubtitle: subtitle,
-                                ),
+                      context.read<SocialPageController>().markPageThreadRead(
+                          item.pageId, peerId: recipientId);
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => PageChatScreen(
+                            pageId: int.parse(item.pageId),
+                            recipientId: recipientId,
+                            pageTitle: chatTitle,
+                            pageAvatar: chatAvatar,
+                            pageSubtitle: subtitle,
+                          ),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 10), // Chỉ padding dọc
+                      color: Colors.transparent, // Không nền
+                      child: Row(
+                        children: [
+                          // AVATAR
+                          Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              CircleAvatar(
+                                radius: 28,
+                                backgroundImage: avatarUrl.isNotEmpty
+                                    ? NetworkImage(avatarUrl)
+                                    : null,
+                                backgroundColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(.3),
+                                child: avatarUrl.isEmpty
+                                    ? Text(
+                                  avatarFallback,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                                )
+                                    : null,
                               ),
-                            );
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 10),
-                            child: Row(
-                              children: [
-                                // AVATAR
-                                Stack(
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 24,
-                                      backgroundImage: avatarUrl.isNotEmpty
-                                          ? NetworkImage(avatarUrl)
-                                          : null,
-                                      backgroundColor: cs.surfaceVariant,
-                                      child: avatarUrl.isEmpty
-                                          ? Text(
-                                              avatarFallback,
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            )
-                                          : null,
-                                    ),
-                                    if (item.isMyPage)
-                                      Positioned(
-                                        right: -2,
-                                        bottom: -2,
-                                        child: Container(
-                                          padding: const EdgeInsets.all(2),
-                                          decoration: BoxDecoration(
-                                            color: cs.primary,
-                                            shape: BoxShape.circle,
-                                            border: Border.all(
-                                              color: Theme.of(context)
-                                                  .scaffoldBackgroundColor,
-                                              width: 2,
-                                            ),
-                                          ),
-                                          child: const Icon(
-                                            Icons.check,
-                                            size: 12,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      )
-                                  ],
-                                ),
-
-                                const SizedBox(width: 10),
-
-                                // INFO
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      // NAME + TIME
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              displayName,
-                                              style: TextStyle(
-                                                fontSize: 15,
-                                                fontWeight:
-                                                    item.unreadCount > 0
-                                                        ? FontWeight.w700
-                                                        : FontWeight.w600,
-                                              ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            item.lastMessageTime,
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              color:
-                                                  cs.onSurface.withOpacity(.6),
-                                            ),
-                                          ),
-                                        ],
+                              if (item.isMyPage)
+                                Positioned(
+                                  right: -2,
+                                  bottom: -2,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(2),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).colorScheme.primary,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Theme.of(context).scaffoldBackgroundColor,
+                                        width: 2.5,
                                       ),
+                                    ),
+                                    child: const Icon(Icons.check, size: 13, color: Colors.white),
+                                  ),
+                                ),
+                            ],
+                          ),
 
-                                      const SizedBox(height: 3),
+                          const SizedBox(width: 14),
 
-                                      // USERNAME
-                                      Text(
-                                        subtitle,
+                          // INFO
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        displayName,
                                         style: TextStyle(
-                                          fontSize: 11,
-                                          color: cs.onSurface.withOpacity(.7),
+                                          fontSize: 15.5,
+                                          fontWeight: item.unreadCount > 0
+                                              ? FontWeight.w700
+                                              : FontWeight.w600,
                                         ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
-
-                                      const SizedBox(height: 3),
-
-                                      // LAST MESSAGE + BADGE
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              item.lastMessage,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                fontSize: 12.5,
-                                                fontWeight: item.unreadCount > 0
-                                                    ? FontWeight.w700
-                                                    : FontWeight.w400,
-                                                color: item.unreadCount > 0
-                                                    ? cs.onSurface
-                                                    : cs.onSurface
-                                                        .withOpacity(.75),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      )
-                                    ],
+                                    ),
+                                    Text(
+                                      item.lastMessageTime,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Theme.of(context).colorScheme.onSurface.withOpacity(.6),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  subtitle,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Theme.of(context).colorScheme.onSurface.withOpacity(.7),
                                   ),
-                                )
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  item.lastMessage,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: item.unreadCount > 0 ? FontWeight.w600 : FontWeight.w400,
+                                    color: item.unreadCount > 0
+                                        ? Theme.of(context).colorScheme.onSurface
+                                        : Theme.of(context).colorScheme.onSurface.withOpacity(.8),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ],
                             ),
                           ),
-                        );
-                      },
+
+                          // Optional: nếu muốn giữ badge unread nhỏ ở góc phải
+                          // if (item.unreadCount > 0)
+                          //   Padding(
+                          //     padding: const EdgeInsets.only(left: 8),
+                          //     child: CircleAvatar(
+                          //       radius: 10,
+                          //       backgroundColor: Theme.of(context).colorScheme.primary,
+                          //       child: Text(
+                          //         item.unreadCount > 99 ? '99+' : item.unreadCount.toString(),
+                          //         style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          //       ),
+                          //     ),
+                          //   ),
+                        ],
+                      ),
                     ),
-                  ),
+                  );
+                },
+              ),
+            ),
           ),
         ],
       ),
