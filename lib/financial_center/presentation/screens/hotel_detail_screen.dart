@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:intl/intl.dart';
-
 import '../services/hotel_service.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-
 import '../widgets/hotel_detail_app_bar.dart';
 import '../widgets/hotel_detail_body.dart';
 import '../widgets/hotel_book_button.dart';
+import '../screens/hotel_checkout_screen.dart';
 import '../widgets/hotel_rooms_section.dart'
     show HotelBookingSummary, HotelSelectedRoom;
 
@@ -320,6 +319,23 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
             .toList() ??
             [];
 
+    final int hotelId = () {
+      final raw = bookingData?['object_id'];
+      if (raw is int) return raw;
+      if (raw is String) {
+        final parsed = int.tryParse(raw);
+        if (parsed != null) return parsed;
+      }
+      final raw2 = _hotelDetail?['id'];
+      if (raw2 is int) return raw2;
+      if (raw2 is String) {
+        final parsed2 = int.tryParse(raw2);
+        if (parsed2 != null) return parsed2;
+      }
+
+      return 0;
+    }();
+
     List<bool> extraSelected =
     extraPriceItems.map((e) => (e['enable']?.toString() == '1')).toList();
 
@@ -332,14 +348,25 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setState) {
+            double _calcRoomLineTotal(HotelSelectedRoom r, int nights) {
+              final int qty = r.quantity <= 0 ? 1 : r.quantity;
+              final int usedNights = (nights > 0)
+                  ? nights
+                  : (r.nights != null && r.nights! > 0 ? r.nights! : 1);
+              final double perNight = r.pricePerNight;
+
+              return perNight * usedNights * qty;
+            }
             int nights = 0;
             if (start != null && end != null) {
               nights = end!.difference(start!).inDays;
               if (nights < 1) nights = 1;
             }
 
-            double roomsTotal =
-            rooms.fold(0.0, (sum, r) => sum + r.totalPrice);
+            double roomsTotal = rooms.fold(
+              0.0,
+                  (sum, r) => sum + _calcRoomLineTotal(r, nights),
+            );
             final bool hasRooms = rooms.isNotEmpty;
 
             double extrasTotal = 0;
@@ -477,8 +504,7 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
               int childrenCapacity = 0;
 
               for (final r in rooms) {
-                final int perRoomAdults =
-                (r.adultsPerRoom ?? r.maxGuests ?? 0);
+                final int perRoomAdults = (r.adultsPerRoom ?? r.maxGuests ?? 0);
                 final int perRoomChildren = (r.childrenPerRoom ?? 0);
 
                 adultsCapacity += perRoomAdults * r.quantity;
@@ -507,23 +533,43 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                 return;
               }
 
+              // Lấy danh sách extra được chọn
+              final List<Map<String, dynamic>> selectedExtras = [];
+              for (int i = 0; i < extraPriceItems.length; i++) {
+                if (extraSelected[i]) {
+                  selectedExtras.add(extraPriceItems[i]);
+                }
+              }
+
+              // Đóng dialog trước
               Navigator.of(ctx).pop();
 
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Đã chọn ${rooms.fold<int>(0, (s, r) => s + r.quantity)} phòng, '
-                        '$requestedAdults người lớn, $requestedChildren trẻ em.\n'
-                        'Tổng tạm tính (gồm phụ phí): ${_formatVndPrice(grandTotal)}\n'
-                        'Chức năng đặt phòng sẽ được cập nhật sau.',
+              // Đẩy sang màn checkout, truyền toàn bộ info màn 4
+              Future.microtask(() {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => HotelCheckoutScreen(
+                      data: HotelCheckoutData(
+                        hotelId: hotelId, // 👈 THÊM DÒNG NÀY
+                        hotelSlug: widget.slug,
+                        hotelName: _hotelDetail?['title']?.toString() ?? '',
+                        checkIn: start!,
+                        checkOut: end!,
+                        nights: nights,
+                        adults: requestedAdults,
+                        children: requestedChildren,
+                        rooms: rooms,
+                        selectedExtras: selectedExtras,
+                        buyerFees: buyerFeeItems,
+                        roomsTotal: roomsTotal,
+                        extrasTotal: extrasTotal,
+                        buyerFeesTotal: buyerFeesTotal,
+                        grandTotal: grandTotal,
+                      ),
+                    ),
                   ),
-                  behavior: SnackBarBehavior.floating,
-                  margin: const EdgeInsets.all(16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              );
+                );
+              });
             }
 
             Future<void> pickDate(bool isStart) async {
@@ -685,6 +731,7 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                   )
                                 else
                                   ...rooms.map((r) {
+                                    final double lineTotal = _calcRoomLineTotal(r, nights);
                                     return Container(
                                       margin:
                                       const EdgeInsets.only(bottom: 8),
@@ -701,15 +748,13 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                         children: [
                                           Expanded(
                                             child: Column(
-                                              crossAxisAlignment:
-                                              CrossAxisAlignment.start,
+                                              crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
                                                 Text(
                                                   r.name,
                                                   style: const TextStyle(
                                                     fontSize: 14,
-                                                    fontWeight:
-                                                    FontWeight.w600,
+                                                    fontWeight: FontWeight.w600,
                                                   ),
                                                 ),
                                                 const SizedBox(height: 4),
@@ -725,8 +770,7 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                                     '${r.nights} đêm • ${_formatVndPrice(r.pricePerNight)} / đêm',
                                                     style: TextStyle(
                                                       fontSize: 12,
-                                                      color: Colors
-                                                          .grey[600],
+                                                      color: Colors.grey[600],
                                                     ),
                                                   ),
                                               ],
@@ -735,12 +779,10 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                           Column(
                                             children: [
                                               Text(
-                                                _formatVndPrice(
-                                                    r.totalPrice),
+                                                _formatVndPrice(lineTotal),
                                                 style: const TextStyle(
                                                   fontSize: 14,
-                                                  fontWeight:
-                                                  FontWeight.w600,
+                                                  fontWeight: FontWeight.w600,
                                                   color: Colors.blue,
                                                 ),
                                               ),
@@ -1009,22 +1051,41 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                 ),
                                 const SizedBox(height: 4),
                                 ...rooms.map((r) {
+                                  final int qty = r.quantity <= 0 ? 1 : r.quantity;
+                                  final int usedNights = (nights > 0)
+                                      ? nights
+                                      : (r.nights != null && r.nights! > 0 ? r.nights! : 1);
+
+                                  final double lineTotal = _calcRoomLineTotal(r, nights);
                                   return Padding(
-                                    padding:
-                                    const EdgeInsets.only(bottom: 4),
+                                    padding: const EdgeInsets.only(bottom: 4),
                                     child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Expanded(
-                                          child: Text(
-                                            '${r.name}  x${r.quantity}',
-                                            style: const TextStyle(
-                                              fontSize: 13,
-                                            ),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                r.name,
+                                                style: const TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                '$qty phòng • $usedNights đêm × ${_formatVndPrice(r.pricePerNight)} / đêm',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.grey[700],
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ),
                                         Text(
-                                          _formatVndPrice(
-                                              r.totalPrice),
+                                          _formatVndPrice(lineTotal),
                                           style: const TextStyle(
                                             fontSize: 13,
                                             fontWeight: FontWeight.w600,
