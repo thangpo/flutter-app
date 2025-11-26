@@ -1,10 +1,22 @@
 import 'package:flutter/material.dart';
 
 class HotelBookButton extends StatelessWidget {
-  const HotelBookButton({super.key});
+  final int totalRoomsSelected;
+  final VoidCallback onPressed;
+
+  const HotelBookButton({
+    super.key,
+    required this.totalRoomsSelected,
+    required this.onPressed,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final hasSelection = totalRoomsSelected > 0;
+    final label = hasSelection
+        ? 'Đặt phòng ngay ($totalRoomsSelected phòng)'
+        : 'Đặt phòng ngay';
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
       width: double.infinity,
@@ -25,38 +37,21 @@ class HotelBookButton extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: const Row(
-                  children: [
-                    Icon(Icons.info_outline_rounded, color: Colors.white),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Text("Chức năng đặt phòng đang phát triển..."),
-                    ),
-                  ],
-                ),
-                backgroundColor: Colors.blue[700],
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                margin: const EdgeInsets.all(16),
-              ),
-            );
-          },
+          onTap: onPressed,
           borderRadius: BorderRadius.circular(16),
-          child: const Center(
+          child: Center(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.calendar_today_rounded,
-                    color: Colors.white, size: 22),
-                SizedBox(width: 12),
+                const Icon(
+                  Icons.calendar_today_rounded,
+                  color: Colors.white,
+                  size: 22,
+                ),
+                const SizedBox(width: 12),
                 Text(
-                  "Đặt phòng ngay",
-                  style: TextStyle(
+                  label,
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 18,
                     fontWeight: FontWeight.bold,

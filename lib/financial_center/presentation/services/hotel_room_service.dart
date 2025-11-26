@@ -22,18 +22,7 @@ class HotelRoomService {
       'firstLoad': 'false',
     };
 
-    print("====================================");
-    print("🚀 CALL API CHECK-AVAILABILITY");
-    print("➡ URL: $baseUrl");
-    print("➡ BODY gửi lên: ${jsonEncode(body)}");
-    print("====================================");
-
     final res = await http.post(Uri.parse(baseUrl), body: body);
-
-    print("⬅ STATUS CODE: ${res.statusCode}");
-    print("⬅ RAW RESPONSE:");
-    print(res.body);
-    print("====================================");
 
     if (res.statusCode != 200) {
       throw Exception('HTTP ${res.statusCode}');
@@ -42,12 +31,8 @@ class HotelRoomService {
     final jsonRes = json.decode(res.body);
 
     if (jsonRes['success'] != true) {
-      print("❌ API ERROR: ${jsonRes['message'] ?? jsonRes['error']}");
       throw Exception(jsonRes['message'] ?? jsonRes['error'] ?? "API error");
     }
-
-    print("✅ API SUCCESS, rooms length: ${(jsonRes['data']?['rooms'] as List?)?.length ?? 0}");
-
     return (jsonRes['data']?['rooms'] as List?) ?? [];
   }
 }

@@ -2,21 +2,78 @@ import 'dart:ui';
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../services/hotel_room_service.dart';
 import 'hotel_room_card.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
 
+class HotelSelectedRoom {
+  final int id;
+  final String name;
+  final int quantity;
+  final double pricePerNight;
+  final int nights;
+  final double totalPrice;
+  final int? maxGuests;
+  final int? adultsPerRoom;
+  final int? childrenPerRoom;
+
+  HotelSelectedRoom({
+    required this.id,
+    required this.name,
+    required this.quantity,
+    required this.pricePerNight,
+    required this.nights,
+    required this.totalPrice,
+    this.maxGuests,
+    this.adultsPerRoom,
+    this.childrenPerRoom,
+  });
+}
+
+class HotelBookingSummary {
+  final List<HotelSelectedRoom> rooms;
+  final DateTime? startDate;
+  final DateTime? endDate;
+  final int adults;
+  final int children;
+  final bool fromSearch;
+
+  final VoidCallback? clearAllRooms;
+  final void Function(int roomId)? removeRoom;
+
+  HotelBookingSummary({
+    required this.rooms,
+    required this.startDate,
+    required this.endDate,
+    required this.adults,
+    required this.children,
+    required this.fromSearch,
+
+    this.clearAllRooms,
+    this.removeRoom,
+  });
+
+  int get totalRooms =>
+      rooms.fold(0, (sum, r) => sum + r.quantity);
+
+  double get totalPrice =>
+      rooms.fold(0.0, (sum, r) => sum + r.totalPrice);
+}
+
 class HotelRoomsSection extends StatefulWidget {
   final int hotelId;
   final List<dynamic> rooms;
   final Map<int, String> roomTermNameMap;
+  final ValueChanged<HotelBookingSummary>? onBookingSummaryChanged;
 
   const HotelRoomsSection({
     super.key,
     required this.hotelId,
     required this.rooms,
     required this.roomTermNameMap,
+    this.onBookingSummaryChanged,
   });
 
   @override
@@ -31,8 +88,8 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
   int _adults = 2;
   int _children = 0;
   bool _loading = false;
+  bool _hasSearched = false;
 
-  /// roomId -> selectedRooms
   final Map<int, int> _selectedRooms = {};
 
   @override
@@ -40,6 +97,10 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
     super.initState();
     _rooms = List<dynamic>.from(widget.rooms);
     _initSelectedRooms(_rooms);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _notifyBookingSummaryChanged();
+    });
   }
 
   void _initSelectedRooms(List<dynamic> rooms) {
@@ -54,18 +115,133 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
     }
   }
 
+  void _clearAllRooms() {
+    setState(() {
+      for (final key in _selectedRooms.keys.toList()) {
+        _selectedRooms[key] = 0;
+      }
+    });
+    _notifyBookingSummaryChanged();
+  }
+
+  void _removeRoomById(int roomId) {
+    if (!_selectedRooms.containsKey(roomId)) return;
+    setState(() {
+      _selectedRooms[roomId] = 0;
+    });
+    _notifyBookingSummaryChanged();
+  }
+
+  int _safeParseFirstInt(dynamic raw) {
+    if (raw == null) return 0;
+    if (raw is int) return raw;
+    if (raw is double) return raw.toInt();
+    final s = raw.toString();
+    final match = RegExp(r'\d+').firstMatch(s);
+    if (match == null) return 0;
+    return int.tryParse(match.group(0)!) ?? 0;
+  }
+
+  HotelBookingSummary _buildBookingSummary() {
+    final List<HotelSelectedRoom> selected = [];
+    final int nights = (_startDate != null && _endDate != null)
+        ? (_endDate!.difference(_startDate!).inDays).clamp(1, 365)
+        : 1;
+
+    for (final r in _rooms) {
+      if (r is! Map) continue;
+      final room = r as Map;
+
+      final int id = int.tryParse(room['id']?.toString() ?? '0') ?? 0;
+      if (id == 0) continue;
+
+      final int quantity = _selectedRooms[id] ?? 0;
+      if (quantity <= 0) continue;
+
+      final String name =
+      (room['title'] ?? room['name'] ?? '').toString();
+
+      final dynamic priceRaw =
+          room['price'] ?? room['min_price'] ?? 0;
+      final double priceDouble = priceRaw is num
+          ? priceRaw.toDouble()
+          : double.tryParse(priceRaw.toString()) ?? 0.0;
+
+      final bool isAvailabilityResult =
+          room['price_text'] != null || room['price_html'] != null;
+
+      final double pricePerNight = isAvailabilityResult && nights > 0
+          ? priceDouble / nights
+          : priceDouble;
+
+      final int? maxGuests = room['max_guests'] != null
+          ? int.tryParse(room['max_guests'].toString())
+          : null;
+
+      final int? adults = (room.containsKey('adults') ||
+          room.containsKey('adults_html'))
+          ? _safeParseFirstInt(
+        room['adults'] ?? room['adults_html'],
+      )
+          : null;
+
+      final int? children = (room.containsKey('children') ||
+          room.containsKey('children_html'))
+          ? _safeParseFirstInt(
+        room['children'] ?? room['children_html'],
+      )
+          : null;
+
+      final double totalPrice =
+          pricePerNight * quantity * nights;
+
+      selected.add(
+        HotelSelectedRoom(
+          id: id,
+          name: name,
+          quantity: quantity,
+          pricePerNight: pricePerNight,
+          nights: nights,
+          totalPrice: totalPrice,
+          maxGuests: maxGuests,
+          adultsPerRoom: adults,
+          childrenPerRoom: children,
+        ),
+      );
+    }
+
+    return HotelBookingSummary(
+      rooms: selected,
+      startDate: _startDate,
+      endDate: _endDate,
+      adults: _adults,
+      children: _children,
+      fromSearch: _hasSearched,
+      clearAllRooms: _clearAllRooms,
+      removeRoom: _removeRoomById,
+    );
+  }
+
+  void _notifyBookingSummaryChanged() {
+    if (widget.onBookingSummaryChanged == null) return;
+    final summary = _buildBookingSummary();
+    widget.onBookingSummaryChanged!(summary);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.rooms.isEmpty && _rooms.isEmpty) {
       return const SizedBox.shrink();
     }
 
-    final theme = Provider.of<ThemeController>(context, listen: false);
+    final theme =
+    Provider.of<ThemeController>(context, listen: false);
     final isDark = theme.darkTheme;
 
     return _buildSection(
       context: context,
-      title: getTranslated('room_types', context) ?? 'Các loại phòng',
+      title: getTranslated('room_types', context) ??
+          'Các loại phòng',
       icon: Icons.meeting_room_rounded,
       isDark: isDark,
       child: Column(
@@ -81,38 +257,83 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
 
           Column(
             children: _rooms.map((r) {
-              final room = r as Map<dynamic, dynamic>;
-              final int id = int.tryParse(room['id']?.toString() ?? '0') ?? 0;
+              final room =
+              r as Map<dynamic, dynamic>;
+              final int id =
+                  int.tryParse(room['id']?.toString() ?? '0') ??
+                      0;
 
               final String name =
-              (room['title'] ?? room['name'] ?? '').toString();
+              (room['title'] ?? room['name'] ?? '')
+                  .toString();
 
-              final String priceStr =
-              (room['price'] ?? room['min_price'] ?? '').toString();
-              final double price =
-                  double.tryParse(priceStr.toString()) ?? 0.0;
+              final int nights =
+              (_startDate != null && _endDate != null)
+                  ? (_endDate!
+                  .difference(_startDate!)
+                  .inDays)
+                  .clamp(1, 365)
+                  : 1;
 
-              final int number = int.tryParse(
-                  (room['number'] ?? room['tmp_number'] ?? 0).toString()) ??
-                  0;
+              final dynamic priceRaw =
+                  room['price'] ?? room['min_price'] ?? 0;
+              final double priceDouble = priceRaw is num
+                  ? priceRaw.toDouble()
+                  : double.tryParse(priceRaw.toString()) ??
+                  0.0;
 
-              final int beds =
-                  int.tryParse((room['beds'] ?? '0').toString()) ?? 0;
-              final int size = int.tryParse(
-                  (room['size'] ?? room['room_size'] ?? '0').toString()) ??
-                  0;
+              final bool isAvailabilityResult =
+                  room['price_text'] != null ||
+                      room['price_html'] != null;
 
-              final int? maxGuests = room['max_guests'] != null
-                  ? int.tryParse(room['max_guests'].toString())
+              final double pricePerNight =
+              isAvailabilityResult && nights > 0
+                  ? priceDouble / nights
+                  : priceDouble;
+
+              final int number =
+              _safeParseFirstInt(
+                room['number'] ?? room['tmp_number'],
+              );
+
+              final int size = _safeParseFirstInt(
+                room['size'] ??
+                    room['room_size'] ??
+                    room['size_html'],
+              );
+
+              final int beds = _safeParseFirstInt(
+                room['beds'] ?? room['beds_html'],
+              );
+
+              final int? adults = (room
+                  .containsKey('adults') ||
+                  room.containsKey('adults_html'))
+                  ? _safeParseFirstInt(
+                room['adults'] ??
+                    room['adults_html'],
+              )
+                  : null;
+
+              final int? children = (room
+                  .containsKey('children') ||
+                  room.containsKey('children_html'))
+                  ? _safeParseFirstInt(
+                room['children'] ??
+                    room['children_html'],
+              )
+                  : null;
+
+              final int? maxGuests =
+              room['max_guests'] != null
+                  ? int.tryParse(
+                room['max_guests'].toString(),
+              )
                   : null;
 
               final List<dynamic> gallery =
-                  (room['gallery'] as List?) ?? [];
-
-              final dynamic termsRaw = room['terms'];
-              final List<dynamic> terms = termsRaw is List
-                  ? termsRaw
-                  : (termsRaw is Map ? [termsRaw] : []);
+                  (room['gallery'] as List?) ??
+                      <dynamic>[];
 
               final String thumb = gallery.isNotEmpty
                   ? ((gallery.first is Map
@@ -121,19 +342,36 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
                   '')
                   : gallery.first)
                   .toString())
-                  : '';
+                  : (room['image'] ?? '').toString();
 
-              final int maxRooms = number > 0 ? number : 0;
-              final int selectedRooms = _selectedRooms[id] ?? 0;
+              List<dynamic> terms = [];
+              final dynamic termsRaw = room['terms'];
 
-              final int nights = (_startDate != null && _endDate != null)
-                  ? (_endDate!.difference(_startDate!).inDays).clamp(1, 365)
-                  : 1;
+              if (room['term_features'] is List) {
+                terms = List<dynamic>.from(
+                    room['term_features']);
+              } else if (termsRaw is List) {
+                terms = termsRaw;
+              } else if (termsRaw is Map) {
+                for (final value in termsRaw.values) {
+                  if (value is Map &&
+                      value['child'] is List) {
+                    for (final c in value['child']) {
+                      if (c is Map) terms.add(c);
+                    }
+                  }
+                }
+              }
+
+              final int maxRooms =
+              number > 0 ? number : 0;
+              final int selectedRooms =
+                  _selectedRooms[id] ?? 0;
 
               return HotelRoomCard(
                 id: id,
                 name: name,
-                pricePerNight: price,
+                pricePerNight: pricePerNight,
                 number: number,
                 beds: beds,
                 size: size,
@@ -143,13 +381,17 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
                 terms: terms,
                 roomTermNameMap: widget.roomTermNameMap,
                 maxRooms: maxRooms,
+                adults: adults,
+                children: children,
                 selectedRooms: selectedRooms,
                 nights: nights,
                 isDark: isDark,
+                isSelected: selectedRooms > 0,
                 onSelectedRoomsChanged: (value) {
                   setState(() {
                     _selectedRooms[id] = value;
                   });
+                  _notifyBookingSummaryChanged();
                 },
               );
             }).toList(),
@@ -159,19 +401,22 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // FILTER BAR
-  // ---------------------------------------------------------------------------
-  Widget _buildFilterBar(BuildContext context, bool isDark) {
+  Widget _buildFilterBar(
+      BuildContext context, bool isDark) {
     final dateFmt = DateFormat('dd/MM/yyyy');
 
     String startText =
-        getTranslated('check_in', context) ?? 'Nhận phòng';
+        getTranslated('check_in', context) ??
+            'Nhận phòng';
     String endText =
-        getTranslated('check_out', context) ?? 'Trả phòng';
+        getTranslated('check_out', context) ??
+            'Trả phòng';
 
     if (_startDate != null) startText = dateFmt.format(_startDate!);
     if (_endDate != null) endText = dateFmt.format(_endDate!);
+
+    final bool showGuests =
+        _startDate != null && _endDate != null;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
@@ -185,8 +430,9 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
                 : Colors.white.withOpacity(0.9),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color:
-              isDark ? Colors.white.withOpacity(0.1) : Colors.grey[200]!,
+              color: isDark
+                  ? Colors.white.withOpacity(0.1)
+                  : Colors.grey[200]!,
             ),
           ),
           child: Column(
@@ -198,10 +444,12 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
                       context: context,
                       isDark: isDark,
                       icon: Icons.login_rounded,
-                      label:
-                      getTranslated('check_in', context) ?? 'Nhận phòng',
+                      label: getTranslated(
+                          'check_in', context) ??
+                          'Nhận phòng',
                       value: startText,
-                      onTap: () => _pickDate(context, isStart: true),
+                      onTap: () =>
+                          _pickDate(context, isStart: true),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -210,64 +458,74 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
                       context: context,
                       isDark: isDark,
                       icon: Icons.logout_rounded,
-                      label:
-                      getTranslated('check_out', context) ?? 'Trả phòng',
+                      label: getTranslated(
+                          'check_out', context) ??
+                          'Trả phòng',
                       value: endText,
-                      onTap: () => _pickDate(context, isStart: false),
+                      onTap: () =>
+                          _pickDate(context, isStart: false),
                     ),
                   ),
                 ],
               ),
+
               const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildGuestSelector(
-                      context: context,
-                      isDark: isDark,
-                      icon: Icons.person_rounded,
-                      label:
-                      getTranslated('adults', context) ?? 'Người lớn',
-                      value: _adults,
-                      min: 1,
-                      onChanged: (v) {
-                        setState(() => _adults = v);
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _buildGuestSelector(
-                      context: context,
-                      isDark: isDark,
-                      icon: Icons.child_care_rounded,
-                      label:
-                      getTranslated('children', context) ?? 'Trẻ em',
-                      value: _children,
-                      min: 0,
-                      onChanged: (v) {
-                        setState(() => _children = v);
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
+
+              if (showGuests) ...[
+                _buildGuestSelector(
+                  context: context,
+                  isDark: isDark,
+                  icon: Icons.person_rounded,
+                  label:
+                  getTranslated('adults', context) ??
+                      'Người lớn',
+                  value: _adults,
+                  min: 1,
+                  onChanged: (v) {
+                    setState(() => _adults = v);
+                    _notifyBookingSummaryChanged();
+                  },
+                ),
+                const SizedBox(height: 8),
+                _buildGuestSelector(
+                  context: context,
+                  isDark: isDark,
+                  icon: Icons.child_care_rounded,
+                  label:
+                  getTranslated('children', context) ??
+                      'Trẻ em',
+                  value: _children,
+                  min: 0,
+                  onChanged: (v) {
+                    setState(() => _children = v);
+                    _notifyBookingSummaryChanged();
+                  },
+                ),
+                const SizedBox(height: 10),
+              ],
+
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: _loading ? null : _checkAvailability,
-                  icon: const Icon(Icons.search_rounded, size: 18),
+                  onPressed:
+                  _loading ? null : _checkAvailability,
+                  icon: const Icon(
+                    Icons.search_rounded,
+                    size: 18,
+                  ),
                   label: Text(
-                    getTranslated('check_availability', context) ??
+                    getTranslated(
+                        'check_availability', context) ??
                         'Kiểm tra phòng trống',
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: isDark
-                        ? Colors.blue[600]?.withOpacity(0.9)
+                        ? Colors.blue[600]
+                        ?.withOpacity(0.9)
                         : Colors.blue[600],
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    padding:
+                    const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -293,15 +551,17 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
       borderRadius: BorderRadius.circular(12),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: const EdgeInsets.symmetric(
+            horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
           color: isDark
               ? Colors.white.withOpacity(0.06)
               : Colors.grey[100]?.withOpacity(0.9),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color:
-            isDark ? Colors.white.withOpacity(0.15) : Colors.grey[300]!,
+            color: isDark
+                ? Colors.white.withOpacity(0.15)
+                : Colors.grey[300]!,
           ),
         ),
         child: Row(
@@ -309,19 +569,22 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
             Icon(
               icon,
               size: 20,
-              color: isDark ? Colors.blue[300] : Colors.blue[700],
+              color:
+              isDark ? Colors.blue[300] : Colors.blue[700],
             ),
             const SizedBox(width: 8),
             Expanded(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                CrossAxisAlignment.start,
                 children: [
                   Text(
                     label,
                     style: TextStyle(
                       fontSize: 11,
-                      color:
-                      isDark ? Colors.grey[300] : Colors.grey[700],
+                      color: isDark
+                          ? Colors.grey[300]
+                          : Colors.grey[700],
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -332,8 +595,9 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color:
-                      isDark ? Colors.white : Colors.black87,
+                      color: isDark
+                          ? Colors.white
+                          : Colors.black87,
                     ),
                   ),
                 ],
@@ -355,7 +619,8 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
     required ValueChanged<int> onChanged,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: const EdgeInsets.symmetric(
+          horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: isDark
             ? Colors.white.withOpacity(0.06)
@@ -372,7 +637,8 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
           Icon(
             icon,
             size: 20,
-            color: isDark ? Colors.blue[300] : Colors.blue[700],
+            color:
+            isDark ? Colors.blue[300] : Colors.blue[700],
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -380,14 +646,19 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
               label,
               style: TextStyle(
                 fontSize: 13,
-                color:
-                isDark ? Colors.grey[200] : Colors.black87,
+                color: isDark
+                    ? Colors.grey[200]
+                    : Colors.black87,
               ),
             ),
           ),
           IconButton(
-            onPressed: value > min ? () => onChanged(value - 1) : null,
-            icon: const Icon(Icons.remove_circle_outline, size: 20),
+            onPressed:
+            value > min ? () => onChanged(value - 1) : null,
+            icon: const Icon(
+              Icons.remove_circle_outline,
+              size: 20,
+            ),
           ),
           Text(
             '$value',
@@ -399,17 +670,22 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
           ),
           IconButton(
             onPressed: () => onChanged(value + 1),
-            icon: const Icon(Icons.add_circle_outline, size: 20),
+            icon: const Icon(
+              Icons.add_circle_outline,
+              size: 20,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Future<void> _pickDate(BuildContext context, {required bool isStart}) async {
+  Future<void> _pickDate(BuildContext context,
+      {required bool isStart}) async {
     final now = DateTime.now();
-    final initial =
-    isStart ? (_startDate ?? now) : (_endDate ?? _startDate ?? now);
+    final initial = isStart
+        ? (_startDate ?? now)
+        : (_endDate ?? _startDate ?? now);
     final firstDate = now;
     final lastDate = now.add(const Duration(days: 365));
 
@@ -420,21 +696,48 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
       lastDate: lastDate,
     );
 
-    if (picked != null) {
+    if (picked == null) return;
+
+    if (isStart) {
+      if (_endDate != null && picked.isAfter(_endDate!)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+                'Ngày nhận phòng không được sau ngày trả phòng'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+        return;
+      }
+
       setState(() {
-        if (isStart) {
-          _startDate = picked;
-          if (_endDate != null && _endDate!.isBefore(_startDate!)) {
-            _endDate = null;
-          }
-        } else {
-          _endDate = picked;
-          if (_startDate != null && _endDate!.isBefore(_startDate!)) {
-            _startDate = null;
-          }
-        }
+        _startDate = picked;
+      });
+    } else {
+      if (_startDate != null && picked.isBefore(_startDate!)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+                'Ngày trả phòng không được trước ngày nhận phòng'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+        return;
+      }
+      setState(() {
+        _endDate = picked;
       });
     }
+
+    _notifyBookingSummaryChanged();
   }
 
   Future<void> _checkAvailability() async {
@@ -442,7 +745,8 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            getTranslated('please_select_dates', context) ??
+            getTranslated(
+                'please_select_dates', context) ??
                 'Vui lòng chọn ngày nhận / trả phòng',
           ),
         ),
@@ -455,7 +759,8 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
     try {
       final df = DateFormat('yyyy-MM-dd');
 
-      final rooms = await HotelRoomService.checkAvailability(
+      final rooms =
+      await HotelRoomService.checkAvailability(
         hotelId: widget.hotelId,
         startDate: df.format(_startDate!),
         endDate: df.format(_endDate!),
@@ -465,20 +770,21 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
 
       setState(() {
         _rooms = rooms;
+        _hasSearched = true;
         _initSelectedRooms(_rooms);
       });
+      _notifyBookingSummaryChanged();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Lỗi: $e')),
       );
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // WRAPPER SECTION
-  // ---------------------------------------------------------------------------
   Widget _buildSection({
     required BuildContext context,
     required String title,
@@ -487,14 +793,16 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
     required bool isDark,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.symmetric(
+          horizontal: 20, vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              filter: ImageFilter.blur(
+                  sigmaX: 10, sigmaY: 10),
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -514,7 +822,8 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         color: isDark
-                            ? Colors.blue[700]?.withOpacity(0.3)
+                            ? Colors.blue[700]
+                            ?.withOpacity(0.3)
                             : Colors.blue[50],
                         borderRadius: BorderRadius.circular(10),
                       ),
@@ -532,7 +841,9 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : Colors.black87,
+                        color: isDark
+                            ? Colors.white
+                            : Colors.black87,
                       ),
                     ),
                   ],

@@ -82,12 +82,6 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
 
   final List<String> countries = [
     'Việt Nam',
-    'Thái Lan',
-    'Lào',
-    'Campuchia',
-    'Mỹ',
-    'Nhật Bản',
-    'Hàn Quốc',
   ];
 
   String? selectedProvince;
