@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import 'hotel_checkout_screen.dart';
+import 'hotel_booking_bill_screen.dart'; // 👈 THÊM IMPORT NÀY
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 
 class HotelSepayPaymentScreen extends StatefulWidget {
@@ -89,7 +90,7 @@ class _HotelSepayPaymentScreenState extends State<HotelSepayPaymentScreen> {
   void _startAutoCheck() {
     final code = widget.bookingCode;
 
-    _timer = Timer.periodic(const Duration(seconds: 8), (_) async {
+    _timer = Timer.periodic(const Duration(seconds: 2), (_) async {
       if (_isPaid) return;
 
       try {
@@ -115,7 +116,7 @@ class _HotelSepayPaymentScreenState extends State<HotelSepayPaymentScreen> {
             });
 
             _timer?.cancel();
-            _showPaidDialog();
+            _showPaidDialog(status); // 👈 TRUYỀN STATUS VÀO
           }
         }
       } catch (e) {
@@ -124,11 +125,13 @@ class _HotelSepayPaymentScreenState extends State<HotelSepayPaymentScreen> {
     });
   }
 
-  void _showPaidDialog() {
+  // ================== KHI ĐÃ THANH TOÁN THÀNH CÔNG ==================
+
+  void _showPaidDialog(String status) {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => AlertDialog(
+      builder: (dialogCtx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(
           children: [
@@ -143,8 +146,30 @@ class _HotelSepayPaymentScreenState extends State<HotelSepayPaymentScreen> {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(context); // đóng dialog
-              Navigator.pop(context, true); // pop màn SePay, trả về true
+              // đóng dialog
+              Navigator.of(dialogCtx).pop();
+
+              // chuyển sang màn BILL, thay thế luôn màn SePay
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (_) => HotelBookingBillScreen(
+                    data: widget.data,
+                    bookingCode: widget.bookingCode,
+                    bookingStatus: status,          // 'paid' / 'completed'
+                    paymentMethod: 'sepay',
+                    createdAt: DateTime.now(),      // hoặc fetch lại từ API nếu bố muốn chuẩn tuyệt đối
+
+                    firstName: widget.firstName,
+                    lastName: widget.lastName,
+                    email: widget.email,
+                    phone: widget.phone,
+                    address: widget.address,
+                    city: widget.city,
+                    country: widget.country,
+                    specialRequest: widget.specialRequest,
+                  ),
+                ),
+              );
             },
             child: const Text('Hoàn tất'),
           ),
@@ -177,7 +202,7 @@ class _HotelSepayPaymentScreenState extends State<HotelSepayPaymentScreen> {
       final response = await dio.get(
         '${AppConstants.travelBaseUrl}/bookings/check/${widget.bookingCode}',
         options: Options(
-          headers: const {
+          headers: {
             'Accept': 'application/json',
           },
         ),
@@ -217,7 +242,7 @@ class _HotelSepayPaymentScreenState extends State<HotelSepayPaymentScreen> {
           _timer?.cancel();
           _isPaid = true;
           if (mounted) {
-            _showPaidDialog();
+            _showPaidDialog(status); // 👈 TRUYỀN STATUS VÀO
           }
         } else {
           if (!mounted) return;
@@ -412,7 +437,8 @@ class _HotelSepayPaymentScreenState extends State<HotelSepayPaymentScreen> {
                               ? Image.network(
                             widget.qrLink,
                             fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) => const Center(
+                            errorBuilder: (_, __, ___) =>
+                            const Center(
                               child: Text('Không tải được QR'),
                             ),
                           )
@@ -519,7 +545,8 @@ class _HotelSepayPaymentScreenState extends State<HotelSepayPaymentScreen> {
                     : const Icon(Icons.refresh),
                 label: const Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Text('Tôi đã chuyển khoản, kiểm tra trạng thái'),
+                  child:
+                  Text('Tôi đã chuyển khoản, kiểm tra trạng thái'),
                 ),
               ),
             ),
