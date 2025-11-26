@@ -1,4 +1,4 @@
-// G:\flutter-app\lib\features\social\screens\friends_list_screen.dart
+﻿// G:\flutter-app\lib\features\social\screens\friends_list_screen.dart
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -8,10 +8,12 @@ import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_friends_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_friends_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_friend.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_chat_repository.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/wowonder_text.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/chat_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_page_mess.dart';
 
-// 👇 nhóm chat
+// nhóm chat
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_chat_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_group_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/group_chats_screen.dart';
@@ -29,6 +31,7 @@ class FriendsListScreen extends StatefulWidget {
 class _FriendsListScreenState extends State<FriendsListScreen> {
   final friendsCtrl =
       Get.put(SocialFriendsController(SocialFriendsRepository()));
+  final _chatRepo = SocialChatRepository();
   final searchCtrl = TextEditingController();
 
   int _tabIndex = 0;
@@ -37,6 +40,8 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
 
   // ✅ static: giữ lại dữ liệu ngay cả khi màn này bị dispose rồi tạo lại
   static final Map<String, int> _localLastActivity = {};
+  final Map<String, String> _lastTextCache = {};
+  final Map<String, int> _lastTimeCache = {};
 
   @override
   void initState() {
@@ -58,7 +63,80 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
     final tb = tbLocal ?? b.lastMessageTime ?? 0;
 
     if (ta == 0 && tb == 0) return 0;
-    return tb.compareTo(ta); // mới nhất lên trên
+    return tb.compareTo(ta); // m?i nh?t l�n tr�n
+  }
+
+  // Convert timestamp (s or ms) to seconds
+  int? _normalizedTimestamp(int? ts) {
+    if (ts == null || ts <= 0) return null;
+    if (ts > 2000000000) {
+      // looks like milliseconds
+      return ts ~/ 1000;
+    }
+    return ts;
+  }
+
+  // Format time label for list items
+  String _formatTimeLabel(SocialFriend u) {
+    final ts = _normalizedTimestamp(
+        _lastTimeCache[u.id] ?? u.lastMessageTime);
+    if (ts != null) {
+      final dt = DateTime.fromMillisecondsSinceEpoch(ts * 1000);
+      final now = DateTime.now();
+      final diff = now.difference(dt);
+      String two(int n) => n.toString().padLeft(2, '0');
+
+      final sameDay =
+          dt.year == now.year && dt.month == now.month && dt.day == now.day;
+      if (sameDay) {
+        return '${two(dt.hour)}:${two(dt.minute)}';
+      }
+      if (diff.inDays < 7) {
+        return '${diff.inDays}d';
+      }
+      final sameYear = dt.year == now.year;
+      return '${two(dt.day)}/${two(dt.month)}${sameYear ? '' : '/${dt.year}'}';
+    }
+
+    final ls = (u.lastSeen ?? '').trim();
+    return ls;
+  }
+
+  Future<void> _loadLatestIfMissing(SocialFriend u) async {
+    if (_lastTextCache.containsKey(u.id)) return;
+    _lastTextCache[u.id] = ''; // mark loading
+    try {
+      final msgs = await _chatRepo.getUserMessages(
+        token: widget.accessToken,
+        peerUserId: u.id.toString(),
+        limit: 1,
+      );
+      if (msgs.isNotEmpty) {
+        final m = msgs.last;
+        String text = (m['display_text'] ?? '').toString().trim();
+        if (text.isEmpty) {
+          text = pickWoWonderText(m);
+        }
+        int? ts;
+        final rawTime =
+            m['time'] ?? m['time_text'] ?? m['timestamp'] ?? m['created_at'];
+        if (rawTime is num) {
+          ts = rawTime.toInt();
+        } else if (rawTime is String) {
+          ts = int.tryParse(rawTime);
+        }
+        if (!mounted) return;
+        setState(() {
+          _lastTextCache[u.id] = text;
+          if (ts != null) {
+            _lastTimeCache[u.id] = ts;
+            _localLastActivity[u.id] = _normalizedTimestamp(ts) ?? ts;
+          }
+        });
+      }
+    } catch (_) {
+      // ignore errors, fallback to existing data
+    }
   }
 
   @override
@@ -161,7 +239,7 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
               return ListView.separated(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 10),
-                itemCount: list.length + 1, // +1 cho ô "Tạo tin"
+                itemCount: list.length + 1, // +1 cho Ã´ "Táº¡o tin"
                 separatorBuilder: (_, __) => const SizedBox(width: 10),
                 itemBuilder: (_, i) {
                   if (i == 0) {
@@ -210,13 +288,20 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                         itemBuilder: (_, i) {
                           final u = list[i];
 
-                          // preview: sau này có lastMessageText thì gắn vào đây
-                          final preview = u.isOnline
-                              ? getTranslated('active_now', context)!
-                              : (u.lastSeen ?? '');
-
-                          // thời gian hiển thị bên phải (tạm thời dùng lastSeen)
-                          final timeLabel = (u.lastSeen ?? '').trim();
+                          // preview: ưu tiên tin nhắn (cache/fetch), fallback sang trạng thái khi không có
+                          _loadLatestIfMissing(u);
+                          final cachedText = _lastTextCache[u.id] ?? '';
+                          final messagePreview =
+                              (cachedText.isNotEmpty ? cachedText : (u.lastMessageText ?? ''))
+                                  .trim();
+                          final statusFallback = u.isOnline
+                              ? getTranslated('active_now', context) ?? ''
+                              : (u.lastSeen ?? '').trim();
+                          final preview = messagePreview.isNotEmpty
+                              ? messagePreview
+                              : statusFallback;
+                          final rawTime = _formatTimeLabel(u).trim();
+                          final timeLabel = rawTime.isNotEmpty ? rawTime : ' ';
 
                           return InkWell(
                             onTap: () => _openChat(u),
@@ -251,15 +336,15 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                                                 ),
                                               ),
                                             ),
-                                            // if (timeLabel.isNotEmpty)
-                                            //   Text(
-                                            //     timeLabel,
-                                            //     style: TextStyle(
-                                            //       color: cs.onSurface
-                                            //           .withOpacity(.5),
-                                            //       fontSize: 11.5,
-                                            //     ),
-                                            //   ),
+                                            if (timeLabel.isNotEmpty)
+                                              Text(
+                                                timeLabel,
+                                                style: TextStyle(
+                                                  color: cs.onSurface
+                                                      .withOpacity(.55),
+                                                  fontSize: 11.5,
+                                                ),
+                                              ),
                                           ],
                                         ),
                                         const SizedBox(height: 3),
