@@ -66,7 +66,6 @@ class SocialFeedScreen extends StatefulWidget {
 
 class SocialFeedScreenState extends State<SocialFeedScreen>
     with AutomaticKeepAliveClientMixin {
-  bool get _isIOSPlatform => !kIsWeb && Platform.isIOS;
   final ScrollController _scrollController = ScrollController();
   final GlobalKey<RefreshIndicatorState> _refreshKey =
       GlobalKey<RefreshIndicatorState>();
@@ -231,7 +230,6 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
   }
 
   void _handleScroll() {
-    if (_isIOSPlatform) return;
     if (!_scrollController.hasClients) return;
     final double offset = _scrollController.position.pixels;
     final double delta = offset - _lastScrollOffset;
@@ -259,10 +257,13 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
     final bool isDarkTheme = theme.brightness == Brightness.dark;
     final mediaQuery = MediaQuery.of(context);
     final bool isIOSPlatform = !kIsWeb && Platform.isIOS;
+    final double statusBar = mediaQuery.padding.top;
     final Color pageBg = isLightTheme ? cs.surface : cs.background;
     const double iosToolbarHeight = 52;
+    final double toolbarHeight =
+        isIOSPlatform ? iosToolbarHeight : kToolbarHeight;
     final double listTopPadding =
-        isIOSPlatform ? mediaQuery.padding.top + iosToolbarHeight + 8 : 12;
+        statusBar + (_chromeVisible ? toolbarHeight + 8 : 8);
     final double listBottomPadding = mediaQuery.padding.bottom + 16;
 
     final Widget feedContent = Stack(
@@ -401,36 +402,35 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
       );
     }
 
-    final PreferredSizeWidget? materialAppBar =
-        (!isIOSPlatform && _chromeVisible)
-            ? AppBar(
-                backgroundColor: pageBg,
-                elevation: 0,
-                titleSpacing: 0,
-                title: Padding(
-                  padding: const EdgeInsets.only(left: 8),
-                  child: Image.asset(
-                    logoAsset,
-                    height: 32,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-                actions: [
-                  IconButton(
-                    icon: const Icon(Icons.search),
-                    onPressed: openSearch,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.people_alt_outlined),
-                    onPressed: openFriends,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.message_outlined),
-                    onPressed: openMessages,
-                  ),
-                ],
-              )
-            : null;
+    final PreferredSizeWidget? materialAppBar = !isIOSPlatform
+        ? AppBar(
+            backgroundColor: pageBg,
+            elevation: 0,
+            titleSpacing: 0,
+            title: Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: Image.asset(
+                logoAsset,
+                height: 32,
+                fit: BoxFit.contain,
+              ),
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.search),
+                onPressed: openSearch,
+              ),
+              IconButton(
+                icon: const Icon(Icons.people_alt_outlined),
+                onPressed: openFriends,
+              ),
+              IconButton(
+                icon: const Icon(Icons.message_outlined),
+                onPressed: openMessages,
+              ),
+            ],
+          )
+        : null;
 
     final AdaptiveAppBar adaptiveAppBar = AdaptiveAppBar(
       useNativeToolbar: isIOSPlatform,
@@ -919,11 +919,11 @@ class _CreateStoryCard extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             onTap: openCreateStory,
-            child: Stack(
-              children: [
-                if (avatar != null && avatar.isNotEmpty)
-                  CachedNetworkImage(
-                    imageUrl: avatar,
+              child: Stack(
+                children: [
+                  if (avatar != null && avatar.isNotEmpty)
+                    CachedNetworkImage(
+                      imageUrl: avatar,
                     width: double.infinity,
                     height: double.infinity,
                     fit: BoxFit.cover,
@@ -942,37 +942,37 @@ class _CreateStoryCard extends StatelessWidget {
                         end: Alignment.topCenter,
                       ),
                     ),
+                    ),
                   ),
-                ),
-                // Positioned(
-                //   bottom: 12,
-                //   left: 0,
-                //   right: 0,
-                //   child: Center(
-                //     child: Container(
-                //       width: 36,
-                //       height: 36,
-                //       decoration: BoxDecoration(
-                //         color: cs.primary,
-                //         shape: BoxShape.circle,
-                //         border: Border.all(color: Colors.white, width: 2),
-                //         boxShadow: [
-                //           BoxShadow(color: Colors.black26, blurRadius: 6),
-                //         ],
-                //       ),
-                //       child: const Icon(
-                //         Icons.add,
-                //         size: 18,
-                //         color: Colors.white,
-                //       ),
-                //     ),
-                //   ),
-                // ),
-              ],
+                  Positioned(
+                    bottom: 12,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: cs.primary,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                          boxShadow: const [
+                            BoxShadow(color: Colors.black26, blurRadius: 6),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.add,
+                          size: 18,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
-      ),
     );
   }
 }
