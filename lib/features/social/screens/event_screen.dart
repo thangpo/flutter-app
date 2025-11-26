@@ -11,6 +11,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/event_detail
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/edit_event_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_event.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class EventScreen extends StatefulWidget {
   const EventScreen({super.key});
@@ -34,53 +35,72 @@ class _EventScreenState extends State<EventScreen> {
     final theme = Theme.of(context);
     final current = ctrl.currentFetch;
 
-    // map fetch -> nhãn tiếng Việt
-    const options = <String, String>{
-      'events': 'Duyệt qua các sự kiện',
-      'going': 'Sự kiện sẽ diễn ra', // hoặc "Đang tham gia"
-      'invited': 'Được mời',
-      'interested': 'Sự kiện quan tâm',
-      'past': 'Những sự kiện đã qua',
-      'my_events': 'Sự kiện của tôi',
+    final options = <String, String>{
+      'events': getTranslated('browse_events', context) ?? 'Duyệt qua các sự kiện',
+      'going': getTranslated('events_you_are_going_to', context) ?? 'Sự kiện sẽ diễn ra',
+      'interested': getTranslated('events_you_are_interested_in', context) ?? 'Sự kiện đã quan tâm',
+      'past': getTranslated('past_events', context) ?? 'Những sự kiện đã qua',
+      'my_events': getTranslated('my_events', context) ?? 'Sự kiện của tôi',
     };
 
     final selected = await showModalBottomSheet<String>(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Lọc sự kiện',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
+        return ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              decoration: BoxDecoration(
+                color: theme.cardColor.withOpacity(0.8),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.withOpacity(0.5),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        getTranslated('filter_events', context) ?? 'Lọc sự kiện',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      ...options.entries.map((e) {
+                        final isSelected = e.key == current;
+                        return ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(e.value, style: const TextStyle(fontWeight: FontWeight.w500)),
+                          trailing: isSelected
+                              ? Icon(
+                            Icons.check_circle,
+                            color: theme.primaryColor,
+                            size: 20,
+                          )
+                              : null,
+                          onTap: () => Navigator.of(ctx).pop(e.key),
+                        );
+                      }),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 12),
-                ...options.entries.map((e) {
-                  final isSelected = e.key == current;
-                  return ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(e.value),
-                    trailing: isSelected
-                        ? Icon(
-                      Icons.check_circle,
-                      color: theme.primaryColor,
-                      size: 20,
-                    )
-                        : null,
-                    onTap: () => Navigator.of(ctx).pop(e.key),
-                  );
-                }),
-              ],
+              ),
             ),
           ),
         );
@@ -96,148 +116,73 @@ class _EventScreenState extends State<EventScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
-    final tEvents = getTranslated('events', context) ?? 'Events';
-    final tNoEvents =
-        getTranslated('no_events_found', context) ?? 'No events yet';
-    final tSuggested =
-        getTranslated('suggested_events', context) ?? 'Suggested for you';
-
+    final tEvents = getTranslated('events', context) ?? 'Sự kiện';
+    final tNoEvents = getTranslated('no_events_found', context) ?? 'Chưa có sự kiện nào';
     final eventCtrl = context.watch<EventController>();
 
-    final titleColor =
-    isDarkMode ? Colors.white.withOpacity(0.9) : Colors.black87;
-
+    // CẤU TRÚC LẠI SCAFFOLD HOÀN TOÀN
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: const SizedBox.shrink(),
-        elevation: 0,
-        backgroundColor: theme.scaffoldBackgroundColor,
-        foregroundColor: theme.iconTheme.color,
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // HEADER (vẫn giữ hiệu ứng kính mờ)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(40),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                  child: Container(
-                    padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: isDarkMode
-                          ? Colors.white.withOpacity(0.1)
-                          : Colors.grey.shade200.withOpacity(0.6),
-                      borderRadius: BorderRadius.circular(40),
-                      border: Border.all(
-                        color: isDarkMode
-                            ? Colors.white.withOpacity(0.2)
-                            : Colors.white.withOpacity(0.5),
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: theme.primaryColor.withOpacity(0.12),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.event,
-                            size: 18,
-                            color: theme.primaryColor,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          tEvents,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
-                            color: theme.colorScheme.onSurface,
-                          ),
-                        ),
-                        const Spacer(),
-                        _RoundIconButton(
-                          icon: Icons.tune_rounded,
-                          onTap: _openFilterSheet,
-                        ),
-                        const SizedBox(width: 8),
-                        _RoundIconButton(
-                          icon: Icons.add,
-                          filled: true,
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const CreateEventScreen(),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
+      // Đặt background động ra ngoài, không cần Stack nữa
+      body: Stack(
+        children: [
+          _buildDecorativeBackground(isDarkMode),
+
+          // CustomScrollView bây giờ là con trực tiếp của body (thông qua LiquidPullToRefresh)
+          // Nó sẽ tự động có kích thước full màn hình và cuộn được.
+          LiquidPullToRefresh(
+            onRefresh: eventCtrl.refresh,
+            color: theme.primaryColor,
+            backgroundColor: theme.cardColor,
+            showChildOpacityTransition: false,
+            child: CustomScrollView(
+              physics: const BouncingScrollPhysics(), // Thêm hiệu ứng nảy khi kéo
+              slivers: [
+                // AppBar được đặt bên trong CustomScrollView để có hiệu ứng ẩn/hiện khi cuộn
+                SliverAppBar(
+                  title: Text(tEvents, style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87)),
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  iconTheme: IconThemeData(color: isDarkMode ? Colors.white : Colors.black87),
+                  pinned: true, // Ghim AppBar ở trên cùng
+                  floating: true, // Hiển thị lại ngay khi cuộn lên
+                ),
+
+                // Header chứa các nút Filter và Add
+                SliverPersistentHeader(
+                  pinned: true,
+                  delegate: _HeaderDelegate(
+                    child: _buildHeader(context),
                   ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 8),
 
-            // List sự kiện
-            Expanded(
-              child: LiquidPullToRefresh(
-                onRefresh: eventCtrl.refresh,
-                color: theme.primaryColor,
-                backgroundColor: theme.cardColor,
-                showChildOpacityTransition: false,
-                child: eventCtrl.loading
-                    ? const Center(child: CircularProgressIndicator())
-                    : (eventCtrl.events.isEmpty
-                    ? Center(
-                  child: Text(
-                    tNoEvents,
-                    style: TextStyle(color: theme.hintColor),
-                  ),
-                )
-                    : SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(left: 4.0),
-                        child: Text(
-                          tSuggested,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                            color: titleColor,
-                          ),
-                        ),
+                // Nội dung chính
+                if (eventCtrl.loading && eventCtrl.events.isEmpty)
+                  const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (eventCtrl.events.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false, // Giữ nguyên fix này
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32.0),
+                        child: Text(tNoEvents, style: TextStyle(color: theme.hintColor)),
                       ),
-                      const SizedBox(height: 12),
-                      GridView.builder(
-                        shrinkWrap: true,
-                        physics:
-                        const NeverScrollableScrollPhysics(),
-                        gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          mainAxisSpacing: 14,
-                          crossAxisSpacing: 14,
-                          childAspectRatio: 0.78,
-                        ),
-                        itemCount: eventCtrl.events.length,
-                        itemBuilder: (context, index) {
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                    sliver: SliverGrid(
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        mainAxisSpacing: 16,
+                        crossAxisSpacing: 16,
+                        childAspectRatio: 0.72,
+                      ),
+                      delegate: SliverChildBuilderDelegate(
+                            (context, index) {
                           final e = eventCtrl.events[index];
                           return GestureDetector(
                             onTap: () {
@@ -245,26 +190,156 @@ class _EventScreenState extends State<EventScreen> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => EventDetailScreen(
-                                      eventId: e.id!),
+                                  builder: (_) => EventDetailScreen(eventId: e.id!),
                                 ),
                               );
                             },
                             child: _EventCard(event: e),
                           );
                         },
+                        childCount: eventCtrl.events.length,
                       ),
-                    ],
+                    ),
                   ),
-                )),
+
+                // Thêm một khoảng đệm an toàn ở cuối để không bị che bởi thanh điều hướng
+                SliverToBoxAdapter(
+                  child: SizedBox(height: MediaQuery.of(context).padding.bottom),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Nền trang trí giống hệt Create/Edit Screen
+  Widget _buildDecorativeBackground(bool isDarkMode) {
+    return Container(
+      color: isDarkMode ? Colors.black : const Color(0xFFF2F5F9),
+      child: Stack(
+        children: [
+          Positioned(
+            top: -100,
+            left: -100,
+            child: Container(
+              height: 250,
+              width: 250,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: (isDarkMode ? Colors.purple.shade900 : Colors.blue.shade200).withOpacity(0.5),
               ),
             ),
-          ],
+          ),
+          Positioned(
+            bottom: -120,
+            right: -150,
+            child: Container(
+              height: 400,
+              width: 400,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                // SỬA MÀU NỀN: Đổi từ purple sang một màu xanh
+                color: (isDarkMode ? Colors.teal.shade900 : Colors.cyan.shade200).withOpacity(0.5),
+              ),
+            ),
+          ),
+          BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 100, sigmaY: 100),
+            child: Container(color: Colors.transparent),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+    final glassColor = isDarkMode ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.6);
+    final borderColor = isDarkMode ? Colors.white.withOpacity(0.2) : Colors.white.withOpacity(0.7);
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(30),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                glassColor.withOpacity(0.8),
+                glassColor.withOpacity(0.5),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(color: borderColor, width: 1.5),
+          ),
+          child: Row(
+            children: [
+              Text(
+                getTranslated('suggested_for_you', context) ?? 'Gợi ý cho bạn',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
+              ),
+              const Spacer(),
+              _RoundIconButton(
+                icon: Icons.tune_rounded,
+                onTap: _openFilterSheet,
+              ),
+              const SizedBox(width: 8),
+              _RoundIconButton(
+                icon: Icons.add,
+                filled: true,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const CreateEventScreen(),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
+
+// Delegate để ghim header khi cuộn
+class _HeaderDelegate extends SliverPersistentHeaderDelegate {
+  final Widget child;
+
+  _HeaderDelegate({required this.child});
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: child,
+    );
+  }
+
+  @override
+  double get maxExtent => 64.0;
+
+  @override
+  double get minExtent => 64.0;
+
+  @override
+  bool shouldRebuild(SliverPersistentHeaderDelegate oldDelegate) {
+    return true;
+  }
+}
+
 
 /// Nút tròn dùng cho search + add trên header
 class _RoundIconButton extends StatelessWidget {
@@ -281,27 +356,27 @@ class _RoundIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+    final buttonColor = filled
+        ? theme.primaryColor
+        : (isDarkMode ? Colors.white.withOpacity(0.15) : Colors.white.withOpacity(0.5));
+    final iconColor = filled ? Colors.white : (isDarkMode ? Colors.white : Colors.black87);
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(30),
       child: Container(
-        width: 34,
-        height: 34,
+        width: 36,
+        height: 36,
         decoration: BoxDecoration(
-          color: filled ? theme.primaryColor : Colors.white.withOpacity(0.8),
+          color: buttonColor,
           shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          border: filled ? null : Border.all(color: Colors.white.withOpacity(0.2)),
         ),
         child: Icon(
           icon,
-          size: 18,
-          color: filled ? Colors.white : theme.iconTheme.color,
+          size: 20,
+          color: iconColor,
         ),
       ),
     );
@@ -313,24 +388,15 @@ class _EventCard extends StatelessWidget {
 
   const _EventCard({required this.event});
 
-  // Tự check quá hạn theo endDate dạng dd-mm-yy hoặc dd-mm-yyyy
   static bool _isDatePast(String? endDateStr) {
-    if (endDateStr == null ||
-        endDateStr.isEmpty ||
-        endDateStr == '0000-00-00') {
+    if (endDateStr == null || endDateStr.isEmpty || endDateStr == '0000-00-00') {
       return false;
     }
     try {
-      final parts = endDateStr.split('-');
-      if (parts.length < 3) return false;
-      final day = int.tryParse(parts[0]) ?? 1;
-      final month = int.tryParse(parts[1]) ?? 1;
-      var year = int.tryParse(parts[2]) ?? DateTime.now().year;
-      if (year < 100) {
-        year += 2000;
-      }
-      final end = DateTime(year, month, day, 23, 59, 59);
-      return end.isBefore(DateTime.now());
+      final date = DateTime.tryParse(endDateStr);
+      if (date == null) return false;
+      final endOfDay = DateTime(date.year, date.month, date.day, 23, 59, 59);
+      return endOfDay.isBefore(DateTime.now());
     } catch (_) {
       return false;
     }
@@ -339,307 +405,200 @@ class _EventCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDarkMode = theme.brightness == Brightness.dark;
-
     final name = event.name ?? '';
-    final location = event.location ?? '';
-    final dateRange = '${event.startDate ?? ''} - ${event.endDate ?? ''}';
     final coverUrl = event.cover;
 
     final socialCtrl = context.read<SocialController>();
     final currentUserId = socialCtrl.currentUser?.id?.toString();
     final posterId = event.posterId?.toString();
-
-    final bool isOwner = (event.isOwner == true) ||
-        (currentUserId != null &&
-            posterId != null &&
-            posterId == currentUserId);
+    final bool isOwner =
+    (currentUserId != null && posterId != null && posterId == currentUserId);
 
     final currentFetch = context.read<EventController>().currentFetch;
-
-    // ✅ XÁC ĐỊNH EVENT ĐÃ QUA HẠN
-    final bool isPast =
-        event.isPast == true || currentFetch == 'past' || _isDatePast(event.endDate);
-    // ✅ ĐANG Ở TAB "Sự kiện sẽ diễn ra"
-    final bool isInGoingTab = currentFetch == 'going';
-    final borderColor = isDarkMode
-        ? Colors.white.withOpacity(0.25)
-        : Colors.white.withOpacity(0.7);
-
-    // màu chính cho "Chỉnh sửa" + "Tham gia"
-    final Color primaryButtonColor = theme.primaryColor;
-    // màu cho nút "Quan tâm"
-    final Color interestBgColor = Colors.white;
-    final Color interestTextColor = theme.primaryColor;
+    final bool isPast = event.isPast == true ||
+        currentFetch == 'past' ||
+        _isDatePast(event.endDate);
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(26),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(26),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 12,
-              offset: const Offset(0, 6),
+      borderRadius: BorderRadius.circular(22),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // LỚP 1: ẢNH NỀN
+          Positioned.fill(
+            child: coverUrl != null && coverUrl.isNotEmpty
+                ? CachedNetworkImage(
+              imageUrl: coverUrl,
+              fit: BoxFit.cover,
+              errorWidget: (_, __, ___) =>
+                  Container(color: theme.primaryColor.withOpacity(0.1)),
+              placeholder: (context, url) => Container(color: theme.cardColor),
+            )
+                : Container(
+              color: theme.primaryColor.withOpacity(0.1),
+              child: Icon(Icons.event,
+                  color: theme.primaryColor.withOpacity(0.5), size: 40),
             ),
-          ],
-        ),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Ảnh nền
-            Positioned.fill(
-              child: coverUrl != null && coverUrl.isNotEmpty
-                  ? Image.network(
-                coverUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  color: Colors.grey.shade300,
-                  child: const Icon(Icons.image_not_supported),
-                ),
-              )
-                  : Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      theme.primaryColor.withOpacity(0.4),
-                      theme.primaryColor.withOpacity(0.2),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: Icon(
-                  Icons.event,
-                  color: theme.primaryColor,
-                  size: 40,
+          ),
+
+          // LỚP 2: LỚP PHỦ GRADIENT TỐI
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withOpacity(0.2),
+                    Colors.black.withOpacity(0.85),
+                  ],
+                  stops: const [0.0, 0.4, 1.0],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
                 ),
               ),
             ),
+          ),
 
-            // Gradient tối
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    stops: const [0.5, 1.0],
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withOpacity(0.75),
-                    ],
+          // LỚP 3: NỘI DUNG VĂN BẢN VÀ NÚT BẤM
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14.5,
+                    color: Colors.white,
+                    shadows: [Shadow(color: Colors.black45, blurRadius: 4)],
                   ),
                 ),
-              ),
-            ),
+                const SizedBox(height: 10),
 
-            // Lớp kính + nội dung
-            Positioned.fill(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.1),
-                    border: Border.all(color: borderColor, width: 1.2),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // Icon trên
-                        Container(
-                          height: 32,
-                          width: 32,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.18),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Icon(
-                            Icons.event,
-                            color: Colors.white,
-                            size: 18,
+                // CÁC NÚT HÀNH ĐỘNG
+                if (isOwner)
+                  _ActionButton(
+                    label: getTranslated('edit', context) ?? 'Chỉnh sửa',
+                    isPrimary: true,
+                    onTap: () async {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => EditEventScreen(event: event)),
+                      );
+                      if (result == true && context.mounted) {
+                        await context.read<EventController>().refresh();
+                      }
+                    },
+                  )
+                else if (isPast)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Center(
+                          child: Text(
+                            getTranslated('event_ended', context) ?? 'Đã kết thúc',
+                            style: const TextStyle(fontSize: 12, color: Colors.white70, fontWeight: FontWeight.w600),
                           ),
                         ),
-
-                        // Nội dung + nút phía dưới
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              name,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                                color: Colors.white,
-                                shadows: [
-                                  Shadow(color: Colors.black26, blurRadius: 4)
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              location,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.white.withOpacity(0.85),
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              dateRange,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.white.withOpacity(0.75),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-
-                            // 🔽 LOGIC NÚT
-                            if (isOwner)
-                            // Chủ sự kiện: nút CHỈNH SỬA (cùng màu với Tham gia)
-                              SizedBox(
-                                width: double.infinity,
-                                child: TextButton(
-                                  style: TextButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 6),
-                                    backgroundColor: primaryButtonColor,
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(999),
-                                    ),
-                                  ),
-                                  onPressed: () async {
-                                    final result = await Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            EditEventScreen(event: event),
-                                      ),
-                                    );
-                                    if (result == true) {
-                                      // reload list
-                                      await context
-                                          .read<EventController>()
-                                          .refresh();
-                                    }
-                                  },
-                                  child: Text(
-                                    getTranslated('edit', context) ??
-                                        'Chỉnh sửa',
-                                    style: const TextStyle(fontSize: 11),
-                                  ),
-                                ),
-                              )
-                            else if (isPast)
-                            // ❗ SỰ KIỆN ĐÃ QUA -> chỉ Quan tâm (màu khác)
-                              SizedBox(
-                                width: double.infinity,
-                                child: TextButton(
-                                  style: TextButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 6),
-                                    backgroundColor: interestBgColor,
-                                    foregroundColor: interestTextColor,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(999),
-                                    ),
-                                    side: BorderSide(
-                                      color: interestTextColor.withOpacity(0.9),
-                                      width: 1.2,
-                                    ),
-                                  ),
-                                  onPressed: () => context
-                                      .read<EventController>()
-                                      .toggleInterestEvent(event.id!),
-                                  child: Text(
-                                    event.isInterested
-                                        ? 'Đã quan tâm'
-                                        : 'Quan tâm',
-                                    style: const TextStyle(fontSize: 11),
-                                  ),
-                                ),
-                              )
-                            else
-                            // Sự kiện chưa qua -> Quan tâm (màu phụ) + Tham gia (màu chính)
-                              Row(
-                                children: [
-                                  // Quan tâm
-                                  Expanded(
-                                    child: TextButton(
-                                      style: TextButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(
-                                            vertical: 6),
-                                        backgroundColor: interestBgColor,
-                                        foregroundColor: interestTextColor,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                          BorderRadius.circular(999),
-                                        ),
-                                        side: BorderSide(
-                                          color: interestTextColor
-                                              .withOpacity(0.9),
-                                          width: 1.2,
-                                        ),
-                                      ),
-                                      onPressed: () => context
-                                          .read<EventController>()
-                                          .toggleInterestEvent(event.id!),
-                                      child: Text(
-                                        event.isInterested
-                                            ? 'Đã quan tâm'
-                                            : 'Quan tâm',
-                                        style: const TextStyle(fontSize: 11),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  // Tham gia
-                                  Expanded(
-                                    child: TextButton(
-                                      style: TextButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(
-                                            vertical: 6),
-                                        backgroundColor: primaryButtonColor,
-                                        foregroundColor: Colors.white,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                          BorderRadius.circular(999),
-                                        ),
-                                      ),
-                                      onPressed: () => context
-                                          .read<EventController>()
-                                          .toggleEventGoing(event.id!),
-                                      child: Text(
-                                        (isInGoingTab || event.isGoing)
-                                            ? 'Đã tham gia'
-                                            : 'Tham gia',
-                                        style: const TextStyle(fontSize: 11),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                          ],
-                        ),
-                      ],
+                      ),
                     ),
+                  )
+                else
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _ActionButton(
+                          label: (currentFetch == 'going' || event.isGoing)
+                              ? getTranslated('going_state', context) ?? 'Đã tham gia'
+                              : getTranslated('join', context) ?? 'Tham gia',
+                          isPrimary: !(event.isGoing),
+                          onTap: () => context
+                              .read<EventController>()
+                              .toggleEventGoing(event.id!),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      InkWell(
+                        onTap: () => context
+                            .read<EventController>()
+                            .toggleInterestEvent(event.id!),
+                        borderRadius: BorderRadius.circular(30),
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: event.isInterested
+                                ? Colors.white.withOpacity(0.9)
+                                : Colors.black.withOpacity(0.3),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            event.isInterested ? Icons.star_rounded : Icons.star_border_rounded,
+                            size: 20,
+                            color: event.isInterested
+                                ? theme.primaryColor
+                                : Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ),
+              ],
             ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Widget con cho các nút hành động
+class _ActionButton extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  final bool isPrimary;
+
+  const _ActionButton({
+    required this.label,
+    required this.onTap,
+    this.isPrimary = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bgColor = isPrimary ? theme.primaryColor : Colors.black.withOpacity(0.3);
+    final textColor = Colors.white;
+
+    return SizedBox(
+      height: 36,
+      child: TextButton(
+        onPressed: onTap,
+        style: TextButton.styleFrom(
+          backgroundColor: bgColor,
+          foregroundColor: textColor,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18), // Bo tròn thành viên thuốc
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
       ),
     );

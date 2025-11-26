@@ -1,6 +1,6 @@
 // lib/features/social/push/call_invite_stream_listener.dart
 import 'dart:async';
-
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
@@ -15,41 +15,26 @@ import '../domain/models/call_invite.dart';
 import '../fcm/fcm_chat_handler.dart';
 import '../screens/incoming_call_screen.dart';
 import '../screens/group_call_screen.dart';
+import '../screens/group_incoming_call_screen.dart';
 
-/// ===========================================
-/// CallInviteForegroundListener
-/// - Lắng nghe:
-///   1) Stream chat (FcmChatHandler.messagesStream)
-///   2) FirebaseMessaging.onMessage (direct)
-/// - Khi detect call_invite:
-///   → attachCall + mở IncomingCallScreen / GroupCallScreen
-/// - Có cơ chế chống trùng (callId, groupId)
-///   để tránh mở UI 2 lần.
-/// ===========================================
+/// Listen FCM foreground để mở UI nghe/từ chối ngay (1-1 & group).
 class CallInviteForegroundListener {
   CallInviteForegroundListener._();
 
   static StreamSubscription? _chatSub;
   static StreamSubscription? _fcmSub;
-
   static final Set<int> _handledCallIds = <int>{};
-  static final Set<String> _handledGroupCalls =
-      <String>{}; // key: callId|groupId
-
+  static final Set<String> _handledGroupCalls = <String>{}; // callId|groupId
   static bool _routing = false;
 
-  /// Gọi hàm này sau khi app đã khởi tạo navigatorKey + Provider
-  /// (thường sau MultiProvider trong main.dart)
-  static void start() {
-    // 1) Chat socket / custom FCM stream (tin nhắn chat)
-    if (_chatSub == null) {
-      _chatSub = FcmChatHandler.messagesStream.listen(_handleChatEvent);
-    }
+  static void _log(String tag, dynamic data) {
+    debugPrint('[CALL-LISTENER][$tag] ${data is String ? data : jsonEncode(data)}');
+  }
 
-    // 2) FCM trực tiếp (push của FirebaseMessaging.onMessage)
-    if (_fcmSub == null) {
-      _fcmSub = FirebaseMessaging.onMessage.listen(_handleFcmDirect);
-    }
+  /// Gọi sau khi navigatorKey + Providers sẵn (thường sau MultiProvider).
+  static void start() {
+    _chatSub ??= FcmChatHandler.messagesStream.listen(_handleChatEvent);
+    _fcmSub ??= FirebaseMessaging.onMessage.listen(_handleFcmDirect);
   }
 
   // =====================================================
@@ -59,73 +44,117 @@ class CallInviteForegroundListener {
     final raw = evt.text ?? '';
     if (raw.isEmpty) return;
 
-    // tin chat thường thì bỏ, chỉ xử lý khi có call_invite
-    if (!raw.contains('call_invite')) return;
+    final normalized = _normalizeCallPayload(raw);
+    if (!normalized.contains('call_invite')) return;
 
-    final inv = _parseLooseCallInvite(raw);
+    // Thử bắt group call từ payload chat (call_invite_group hoặc có group_id)
+    final grpPayload = _parseGroupInviteFromText(normalized, const {});
+    if (grpPayload != null) {
+      _log('chat_group_payload', grpPayload);
+      _openGroupFromData(grpPayload);
+      // fallback: nếu thiếu call_id, thử inbox group
+      final gid = _extractGroupId(grpPayload);
+      if ((grpPayload['call_id'] ?? 0) == 0 && gid.isNotEmpty) {
+        _probeGroupInbox(gid);
+      }
+      return;
+    }
+
+    final inv =
+        CallInvite.tryParse(normalized) ?? _parseLooseCallInvite(normalized);
     if (inv == null || inv.isExpired()) return;
-
     if (!_handledCallIds.add(inv.callId)) return;
 
     _openIncoming(inv);
   }
 
   // =====================================================
-  // ============== 2. FCM TRỰC TIẾP (onMessage) =========
+  // ============== 2. FCM DIRECT (onMessage) ============
   // =====================================================
   static Future<void> _handleFcmDirect(RemoteMessage msg) async {
     final data = msg.data;
     if (data.isEmpty) return;
 
     final type = (data['type'] ?? '').toString();
+    final isGroupFlag = _isTrue(data['is_group']);
 
-    // ----------- GROUP CALL -----------
-    final hasGroup = data.containsKey('group_id');
-    if (hasGroup &&
-        (type == 'call_invite_group' || data.containsKey('call_id'))) {
-      _openGroupFromData(data);
-      return;
-    }
-
-    // ----------- 1-1 CALL -----------
     final raw = data['text']?.toString() ?? '';
+    _log('fcm_onMessage', {'type': type, 'is_group': isGroupFlag, 'data': data, 'text': raw});
+
     final callerName =
         data['sender_name']?.toString() ?? data['caller_name']?.toString();
     final callerAvatar =
         data['sender_avatar']?.toString() ?? data['caller_avatar']?.toString();
 
-    // Trường hợp Wo_RegisterMessage gửi type = chat_message
-    // nhưng text là payload call
-    if (raw.isNotEmpty && raw.contains('call_invite')) {
-      final inv = _parseLooseCallInvite(raw);
-      if (inv != null && !inv.isExpired()) {
-        if (!_handledCallIds.add(inv.callId)) return;
-        _openIncoming(
-          inv,
-          callerName: callerName,
-          callerAvatar: callerAvatar,
-        );
+    // ----------- GROUP CALL -----------
+    if (data.containsKey('group_id') &&
+        (type == 'call_invite_group' ||
+            type == 'call_invite' || // PHP backend đang gửi type=call_invite + is_group
+            isGroupFlag ||
+            data.containsKey('call_id'))) {
+      final gid = _extractGroupId(data);
+      final cid = int.tryParse('${data['call_id'] ?? ''}') ?? 0;
+      _log('fcm_group_detected', {'gid': gid, 'cid': cid, 'type': type});
+      if (cid <= 0 && gid.isNotEmpty) {
+        // fallback: call_id missing -> ping inbox to fetch latest ringing call
+        await _probeGroupInbox(gid);
+      } else {
+        _openGroupFromData(data);
+      }
+      return;
+    }
+    // type=chat_message nhưng text chứa payload group call
+    if (raw.isNotEmpty) {
+      final normalized = _normalizeCallPayload(raw);
+      final groupPayload = _parseGroupInviteFromText(normalized, data);
+      if (groupPayload != null) {
+        _openGroupFromData(groupPayload);
+        // fallback: nếu thiếu call_id -> ping inbox group để lấy call hiện tại
+        final gid = _extractGroupId(groupPayload);
+        if ((groupPayload['call_id'] ?? 0) == 0 && gid.isNotEmpty) {
+          _probeGroupInbox(gid);
+        }
         return;
       }
     }
 
-    // Fallback: nếu server gửi type = call_invite + call_id + media ở root
+    // ----------- 1-1 CALL -----------
+
+    // Wo_RegisterMessage gửi type=chat_message nhưng text là payload call
+    if (raw.isNotEmpty) {
+      final normalized = _normalizeCallPayload(raw);
+      if (normalized.contains('call_invite')) {
+        final inv =
+            CallInvite.tryParse(normalized) ?? _parseLooseCallInvite(normalized);
+        if (inv != null && !inv.isExpired()) {
+          if (_handledCallIds.add(inv.callId)) {
+            _openIncoming(
+              inv,
+              callerName: callerName,
+              callerAvatar: callerAvatar,
+            );
+          }
+          return;
+        }
+      }
+    }
+
+    // Fallback: type=call_invite + call_id + media ở root
+    final mediaRaw = _extractMedia(data);
     final looksLikeCallInvite = type == 'call_invite' ||
         (data.containsKey('call_id') &&
-            data.containsKey('media') &&
+            mediaRaw != null &&
             !data.containsKey('group_id'));
     if (!looksLikeCallInvite) return;
 
     final callId = int.tryParse('${data['call_id'] ?? ''}') ?? 0;
     if (callId <= 0) return;
-
-    final media = (data['media']?.toString() == 'video') ? 'video' : 'audio';
     final ts = int.tryParse('${data['ts'] ?? 0}') ??
         DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
     final inv = CallInvite(
       callId: callId,
-      media: media,
+      media: mediaRaw ?? 'audio',
       issuedAt: DateTime.fromMillisecondsSinceEpoch(ts * 1000),
     );
     if (inv.isExpired()) return;
@@ -139,11 +168,11 @@ class CallInviteForegroundListener {
   }
 
   // =====================================================
-  // ============== PARSER PAYLOAD CALL (TỪ TEXT) ========
+  // ============== PARSER PAYLOAD CALL (TEXT) ===========
   // =====================================================
 
   /// Text kiểu:
-  ///   {'type':'call_invite','call_id':'173','media':'video','ts':1763955418}
+  ///   {"type":"call_invite","call_id":173,"media":"video","ts":1763955418}
   /// hoặc tương tự -> rút ra call_id, media, ts bằng cách cắt chuỗi.
   static CallInvite? _parseLooseCallInvite(String raw) {
     if (!raw.contains('call_invite')) return null;
@@ -170,7 +199,7 @@ class CallInviteForegroundListener {
 
   /// Cắt value của 1 key trong chuỗi kiểu {'key':'value', "key2":123}
   static String? _extractValue(String raw, String key) {
-    // Tìm 'key' hoặc "key"
+    // tìm 'key' hoặc "key"
     int idx = raw.indexOf("'$key'");
     if (idx == -1) {
       idx = raw.indexOf('"$key"');
@@ -213,19 +242,137 @@ class CallInviteForegroundListener {
     return raw.substring(start, end);
   }
 
+  /// Chuẩn hóa payload call_invite (HTML-escaped, backslash-escaped)
+  static String _normalizeCallPayload(String raw) {
+    var s = raw;
+    s = s.replaceAll('\\&quot;', '"').replaceAll('&quot;', '"');
+    s = s.replaceAll('&amp;', '&');
+    return s;
+  }
+
+  /// Chuẩn hóa media từ payload (media | call_type | type_two | call_media)
+  static String? _extractMedia(Map<String, dynamic> data) {
+    final raw = (data['media'] ??
+            data['call_type'] ??
+            data['type_two'] ??
+            data['call_media'])
+        ?.toString()
+        .toLowerCase();
+    if (raw == 'video' || raw == 'audio') return raw;
+    return null;
+  }
+
+  static String _extractGroupId(Map<String, dynamic> data) {
+    final v = data['group_id'] ??
+        data['groupId'] ??
+        data['groupID'] ??
+        data['gid'];
+    return (v ?? '').toString();
+  }
+
+  static bool _isTrue(dynamic v) {
+    if (v == null) return false;
+    if (v is bool) return v;
+    final s = v.toString().toLowerCase();
+    return s == '1' || s == 'true' || s == 'yes';
+  }
+
+  /// Khi payload group không có call_id, thử ping inbox để lấy call mới nhất của group
+  static Future<void> _probeGroupInbox(String groupId) async {
+    if (_routing) return;
+    final nav = navigatorKey.currentState;
+    final ctx = nav?.overlay?.context ?? navigatorKey.currentContext;
+    if (ctx == null || !ctx.mounted) return;
+
+    try {
+      final gc = ctx.read<GroupCallController>();
+      var handled = false;
+      _log('probe_inbox_start', groupId);
+      // Gắn onIncoming tạm thời để mở UI
+      gc.onIncoming = (call) {
+        handled = true;
+        final cid = int.tryParse('${call['call_id'] ?? call['id'] ?? ''}') ?? 0;
+        if (cid <= 0) return;
+        gc.stopWatchingInbox();
+        gc.onIncoming = null;
+        _log('probe_inbox_hit', {'gid': groupId, 'cid': cid, 'call': call});
+        _openGroupFromData({
+          'call_id': cid,
+          'group_id': groupId,
+          'media': call['media'] ?? 'audio',
+          'group_name': call['group_name'] ?? call['name'],
+        });
+      };
+      gc.watchGroupInbox(groupId, autoOpen: false);
+      await gc.forceCheckInbox();
+      // Cleanup watchdog để tránh polling mãi nếu không có call
+      Future.delayed(const Duration(seconds: 10), () {
+        if (!handled) {
+          _log('probe_inbox_timeout', groupId);
+          gc.stopWatchingInbox();
+          gc.onIncoming = null;
+        }
+      });
+    } catch (_) {
+      // ignore
+    }
+  }
+
+  /// Parse group invite từ text (JSON hoặc loang) + fallback data map
+  static Map<String, dynamic>? _parseGroupInviteFromText(
+      String text, Map<String, dynamic> data) {
+    Map<String, dynamic>? m;
+    try {
+      if (text.trim().startsWith('{') && text.trim().endsWith('}')) {
+        final decoded = jsonDecode(text);
+        if (decoded is Map<String, dynamic>) {
+          m = decoded;
+        } else if (decoded is Map) {
+            m = decoded.map((k, v) => MapEntry(k.toString(), v));
+        }
+      }
+    } catch (_) {}
+
+    m ??= {};
+    // merge data root để lấy group_name/call_type nếu text thiếu
+    m.addAll(data);
+
+    final callId = int.tryParse('${m['call_id'] ?? m['id'] ?? ''}') ?? 0;
+    final groupId = _extractGroupId(m);
+    if (groupId.isEmpty) return null;
+
+    final media = _extractMedia(m) ?? 'audio';
+    final groupName = m['group_name']?.toString();
+
+    return {
+      'call_id': callId,
+      'group_id': groupId,
+      'media': media,
+      if (groupName != null) 'group_name': groupName,
+    };
+  }
+
   // =====================================================
   // ================= GROUP CALL HELPERS ================
   // =====================================================
   static void _openGroupFromData(Map<String, dynamic> data) {
     final callId = int.tryParse('${data['call_id'] ?? ''}') ?? 0;
     final groupId = '${data['group_id'] ?? ''}';
-    if (callId <= 0 || groupId.isEmpty) return;
+    if (groupId.isEmpty) return;
+    if (callId <= 0) {
+      // fallback: missing call_id -> probe inbox to fetch active call
+      _log('open_group_missing_call', data);
+      _probeGroupInbox(groupId);
+      return;
+    }
 
-    final media = (data['media']?.toString() == 'video') ? 'video' : 'audio';
+    final media = _extractMedia(data) ?? 'audio';
     final name = data['group_name']?.toString();
 
     final key = '$callId|$groupId';
     if (!_handledGroupCalls.add(key)) return;
+
+    _log('open_group_ui', {'call_id': callId, 'group_id': groupId, 'media': media});
 
     _openGroupIncoming(
       callId: callId,
@@ -249,7 +396,6 @@ class CallInviteForegroundListener {
     final ctx = nav?.overlay?.context ?? navigatorKey.currentContext;
 
     if (nav == null || ctx == null || !ctx.mounted) {
-      // navigator chưa sẵn sàng -> đợi frame sau
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => _openIncoming(
           inv,
@@ -315,7 +461,6 @@ class CallInviteForegroundListener {
     _routing = true;
 
     try {
-      // Warm up controller state if needed
       final gc = ctx.read<GroupCallController>();
       gc.currentCallId = callId;
       gc.status = CallStatus.ringing;
@@ -324,10 +469,11 @@ class CallInviteForegroundListener {
     nav
         .push(
       MaterialPageRoute(
-        builder: (_) => GroupCallScreen(
+        fullscreenDialog: true,
+        builder: (_) => GroupIncomingCallScreen(
           groupId: groupId,
-          mediaType: media,
           callId: callId,
+          media: media,
           groupName: groupName,
         ),
       ),

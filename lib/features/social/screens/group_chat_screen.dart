@@ -1,4 +1,4 @@
-// G:\flutter-app\lib\features\social\screens\group_chat_screen.dart
+﻿// G:\flutter-app\lib\features\social\screens\group_chat_screen.dart
 import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
@@ -163,41 +163,36 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       }
 
       _ringingDialogOpen = true;
-      await showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => AlertDialog(
-          title: Text(media == 'video' ? 'Cuộc gọi video' : 'Cuộc gọi thoại'),
-          content: const Text('Bạn có muốn tham gia cuộc gọi nhóm không?'),
-          actions: [
-            TextButton(
-              onPressed: () async {
-                // Đánh dấu đã từ chối (left_at) để không hiện lại trong inbox
-                try {
-                  await gcc.leaveRoom(callId);
-                } catch (_) {}
-                if (mounted) Navigator.of(context).pop();
-              },
-              child: const Text('TỪ CHỐI'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                Navigator.of(context).push(MaterialPageRoute(
+      final gName = _finalTitle(context.read<GroupChatController>());
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (ctx) => _GroupIncomingCallPage(
+            groupId: widget.groupId,
+            groupName: gName,
+            media: media,
+            callId: callId,
+            onDecline: () async {
+              try {
+                await gcc.leaveRoom(callId);
+              } catch (_) {}
+              if (ctx.mounted) Navigator.of(ctx).pop();
+            },
+            onAccept: () {
+              Navigator.of(ctx).pushReplacement(
+                MaterialPageRoute(
                   builder: (_) => GroupCallScreen(
                     groupId: widget.groupId,
                     mediaType: media,
-                    callId: callId, // attachAndJoin
-                    groupName: _finalTitle(context.read<GroupChatController>()),
+                    callId: callId,
+                    groupName: gName,
                   ),
-                ));
-              },
-              child: const Text('CHẤP NHẬN'),
-            ),
-          ],
+                ),
+              );
+            },
+          ),
         ),
       );
-
       _ringingDialogOpen = false;
     };
   }
@@ -922,7 +917,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   Future<void> _openGroupInfoSheet() async {
     final gc = context.read<GroupChatController>();
 
-    // ---- Check mình có phải chủ nhóm không ----
+    // ---- Check mÃ¬nh cÃ³ pháº£i chá»§ nhÃ³m khÃ´ng ----
     bool isOwner = false;
     try {
       await gc.loadGroupMembers(widget.groupId);
@@ -948,7 +943,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       ),
       builder: (ctx) {
         return DefaultTabController(
-          length: 3, // Ảnh/Video, File, Link
+          length: 3, // áº¢nh/Video, File, Link
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             child: Column(
@@ -1671,6 +1666,87 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     );
   }
 
+  Widget _buildGroupEmptyState({
+    required ImageProvider? avatarProvider,
+    required String title,
+  }) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Stack(
+              alignment: Alignment.bottomRight,
+              children: [
+                CircleAvatar(
+                  radius: 46,
+                  backgroundImage: avatarProvider,
+                  backgroundColor: Colors.grey.shade300,
+                  child: avatarProvider == null
+                      ? const Icon(Icons.group, size: 46, color: Colors.white70)
+                      : null,
+                ),
+                Container(
+                  width: 14,
+                  height: 14,
+                  margin: const EdgeInsets.only(bottom: 4, right: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.green,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Ban da tao nhom nay',
+              style: TextStyle(color: Colors.black54, fontSize: 13),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _EmptyActionButton(
+                  icon: Icons.person_add_alt,
+                  label: 'Them',
+                  onTap: _openAddMembersPicker,
+                ),
+                const SizedBox(width: 12),
+                _EmptyActionButton(
+                  icon: Icons.edit,
+                  label: 'Ten',
+                  onTap: _changeGroupName,
+                ),
+                const SizedBox(width: 12),
+                _EmptyActionButton(
+                  icon: Icons.group_outlined,
+                  label: 'Thanh vien',
+                  onTap: _openMembersSheet,
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'Ban da dat ten nhom la $title.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.black54, fontSize: 13),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ---------------- UI ----------------
   @override
   Widget build(BuildContext context) {
@@ -1742,7 +1818,24 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                         onRefresh: () => context
                             .read<GroupChatController>()
                             .loadMessages(widget.groupId),
-                        child: ListView.builder(
+                        child: items.isEmpty
+                            ? LayoutBuilder(
+                                builder: (context, constraints) {
+                                  return SingleChildScrollView(
+                                    physics:
+                                        const AlwaysScrollableScrollPhysics(),
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                          minHeight: constraints.maxHeight),
+                                      child: _buildGroupEmptyState(
+                                        avatarProvider: avatarProvider,
+                                        title: title,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              )
+                            : ListView.builder(
                           controller: _scroll,
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 8),
@@ -2607,6 +2700,44 @@ class _GroupMediaTabState extends State<_GroupMediaTab> {
   }
 }
 
+class _EmptyActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _EmptyActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(22),
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 22, color: Colors.black87),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+        ),
+      ],
+    );
+  }
+}
+
 
 class _FullScreenImagePage extends StatelessWidget {
   final String url;
@@ -2729,6 +2860,150 @@ class _FullScreenVideoPageState extends State<_FullScreenVideoPage> {
                     ],
                   ),
       ),
+    );
+  }
+}
+
+/// Fullscreen incoming UI cho cuộc gọi nhóm (nhận / từ chối)
+class _GroupIncomingCallPage extends StatelessWidget {
+  final String groupId;
+  final String groupName;
+  final String media;
+  final int callId;
+  final VoidCallback onAccept;
+  final Future<void> Function() onDecline;
+
+  const _GroupIncomingCallPage({
+    required this.groupId,
+    required this.groupName,
+    required this.media,
+    required this.callId,
+    required this.onAccept,
+    required this.onDecline,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isVideo = media == 'video';
+    return Scaffold(
+      backgroundColor: Colors.black87,
+      body: SafeArea(
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                children: [
+                  const SizedBox(height: 12),
+                  Text(
+                    isVideo ? 'Cuộc gọi nhóm video' : 'Cuộc gọi nhóm thoại',
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    groupName.isNotEmpty ? groupName : 'Nhóm $groupId',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Call ID: $callId',
+                    style: const TextStyle(color: Colors.white38, fontSize: 12),
+                  ),
+                ],
+              ),
+              Icon(
+                isVideo ? Icons.videocam : Icons.call,
+                size: 96,
+                color: isVideo ? Colors.lightBlueAccent : Colors.greenAccent,
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _IncomingButton(
+                    label: 'Từ chối',
+                    color: Colors.redAccent,
+                    icon: Icons.call_end,
+                    onTap: () async {
+                      await onDecline();
+                    },
+                  ),
+                  _IncomingButton(
+                    label: 'Nghe',
+                    color: Colors.green,
+                    icon: isVideo ? Icons.videocam : Icons.call,
+                    onTap: onAccept,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _IncomingButton extends StatelessWidget {
+  final String label;
+  final Color color;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _IncomingButton({
+    required this.label,
+    required this.color,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(36),
+          child: Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: color.withOpacity(0.4),
+                  blurRadius: 16,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: Icon(icon, color: Colors.white, size: 30),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white, fontSize: 14),
+        ),
+      ],
     );
   }
 }

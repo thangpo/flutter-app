@@ -1488,7 +1488,6 @@
   "current_image": "Current image",
   "update_ad": "Update ad",
   "select_country": "Select country",
-
   "fill_all_fields": "Fill all fields",
   "select_image": "Select image",
   "select_dates": "Select dates",
@@ -1502,11 +1501,9 @@
   "select_date": "Select date",
   "select_countries": "Select countries",
   "enter_city_or_province": "Enter city or province",
-
   "reactions": "Reactions",
   "comment_reactions": "Comment reactions",
   "mutual_friends": "Mutual frends",
-
   "ad_default_title": "Sponsored ad",
   "ad_sponsored": "Sponsored",
   "ad_learn_more": "Learn more",
@@ -1515,8 +1512,6 @@
   "wow": "Wow",
   "sad": "Sad",
   "angry": "Angry",
-
-
   "your_pages":"Your Pages",
   "liked_pages":"Like Pages",
   "like_page":"Like Page",
@@ -1530,6 +1525,48 @@
   "page_category":"Page Category",
   "select_category":"Select Category",
   "page_description":"Page Description",
-  "page_description_hint":"Page Description Hint"
+  "page_description_hint":"Page Description Hint",
+  "rooms_available": "Rooms available",
+  "beds": "Beds",
+  "guests": "Guests",
+  "night": "Night",
+  "number_of_rooms": "Number of rooms",
+  "selected_room": "Selected room",
+  "select_room": "Select room",
 
+  "no_events_found": "No events found yet",
+  "event_ended": "Event has ended",
+  "going_state": "Going",
+  "filter_events": "Filter Events",
+  "browse_events": "Browse events",
+  "events_you_are_going_to": "Events you're going to",
+  "events_you_are_interested_in": "Events you're interested in",
+  "past_events": "Past events",
+  "my_events": "My events",
+
+  "share_on_profile": "Share on your profile",
+  "copy_link": "Copy link",
+  "copied_event_link": "Event link copied",
+
+  "event_not_found": "Event not found",
+
+  "going": "Going",
+  "interested": "Interested",
+  "event_joined": "Joined",
+  "event_join": "Join",
+
+  "delete_event_title": "Delete event",
+  "delete_event_confirm": "Are you sure you want to delete this event? This action cannot be undone.",
+  "event_delete_success": "Event deleted",
+  "event_delete_failed": "Failed to delete event.",
+
+  "event_time": "Time",
+  "event_location": "Location",
+  "event_location_empty": "No location yet",
+
+  "organizer": "Organizer",
+  "event_description_empty": "No description yet",
+  "event_name_empty": "Untitled event",
+  "edit_event": "Edit",
+  "create_event": "Create new"
 }

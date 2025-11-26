@@ -13,6 +13,7 @@ class PageChatScreen extends StatefulWidget {
   final String pageTitle;
   final String pageAvatar;
   final String recipientId;
+  final String pageSubtitle;
 
   const PageChatScreen({
     super.key,
@@ -20,6 +21,7 @@ class PageChatScreen extends StatefulWidget {
     required this.pageTitle,
     required this.pageAvatar,
     required this.recipientId,
+    required this.pageSubtitle,
   });
 
   @override
@@ -112,9 +114,23 @@ class _PageChatScreenState extends State<PageChatScreen> {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(widget.pageTitle,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w600, fontSize: 16)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(widget.pageTitle,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 16)),
+                  const SizedBox(height: 2),
+                  Text(
+                    widget.pageSubtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

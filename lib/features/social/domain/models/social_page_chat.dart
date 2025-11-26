@@ -1,8 +1,8 @@
 class PageChatThread {
-  final String pageId;    // ID of the Page
-  final String userId;    // Peer ID (use as recipient_id when fetch/send)
-  final String ownerId;   // Page owner ID
-  final String peerName;  // Peer display name
+  final String pageId; // Page id
+  final String userId; // Customer/peer id
+  final String ownerId; // Page owner id
+  final String peerName; // Customer display name
   final String peerAvatar;
   final String pageName;
   final String pageTitle;
@@ -64,49 +64,119 @@ class PageChatThread {
   }
 
   factory PageChatThread.fromJson(Map<String, dynamic> json) {
-    final Map<String, dynamic> lastMsg = json['last_message'] ?? {};
-    final Map<String, dynamic> userData = lastMsg['user_data'] ?? {};
-    final String ownerId = (json['user_id'] ?? '').toString();
-    final String peerName =
-        (userData['name'] ?? userData['username'] ?? '').toString();
-    final String peerAvatar = (userData['avatar'] ?? '').toString();
+    String _s(dynamic v) => (v ?? '').toString();
+    Map<String, dynamic> _m(dynamic src) =>
+        src is Map ? Map<String, dynamic>.from(src as Map) : <String, dynamic>{};
+    String _firstNonEmpty(Iterable<String> list) =>
+        list.firstWhere((e) => e.isNotEmpty, orElse: () => '');
 
-    // Peer = the other end of the conversation (recipient_id to use).
-    final String fromId = (lastMsg['from_id'] ?? '').toString();
-    final String toId = (lastMsg['to_id'] ?? '').toString();
-    final String userDataId = (userData['user_id'] ?? '').toString();
+    final Map<String, dynamic> lastMsg = _m(json['last_message']);
+    final Map<String, dynamic> rootUserData = _m(json['user_data']);
+    final Map<String, dynamic> lastUserData = _m(lastMsg['user_data']);
 
+    final bool isMyPage =
+        json['is_page_onwer'] == 1 || json['is_page_onwer'] == true;
+
+    final String pageId = _s(json['page_id']);
+    final String pageTitle = _s(json['name']);
+    final String pageName = _s(json['page_name']);
+
+    // Owner of the page (WoWonder thường set user_id = owner)
+    final String ownerId = _firstNonEmpty(<String>[
+      _s(json['page_owner_id']),
+      _s(json['owner_id']),
+      _s(json['page_user_id']),
+      _s(json['user_id']),
+      _s(lastMsg['owner_id']),
+      _s(lastMsg['page_owner_id']),
+    ]);
+
+    final String fromId = _s(lastMsg['from_id']);
+    final String toId = _s(lastMsg['to_id']);
+
+    // Determine peer (customer), avoiding owner/page ids
     String peerId = '';
-    if (fromId.isNotEmpty && toId.isNotEmpty) {
-      if (fromId == ownerId) {
-        peerId = toId;
-      } else if (toId == ownerId) {
-        peerId = fromId;
-      }
+    if (ownerId.isNotEmpty) {
+      if (fromId == ownerId && toId.isNotEmpty) peerId = toId;
+      if (toId == ownerId && fromId.isNotEmpty) peerId = fromId;
     }
-
-    if (peerId.isEmpty && userDataId.isNotEmpty && userDataId != ownerId) {
-      peerId = userDataId;
-    }
-
     if (peerId.isEmpty) {
-      peerId = fromId.isNotEmpty ? fromId : toId;
+      peerId = _firstNonEmpty(<String>[
+        _s(json['recipient_id']),
+        _s(lastMsg['recipient_id']),
+        _s(rootUserData['user_id']),
+        _s(lastUserData['user_id']),
+        fromId,
+        toId,
+      ].where((id) => id.isNotEmpty && id != ownerId && id != pageId));
     }
+
+    String _pickName(String id) {
+      if (id.isEmpty) return '';
+      if (_s(lastUserData['user_id']) == id) {
+        final n = _firstNonEmpty([
+          _s(lastUserData['name']),
+          _s(lastUserData['username']),
+        ]);
+        if (n.isNotEmpty && n != 'null') return n;
+      }
+      if (id == fromId) {
+        final n = _firstNonEmpty([_s(lastMsg['from_name']), _s(lastMsg['from_username'])]);
+        if (n.isNotEmpty && n != 'null') return n;
+      }
+      if (id == toId) {
+        final n = _firstNonEmpty([_s(lastMsg['to_name']), _s(lastMsg['to_username'])]);
+        if (n.isNotEmpty && n != 'null') return n;
+      }
+      if (_s(rootUserData['user_id']) == id) {
+        final n = _firstNonEmpty([_s(rootUserData['name']), _s(rootUserData['username'])]);
+        if (n.isNotEmpty && n != 'null') return n;
+      }
+      return '';
+    }
+
+    String _pickAvatar(String id) {
+      if (id.isEmpty) return '';
+      if (_s(lastUserData['user_id']) == id) {
+        final a = _s(lastUserData['avatar']);
+        if (a.isNotEmpty && a != 'null') return a;
+      }
+      if (id == fromId) {
+        final a = _s(lastMsg['from_avatar']);
+        if (a.isNotEmpty && a != 'null') return a;
+      }
+      if (id == toId) {
+        final a = _s(lastMsg['to_avatar']);
+        if (a.isNotEmpty && a != 'null') return a;
+      }
+      if (_s(rootUserData['user_id']) == id) {
+        final a = _s(rootUserData['avatar']);
+        if (a.isNotEmpty && a != 'null') return a;
+      }
+      return '';
+    }
+
+    final String peerName = _pickName(peerId);
+    final String peerAvatar = _pickAvatar(peerId);
+
+    final bool lastFromOwner = ownerId.isNotEmpty && fromId == ownerId;
+    final bool isUnreadCustomerMsg =
+        !lastFromOwner && _s(lastMsg['seen']) == '0';
 
     return PageChatThread(
-      pageId: json['page_id']?.toString() ?? '',
+      pageId: pageId,
       userId: peerId,
       ownerId: ownerId,
-      peerName: peerName,
+      peerName: peerName.isNotEmpty ? peerName : peerId,
       peerAvatar: peerAvatar,
-      pageName: json['page_name']?.toString() ?? '',
-      pageTitle: json['name']?.toString() ?? '',
-      isMyPage: json['is_page_onwer'] == 1 || json['is_page_onwer'] == true,
-      lastMessage: lastMsg['text']?.toString() ?? '',
-      lastMessageTime: lastMsg['date_time']?.toString() ?? '',
-      unreadCount: (lastMsg['seen']?.toString() == "0") ? 1 : 0,
-      avatar: json['avatar']?.toString() ?? '',
-      lastMessageType: lastMsg['type']?.toString() ?? '',
+      pageName: pageName,
+      pageTitle: pageTitle,
+      isMyPage: isMyPage,
+      lastMessage: _s(lastMsg['text']),
+      lastMessageTime: _s(lastMsg['date_time']),
+      unreadCount: isUnreadCustomerMsg ? 1 : 0,
+      avatar: peerAvatar.isNotEmpty ? peerAvatar : _s(json['avatar']),
+      lastMessageType: _s(lastMsg['type']),
     );
   }
 }

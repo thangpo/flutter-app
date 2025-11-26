@@ -4,6 +4,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_sixvalley_ecommerce/features/ads/domain/models/ads_model.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/event_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
@@ -38,6 +39,9 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_post_
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_event.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/event_detail_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/widgets/social_event_attachment_loader.dart';
 
 bool _listsEqual<T>(List<T> a, List<T> b) {
   if (identical(a, b)) return true;
@@ -1355,6 +1359,10 @@ class SocialPostCard extends StatelessWidget {
           (ctrl) => ctrl.findPostById(this.post.id),
         ) ??
         this.post;
+    // lấy eventId từ nội dung post (link /events/123)
+    final String? attachedEventId = extractEventIdFromPost(post);
+    final bool hasEventAttachment = attachedEventId != null;
+
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final bool isLightTheme = theme.brightness == Brightness.light;
@@ -1379,6 +1387,7 @@ class SocialPostCard extends StatelessWidget {
             onTap: () => _openSharedPostDetail(context, sharedPost),
           )
         : buildSocialPostMedia(context, post);
+
     final List<String> topReactions = _topReactionLabels(post);
     final int shareCount = post.shareCount;
     final bool isSharing = context.select<SocialController, bool>(
@@ -1742,9 +1751,11 @@ class SocialPostCard extends StatelessWidget {
                 ),
               ),
 
-            if (mediaContent != null) ...[
+            if (mediaContent != null || hasEventAttachment) ...[
               SizedBox(height: mediaTopSpacing),
-              mediaContent,
+              if (mediaContent != null) mediaContent,
+              if (hasEventAttachment && attachedEventId != null)
+                SocialEventAttachmentLoader(eventId: attachedEventId),
               const SizedBox(height: 8),
             ],
 
@@ -2120,6 +2131,7 @@ class SocialPostCard extends StatelessWidget {
     );
   }
 }
+
 
 class _PostAdCard extends StatefulWidget {
   final AdsModel ad;

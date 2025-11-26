@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -15,6 +16,8 @@ import 'package:flutter_sixvalley_ecommerce/features/social/utils/social_feeling
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/social_feeling_helper.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/post_background_presets.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_event.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/widgets/social_event_attachment_card.dart';
 
 class SocialCreatePostScreen extends StatefulWidget {
   final String? groupId;
@@ -22,6 +25,8 @@ class SocialCreatePostScreen extends StatefulWidget {
   final String? groupTitle;
   final String? pageId;
   final String? pageName;
+  final SocialEvent? attachedEvent;
+  final String? initialText;
 
   const SocialCreatePostScreen({
     super.key,
@@ -30,6 +35,8 @@ class SocialCreatePostScreen extends StatefulWidget {
     this.groupTitle,
     this.pageId,
     this.pageName,
+    this.attachedEvent,
+    this.initialText,
   });
 
   @override
@@ -60,6 +67,12 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialText != null && widget.initialText!.trim().isNotEmpty) {
+      _textController.text = widget.initialText!;
+      _textController.selection = TextSelection.fromPosition(
+        TextPosition(offset: _textController.text.length),
+      );
+    }
     _textController.addListener(_handleTextChanged);
     _textFocusNode.addListener(_handleTextFocusChange);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -77,6 +90,39 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
     _textFocusNode.dispose();
     _textController.dispose();
     super.dispose();
+  }
+  String _buildEventShareLink(SocialEvent event) {
+    final String id = (event.id ?? '').toString();
+    if (id.isEmpty) return '';
+
+    final String base = AppConstants.socialBaseUrl;
+    final String normalizedBase =
+    base.endsWith('/') ? base.substring(0, base.length - 1) : base;
+
+    return '$normalizedBase/events/$id/';
+  }
+
+  String _buildFinalTextForSubmit(String raw) {
+    String text = raw.trim();
+
+    final SocialEvent? ev = widget.attachedEvent;
+    if (ev != null) {
+      final String id = (ev.id ?? '').toString();
+      if (id.isNotEmpty) {
+        final String link = _buildEventShareLink(ev);
+
+        // nếu text chưa chứa /events/{id} thì mới chèn
+        if (!text.contains('/events/$id')) {
+          if (text.isEmpty) {
+            text = link;
+          } else {
+            text = '$text\n$link';
+          }
+        }
+      }
+    }
+
+    return text;
   }
 
   Future<void> _onPickMedia() async {
@@ -441,11 +487,13 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
       _selectedFeelingType,
       _selectedFeelingValue,
     );
+    final bool hasEvent = widget.attachedEvent != null;
     return _textController.text.trim().isNotEmpty ||
         _images.isNotEmpty ||
         _video != null ||
         hasFeeling ||
-        _hasLocation;
+        _hasLocation ||
+        hasEvent;
   }
 
   bool get _hasLocation =>
@@ -494,11 +542,9 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
     });
     try {
       final SocialController sc = context.read<SocialController>();
-
+      final String finalText = _buildFinalTextForSubmit(_textController.text);
       final SocialPost? created = await sc.createPost(
-        text: _textController.text.trim().isNotEmpty
-            ? _textController.text.trim()
-            : null,
+        text: finalText.isNotEmpty ? finalText : null,
         imagePaths:
             _video == null ? _images.map((XFile f) => f.path).toList() : null,
         videoPath: _video?.path,
@@ -511,7 +557,10 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
         backgroundColorId: _selectedBackgroundId,
       );
       if (mounted && created != null) {
-        Navigator.of(context).pop<SocialPost>(created);
+        final SocialPost result = widget.attachedEvent != null
+            ? created.copyWith(attachedEvent: widget.attachedEvent)
+            : created;
+        Navigator.of(context).pop<SocialPost>(result);
       }
     } catch (_) {
       // Errors are surfaced via showCustomSnackBar inside controller if any.
@@ -628,6 +677,15 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
                     ),
                     const SizedBox(height: 16),
                     _buildTextField(theme),
+                    if (widget.attachedEvent != null) ...[
+                      const SizedBox(height: 12),
+                      SocialEventAttachmentCard(
+                        event: widget.attachedEvent!,
+                        onTap: () {
+                        },
+                      ),
+                    ],
+
                     if (SocialFeelingHelper.hasSelection(
                       _selectedFeelingType,
                       _selectedFeelingValue,

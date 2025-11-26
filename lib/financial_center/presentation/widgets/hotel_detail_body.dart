@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:url_launcher/url_launcher.dart';
-
 import 'hotel_rooms_section.dart';
 import 'hotel_review_section.dart';
 
 class HotelDetailBody extends StatelessWidget {
   final Map<String, dynamic> hotel;
+  final Key? roomsSectionKey;
+  final ValueChanged<HotelBookingSummary>? onBookingSummaryChanged;
 
-  const HotelDetailBody({super.key, required this.hotel});
+  const HotelDetailBody({
+    super.key,
+    required this.hotel,
+    this.roomsSectionKey,
+    this.onBookingSummaryChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -26,15 +32,14 @@ class HotelDetailBody extends StatelessWidget {
     final String? lng = hotel['map_lng']?.toString();
     final dynamic reviewSummaryRaw = hotel['review_summary'];
 
-    final double score =
-        double.tryParse(
-          (reviewSummaryRaw is Map
-              ? reviewSummaryRaw['score']
-              : hotel['review_score'])
-              ?.toString() ??
-              '0',
-        ) ??
-            0;
+    final double score = double.tryParse(
+      (reviewSummaryRaw is Map
+          ? reviewSummaryRaw['score']
+          : hotel['review_score'])
+          ?.toString() ??
+          '0',
+    ) ??
+        0;
 
     final dynamic reviewListRaw = hotel['review_list'] ?? hotel['reviewList'];
     final List<dynamic> reviews;
@@ -64,15 +69,18 @@ class HotelDetailBody extends StatelessWidget {
     final List<dynamic> rawTerms = termsRaw is List ? termsRaw : const [];
     final dynamic roomsRaw = hotel['rooms'];
     final List<dynamic> rooms = roomsRaw is List ? roomsRaw : const [];
+
+    // Map term_id -> tên term để map cho room
     final Map<int, String> roomTermNameMap = {};
     for (final attr in attributes) {
       if (attr is Map && attr['terms'] is List) {
         for (final t in (attr['terms'] as List)) {
           if (t is Map) {
-            final int? termId =
-            int.tryParse(t['id']?.toString() ?? '');
-            final String name =
-            (t['translation']?['name'] ?? t['name'] ?? '').toString();
+            final int? termId = int.tryParse(t['id']?.toString() ?? '');
+            final String name = (t['translation']?['name'] ??
+                t['name'] ??
+                '')
+                .toString();
             if (termId != null && name.isNotEmpty) {
               roomTermNameMap[termId] = name;
             }
@@ -85,6 +93,7 @@ class HotelDetailBody extends StatelessWidget {
     (hotel['policy'] ?? hotel['extra_info'] ?? hotel['term'] ?? '')
         .toString();
     final String contentHtml = (hotel['content'] ?? '').toString();
+
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -96,11 +105,13 @@ class HotelDetailBody extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          /// --- Header: tên, điểm, vị trí, giá ---
           Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Title + Score
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -119,7 +130,9 @@ class HotelDetailBody extends StatelessWidget {
                     if (score > 0)
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.blue[700],
                           borderRadius: BorderRadius.circular(12),
@@ -137,8 +150,11 @@ class HotelDetailBody extends StatelessWidget {
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.star_rounded,
-                                    color: Colors.white, size: 20),
+                                const Icon(
+                                  Icons.star_rounded,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
                                 const SizedBox(width: 4),
                                 Text(
                                   score.toStringAsFixed(1),
@@ -165,7 +181,10 @@ class HotelDetailBody extends StatelessWidget {
                       ),
                   ],
                 ),
+
                 const SizedBox(height: 12),
+
+                // Location
                 if (locationText.isNotEmpty)
                   Row(
                     children: [
@@ -196,6 +215,7 @@ class HotelDetailBody extends StatelessWidget {
 
                 const SizedBox(height: 20),
 
+                // Price card
                 if (priceText.isNotEmpty)
                   Container(
                     padding: const EdgeInsets.all(20),
@@ -256,8 +276,13 @@ class HotelDetailBody extends StatelessWidget {
               ],
             ),
           ),
+
           const SizedBox(height: 8),
+
+          /// --- Thông tin tổng quan (sao, check-in/out, min night) ---
           _buildBasicInfoSection(hotel),
+
+          /// --- Mô tả ---
           if (contentHtml.isNotEmpty)
             _buildSection(
               title: "Mô tả",
@@ -277,6 +302,8 @@ class HotelDetailBody extends StatelessWidget {
                 },
               ),
             ),
+
+          /// --- Địa chỉ ---
           if (address.isNotEmpty)
             _buildSection(
               title: "Địa chỉ",
@@ -317,22 +344,29 @@ class HotelDetailBody extends StatelessWidget {
                 ),
               ),
             ),
+
+          /// --- Map preview ---
           if (lat != null &&
               lng != null &&
               lat.isNotEmpty &&
               lng.isNotEmpty)
             _buildMapPreview(lat, lng),
 
+          /// --- Amenities ---
           if (attributes.isNotEmpty || rawTerms.isNotEmpty)
             _buildAmenitiesSection(attributes, rawTerms),
 
+          /// --- Rooms (gắn key ở đây) ---
           if (rooms.isNotEmpty)
             HotelRoomsSection(
+              key: roomsSectionKey,
               hotelId: hotel['id'] ?? 0,
               rooms: rooms,
               roomTermNameMap: roomTermNameMap,
+              onBookingSummaryChanged: onBookingSummaryChanged,
             ),
 
+          /// --- Reviews ---
           if (score > 0 || reviews.isNotEmpty)
             HotelReviewSection(
               score: score,
@@ -340,6 +374,7 @@ class HotelDetailBody extends StatelessWidget {
               reviews: reviews,
             ),
 
+          /// --- Policy ---
           if (policyHtml.isNotEmpty)
             _buildSection(
               title: "Chính sách & lưu ý",
@@ -361,6 +396,7 @@ class HotelDetailBody extends StatelessWidget {
       ),
     );
   }
+
   Widget _buildSection({
     required String title,
     required IconData icon,
@@ -400,8 +436,7 @@ class HotelDetailBody extends StatelessWidget {
   }
 
   Widget _buildBasicInfoSection(Map<String, dynamic> hotel) {
-    final String starText =
-    (hotel['star_rate'] ??
+    final String starText = (hotel['star_rate'] ??
         hotel['star'] ??
         hotel['review_score_total'] ??
         '')
@@ -506,8 +541,11 @@ class HotelDetailBody extends StatelessWidget {
                 child: Container(
                   color: Colors.grey[200],
                   child: const Center(
-                    child: Icon(Icons.map_rounded,
-                        size: 60, color: Colors.grey),
+                    child: Icon(
+                      Icons.map_rounded,
+                      size: 60,
+                      color: Colors.grey,
+                    ),
                   ),
                 ),
               ),
@@ -534,8 +572,11 @@ class HotelDetailBody extends StatelessWidget {
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.near_me_rounded,
-                          color: Colors.white, size: 18),
+                      Icon(
+                        Icons.near_me_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
                       SizedBox(width: 8),
                       Text(
                         'Nhấn để xem trên Google Maps',
@@ -557,7 +598,9 @@ class HotelDetailBody extends StatelessWidget {
   }
 
   Widget _buildAmenitiesSection(
-      List<dynamic> attributes, List<dynamic> rawTerms) {
+      List<dynamic> attributes,
+      List<dynamic> rawTerms,
+      ) {
     final List<Widget> sections = [];
 
     for (final attr in attributes) {
@@ -586,6 +629,7 @@ class HotelDetailBody extends StatelessWidget {
                   '')
                   .toString()
                   : t.toString();
+
               if (name.isEmpty) return const SizedBox.shrink();
 
               return _buildAmenityChip(name);
@@ -686,10 +730,11 @@ class HotelDetailBody extends StatelessWidget {
             duration: Duration(milliseconds: 300 + (index * 50)),
             curve: Curves.easeOutBack,
             builder: (context, value, child) {
+              final double opacity = value.clamp(0.0, 1.0);
               return Transform.scale(
                 scale: value,
                 child: Opacity(
-                  opacity: value,
+                  opacity: opacity,
                   child: child,
                 ),
               );

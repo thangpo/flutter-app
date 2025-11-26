@@ -10,6 +10,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_story_viewer_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_group_detail_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_groups_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/event_detail_screen.dart';
 
 /// ========================= CONFIG =========================
 
@@ -69,6 +70,17 @@ const Set<String> _groupOpenActions = {
   'open_group_invite',
   'open_group_request',
 };
+// Mở event
+const Set<String> _eventTypes = {
+  'interested_event',
+  'going_event',
+};
+
+const Set<String> _eventOpenActions = {
+  'open_event',
+  'open_interested_event',
+  'open_going_event',
+};
 
 /// Cooldown chống double navigate
 bool _routing = false;
@@ -126,16 +138,24 @@ Future<void> _routeFromDataMap(Map<String, dynamic> data) async {
     _str(merged['groupId']),
     _str((merged['group'] is Map) ? (merged['group']['id']) : ''),
   ]);
-
+  final String eventId = _pickFirstNonEmpty([
+    _str(merged['event_id']),
+    _str(merged['eventId']),
+    _str((merged['event'] is Map) ? (merged['event']['id']) : ''),
+  ]);
   debugPrint(
-    '✅ parsed: type=$type | action=$action | postId=$postId | userId=$userId | storyId=$storyId',
+    '✅ parsed: type=$type | action=$action | postId=$postId | userId=$userId | storyId=$storyId | groupId=$groupId | eventId=$eventId',
   );
+
   // 3️⃣ Điều hướng theo loạic
   if (_shouldOpenStory(type: type, action: action, storyId: storyId)) {
     await _openStory(storyId, userId);
     return;
   }
-
+  if (_shouldOpenEvent(type: type, action: action, eventId: eventId)) {
+    await _openEventPayload(eventId);
+    return;
+  }
   if (_shouldOpenPost(type: type, action: action, postId: postId)) {
     await _openPostPayload(postId);
     return;
@@ -194,6 +214,14 @@ bool _shouldOpenGroup({
   if (groupId.isEmpty || groupId == '0' || groupId == 'null') return false;
   return _groupTypes.contains(type) || _groupOpenActions.contains(action);
 }
+bool _shouldOpenEvent({
+  required String type,
+  required String action,
+  required String eventId,
+}) {
+  if (eventId.isEmpty || eventId == '0' || eventId == 'null') return false;
+  return _eventTypes.contains(type) || _eventOpenActions.contains(action);
+}
 
 
 /// ========================= NAV HELPERS =========================
@@ -208,6 +236,13 @@ Future<void> _openPostPayload(String postId) async {
           myReaction: '',
         ),
       ),
+    );
+  });
+}
+Future<void> _openEventPayload(String eventId) async {
+  await _pushOnce(() {
+    return MaterialPageRoute(
+      builder: (_) => EventDetailScreen(eventId: eventId),
     );
   });
 }

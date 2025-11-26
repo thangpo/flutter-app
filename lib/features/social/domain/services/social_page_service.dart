@@ -731,5 +731,34 @@ class SocialPageService implements SocialPageServiceInterface {
     return <PageChatThread>[];
   }
 
+  @override
+  Future<PageUserBrief?> getUserDataById({required String userId}) async {
+    final resp = await socialPageRepository.fetchUserDataById(userId: userId);
+
+    if (resp.isSuccess && resp.response != null) {
+      try {
+        final data = resp.response!.data;
+        Map<String, dynamic>? userMap;
+        if (data is Map && data['user_data'] is Map) {
+          userMap = Map<String, dynamic>.from(data['user_data'] as Map);
+        }
+        if (userMap == null) return null;
+        final String name = (userMap['name'] ?? userMap['username'] ?? '')
+            .toString();
+        final String avatar = (userMap['avatar'] ?? '').toString();
+        return PageUserBrief(
+          id: (userMap['user_id'] ?? userId).toString(),
+          name: name,
+          avatar: avatar,
+        );
+      } catch (_) {
+        return null;
+      }
+    }
+
+    ApiChecker.checkApi(resp);
+    return null;
+  }
+
 
 }
