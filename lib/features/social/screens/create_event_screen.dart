@@ -189,8 +189,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SizedBox(height: 56),
-
                     _buildImagePicker(isDarkMode),
                     const SizedBox(height: 20),
 

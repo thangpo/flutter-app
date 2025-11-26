@@ -1,6 +1,5 @@
 // lib/features/social/screens/event_detail_screen.dart
 import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -8,10 +7,10 @@ import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/event_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_event.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/edit_event_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_post_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/edit_event_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final String eventId;
@@ -80,8 +79,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     ListTile(
                       leading: const Icon(Icons.link),
                       title: Text(
-                        getTranslated('copy_link', context) ??
-                            'Sao chép liên kết',
+                        getTranslated('copy_link', context) ?? 'Sao chép liên kết',
                       ),
                       onTap: () async {
                         await Clipboard.setData(ClipboardData(text: link));
@@ -108,35 +106,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final tEventNotFound = getTranslated('event_not_found', context) ??
-        'Không tìm thấy sự kiện';
+    final tEventNotFound =
+        getTranslated('event_not_found', context) ?? 'Không tìm thấy sự kiện';
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
-        extendBodyBehindAppBar: true,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: const _AppBarButton(child: BackButton(color: Colors.white)),
-          actions: [
-            FutureBuilder<SocialEvent?>(
-              future: _future,
-              builder: (context, snapshot) {
-                if (snapshot.hasData) {
-                  return _AppBarButton(
-                    child: IconButton(
-                      icon: const Icon(Icons.share_outlined,
-                          color: Colors.white),
-                      onPressed: () => _showShareSheet(snapshot.data!),
-                    ),
-                  );
-                }
-                return const SizedBox.shrink();
-              },
-            ),
-          ],
-        ),
         body: FutureBuilder<SocialEvent?>(
           future: _future,
           builder: (context, snapshot) {
@@ -144,14 +119,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 snapshot.connectionState == ConnectionState.waiting;
             final event = snapshot.data ?? widget.initialEvent;
 
-            if (event == null && isLoading) {
-              return const Center(child: CircularProgressIndicator());
-            }
-
             if (event == null) {
-              return Center(
-                child: Text(tEventNotFound),
-              );
+              if (isLoading) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              return Center(child: Text(tEventNotFound));
             }
 
             return _buildBody(context, event);
@@ -161,7 +133,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     );
   }
 
+  // === CẤU TRÚC BODY MỚI: Dùng Stack để chồng các lớp lên nhau ===
   Widget _buildBody(BuildContext context, SocialEvent event) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
     final socialCtrl = context.read<SocialController>();
     final currentUserId = socialCtrl.currentUser?.id?.toString();
     final posterId = event.posterId?.toString();
@@ -170,108 +146,175 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             posterId != null &&
             posterId == currentUserId);
 
-    final tNameEmpty =
-        getTranslated('event_name_empty', context) ?? '(Chưa có tên)';
-
     return Stack(
       children: [
-        // Lớp 1: Ảnh bìa tràn viền
-        Positioned.fill(child: _buildCover(event)),
+        // Lớp 1: Background động đồng bộ với màn hình Create
+        _buildDecorativeBackground(isDarkMode, event.cover),
 
-        // Lớp 2: Sheet kéo lên
-        DraggableScrollableSheet(
-          initialChildSize: 0.65,
-          minChildSize: 0.65,
-          maxChildSize: 0.9,
-          builder: (BuildContext context, ScrollController scrollController) {
-            return Container(
-              decoration: BoxDecoration(
-                color: Theme.of(context).scaffoldBackgroundColor,
-                borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(32)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
-                    blurRadius: 20,
-                    spreadRadius: 5,
-                  )
-                ],
+        // Lớp 2: Nội dung cuộn được (thông tin chi tiết)
+        SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Column(
+            children: [
+              // Khoảng đệm trên cùng, đẩy nội dung xuống dưới khu vực header
+              SizedBox(
+                height: MediaQuery.of(context).padding.top + 180,
               ),
-              child: ClipRRect(
-                borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(32)),
-                child: ListView(
-                  controller: scrollController,
-                  padding: const EdgeInsets.all(20),
-                  children: [
-                    // Tên sự kiện
-                    Text(
-                      event.name ?? tNameEmpty,
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineSmall
-                          ?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Khu vực hành động + “thống kê”
-                    _buildActionsAndStatsSection(context, event, isOwner),
-
-                    const Divider(height: 40),
-
-                    // Thời gian + địa điểm
-                    _buildDetailsSection(context, event),
-
-                    const Divider(height: 40),
-
-                    // Mô tả
-                    _buildDescriptionSection(context, event),
-
-                    // Người tổ chức
-                    if (event.user != null) ...[
-                      const Divider(height: 40),
-                      _buildOrganizerSection(context, event),
-                    ],
-
-                    const SizedBox(height: 40),
-                  ],
-                ),
+              // Thẻ thông tin chi tiết
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+                child: _buildConsolidatedInfoCard(context, event, isDarkMode),
               ),
-            );
-          },
+            ],
+          ),
+        ),
+
+        // Lớp 3: Header nổi (chứa tên sự kiện và các nút)
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: _buildFloatingHeader(context, event, isOwner, isDarkMode),
         ),
       ],
     );
   }
 
-  // --- WIDGET CON ---
-
-  Widget _buildCover(SocialEvent event) {
-    final coverUrl = event.cover;
+  // === WIDGET MỚI: Đồng bộ background từ màn hình Create Event ===
+  Widget _buildDecorativeBackground(bool isDarkMode, String? coverUrl) {
+    final hasCover = coverUrl != null && coverUrl.isNotEmpty;
     return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Theme.of(context).primaryColor.withOpacity(0.2),
-        image: coverUrl != null && coverUrl.isNotEmpty
-            ? DecorationImage(
+      decoration: hasCover
+          ? BoxDecoration(
+        image: DecorationImage(
           image: NetworkImage(coverUrl),
           fit: BoxFit.cover,
-        )
-            : null,
+        ),
+      )
+          : BoxDecoration(
+        color: isDarkMode ? Colors.black : const Color(0xFFF2F5F9),
       ),
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            stops: const [0.0, 0.4, 1.0],
-            colors: [
-              Colors.black.withOpacity(0.5),
-              Colors.transparent,
-              Colors.black.withOpacity(0.7),
+      child: Stack(
+        children: [
+          if (!hasCover) ...[
+            Positioned(
+              top: -100,
+              left: -100,
+              child: Container(
+                height: 250,
+                width: 250,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: (isDarkMode
+                      ? Colors.purple.shade900
+                      : Colors.blue.shade200)
+                      .withOpacity(0.5),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: -120,
+              right: -150,
+              child: Container(
+                height: 400,
+                width: 400,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: (isDarkMode
+                      ? Colors.teal.shade900
+                      : Colors.purple.shade200)
+                      .withOpacity(0.5),
+                ),
+              ),
+            ),
+          ],
+          BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 100, sigmaY: 100),
+            child: Container(color: Colors.transparent),
+          ),
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.black.withOpacity(0.5),
+                  Colors.transparent,
+                  Colors.black.withOpacity(0.2)
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                stops: const [0.0, 0.5, 1.0],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // === WIDGET MỚI: Header nổi ===
+  Widget _buildFloatingHeader(
+      BuildContext context, SocialEvent event, bool isOwner, bool isDarkMode) {
+    final tNameEmpty =
+        getTranslated('event_name_empty', context) ?? '(Chưa có tên)';
+
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        child: Container(
+          padding: EdgeInsets.only(
+            top: MediaQuery.of(context).padding.top,
+            bottom: 16,
+          ),
+          decoration: BoxDecoration(
+            color: (isDarkMode ? Colors.black : Colors.white).withOpacity(0.2),
+            border: Border(
+              bottom: BorderSide(color: Colors.white.withOpacity(0.2)),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Hàng chứa nút Back và Share
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const BackButton(color: Colors.white),
+                  IconButton(
+                    icon:
+                    const Icon(Icons.share_outlined, color: Colors.white),
+                    onPressed: () => _showShareSheet(event),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // Tên sự kiện
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Text(
+                  event.name ?? tNameEmpty,
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineSmall
+                      ?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    shadows: const [
+                      Shadow(blurRadius: 6, color: Colors.black87)
+                    ],
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Các nút hành động chính
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: isOwner
+                    ? _buildOwnerActions(context, event)
+                    : _buildGuestActions(context, event),
+              ),
             ],
           ),
         ),
@@ -279,55 +322,147 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     );
   }
 
-  Widget _buildActionsAndStatsSection(
-      BuildContext context, SocialEvent event, bool isOwner) {
-    final theme = Theme.of(context);
+  BoxDecoration _getGlassmorphismDecoration(BuildContext context,
+      {bool isDarkMode = false}) {
+    final glassColor = isDarkMode
+        ? Colors.white.withOpacity(0.1)
+        : Colors.white.withOpacity(0.6);
+    final borderColor = isDarkMode
+        ? Colors.white.withOpacity(0.2)
+        : Colors.white.withOpacity(0.8);
 
-    final tGoing = getTranslated('going', context) ?? 'Sẽ đi';
-    final tInterested =
-        getTranslated('interested', context) ?? 'Quan tâm';
+    return BoxDecoration(
+      color: glassColor,
+      borderRadius: BorderRadius.circular(22),
+      border: Border.all(color: borderColor, width: 1.5),
+    );
+  }
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.primaryColor.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        children: [
-          // “Thống kê” trạng thái của chính mình
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+  // === Thẻ thông tin chi tiết ===
+  Widget _buildConsolidatedInfoCard(
+      BuildContext context, SocialEvent event, bool isDarkMode) {
+    final tDescription =
+        getTranslated('description', context) ?? 'Mô tả';
+    final tDescEmpty =
+        getTranslated('event_description_empty', context) ??
+            '(Chưa có mô tả)';
+    final tTimeStart = getTranslated('event_time_start', context) ?? 'Thời gian bắt đầu';
+    final tTimeEnd =
+        getTranslated('event_time_end', context) ?? 'Thời gian kết thúc';
+    final tLocation =
+        getTranslated('event_location', context) ?? 'Địa điểm';
+    final tLocationEmpty =
+        getTranslated('event_location_empty', context) ??
+            'Chưa có địa điểm';
+    final tOrganizer =
+        getTranslated('organizer', context) ?? 'Người tổ chức';
+
+    // Helper nhỏ để build chuỗi ngày giờ
+    String _buildDateTime(String? date, String? time) {
+      final d = (date ?? '').trim();
+      final t = (time ?? '').trim();
+      if (d.isEmpty && t.isEmpty) return '-';
+      if (d.isEmpty) return t;
+      if (t.isEmpty) return d;
+      return '$d $t';
+    }
+
+    final startText =
+    _buildDateTime(event.startDate, event.startTime);
+    final endText = _buildDateTime(event.endDate, event.endTime);
+    final desc = event.description ?? tDescEmpty;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration:
+          _getGlassmorphismDecoration(context, isDarkMode: isDarkMode),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _StatItem(
-                // Dùng ✓ / – thay cho số, vì backend không trả count
-                count: event.isGoing ? '✓' : '–',
-                label: tGoing,
+              // Bắt đầu
+              _InfoRow(
+                icon: Icons.calendar_today_outlined,
+                title: tTimeStart,
+                subtitle: startText,
               ),
-              Container(
-                width: 1,
-                height: 30,
-                color: theme.dividerColor,
+              const SizedBox(height: 12),
+              // Kết thúc
+              _InfoRow(
+                icon: Icons.calendar_month_outlined,
+                title: tTimeEnd,
+                subtitle: endText,
               ),
-              _StatItem(
-                count: event.isInterested ? '✓' : '–',
-                label: tInterested,
+              _buildDivider(),
+              _InfoRow(
+                icon: Icons.location_on_outlined,
+                title: tLocation,
+                subtitle: event.location ?? tLocationEmpty,
               ),
+              _buildDivider(),
+              Text(
+                tDescription,
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                desc,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(height: 1.6),
+              ),
+              if (event.user != null) ...[
+                _buildDivider(),
+                Text(
+                  tOrganizer,
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 24,
+                      backgroundImage:
+                      NetworkImage(event.user!.avatar ?? ''),
+                      backgroundColor: Colors.grey.shade300,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        event.user!.name ?? event.user!.username ?? '',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
-          const SizedBox(height: 16),
-          // Nút hành động
-          isOwner
-              ? _buildOwnerActions(context, event)
-              : _buildGuestActions(context, event),
-        ],
+        ),
       ),
     );
   }
 
+  // --- CÁC WIDGET HELPER VÀ HÀNH ĐỘNG ---
+  Widget _buildDivider() => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 16.0),
+    child: Divider(
+        height: 1,
+        color: Theme.of(context).dividerColor.withOpacity(0.5)),
+  );
+
   Widget _buildGuestActions(BuildContext context, SocialEvent event) {
     final theme = Theme.of(context);
-
     final tJoined =
         getTranslated('event_joined', context) ?? 'Đã tham gia';
     final tJoin = getTranslated('event_join', context) ?? 'Tham gia';
@@ -342,8 +477,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             label: Text(event.isGoing ? tJoined : tJoin),
             style: ElevatedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 12),
-              backgroundColor:
-              event.isGoing ? Colors.green.shade600 : theme.primaryColor,
+              backgroundColor: event.isGoing
+                  ? Colors.green.shade600
+                  : theme.primaryColor,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -353,10 +489,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               final ok = await context
                   .read<EventController>()
                   .toggleEventGoing(event.id!);
-
-              if (!mounted) return;
-              if (!ok) return;
-
+              if (!mounted || !ok) return;
               setState(() {
                 event.isGoing = !event.isGoing;
               });
@@ -367,17 +500,20 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         IconButton(
           icon: Icon(
             event.isInterested ? Icons.star : Icons.star_border,
+            color: Colors.white,
           ),
-          color: event.isInterested ? Colors.amber.shade700 : theme.hintColor,
-          iconSize: 28,
+          style: IconButton.styleFrom(
+            backgroundColor:
+            (event.isInterested ? Colors.amber.shade700 : Colors.white)
+                .withOpacity(0.2),
+            side: BorderSide(color: Colors.white.withOpacity(0.4)),
+          ),
+          iconSize: 24,
           onPressed: () async {
             final ok = await context
                 .read<EventController>()
                 .toggleInterestEvent(event.id!);
-
-            if (!mounted) return;
-            if (!ok) return;
-
+            if (!mounted || !ok) return;
             setState(() {
               event.isInterested = !event.isInterested;
             });
@@ -392,12 +528,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final tDelete = getTranslated('delete', context) ?? 'Xóa';
     final tDeleteTitle =
         getTranslated('delete_event_title', context) ?? 'Xóa sự kiện';
-    final tDeleteConfirm = getTranslated('delete_event_confirm', context) ??
-        'Bạn có chắc muốn xóa? Hành động này không thể hoàn tác.';
+    final tDeleteConfirm =
+        getTranslated('delete_event_confirm', context) ??
+            'Bạn có chắc muốn xóa? Hành động này không thể hoàn tác.';
     final tCancel = getTranslated('cancel', context) ?? 'Hủy';
     final tDeleteSuccess =
-        getTranslated('event_delete_success', context) ??
-            'Đã xóa sự kiện';
+        getTranslated('event_delete_success', context) ?? 'Đã xóa sự kiện';
     final tDeleteFailed =
         getTranslated('event_delete_failed', context) ??
             'Xóa sự kiện thất bại.';
@@ -477,127 +613,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       ],
     );
   }
-
-  Widget _buildDetailsSection(BuildContext context, SocialEvent event) {
-    final tTime = getTranslated('event_time', context) ?? 'Thời gian';
-    final tLocation =
-        getTranslated('event_location', context) ?? 'Địa điểm';
-    final tLocationEmpty =
-        getTranslated('event_location_empty', context) ??
-            'Chưa có địa điểm';
-
-    final timeText = event.timeText ??
-        '${event.startDate ?? ''}${event.startTime != null ? ' ${event.startTime}' : ''}';
-
-    return Column(
-      children: [
-        _InfoRow(
-          icon: Icons.calendar_today_outlined,
-          title: tTime,
-          subtitle: timeText,
-        ),
-        const SizedBox(height: 16),
-        _InfoRow(
-          icon: Icons.location_on_outlined,
-          title: tLocation,
-          subtitle: event.location ?? tLocationEmpty,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDescriptionSection(BuildContext context, SocialEvent event) {
-    final tDescription =
-        getTranslated('description', context) ?? 'Mô tả';
-    final tDescEmpty =
-        getTranslated('event_description_empty', context) ??
-            '(Chưa có mô tả)';
-
-    final desc = event.description ?? tDescEmpty;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          tDescription,
-          style: Theme.of(context)
-              .textTheme
-              .titleLarge
-              ?.copyWith(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          desc,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Theme.of(context).hintColor,
-            height: 1.6,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildOrganizerSection(BuildContext context, SocialEvent event) {
-    final tOrganizer =
-        getTranslated('organizer', context) ?? 'Người tổ chức';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          tOrganizer,
-          style: Theme.of(context)
-              .textTheme
-              .titleLarge
-              ?.copyWith(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            CircleAvatar(
-              radius: 24,
-              backgroundImage: NetworkImage(event.user!.avatar ?? ''),
-              backgroundColor: Colors.grey.shade300,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                event.user!.name ?? event.user!.username ?? '',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-// --- HELPER WIDGETS ---
-
-class _AppBarButton extends StatelessWidget {
-  final Widget child;
-  const _AppBarButton({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: ClipRRect(
-        borderRadius: const BorderRadius.all(Radius.circular(30)),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.2),
-              shape: BoxShape.circle,
-            ),
-            child: child,
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _InfoRow extends StatelessWidget {
@@ -631,8 +646,7 @@ class _InfoRow extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 subtitle,
-                style: theme.textTheme.bodyMedium
-                    ?.copyWith(color: theme.hintColor),
+                style: theme.textTheme.bodyMedium?.copyWith(),
               ),
             ],
           ),
@@ -658,48 +672,19 @@ class _ActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final buttonColor = color ?? theme.primaryColor;
-    return OutlinedButton.icon(
-      icon: Icon(icon),
+    return ElevatedButton.icon(
+      icon: Icon(icon, size: 20),
       label: Text(label),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: buttonColor,
+      style: ElevatedButton.styleFrom(
+        foregroundColor: Colors.white,
+        backgroundColor: (color ?? theme.primaryColor).withOpacity(0.7),
         padding: const EdgeInsets.symmetric(vertical: 12),
-        side: BorderSide(color: buttonColor.withOpacity(0.5)),
+        side: BorderSide(color: Colors.white.withOpacity(0.5)),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),
       ),
       onPressed: onTap,
-    );
-  }
-}
-
-class _StatItem extends StatelessWidget {
-  final String count;
-  final String label;
-  const _StatItem({required this.count, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(
-          count,
-          style: Theme.of(context)
-              .textTheme
-              .titleLarge
-              ?.copyWith(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: Theme.of(context)
-              .textTheme
-              .bodySmall
-              ?.copyWith(color: Theme.of(context).hintColor),
-        ),
-      ],
     );
   }
 }

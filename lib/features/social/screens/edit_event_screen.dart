@@ -277,7 +277,6 @@ class _EditEventScreenState extends State<EditEventScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SizedBox(height: 56),
                     _buildImagePicker(isDarkMode),
                     const SizedBox(height: 20),
                     _buildGlassTextField(
@@ -467,8 +466,8 @@ class _EditEventScreenState extends State<EditEventScreen> {
 
   Widget _buildDateTimePickerSection(bool isDarkMode) {
     final tStart =
-        getTranslated('event_start', context) ?? 'Bắt đầu';
-    final tEnd = getTranslated('event_end', context) ?? 'Kết thúc';
+        getTranslated('event_time_start', context) ?? 'Bắt đầu';
+    final tEnd = getTranslated('event_time_end', context) ?? 'Kết thúc';
 
     return _buildGlassContainer(
       child: Column(

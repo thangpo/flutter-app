@@ -1545,12 +1545,17 @@
   "delete_event_title": "Xóa sự kiện",
   "delete_event_confirm": "Bạn có chắc muốn xóa? Hành động này không thể hoàn tác.",
   "event_delete_success": "Đã xóa sự kiện",
+  "edit_event": "Chỉnh sửa",
+  "create_event": "Tạo mới",
   "event_delete_failed": "Xóa sự kiện thất bại.",
-  "event_time": "Thời gian",
+  "event_time_start": "Thời gian bắt đầu",
+  "event_time_end": "Thời gian kết thúc",
   "event_location": "Địa điểm",
   "event_location_empty": "Chưa có địa điểm",
   "organizer": "Người tổ chức",
   "event_description_empty": "Chưa có mô tả",
-  "event_name_empty": "Chưa có tên sự kiện"
+  "event_name_empty": "Chưa có tên sự kiện",
+  "event_name": "Tên sự kiện",
+  "event_description": "Mô tả sự kiện"
 }
 

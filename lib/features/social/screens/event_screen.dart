@@ -120,79 +120,93 @@ class _EventScreenState extends State<EventScreen> {
     final tNoEvents = getTranslated('no_events_found', context) ?? 'Chưa có sự kiện nào';
     final eventCtrl = context.watch<EventController>();
 
+    // CẤU TRÚC LẠI SCAFFOLD HOÀN TOÀN
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: Text(tEvents, style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87)),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: IconThemeData(color: isDarkMode ? Colors.white : Colors.black87),
-      ),
+      // Đặt background động ra ngoài, không cần Stack nữa
       body: Stack(
         children: [
-          // LỚP 1: NỀN TRANG TRÍ
           _buildDecorativeBackground(isDarkMode),
 
-          // LỚP 2: NỘI DUNG CHÍNH
-          Padding(
-            // SỬA LỖI VỊ TRÍ HEADER: Thêm Padding để đẩy nội dung xuống dưới AppBar
-            padding: EdgeInsets.only(top: kToolbarHeight + MediaQuery.of(context).padding.top),
-            child: LiquidPullToRefresh(
-              onRefresh: eventCtrl.refresh,
-              color: theme.primaryColor,
-              backgroundColor: theme.cardColor,
-              showChildOpacityTransition: false,
-              child: CustomScrollView(
-                slivers: [
-                  SliverPersistentHeader(
-                    pinned: true,
-                    delegate: _HeaderDelegate(
-                      child: _buildHeader(context),
-                    ),
+          // CustomScrollView bây giờ là con trực tiếp của body (thông qua LiquidPullToRefresh)
+          // Nó sẽ tự động có kích thước full màn hình và cuộn được.
+          LiquidPullToRefresh(
+            onRefresh: eventCtrl.refresh,
+            color: theme.primaryColor,
+            backgroundColor: theme.cardColor,
+            showChildOpacityTransition: false,
+            child: CustomScrollView(
+              physics: const BouncingScrollPhysics(), // Thêm hiệu ứng nảy khi kéo
+              slivers: [
+                // AppBar được đặt bên trong CustomScrollView để có hiệu ứng ẩn/hiện khi cuộn
+                SliverAppBar(
+                  title: Text(tEvents, style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87)),
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  iconTheme: IconThemeData(color: isDarkMode ? Colors.white : Colors.black87),
+                  pinned: true, // Ghim AppBar ở trên cùng
+                  floating: true, // Hiển thị lại ngay khi cuộn lên
+                ),
+
+                // Header chứa các nút Filter và Add
+                SliverPersistentHeader(
+                  pinned: true,
+                  delegate: _HeaderDelegate(
+                    child: _buildHeader(context),
                   ),
-                  if (eventCtrl.loading && eventCtrl.events.isEmpty)
-                    const SliverFillRemaining(
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-                  else if (eventCtrl.events.isEmpty)
-                    SliverFillRemaining(
-                      child: Center(
+                ),
+
+                // Nội dung chính
+                if (eventCtrl.loading && eventCtrl.events.isEmpty)
+                  const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (eventCtrl.events.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false, // Giữ nguyên fix này
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32.0),
                         child: Text(tNoEvents, style: TextStyle(color: theme.hintColor)),
                       ),
-                    )
-                  else
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                      sliver: SliverGrid(
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          mainAxisSpacing: 16,
-                          crossAxisSpacing: 16,
-                          childAspectRatio: 0.72,
-                        ),
-                        delegate: SliverChildBuilderDelegate(
-                              (context, index) {
-                            final e = eventCtrl.events[index];
-                            return GestureDetector(
-                              onTap: () {
-                                if (e.id == null) return;
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => EventDetailScreen(eventId: e.id!),
-                                  ),
-                                );
-                              },
-                              child: _EventCard(event: e),
-                            );
-                          },
-                          childCount: eventCtrl.events.length,
-                        ),
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                    sliver: SliverGrid(
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        mainAxisSpacing: 16,
+                        crossAxisSpacing: 16,
+                        childAspectRatio: 0.72,
+                      ),
+                      delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                          final e = eventCtrl.events[index];
+                          return GestureDetector(
+                            onTap: () {
+                              if (e.id == null) return;
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => EventDetailScreen(eventId: e.id!),
+                                ),
+                              );
+                            },
+                            child: _EventCard(event: e),
+                          );
+                        },
+                        childCount: eventCtrl.events.length,
                       ),
                     ),
-                ],
-              ),
+                  ),
+
+                // Thêm một khoảng đệm an toàn ở cuối để không bị che bởi thanh điều hướng
+                SliverToBoxAdapter(
+                  child: SizedBox(height: MediaQuery.of(context).padding.bottom),
+                ),
+              ],
             ),
           ),
         ],

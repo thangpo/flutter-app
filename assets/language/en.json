@@ -1564,5 +1564,7 @@
 
   "organizer": "Organizer",
   "event_description_empty": "No description yet",
-  "event_name_empty": "Untitled event"
+  "event_name_empty": "Untitled event",
+  "edit_event": "Edit",
+  "create_event": "Create new"
 }
