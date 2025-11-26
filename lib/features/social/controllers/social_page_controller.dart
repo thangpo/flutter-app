@@ -54,6 +54,7 @@ class SocialPageController with ChangeNotifier {
   bool _loadingPageChatList = false;
   String? _pageChatListError;
   final Map<String, PageUserBrief> _pageUserCache = <String, PageUserBrief>{};
+  Timer? _pageChatListTimer;
 
   List<PageChatThread> get pageChatList =>
       List<PageChatThread>.unmodifiable(_pageChatList);
@@ -742,6 +743,10 @@ class SocialPageController with ChangeNotifier {
           ? _pageMessages.map((e) => e.id).reduce((a, b) => a > b ? a : b)
           : null;
 
+      if (_pageMessages.isNotEmpty) {
+        _updatePageThreadAfterMessage(_pageMessages.last);
+      }
+
       notifyListeners();
     } catch (e, st) {
       debugPrint('_pollNewPageMessages ERROR: $e\n$st');
@@ -1121,9 +1126,64 @@ class SocialPageController with ChangeNotifier {
     }
   }
 
+  /// Polling version: không bật loading UI, chỉ cập nhật khi có thay đổi
+  Future<void> pollPageChatList({int limit = 50, int offset = 0}) async {
+    if (_loadingPageChatList) return;
+    try {
+      final List<PageChatThread> list =
+          await service.getPageChatList(limit: limit, offset: offset);
+
+      list.sort((a, b) {
+        final da = _safeParseDate(a.lastMessageTime);
+        final db = _safeParseDate(b.lastMessageTime);
+        if (da == null && db == null) {
+          return b.lastMessageTime.compareTo(a.lastMessageTime);
+        }
+        if (da == null) return 1;
+        if (db == null) return -1;
+        return db.compareTo(da);
+      });
+
+      // so sánh nhanh: map pageId -> lastMessageTime + lastMessage
+      bool changed = list.length != _pageChatList.length;
+      if (!changed) {
+        for (int i = 0; i < list.length; i++) {
+          final newItem = list[i];
+          final oldItem = _pageChatList[i];
+          if (newItem.pageId != oldItem.pageId ||
+              newItem.lastMessageTime != oldItem.lastMessageTime ||
+              newItem.lastMessage != oldItem.lastMessage ||
+              newItem.unreadCount != oldItem.unreadCount) {
+            changed = true;
+            break;
+          }
+        }
+      }
+
+      if (changed) {
+        _pageChatList = list;
+        await _hydratePageChatPeers();
+      }
+    } catch (e, st) {
+      debugPrint('pollPageChatList ERROR: $e\n$st');
+    }
+  }
+
 
   Future<void> refreshPageChatList() async {
     return loadPageChatList(limit: 50, offset: 0);
+  }
+
+  void startPageChatListPolling({Duration interval = const Duration(seconds: 5)}) {
+    _pageChatListTimer?.cancel();
+    _pageChatListTimer = Timer.periodic(interval, (_) {
+      pollPageChatList();
+    });
+  }
+
+  void stopPageChatListPolling() {
+    _pageChatListTimer?.cancel();
+    _pageChatListTimer = null;
   }
 
   Future<void> _hydratePageChatPeers() async {

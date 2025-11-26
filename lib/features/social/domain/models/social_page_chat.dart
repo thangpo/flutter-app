@@ -159,6 +159,10 @@ class PageChatThread {
     final String peerName = _pickName(peerId);
     final String peerAvatar = _pickAvatar(peerId);
 
+    final bool lastFromOwner = ownerId.isNotEmpty && fromId == ownerId;
+    final bool isUnreadCustomerMsg =
+        !lastFromOwner && _s(lastMsg['seen']) == '0';
+
     return PageChatThread(
       pageId: pageId,
       userId: peerId,
@@ -170,7 +174,7 @@ class PageChatThread {
       isMyPage: isMyPage,
       lastMessage: _s(lastMsg['text']),
       lastMessageTime: _s(lastMsg['date_time']),
-      unreadCount: (_s(lastMsg['seen']) == "0") ? 1 : 0,
+      unreadCount: isUnreadCustomerMsg ? 1 : 0,
       avatar: peerAvatar.isNotEmpty ? peerAvatar : _s(json['avatar']),
       lastMessageType: _s(lastMsg['type']),
     );

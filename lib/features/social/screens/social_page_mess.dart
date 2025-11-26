@@ -27,11 +27,13 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
     super.initState();
     Future.microtask(() {
       context.read<SocialPageController>().loadPageChatList();
+      context.read<SocialPageController>().startPageChatListPolling();
     });
   }
 
   @override
   void dispose() {
+    context.read<SocialPageController>().stopPageChatListPolling();
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -344,11 +346,6 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                                               ),
                                             ),
                                           ),
-                                          if (item.unreadCount > 0)
-                                            const SizedBox(width: 8),
-                                          if (item.unreadCount > 0)
-                                            _UnreadBadge(
-                                                count: item.unreadCount),
                                         ],
                                       )
                                     ],
@@ -466,21 +463,7 @@ class _UnreadBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: Colors.red,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        count.toString(),
-        style: const TextStyle(
-          fontSize: 10,
-          color: Colors.white,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
+    return const SizedBox.shrink(); // unused after removing badge display
   }
 }
 
