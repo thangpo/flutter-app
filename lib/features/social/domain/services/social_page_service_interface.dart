@@ -6,6 +6,18 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_page_mess.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_page_chat.dart';
 
+class PageUserBrief {
+  final String id;
+  final String name;
+  final String avatar;
+
+  const PageUserBrief({
+    required this.id,
+    required this.name,
+    required this.avatar,
+  });
+}
+
 
 abstract class SocialPageServiceInterface {
   /// Lấy danh sách Page gợi ý
@@ -89,5 +101,6 @@ abstract class SocialPageServiceInterface {
     int limit,
     int offset,
   });
+  Future<PageUserBrief?> getUserDataById({required String userId});
 
 }

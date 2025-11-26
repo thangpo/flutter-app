@@ -934,4 +934,34 @@
       }
       return list;
     }
+
+    Future<ApiResponseModel<Response>> fetchUserDataById({
+      required String userId,
+    }) async {
+      try {
+        final token = _getSocialAccessToken();
+        if (token == null || token.isEmpty) {
+          return ApiResponseModel.withError('Please log in to your social network account');
+        }
+
+        final String url =
+            '${AppConstants.socialBaseUrl}${AppConstants.socialGetUserDataUri}?access_token=$token';
+
+        final form = FormData.fromMap({
+          'server_key': AppConstants.socialServerKey,
+          'fetch': 'user_data',
+          'user_id': userId,
+        });
+
+        final res = await dioClient.post(
+          url,
+          data: form,
+          options: Options(contentType: 'multipart/form-data'),
+        );
+
+        return ApiResponseModel.withSuccess(res);
+      } catch (e) {
+        return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+      }
+    }
   }

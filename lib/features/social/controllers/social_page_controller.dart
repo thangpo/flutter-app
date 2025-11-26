@@ -53,6 +53,7 @@ class SocialPageController with ChangeNotifier {
   List<PageChatThread> _pageChatList = [];
   bool _loadingPageChatList = false;
   String? _pageChatListError;
+  final Map<String, PageUserBrief> _pageUserCache = <String, PageUserBrief>{};
 
   List<PageChatThread> get pageChatList =>
       List<PageChatThread>.unmodifiable(_pageChatList);
@@ -809,6 +810,7 @@ class SocialPageController with ChangeNotifier {
         _lastMessageId = _pageMessages
             .map((e) => e.id)
             .reduce((a, b) => a > b ? a : b);
+        _updatePageThreadAfterMessage(_pageMessages.last);
         notifyListeners();
       }
     } catch (e, st) {
@@ -1108,7 +1110,8 @@ class SocialPageController with ChangeNotifier {
         return db.compareTo(da); // Mới nhất lên đầu
       });
 
-      _pageChatList = list;
+        _pageChatList = list;
+        await _hydratePageChatPeers();
     } catch (e, st) {
       debugPrint('loadPageChatList ERROR: $e\n$st');
       _pageChatListError = e.toString();
@@ -1121,6 +1124,53 @@ class SocialPageController with ChangeNotifier {
 
   Future<void> refreshPageChatList() async {
     return loadPageChatList(limit: 50, offset: 0);
+  }
+
+  Future<void> _hydratePageChatPeers() async {
+    // collect ids missing name/avatar
+    bool _isNameMissing(PageChatThread t) =>
+        t.peerName.isEmpty || t.peerName == t.userId;
+
+    final Set<String> missingIds = _pageChatList
+        .where((t) =>
+            t.userId.isNotEmpty &&
+            (_isNameMissing(t) || t.peerAvatar.isEmpty))
+        .map((t) => t.userId)
+        .where((id) => !_pageUserCache.containsKey(id))
+        .toSet();
+
+    for (final id in missingIds) {
+      try {
+        final PageUserBrief? u = await service.getUserDataById(userId: id);
+        if (u != null) {
+          _pageUserCache[id] = u;
+        }
+      } catch (_) {
+        // ignore per-id failures
+      }
+    }
+
+    if (_pageUserCache.isEmpty) return;
+
+    bool changed = false;
+    final List<PageChatThread> updated = _pageChatList.map((t) {
+      final PageUserBrief? u = _pageUserCache[t.userId];
+      if (u == null) return t;
+      final bool needName = _isNameMissing(t);
+      final bool needAvatar = t.peerAvatar.isEmpty;
+      if (!needName && !needAvatar) return t;
+      changed = true;
+      return t.copyWith(
+        peerName: needName ? u.name : t.peerName,
+        peerAvatar: needAvatar ? u.avatar : t.peerAvatar,
+        avatar: needAvatar ? u.avatar : t.avatar,
+      );
+    }).toList();
+
+    if (changed) {
+      _pageChatList = updated;
+      notifyListeners();
+    }
   }
 
   Future<void> loadMorePageMessages() async {
@@ -1239,6 +1289,84 @@ class SocialPageController with ChangeNotifier {
     list.insert(0, item);
     _pageChatList = list;
     notifyListeners();
+  }
+
+  void _updatePageThreadAfterMessage(SocialPageMessage message) {
+    if (_currentChatPageId == null || _currentChatRecipientId == null) return;
+    final String threadId = _currentChatPageId!.toString();
+    final String recipientId = _currentChatRecipientId!;
+
+    int idx = _pageChatList.indexWhere(
+      (t) =>
+          t.pageId == threadId &&
+          (t.userId == recipientId || t.ownerId == recipientId),
+    );
+
+    // fallback: match by pageId only
+    if (idx == -1) {
+      idx = _pageChatList.indexWhere((t) => t.pageId == threadId);
+    }
+    if (idx == -1) return;
+
+    String _formatTime() {
+      if (message.timeText.isNotEmpty) return message.timeText;
+      try {
+        final DateTime dt = DateTime.fromMillisecondsSinceEpoch(
+          message.time * 1000,
+          isUtc: false,
+        );
+        final two = (int v) => v.toString().padLeft(2, '0');
+        return '${two(dt.hour)}:${two(dt.minute)}';
+      } catch (_) {
+        return '';
+      }
+    }
+
+    String _displayText() {
+      if (message.displayText.isNotEmpty) return message.displayText;
+      if (message.text.isNotEmpty) return message.text;
+      if (message.media.isNotEmpty) return '[Media]';
+      return '';
+    }
+
+    final PageChatThread current = _pageChatList[idx];
+    final PageChatThread updated = current.copyWith(
+      lastMessage: _displayText(),
+      lastMessageTime: _formatTime(),
+      lastMessageType: message.type,
+      unreadCount: 0,
+    );
+
+    final list = List<PageChatThread>.from(_pageChatList);
+    list.removeAt(idx);
+    list.insert(0, updated);
+    _pageChatList = list;
+    notifyListeners();
+  }
+
+  void markPageThreadRead(String pageId, {String? peerId}) {
+    final List<PageChatThread> list = List<PageChatThread>.from(_pageChatList);
+    bool changed = false;
+
+    for (int i = 0; i < list.length; i++) {
+      final t = list[i];
+      if (t.pageId != pageId) continue;
+      if (peerId != null &&
+          t.userId.isNotEmpty &&
+          t.userId != peerId &&
+          t.ownerId != peerId) {
+        continue;
+      }
+      if (t.unreadCount != 0) {
+        list[i] = t.copyWith(unreadCount: 0);
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      _pageChatList = list;
+      notifyListeners();
+    }
   }
 
 }

@@ -190,10 +190,26 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                           return const SizedBox.shrink();
                         }
 
+                        final String chatTitle = item.isMyPage
+                            ? (item.peerName.isNotEmpty
+                                ? item.peerName
+                                : item.pageTitle)
+                            : item.pageTitle;
+                        final String chatAvatar = item.isMyPage &&
+                                item.peerAvatar.isNotEmpty
+                            ? item.peerAvatar
+                            : item.avatar;
+
                         return InkWell(
                           onTap: () {
                             final recipientId =
                                 item.isMyPage ? item.userId : item.ownerId;
+
+                            // Mark thread as read when opening chat
+                            context
+                                .read<SocialPageController>()
+                                .markPageThreadRead(item.pageId,
+                                    peerId: recipientId);
 
                             Navigator.push(
                               context,
@@ -201,8 +217,9 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                                 builder: (_) => PageChatScreen(
                                   pageId: int.parse(item.pageId),
                                   recipientId: recipientId,
-                                  pageTitle: item.pageTitle,
-                                  pageAvatar: item.avatar,
+                                  pageTitle: chatTitle,
+                                  pageAvatar: chatAvatar,
+                                  pageSubtitle: subtitle,
                                 ),
                               ),
                             );
@@ -269,9 +286,12 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                                           Expanded(
                                             child: Text(
                                               displayName,
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 fontSize: 15,
-                                                fontWeight: FontWeight.w600,
+                                                fontWeight:
+                                                    item.unreadCount > 0
+                                                        ? FontWeight.w700
+                                                        : FontWeight.w600,
                                               ),
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
@@ -314,8 +334,13 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                                               overflow: TextOverflow.ellipsis,
                                               style: TextStyle(
                                                 fontSize: 12.5,
-                                                color: cs.onSurface
-                                                    .withOpacity(.75),
+                                                fontWeight: item.unreadCount > 0
+                                                    ? FontWeight.w700
+                                                    : FontWeight.w400,
+                                                color: item.unreadCount > 0
+                                                    ? cs.onSurface
+                                                    : cs.onSurface
+                                                        .withOpacity(.75),
                                               ),
                                             ),
                                           ),

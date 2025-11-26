@@ -64,84 +64,94 @@ class PageChatThread {
   }
 
   factory PageChatThread.fromJson(Map<String, dynamic> json) {
-    final Map<String, dynamic> lastMsg =
-        (json['last_message'] ?? const <String, dynamic>{})
-            as Map<String, dynamic>;
+    String _s(dynamic v) => (v ?? '').toString();
+    Map<String, dynamic> _m(dynamic src) =>
+        src is Map ? Map<String, dynamic>.from(src as Map) : <String, dynamic>{};
+    String _firstNonEmpty(Iterable<String> list) =>
+        list.firstWhere((e) => e.isNotEmpty, orElse: () => '');
 
-    // owner/page ids
-    final String ownerId = [
-      lastMsg['owner_id'],
-      lastMsg['page_owner_id'],
-      json['page_owner_id'],
-      json['owner_id'],
-      json['page_user_id'],
-      json['user_id'],
-    ]
-        .map((e) => (e ?? '').toString())
-        .firstWhere((e) => e.isNotEmpty, orElse: () => '');
+    final Map<String, dynamic> lastMsg = _m(json['last_message']);
+    final Map<String, dynamic> rootUserData = _m(json['user_data']);
+    final Map<String, dynamic> lastUserData = _m(lastMsg['user_data']);
 
-    final String pageId = (json['page_id'] ?? '').toString();
-    final String pageTitle = (json['name'] ?? '').toString();
-    final String pageName = (json['page_name'] ?? '').toString();
+    final bool isMyPage =
+        json['is_page_onwer'] == 1 || json['is_page_onwer'] == true;
 
-    final String fromId = (lastMsg['from_id'] ?? '').toString();
-    final String toId = (lastMsg['to_id'] ?? '').toString();
-    final bool fromIsOwner =
-        ownerId.isNotEmpty && fromId.isNotEmpty && fromId == ownerId;
-    final bool toIsOwner =
-        ownerId.isNotEmpty && toId.isNotEmpty && toId == ownerId;
+    final String pageId = _s(json['page_id']);
+    final String pageTitle = _s(json['name']);
+    final String pageName = _s(json['page_name']);
 
-    // Decide peerId as "other side" (customer)
+    // Owner of the page (WoWonder thường set user_id = owner)
+    final String ownerId = _firstNonEmpty(<String>[
+      _s(json['page_owner_id']),
+      _s(json['owner_id']),
+      _s(json['page_user_id']),
+      _s(json['user_id']),
+      _s(lastMsg['owner_id']),
+      _s(lastMsg['page_owner_id']),
+    ]);
+
+    final String fromId = _s(lastMsg['from_id']);
+    final String toId = _s(lastMsg['to_id']);
+
+    // Determine peer (customer), avoiding owner/page ids
     String peerId = '';
-    if (fromIsOwner && toId.isNotEmpty) {
-      peerId = toId;
-    } else if (toIsOwner && fromId.isNotEmpty) {
-      peerId = fromId;
-    } else if (!fromIsOwner && fromId.isNotEmpty) {
-      peerId = fromId;
-    } else if (!toIsOwner && toId.isNotEmpty) {
-      peerId = toId;
+    if (ownerId.isNotEmpty) {
+      if (fromId == ownerId && toId.isNotEmpty) peerId = toId;
+      if (toId == ownerId && fromId.isNotEmpty) peerId = fromId;
     }
-
-    Map<String, dynamic> _toMap(dynamic src) =>
-        src is Map<String, dynamic> ? Map<String, dynamic>.from(src) : <String, dynamic>{};
+    if (peerId.isEmpty) {
+      peerId = _firstNonEmpty(<String>[
+        _s(json['recipient_id']),
+        _s(lastMsg['recipient_id']),
+        _s(rootUserData['user_id']),
+        _s(lastUserData['user_id']),
+        fromId,
+        toId,
+      ].where((id) => id.isNotEmpty && id != ownerId && id != pageId));
+    }
 
     String _pickName(String id) {
       if (id.isEmpty) return '';
+      if (_s(lastUserData['user_id']) == id) {
+        final n = _firstNonEmpty([
+          _s(lastUserData['name']),
+          _s(lastUserData['username']),
+        ]);
+        if (n.isNotEmpty && n != 'null') return n;
+      }
       if (id == fromId) {
-        final n = (lastMsg['from_name'] ?? lastMsg['from_username'] ?? '').toString();
-        if (n.isNotEmpty) return n;
+        final n = _firstNonEmpty([_s(lastMsg['from_name']), _s(lastMsg['from_username'])]);
+        if (n.isNotEmpty && n != 'null') return n;
       }
       if (id == toId) {
-        final n = (lastMsg['to_name'] ?? lastMsg['to_username'] ?? '').toString();
-        if (n.isNotEmpty) return n;
+        final n = _firstNonEmpty([_s(lastMsg['to_name']), _s(lastMsg['to_username'])]);
+        if (n.isNotEmpty && n != 'null') return n;
       }
-      for (final candidate in [json['user_data'], lastMsg['user_data']]) {
-        final m = _toMap(candidate);
-        if ((m['user_id'] ?? '').toString() == id) {
-          final n = (m['name'] ?? m['username'] ?? '').toString();
-          if (n.isNotEmpty) return n;
-        }
+      if (_s(rootUserData['user_id']) == id) {
+        final n = _firstNonEmpty([_s(rootUserData['name']), _s(rootUserData['username'])]);
+        if (n.isNotEmpty && n != 'null') return n;
       }
       return '';
     }
 
     String _pickAvatar(String id) {
       if (id.isEmpty) return '';
+      if (_s(lastUserData['user_id']) == id) {
+        final a = _s(lastUserData['avatar']);
+        if (a.isNotEmpty && a != 'null') return a;
+      }
       if (id == fromId) {
-        final a = (lastMsg['from_avatar'] ?? '').toString();
-        if (a.isNotEmpty) return a;
+        final a = _s(lastMsg['from_avatar']);
+        if (a.isNotEmpty && a != 'null') return a;
       }
       if (id == toId) {
-        final a = (lastMsg['to_avatar'] ?? '').toString();
-        if (a.isNotEmpty) return a;
+        final a = _s(lastMsg['to_avatar']);
+        if (a.isNotEmpty && a != 'null') return a;
       }
-      for (final candidate in [json['user_data'], lastMsg['user_data']]) {
-        final m = _toMap(candidate);
-        if ((m['user_id'] ?? '').toString() == id) {
-          final a = (m['avatar'] ?? '').toString();
-          if (a.isNotEmpty) return a;
-        }
+      if (_s(rootUserData['user_id']) == id) {
+        final a = _s(rootUserData['avatar']);
+        if (a.isNotEmpty && a != 'null') return a;
       }
       return '';
     }
@@ -157,12 +167,12 @@ class PageChatThread {
       peerAvatar: peerAvatar,
       pageName: pageName,
       pageTitle: pageTitle,
-      isMyPage: json['is_page_onwer'] == 1 || json['is_page_onwer'] == true,
-      lastMessage: lastMsg['text']?.toString() ?? '',
-      lastMessageTime: lastMsg['date_time']?.toString() ?? '',
-      unreadCount: (lastMsg['seen']?.toString() == "0") ? 1 : 0,
-      avatar: peerAvatar.isNotEmpty ? peerAvatar : (json['avatar']?.toString() ?? ''),
-      lastMessageType: lastMsg['type']?.toString() ?? '',
+      isMyPage: isMyPage,
+      lastMessage: _s(lastMsg['text']),
+      lastMessageTime: _s(lastMsg['date_time']),
+      unreadCount: (_s(lastMsg['seen']) == "0") ? 1 : 0,
+      avatar: peerAvatar.isNotEmpty ? peerAvatar : _s(json['avatar']),
+      lastMessageType: _s(lastMsg['type']),
     );
   }
 }
