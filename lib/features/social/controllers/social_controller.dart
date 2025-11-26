@@ -1328,6 +1328,7 @@ class SocialController with ChangeNotifier {
         groupId: groupId,
         pageId: pageId,
         postMap: postMap,
+
       );
       final SocialPost normalized = groupId != null
           ? post.copyWith(

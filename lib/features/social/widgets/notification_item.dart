@@ -14,6 +14,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_post_
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_group_detail_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_groups_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/event_detail_screen.dart';
 
 class NotificationItem extends StatefulWidget {
   final SocialNotification n;
@@ -335,7 +336,22 @@ class _NotificationItemState extends State<NotificationItem> {
       }
     }
 
-    // 🟢 3️⃣ Mặc định: mở profile
+    // 🟡 4️⃣ Event (sự kiện)
+    if (n.type == 'interested_event' || n.type == 'going_event') {
+      final eventId = n.eventId ?? '';
+      if (eventId.isNotEmpty && eventId != '0') {
+        if (!mounted) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => EventDetailScreen(eventId: eventId),
+          ),
+        );
+        return;
+      }
+    }
+
+    // 🟢 Mặc định: mở profile
     final String notifierId = n.notifierId ?? '';
     if (notifierId.isNotEmpty) {
       if (!mounted) return;
@@ -390,6 +406,10 @@ class _NotificationItemState extends State<NotificationItem> {
       return "đã chọc bạn.";
       case 'added_u_as':
         return "đã gửi cho bạn lời mời gia đình.";
+      case 'interested_event':
+        return "đã quan tâm tới sự kiện của bạn.";
+      case 'going_event':
+        return "đã đánh dấu sẽ tham gia sự kiện của bạn.";
       default:
         return "đã tương tác với bạn.";
     }
@@ -467,6 +487,10 @@ class _NotificationItemState extends State<NotificationItem> {
       return Icons.touch_app_rounded;
       case 'added_u_as':
         return Icons.family_restroom;
+      case 'interested_event':
+        return Icons.event_available_rounded;
+      case 'going_event':
+        return Icons.event_rounded;
       default:
         return Icons.notifications_rounded;
     }
@@ -492,6 +516,10 @@ class _NotificationItemState extends State<NotificationItem> {
         return const Color(0xFF0A84FF);
       case 'added_u_as':
         return const Color(0xFFFFB020); // vàng cam nhẹ cho family
+      case 'interested_event':
+        return const Color(0xFFFFB020); // vàng cam nổi bật cho sự kiện
+      case 'going_event':
+        return const Color(0xFF34B233); // xanh lá
       default: return const Color(0xFFAAAAAA);
     }
   }
