@@ -12,6 +12,7 @@ class AppConstants {
   static const LocalCachesTypeEnum cachesType = LocalCachesTypeEnum.all;
 
   static const String baseUrl = 'https://vnshop247.com';
+  static const String travelBaseUrl = 'https://vietnamtoure.com/api';
 
   static const String socialBaseUrl = 'https://social.vnshop247.com';
   static const String socialServerKey =

@@ -1,6 +1,6 @@
 import 'dart:ui';
-import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 
 class HotelRoomCard extends StatelessWidget {
@@ -16,9 +16,12 @@ class HotelRoomCard extends StatelessWidget {
   final List<dynamic> terms;
   final Map<int, String> roomTermNameMap;
   final int maxRooms;
+  final int? adults;
+  final int? children;
   final int selectedRooms;
   final int nights;
   final bool isDark;
+  final bool isSelected; // 👈 NEW
   final ValueChanged<int> onSelectedRoomsChanged;
 
   const HotelRoomCard({
@@ -35,21 +38,28 @@ class HotelRoomCard extends StatelessWidget {
     required this.terms,
     required this.roomTermNameMap,
     required this.maxRooms,
+    required this.adults,
+    required this.children,
     required this.selectedRooms,
     required this.nights,
     required this.isDark,
+    required this.isSelected, // 👈 NEW
     required this.onSelectedRoomsChanged,
   });
 
   @override
   Widget build(BuildContext context) {
+    final borderColor = isSelected
+        ? (isDark ? Colors.blue[300]! : Colors.blue[500]!)
+        : (isDark ? Colors.white.withOpacity(0.1) : Colors.grey[200]!);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey[200]!,
-          width: 1,
+          color: borderColor,
+          width: isSelected ? 1.5 : 1,
         ),
       ),
       child: ClipRRect(
@@ -58,9 +68,13 @@ class HotelRoomCard extends StatelessWidget {
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: Container(
             decoration: BoxDecoration(
-              color: isDark
+              color: isSelected
+                  ? (isDark
+                  ? Colors.blueGrey.withOpacity(0.35)
+                  : Colors.blueGrey.withOpacity(0.08))
+                  : (isDark
                   ? Colors.black.withOpacity(0.3)
-                  : Colors.white.withOpacity(0.7),
+                  : Colors.white.withOpacity(0.7)),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Column(
@@ -103,35 +117,6 @@ class HotelRoomCard extends StatelessWidget {
                     : _buildRoomPlaceholder(),
               ),
             ),
-            if (number > 0)
-              Positioned(
-                top: 8,
-                left: 8,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.5),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        '$number ${getTranslated('rooms_available', context) ?? 'phòng'}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
             if (gallery.length > 1)
               Positioned(
                 bottom: 8,
@@ -172,6 +157,38 @@ class HotelRoomCard extends StatelessWidget {
                   ),
                 ),
               ),
+            if (isSelected)
+              Positioned(
+                top: 8,
+                left: 8,
+                child: Container(
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.45),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.check_circle_rounded,
+                        size: 14,
+                        color: Colors.greenAccent[400],
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        getTranslated('selected', context) ?? 'Đã chọn',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
           ],
         ),
         const SizedBox(width: 12),
@@ -209,13 +226,19 @@ class HotelRoomCard extends StatelessWidget {
                       _buildRoomMiniChip(
                         context,
                         Icons.bed_rounded,
-                        '$beds ${getTranslated('beds', context) ?? 'giường'}',
+                        'x$beds ${getTranslated('beds', context) ?? 'giường'}',
                       ),
-                    if (maxGuests != null && maxGuests! > 0)
+                    if (adults != null && adults! > 0)
                       _buildRoomMiniChip(
                         context,
-                        Icons.group_rounded,
-                        '${getTranslated('max', context) ?? 'Tối đa'} $maxGuests ${getTranslated('guests', context) ?? 'khách'}',
+                        Icons.person_outline_rounded,
+                        'x$adults ${getTranslated('adults', context) ?? 'người lớn'}',
+                      ),
+                    if (children != null && children! > 0)
+                      _buildRoomMiniChip(
+                        context,
+                        Icons.child_care_rounded,
+                        'x$children ${getTranslated('children', context) ?? 'trẻ em'}',
                       ),
                   ],
                 ),
@@ -269,6 +292,7 @@ class HotelRoomCard extends StatelessWidget {
                       label = (term['translation']?['name'] ??
                           term['name'] ??
                           term['display_name'] ??
+                          term['title'] ??
                           '')
                           .toString();
                     }
@@ -299,8 +323,9 @@ class HotelRoomCard extends StatelessWidget {
                           Icon(
                             Icons.check_circle,
                             size: 12,
-                            color:
-                            isDark ? Colors.green[300] : Colors.green[700],
+                            color: isDark
+                                ? Colors.green[300]
+                                : Colors.green[700],
                           ),
                           const SizedBox(width: 4),
                           Text(
@@ -336,10 +361,8 @@ class HotelRoomCard extends StatelessWidget {
   }
 
   Widget _buildRoomQuantitySelector(BuildContext context) {
-    final label =
-        getTranslated('number_of_rooms', context) ?? 'Số phòng';
+    final label = getTranslated('number_of_rooms', context) ?? 'Số phòng';
     final totalPrice = pricePerNight * selectedRooms * nights;
-    final nightsLabel = nights > 1 ? '$nights đêm' : '1 đêm';
 
     return Container(
       padding: const EdgeInsets.all(10),
@@ -349,9 +372,8 @@ class HotelRoomCard extends StatelessWidget {
             : Colors.grey[100]?.withOpacity(0.9),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isDark
-              ? Colors.white.withOpacity(0.15)
-              : Colors.grey[300]!,
+          color:
+          isDark ? Colors.white.withOpacity(0.15) : Colors.grey[300]!,
         ),
       ),
       child: Row(
@@ -379,10 +401,14 @@ class HotelRoomCard extends StatelessWidget {
                   },
                   items: List.generate(maxRooms + 1, (i) {
                     if (i == 0) {
+                      final zeroLabel =
+                          getTranslated('select_room', context) ??
+                              'Chọn phòng';
+
                       return DropdownMenuItem(
                         value: 0,
                         child: Text(
-                          '0',
+                          zeroLabel,
                           style: TextStyle(
                             fontSize: 14,
                             color:
@@ -393,8 +419,11 @@ class HotelRoomCard extends StatelessWidget {
                     }
 
                     final total = pricePerNight * i * nights;
+                    final nightsLabel =
+                    nights > 1 ? '$nights đêm' : '1 đêm';
                     final text =
-                        '$i ${getTranslated('rooms', context) ?? 'phòng'} (${_formatVndPrice(total)} / $nightsLabel)';
+                        '$i ${getTranslated('rooms', context) ?? 'phòng'} '
+                        '(${_formatVndPrice(total)} / $nightsLabel)';
 
                     return DropdownMenuItem(
                       value: i,
@@ -440,9 +469,19 @@ class HotelRoomCard extends StatelessWidget {
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: ElevatedButton(
               onPressed: () {
-                final rooms = selectedRooms;
+                if (selectedRooms <= 0) {
+                  final msg =
+                      getTranslated('please_select_room_qty', context) ??
+                          'Vui lòng chọn số phòng ở phía trên.';
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(msg)),
+                  );
+                  return;
+                }
+
                 final msg =
-                    '${getTranslated('selected_room', context) ?? 'Đã chọn'}: $name - $rooms ${getTranslated('rooms', context) ?? 'phòng'}';
+                    '${getTranslated('selected_room', context) ?? 'Đã chọn'}: '
+                    '$name - $selectedRooms ${getTranslated('rooms', context) ?? 'phòng'}';
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(msg),
@@ -514,7 +553,8 @@ class HotelRoomCard extends StatelessWidget {
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          padding:
+          const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
             color: isDark
                 ? Colors.white.withOpacity(0.1)
