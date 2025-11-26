@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/group_chat_controller.dart';
@@ -7,6 +7,7 @@ import 'create_group_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_list_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_page_mess.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/wowonder_text.dart';
 
 class GroupChatsScreen extends StatefulWidget {
   final String accessToken;
@@ -19,6 +20,8 @@ class GroupChatsScreen extends StatefulWidget {
 class _GroupChatsScreenState extends State<GroupChatsScreen> {
   final _searchCtrl = TextEditingController();
   String _keyword = '';
+  final Map<String, String> _previewCache = {};
+  final Map<String, int> _timeCache = {};
 
   @override
   void initState() {
@@ -38,9 +41,18 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
     await context.read<GroupChatController>().loadGroups();
   }
 
+  int? _normalizedTs(dynamic ts) {
+    if (ts == null) return null;
+    int? v;
+    if (ts is num) v = ts.toInt();
+    if (ts is String) v = int.tryParse(ts);
+    if (v == null || v <= 0) return null;
+    if (v > 2000000000) return v ~/ 1000; // ms -> s
+    return v;
+  }
+
   String _formatTime(dynamic ts) {
-    if (ts == null) return '';
-    final sec = int.tryParse(ts.toString());
+    final sec = _normalizedTs(ts);
     if (sec == null) return '';
     final dt = DateTime.fromMillisecondsSinceEpoch(sec * 1000);
     final now = DateTime.now();
@@ -52,40 +64,126 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
     return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}';
   }
 
+  Future<void> _ensureLatestPreview(
+      Map<String, dynamic> g, GroupChatController ctrl) async {
+    final groupId = (g['group_id'] ?? g['id'] ?? '').toString();
+    if (groupId.isEmpty) return;
+    if (_previewCache.containsKey(groupId)) return; // đã có (kể cả rỗng)
+    _previewCache[groupId] = '';
+
+    try {
+      final msgs = await ctrl.repo.fetchMessages(groupId, limit: 1);
+      if (msgs.isNotEmpty) {
+        final m = msgs.last;
+        String txt = (m['display_text'] ?? '').toString().trim();
+        if (txt.isEmpty) {
+          txt = pickWoWonderText(m);
+        }
+        int? ts;
+        final rawTime = m['time'] ?? m['time_text'] ?? m['timestamp'];
+        if (rawTime is num) ts = rawTime.toInt();
+        if (rawTime is String) ts = int.tryParse(rawTime);
+
+        if (!mounted) return;
+        setState(() {
+          _previewCache[groupId] = txt;
+          if (ts != null) _timeCache[groupId] = ts;
+        });
+      }
+    } catch (_) {
+      // ignore errors; keep fallback preview
+    }
+  }
+
   String _previewText(Map<String, dynamic> g) {
-    final text = g['last_message'] ??
-        g['last_message_text'] ??
-        g['last_text'] ??
-        g['text'] ??
-        '';
-    final sender = g['last_sender_name'] ?? g['last_sender'] ?? '';
-    final type = (g['last_message_type'] ?? g['type_two'] ?? '').toString();
-    final isMedia = type == 'media' ||
-        type == 'image' ||
-        type == 'video' ||
-        type == 'voice' ||
-        type == 'audio' ||
-        type == 'file';
-    String tag = '';
-    if (isMedia) {
-      if (type == 'image') {
-        tag = '[Ảnh]';
-      } else if (type == 'video') {
-        tag = '[Video]';
-      } else if (type == 'voice' || type == 'audio') {
-        tag = '[Voice]';
-      } else if (type == 'file') {
-        tag = '[Tệp]';
-      } else {
-        tag = '[Ảnh/Video]';
+    final sender = (g['last_sender_name'] ?? g['last_sender'] ?? '').toString();
+
+    // last_message as map (WoWonder style)
+    final lm = g['last_message'];
+    Map<String, dynamic>? lastMap;
+    if (lm is Map<String, dynamic>) {
+      lastMap = Map<String, dynamic>.from(lm);
+    } else if (lm is List && lm.isNotEmpty && lm.first is Map) {
+      lastMap = Map<String, dynamic>.from(lm.first as Map);
+    }
+
+    if (lastMap != null) {
+      String txt = (lastMap['display_text'] ?? '').toString().trim();
+      if (txt.isEmpty) {
+        // try text/message fields
+        txt = (lastMap['text'] ??
+                lastMap['message'] ??
+                lastMap['textDecoded'] ??
+                '')
+            .toString()
+            .trim();
+      }
+      if (txt.isEmpty) {
+        txt = pickWoWonderText(lastMap);
+      }
+      if (txt.isNotEmpty) {
+        return sender.isNotEmpty ? '$sender: $txt' : txt;
       }
     }
-    if (isMedia) return '${sender.isNotEmpty ? "$sender: " : ""}$tag';
-    if (text is String && text.isNotEmpty) {
+
+    // flat text (various keys)
+    final text = g['last_message_text'] ??
+        g['last_text'] ??
+        g['text'] ??
+        g['last_message'] ??
+        g['last_msg'] ??
+        '';
+    if (text is String && text.trim().isNotEmpty) {
       final t = text.replaceAll('\n', ' ').trim();
       return sender.isNotEmpty ? '$sender: $t' : t;
     }
-    return 'Bắt đầu đoạn chat';
+
+    // type/media label
+    final type = (g['last_message_type'] ?? g['type_two'] ?? '').toString();
+    String tag = '';
+    switch (type) {
+      case 'image':
+        tag = '[Image]';
+        break;
+      case 'video':
+        tag = '[Video]';
+        break;
+      case 'voice':
+      case 'audio':
+        tag = '[Voice]';
+        break;
+      case 'file':
+        tag = '[File]';
+        break;
+      default:
+        if (type.isNotEmpty) tag = '[$type]';
+    }
+    if (tag.isNotEmpty) {
+      return sender.isNotEmpty ? '$sender: $tag' : tag;
+    }
+
+    return getTranslated('no_messages_yet', context) ?? 'Bat dau doan chat';
+  }
+
+  int _lastTsFor(Map<String, dynamic> g) {
+    final gid = (g['group_id'] ?? g['id'] ?? '').toString();
+    final cached = _timeCache[gid];
+    if (cached != null) return _normalizedTs(cached) ?? 0;
+    final fields = [
+      g['last_time'],
+      g['time'],
+      g['last_message_time'],
+      g['last_msg_time']
+    ];
+    for (final f in fields) {
+      final n = _normalizedTs(f);
+      if (n != null && n > 0) return n;
+    }
+    return 0;
+  }
+
+  void _sortGroups(List<Map<String, dynamic>> groups) {
+    groups.sort((a, b) => _lastTsFor(b).compareTo(_lastTsFor(a)));
   }
 
   int _unread(Map<String, dynamic> g) {
@@ -176,7 +274,7 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                var groups = ctrl.groups;
+                var groups = List<Map<String, dynamic>>.from(ctrl.groups);
                 if (_keyword.isNotEmpty) {
                   groups = groups.where((g) {
                     final name = (g['group_name'] ?? g['name'] ?? '')
@@ -185,6 +283,7 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
                     return name.contains(_keyword);
                   }).toList();
                 }
+                _sortGroups(groups);
 
                 if (groups.isEmpty) {
                   return Center(
@@ -199,6 +298,7 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
                     itemCount: groups.length,
                     itemBuilder: (_, i) {
                       final g = groups[i];
+                      _ensureLatestPreview(g, ctrl);
                       final groupId =
                           (g['group_id'] ?? g['id'] ?? '').toString();
                       final groupName =
@@ -207,9 +307,15 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
                       final avatar =
                           (g['avatar'] ?? g['image'] ?? '').toString();
                       final time = _formatTime(
-                        g['last_time'] ?? g['time'] ?? g['last_message_time'],
+                        _timeCache[groupId] ??
+                            g['last_time'] ??
+                            g['time'] ??
+                            g['last_message_time'],
                       );
-                      final preview = _previewText(g);
+                      final cachedText = _previewCache[groupId] ?? '';
+                      final preview = cachedText.isNotEmpty
+                          ? cachedText
+                          : _previewText(g);
                       final unread = _unread(g);
                       final muted = _isMuted(g);
                       final online = _isOnline(g);
