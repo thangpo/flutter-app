@@ -1666,6 +1666,87 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     );
   }
 
+  Widget _buildGroupEmptyState({
+    required ImageProvider? avatarProvider,
+    required String title,
+  }) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Stack(
+              alignment: Alignment.bottomRight,
+              children: [
+                CircleAvatar(
+                  radius: 46,
+                  backgroundImage: avatarProvider,
+                  backgroundColor: Colors.grey.shade300,
+                  child: avatarProvider == null
+                      ? const Icon(Icons.group, size: 46, color: Colors.white70)
+                      : null,
+                ),
+                Container(
+                  width: 14,
+                  height: 14,
+                  margin: const EdgeInsets.only(bottom: 4, right: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.green,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Ban da tao nhom nay',
+              style: TextStyle(color: Colors.black54, fontSize: 13),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _EmptyActionButton(
+                  icon: Icons.person_add_alt,
+                  label: 'Them',
+                  onTap: _openAddMembersPicker,
+                ),
+                const SizedBox(width: 12),
+                _EmptyActionButton(
+                  icon: Icons.edit,
+                  label: 'Ten',
+                  onTap: _changeGroupName,
+                ),
+                const SizedBox(width: 12),
+                _EmptyActionButton(
+                  icon: Icons.group_outlined,
+                  label: 'Thanh vien',
+                  onTap: _openMembersSheet,
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'Ban da dat ten nhom la $title.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.black54, fontSize: 13),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ---------------- UI ----------------
   @override
   Widget build(BuildContext context) {
@@ -1737,7 +1818,24 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                         onRefresh: () => context
                             .read<GroupChatController>()
                             .loadMessages(widget.groupId),
-                        child: ListView.builder(
+                        child: items.isEmpty
+                            ? LayoutBuilder(
+                                builder: (context, constraints) {
+                                  return SingleChildScrollView(
+                                    physics:
+                                        const AlwaysScrollableScrollPhysics(),
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                          minHeight: constraints.maxHeight),
+                                      child: _buildGroupEmptyState(
+                                        avatarProvider: avatarProvider,
+                                        title: title,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              )
+                            : ListView.builder(
                           controller: _scroll,
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 8),
@@ -2598,6 +2696,44 @@ class _GroupMediaTabState extends State<_GroupMediaTab> {
           onTap: url.isNotEmpty ? () => _openUrl(url) : null,
         );
       },
+    );
+  }
+}
+
+class _EmptyActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _EmptyActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(22),
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 22, color: Colors.black87),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+        ),
+      ],
     );
   }
 }
