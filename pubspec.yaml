@@ -8,6 +8,7 @@ environment:
   sdk: ^3.6.2
 
 dependencies:
+  adaptive_platform_ui: ^0.1.100
   liquid_pull_to_refresh: ^3.0.0
   flutter:
     sdk: flutter

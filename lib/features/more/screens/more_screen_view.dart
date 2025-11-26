@@ -68,6 +68,8 @@ class _MoreScreenState extends State<MoreScreen> {
   @override
   Widget build(BuildContext context) {
     // var authController = Provider.of<AuthController>(context, listen: false);
+    final double bottomSafeSpace =
+        MediaQuery.of(context).padding.bottom + kBottomNavigationBarHeight;
 
     return Scaffold(
       body: CustomScrollView(slivers: [
@@ -449,6 +451,9 @@ class _MoreScreenState extends State<MoreScreen> {
                                 color: Theme.of(context).hintColor),
                           ),
                         ]),
+                  ),
+                  SizedBox(
+                    height: bottomSafeSpace,
                   ),
                 ]);
           }),

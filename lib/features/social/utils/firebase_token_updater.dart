@@ -1,10 +1,10 @@
 // lib/core/utils/firebase_token_updater.dart
 import 'dart:developer';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
-import 'package:flutter_sixvalley_ecommerce/features/auth/domain/repositories/auth_repository.dart';
 
 class FirebaseTokenUpdater {
   static Future<void> update() async {
@@ -16,7 +16,7 @@ class FirebaseTokenUpdater {
         return;
       }
 
-      final fcmToken = await FirebaseMessaging.instance.getToken();
+      final fcmToken = await _getFcmTokenSafe();
       if (fcmToken == null || fcmToken.isEmpty) {
         log('⚠️ Missing FCM token, skip');
         return;
@@ -36,6 +36,32 @@ class FirebaseTokenUpdater {
       log('response => $body');
     } catch (e, st) {
       log('❌ Error updating FCM token: $e\n$st');
+    }
+  }
+
+  static Future<String?> _getFcmTokenSafe() async {
+    final messaging = FirebaseMessaging.instance;
+    if (Platform.isIOS) {
+      // iOS cần APNS token trước khi có FCM token
+      final apnsToken = await messaging.getAPNSToken();
+      if (apnsToken == null) {
+        log('⚠️ APNS token chưa sẵn sàng, đợi onTokenRefresh...');
+        try {
+          // onTokenRefresh sẽ bắn ngay khi APNS/FCM sẵn sàng
+          return await messaging.onTokenRefresh.first
+              .timeout(const Duration(seconds: 8));
+        } catch (e) {
+          log('⚠️ Chưa lấy được token sau khi chờ: $e');
+          return null;
+        }
+      }
+    }
+
+    try {
+      return await messaging.getToken();
+    } catch (e) {
+      log('⚠️ Lỗi lấy FCM token: $e');
+      return null;
     }
   }
 }

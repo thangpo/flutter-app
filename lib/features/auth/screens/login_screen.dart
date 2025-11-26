@@ -265,7 +265,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                         focusNode: _emailNumberFocus,
                                         nextFocus: _passwordFocus,
                                         controller: _emailPhoneController,
-                                        inputType: TextInputType.name,
+                                        inputType: isNumberLogin
+                                            ? TextInputType.phone
+                                            : TextInputType.emailAddress,
                                         labelText: getTranslated('email/phone', context),
                                         required: true,
                                       );

@@ -28,30 +28,34 @@ class _SellerCardState extends State<SellerCard> {
   Widget build(BuildContext context) {
     final bool isLtr = Provider.of<LocalizationController>(context, listen: false).isLtr;
     var splashController = Provider.of<SplashController>(context, listen: false);
+    final seller = widget.sellerModel;
+    final shop = seller?.shop;
+    final bool isInHouse = seller?.id == 0;
 
     vacationIsOn = ShopHelper.isVacationActive(
       context,
-      startDate: widget.sellerModel?.shop?.vacationStartDate,
-      endDate: widget.sellerModel?.shop?.vacationEndDate,
-      vacationDurationType: widget.sellerModel?.shop?.vacationDurationType,
-      vacationStatus: widget.sellerModel?.shop?.vacationStatus,
-      isInHouseSeller: widget.sellerModel?.id == 0,
+      startDate: shop?.vacationStartDate,
+      endDate: shop?.vacationEndDate,
+      vacationDurationType: shop?.vacationDurationType,
+      vacationStatus: shop?.vacationStatus,
+      isInHouseSeller: isInHouse,
     );
 
 
     return InkWell(
         onTap: () {
+          if (seller == null) return;
 
           Navigator.push(context, MaterialPageRoute(builder: (_) => TopSellerProductScreen(
-            sellerId: widget.sellerModel?.id,
-            temporaryClose: widget.sellerModel?.shop?.temporaryClose,
-            vacationStatus: widget.sellerModel?.shop?.vacationStatus??false,
-            vacationEndDate: widget.sellerModel?.shop?.vacationEndDate,
-            vacationStartDate: widget.sellerModel?.shop?.vacationStartDate,
-            vacationDurationType: widget.sellerModel?.shop?.vacationDurationType,
-            name: widget.sellerModel?.shop?.name,
-            banner: widget.sellerModel?.shop?.bannerFullUrl?.path,
-            image: widget.sellerModel?.shop?.imageFullUrl?.path,
+            sellerId: seller.id,
+            temporaryClose: shop?.temporaryClose,
+            vacationStatus: shop?.vacationStatus ?? false,
+            vacationEndDate: shop?.vacationEndDate,
+            vacationStartDate: shop?.vacationStartDate,
+            vacationDurationType: shop?.vacationDurationType,
+            name: shop?.name,
+            banner: shop?.bannerFullUrl?.path,
+            image: shop?.imageFullUrl?.path,
           )));
         },
         child : Padding(
@@ -74,9 +78,9 @@ class _SellerCardState extends State<SellerCard> {
                   child: ClipRRect(
                       borderRadius: const BorderRadius.only(topLeft: Radius.circular(Dimensions.paddingSizeSmall),
                           topRight: Radius.circular(Dimensions.paddingSizeSmall)),
-                      child: CustomImageWidget(image: widget.sellerModel?.id == 0 ?
-                      splashController.configModel?.inHouseShop?.bannerFullUrl?.path ?? '' :
-                      widget.sellerModel!.shop!.bannerFullUrl?.path ?? ''))),
+                      child: CustomImageWidget(image: isInHouse
+                          ? splashController.configModel?.inHouseShop?.bannerFullUrl?.path ?? ''
+                          : shop?.bannerFullUrl?.path ?? ''))),
 
               Row(children: [
                 Container(transform: isLtr ? Matrix4.translationValues(12, -20, 0) : Matrix4.translationValues(-12, -20, 0), height: 60, width: 60,
@@ -87,19 +91,19 @@ class _SellerCardState extends State<SellerCard> {
                             color: Theme.of(context).highlightColor),
                         child: ClipRRect(borderRadius: const BorderRadius.all(Radius.circular(Dimensions.paddingSizeOverLarge)),
                           child: CustomImageWidget(
-                            image: widget.sellerModel!.id == 0 ?
-                            splashController.configModel!.inHouseShop?.imageFullUrl?.path ?? '' :
-                            '${widget.sellerModel!.shop?.imageFullUrl?.path}',
+                            image: isInHouse
+                                ? splashController.configModel?.inHouseShop?.imageFullUrl?.path ?? ''
+                                : shop?.imageFullUrl?.path ?? '',
                             width: 60,height: 60,
                           ),
                         ),
                       ),
 
-                      if((widget.sellerModel!.shop!.temporaryClose ?? false) || vacationIsOn)
+                      if((shop?.temporaryClose ?? false) || vacationIsOn)
                         Container(decoration: BoxDecoration(color: Colors.black.withValues(alpha:.5),
                             borderRadius: const BorderRadius.all(Radius.circular(Dimensions.paddingSizeOverLarge)))),
 
-                      (widget.sellerModel!.shop!.temporaryClose ?? false) ?
+                      (shop?.temporaryClose ?? false) ?
                       Center(child: Text(getTranslated('temporary_closed', context)!, textAlign: TextAlign.center, style: textRegular.copyWith(
                         color: Colors.white,
                         fontSize: Dimensions.fontSizeExtraSmall,
@@ -114,9 +118,9 @@ class _SellerCardState extends State<SellerCard> {
 
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-                  Text(widget.sellerModel?.id == 0
+                  Text(isInHouse
                       ? splashController.configModel?.inHouseShop?.name ?? ''
-                      : widget.sellerModel?.shop?.name ?? '',
+                      : shop?.name ?? '',
                     maxLines: 1, overflow: TextOverflow.ellipsis,
                     style: textRegular.copyWith(fontSize: Dimensions.fontSizeLarge, color: Theme.of(context).textTheme.bodyLarge?.color),
                   ),
@@ -125,12 +129,12 @@ class _SellerCardState extends State<SellerCard> {
                     child: Row(children: [
                       Icon(Icons.star_rate_rounded, color: Colors.yellow.shade700, size: 15),
 
-                      Text("${widget.sellerModel?.averageRating?.toStringAsFixed(1)} ", style: textRegular.copyWith(
+                      Text("${(seller?.averageRating ?? 0).toStringAsFixed(1)} ", style: textRegular.copyWith(
                         fontSize: Dimensions.fontSizeSmall,
                         color: Theme.of(context).textTheme.bodyLarge?.color,
                       )),
 
-                      Text(" (${widget.sellerModel?.ratingCount??0})", style: textRegular.copyWith(
+                      Text(" (${seller?.ratingCount??0})", style: textRegular.copyWith(
                         fontSize: Dimensions.fontSizeSmall,
                         color: Theme.of(context).hintColor,
                       )),
@@ -147,7 +151,7 @@ class _SellerCardState extends State<SellerCard> {
                         decoration: BoxDecoration(color: Theme.of(context).hintColor.withValues(alpha:.125),
                             borderRadius: BorderRadius.circular(Dimensions.paddingSizeExtraSmall)),
                         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                          Text(NumberFormat.compact().format(widget.sellerModel?.productCount??0),
+                          Text(NumberFormat.compact().format(seller?.productCount??0),
                             style: textBold.copyWith(fontSize: Dimensions.fontSizeDefault, color:Theme.of(context).primaryColor),),
                           const SizedBox(width: Dimensions.paddingSizeExtraSmall),
 
