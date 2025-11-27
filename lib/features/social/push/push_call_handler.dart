@@ -161,7 +161,8 @@ class SocialCallPushHandler {
     final callId = int.tryParse('${data['call_id']}') ?? 0;
     if (callId <= 0) return;
 
-    final media = (data['media'] == 'video') ? 'video' : 'audio';
+    // Backend đôi lúc gửi media dưới các key khác (media_type/call_type/type_two/call_media)
+    final media = _extractMedia(data);
     final callerName = data['caller_name'];
     final callerAvatar = data['caller_avatar'];
 
@@ -220,6 +221,19 @@ class SocialCallPushHandler {
         ),
       ),
     );
+  }
+
+  /// Chuẩn hóa media từ payload FCM / PHP (support nhiều key fallback)
+  String _extractMedia(Map<String, dynamic> data) {
+    final raw = (data['media'] ??
+            data['media_type'] ??
+            data['call_type'] ??
+            data['type_two'] ??
+            data['call_media'])
+        ?.toString()
+        .toLowerCase();
+
+    return (raw == 'video') ? 'video' : 'audio';
   }
 }
 
