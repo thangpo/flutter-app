@@ -303,9 +303,12 @@ class _CallScreenState extends State<CallScreen> {
             'offerToReceiveAudio': 1,
             'offerToReceiveVideo': 1,
           });
-          await _pc!.setLocalDescription(answer);
-          await _cc.sendAnswer(answer.sdp!);
-          _log('callee answer created ${_sdpSummary(answer.sdp ?? '')}');
+          final patchedSdp = _forceSendRecvSdp(answer.sdp ?? '');
+          final patched = RTCSessionDescription(patchedSdp, 'answer');
+
+          await _pc!.setLocalDescription(patched);
+          await _cc.sendAnswer(patchedSdp);
+          _log('callee answer created ${_sdpSummary(patchedSdp)}');
         } catch (e) {
           final msg = '$e';
           if (!msg.contains('Called in wrong state')) {
@@ -461,6 +464,14 @@ class _CallScreenState extends State<CallScreen> {
     } catch (e, st) {
       _log('ensureSendRecvTransceivers error: $e', st: st);
     }
+  }
+
+  String _forceSendRecvSdp(String sdp) {
+    // Thay thế mọi recvonly/sendonly/inactive thành sendrecv để chắc chắn gửi hình/tiếng
+    var patched = sdp.replaceAll(RegExp(r'^a=recvonly$', multiLine: true), 'a=sendrecv');
+    patched = patched.replaceAll(RegExp(r'^a=sendonly$', multiLine: true), 'a=sendrecv');
+    patched = patched.replaceAll(RegExp(r'^a=inactive$', multiLine: true), 'a=sendrecv');
+    return patched;
   }
 
   String _sdpSummary(String sdp) {
