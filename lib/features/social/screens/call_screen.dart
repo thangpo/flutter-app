@@ -135,6 +135,7 @@ class _CallScreenState extends State<CallScreen> {
             _remoteRenderer.srcObject = stream;
             _log(
                 'onTrack kind=${e.track.kind} id=${e.track.id} remoteStream=${stream.id}');
+            _logRemoteSizeLater();
           } catch (err, st) {
             _log('onTrack set renderer error: $err', st: st);
           }
@@ -405,6 +406,16 @@ class _CallScreenState extends State<CallScreen> {
 
   void _log(String msg, {StackTrace? st}) {
     developer.log(msg, name: 'CallScreen', stackTrace: st);
+  }
+
+  void _logRemoteSizeLater() {
+    Future.delayed(const Duration(milliseconds: 300), () {
+      try {
+        final w = _remoteRenderer.videoWidth;
+        final h = _remoteRenderer.videoHeight;
+        _log('remoteRenderer size ${w}x$h');
+      } catch (_) {}
+    });
   }
 
   Future<void> _ensureLocalMedia({required bool wantVideo}) async {
