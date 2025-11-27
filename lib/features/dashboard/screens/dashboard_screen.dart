@@ -37,7 +37,7 @@ class DashBoardScreen extends StatefulWidget {
 }
 
 class DashBoardScreenState extends State<DashBoardScreen> {
-  int _pageIndex = 1;
+  int _pageIndex = 0;
   late List<NavigationModel> _screens;
   final PageStorageBucket bucket = PageStorageBucket();
   final GlobalKey<SocialFeedScreenState> _socialFeedKey =
@@ -187,26 +187,26 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       ),
     ];
 
-    // Android nav items (icon + label + badge)
+    // Android nav items (icon + label)
     final List<_AndroidNavItem> androidItems = [
       _AndroidNavItem(
         icon: Icons.home_outlined,
         label: t('home'),
       ),
       _AndroidNavItem(
-        icon: Icons.chat_bubble_outline,
-        label: t('social'),
-      ),
-      _AndroidNavItem(
-        icon: Icons.event_note_outlined,
+        icon: Icons.travel_explore_outlined,
         label: t('travel'),
       ),
       _AndroidNavItem(
-        icon: Icons.medication_outlined,
+        icon: Icons.public,
+        label: t('social'),
+      ),
+      _AndroidNavItem(
+        icon: Icons.storefront_outlined,
         label: t('shop'),
       ),
       _AndroidNavItem(
-        icon: Icons.monitor_heart_outlined,
+        icon: Icons.notifications_none,
         label: t('notifications'),
         badgeCount: unreadNotifications,
       ),
@@ -271,7 +271,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
                 left: 0,
                 right: 0,
                 bottom: 0,
-                child: AndroidCurvedBottomBar(
+                child: AndroidCutoutBottomBar(
                   items: androidItems,
                   currentIndex: _pageIndex,
                   onTap: (index) =>
@@ -329,7 +329,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
 }
 
 // ------------------------------------------------------------------
-// Android bottom bar giống ảnh: thanh xám bo góc + avatar tròn chọc vào
+// Android bottom bar: thanh xám bo góc + vòng tròn to chứa icon selected
 // ------------------------------------------------------------------
 
 class _AndroidNavItem {
@@ -344,12 +344,12 @@ class _AndroidNavItem {
   });
 }
 
-class AndroidCurvedBottomBar extends StatelessWidget {
+class AndroidCutoutBottomBar extends StatelessWidget {
   final List<_AndroidNavItem> items;
   final int currentIndex;
   final ValueChanged<int> onTap;
 
-  const AndroidCurvedBottomBar({
+  const AndroidCutoutBottomBar({
     super.key,
     required this.items,
     required this.currentIndex,
@@ -362,69 +362,83 @@ class AndroidCurvedBottomBar extends StatelessWidget {
     final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
+    final Color scaffoldBg = theme.scaffoldBackgroundColor;
     final Color barColor = isDark
         ? const Color(0xFF2C2C2E)
-        : const Color(0xFFF2F3F7); // xám nhạt như ảnh
+        : const Color(0xFFE8EBF0); // xám nhạt giống wireframe
 
     return SafeArea(
       minimum: const EdgeInsets.only(bottom: 6),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: SizedBox(
+        height: 90,
         child: Stack(
           clipBehavior: Clip.none,
           children: [
             // Thanh bottom bar
-            Container(
-              height: 64,
-              decoration: BoxDecoration(
-                color: barColor,
-                borderRadius: BorderRadius.circular(22),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 12,
-                    offset: const Offset(0, -2),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: List.generate(
-                  items.length,
-                      (index) => Expanded(
-                    child: _AndroidNavItemWidget(
-                      item: items[index],
-                      selected: index == currentIndex,
-                      onTap: () => onTap(index),
+            Positioned(
+              left: 12,
+              right: 12,
+              bottom: 0,
+              child: Container(
+                height: 60,
+                decoration: BoxDecoration(
+                  color: barColor,
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 10,
+                      offset: const Offset(0, -1),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: List.generate(
+                    items.length,
+                        (index) => Expanded(
+                      child: _AndroidNavItemWidget(
+                        item: items[index],
+                        selected: index == currentIndex,
+                        onTap: () => onTap(index),
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-            // Nút tròn chọc vào thanh (avatar / quick action)
+
+            // Vòng tròn to ở góc trái, nền cùng màu scaffold → cảm giác hõ xuống
             Positioned(
-              left: 18,
-              top: -18,
+              left: 22,
+              bottom: 32,
               child: Container(
-                height: 48,
-                width: 48,
+                height: 54,
+                width: 54,
                 decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color(0xFF3A3A3C)
-                      : Colors.white,
+                  color: scaffoldBg,
                   shape: BoxShape.circle,
                   boxShadow: [
+                    // viền nhẹ để nhìn như bo lõm vào thanh
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.12),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
                     ),
                   ],
                 ),
-                child: Icon(
-                  Icons.person,
-                  color:
-                  isDark ? cs.onSurface : cs.primary.withOpacity(0.9),
-                  size: 24,
+                child: Container(
+                  margin: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: cs.primary.withOpacity(0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Icon(
+                      items[currentIndex].icon,
+                      size: 26,
+                      color: cs.primary,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -452,7 +466,7 @@ class _AndroidNavItemWidget extends StatelessWidget {
     final cs = theme.colorScheme;
 
     final Color iconColor =
-    selected ? cs.primary : cs.onSurface.withOpacity(0.7);
+    selected ? cs.onSurface : cs.onSurface.withOpacity(0.7);
     final FontWeight labelWeight =
     selected ? FontWeight.w600 : FontWeight.w400;
 
@@ -460,7 +474,7 @@ class _AndroidNavItemWidget extends StatelessWidget {
       borderRadius: BorderRadius.circular(18),
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.only(top: 12, bottom: 8),
+        padding: const EdgeInsets.only(top: 10, bottom: 6),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -469,7 +483,7 @@ class _AndroidNavItemWidget extends StatelessWidget {
               children: [
                 Icon(
                   item.icon,
-                  size: 22,
+                  size: 20,
                   color: iconColor,
                 ),
                 if (item.badgeCount > 0)
@@ -478,7 +492,7 @@ class _AndroidNavItemWidget extends StatelessWidget {
                     top: -4,
                     child: Container(
                       padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(
+                      decoration: const BoxDecoration(
                         color: Colors.redAccent,
                         shape: BoxShape.circle,
                       ),
@@ -510,7 +524,7 @@ class _AndroidNavItemWidget extends StatelessWidget {
               style: theme.textTheme.labelSmall?.copyWith(
                 fontSize: 10,
                 fontWeight: labelWeight,
-                color: cs.onSurface.withOpacity(selected ? 0.9 : 0.7),
+                color: cs.onSurface.withOpacity(selected ? 0.95 : 0.7),
               ),
             ),
           ],
