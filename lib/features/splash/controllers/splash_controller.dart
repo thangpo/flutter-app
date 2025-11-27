@@ -272,7 +272,5 @@ class SplashController extends ChangeNotifier {
     }
     return ModalRoute.of(_buildContext!)?.settings.name == 'MaintenanceScreen';
   }
-
-
 }
 

@@ -17,8 +17,6 @@ import 'package:flutter_sixvalley_ecommerce/features/product_details/screens/pro
 import 'package:flutter_sixvalley_ecommerce/features/product_details/widgets/min_order_quanty_widget.dart';
 
 
-
-
 class CartWidget extends StatelessWidget {
   final CartModel? cartModel;
   final int index;
@@ -353,7 +351,6 @@ class _CartProductDetailsWidget extends StatelessWidget {
         ),
         const SizedBox(height: Dimensions.paddingSizeSmall),
 
-        // Giá gốc (nếu có giảm)
         cm.discount! > 0
             ? Text(
           PriceConverter.convertPrice(context, cm.price),
@@ -367,7 +364,6 @@ class _CartProductDetailsWidget extends StatelessWidget {
         )
             : const SizedBox(),
 
-        // Giá sau giảm
         Text(
           PriceConverter.convertPrice(
             context,
@@ -390,7 +386,6 @@ class _CartProductDetailsWidget extends StatelessWidget {
           ),
         ),
 
-        // Biến thể
         (cm.variant != null && cm.variant!.isNotEmpty)
             ? Padding(
           padding: const EdgeInsets.only(
@@ -418,7 +413,6 @@ class _CartProductDetailsWidget extends StatelessWidget {
             : const SizedBox(),
         const SizedBox(width: Dimensions.paddingSizeSmall),
 
-        // --------- Hiển thị thuế (cho cả include & exclude) ----------
         Builder(
           builder: (context) {
             final double taxPerUnit = cm.tax ?? 0;
@@ -426,17 +420,14 @@ class _CartProductDetailsWidget extends StatelessWidget {
             final double taxAmount = taxPerUnit * qty;
 
             if (taxAmount <= 0) {
-              // Không có thuế thì không hiển thị dòng này
               return const SizedBox.shrink();
             }
 
             String taxText;
             if (cm.taxModel == 'exclude') {
-              // Thuế cộng thêm
               taxText =
               '(${getTranslated('tax', context)} : ${PriceConverter.convertPrice(context, taxAmount)})';
             } else {
-              // Thuế đã gồm trong giá nhưng vẫn show số để user thấy rõ
               taxText =
               '(${getTranslated('tax', context)} : ${PriceConverter.convertPrice(context, taxAmount)})';
             }
