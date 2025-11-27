@@ -328,6 +328,14 @@ class _CallScreenState extends State<CallScreen> {
       for (var ic in _cc.iceCandidates) {
         final key = '${ic.candidate}|${ic.sdpMid}|${ic.sdpMLineIndex}';
         if (_addedCandidates.contains(key)) continue;
+
+        if (!_remoteDescSet) {
+          // Chờ có remote description rồi mới add, tránh lỗi "remote description null"
+          _log(
+              'skip addRemoteCandidate (no remoteDesc yet) mid=${ic.sdpMid} mline=${ic.sdpMLineIndex}');
+          continue;
+        }
+
         _addedCandidates.add(key);
 
         try {
