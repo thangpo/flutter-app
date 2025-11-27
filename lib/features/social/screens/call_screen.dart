@@ -32,6 +32,7 @@ class CallScreen extends StatefulWidget {
 class _CallScreenState extends State<CallScreen> {
   RTCPeerConnection? _pc;
   MediaStream? _localStream;
+  MediaStream? _remoteStream;
 
   final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
   final RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
@@ -132,10 +133,12 @@ class _CallScreenState extends State<CallScreen> {
         // Chỉ gán renderer khi track video để tránh âm thanh ghi đè stream video
         if (e.track.kind == 'video') {
           try {
+            _remoteStream = stream;
             _remoteRenderer.srcObject = stream;
             _log(
                 'onTrack kind=${e.track.kind} id=${e.track.id} remoteStream=${stream.id}');
             _logRemoteSizeLater();
+            _kickRemoteRenderIfBlank();
           } catch (err, st) {
             _log('onTrack set renderer error: $err', st: st);
           }
@@ -414,6 +417,23 @@ class _CallScreenState extends State<CallScreen> {
         final w = _remoteRenderer.videoWidth;
         final h = _remoteRenderer.videoHeight;
         _log('remoteRenderer size ${w}x$h');
+      } catch (_) {}
+    });
+  }
+
+  void _kickRemoteRenderIfBlank() {
+    Future.delayed(const Duration(seconds: 1), () {
+      if (!_viewAlive) return;
+      try {
+        final w = _remoteRenderer.videoWidth;
+        final h = _remoteRenderer.videoHeight;
+        if ((w == 0 || h == 0) && _remoteStream != null) {
+          // thử gán lại stream để renderer refresh
+          _remoteRenderer.srcObject = _remoteStream;
+          _log('remoteRenderer blank -> reattach stream ${_remoteStream?.id}');
+          _logRemoteSizeLater();
+          if (mounted) setState(() {});
+        }
       } catch (_) {}
     });
   }
