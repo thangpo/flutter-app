@@ -1,6 +1,8 @@
 ﻿import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/cart/controllers/cart_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/chat/controllers/chat_controller.dart';
@@ -29,6 +31,7 @@ import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 
 class DashBoardScreen extends StatefulWidget {
   const DashBoardScreen({super.key});
+
   @override
   DashBoardScreenState createState() => DashBoardScreenState();
 }
@@ -45,12 +48,14 @@ class DashBoardScreenState extends State<DashBoardScreen> {
   @override
   void initState() {
     super.initState();
+
     Provider.of<FlashDealController>(context, listen: false)
         .getFlashDealList(true, true);
     Provider.of<SplashController>(context, listen: false)
         .getBusinessPagesList('default');
     Provider.of<SplashController>(context, listen: false)
         .getBusinessPagesList('pages');
+
     if (Provider.of<AuthController>(context, listen: false).isLoggedIn()) {
       Provider.of<CartController>(context, listen: false).mergeGuestCart();
       Provider.of<WishListController>(context, listen: false).getWishList();
@@ -64,6 +69,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
 
     final SplashController splashController =
     Provider.of<SplashController>(context, listen: false);
+
     Provider.of<SearchProductController>(context, listen: false)
         .getAuthorList(null);
     Provider.of<SearchProductController>(context, listen: false)
@@ -83,13 +89,11 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         icon: Images.homeImage,
         screen: const MainHomeScreen(),
       ),
-
       NavigationModel(
         name: 'travel',
         icon: Images.TravelIcon,
         screen: const TravelScreen(isBackButtonExist: false),
       ),
-
       NavigationModel(
         name: 'social',
         icon: Images.SocialIcon,
@@ -98,7 +102,6 @@ class DashBoardScreenState extends State<DashBoardScreen> {
           onChromeVisibilityChanged: _handleChromeVisibilityChanged,
         ),
       ),
-
       NavigationModel(
         name: 'shop',
         icon: Images.storeIcon,
@@ -108,14 +111,16 @@ class DashBoardScreenState extends State<DashBoardScreen> {
             ? const AsterThemeHomeScreen()
             : const FashionThemeHomePage(),
       ),
-
       NavigationModel(
-          name: 'notifications',
-          icon: Images.notification,
-          screen: const NotificationsScreen(isBackButtonExist: false)),
-
+        name: 'notifications',
+        icon: Images.notification,
+        screen: const NotificationsScreen(isBackButtonExist: false),
+      ),
       NavigationModel(
-          name: 'more', icon: Images.moreImage, screen: const MoreScreen()),
+        name: 'more',
+        icon: Images.moreImage,
+        screen: const MoreScreen(),
+      ),
     ];
 
     _socialTabIndex =
@@ -130,6 +135,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     final cs = theme.colorScheme;
     final platformBrightness = MediaQuery.platformBrightnessOf(context);
     final bool isIOSPlatform = !kIsWeb && Platform.isIOS;
+
     final bool hideNav = (_socialTabIndex != null &&
         _pageIndex == _socialTabIndex &&
         !_showBottomNav);
@@ -146,6 +152,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       navActiveColor = _boostLightness(navActiveColor, 0.20);
     }
 
+    // iOS destinations (giữ nguyên)
     final List<AdaptiveNavigationDestination> iosDestinations = [
       AdaptiveNavigationDestination(
         icon: 'house.fill',
@@ -180,42 +187,34 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       ),
     ];
 
-    final List<AdaptiveNavigationDestination> androidDestinations = [
-      AdaptiveNavigationDestination(
+    // Android nav items (icon + label + badge)
+    final List<_AndroidNavItem> androidItems = [
+      _AndroidNavItem(
         icon: Icons.home_outlined,
-        selectedIcon: Icons.home,
         label: t('home'),
       ),
-      AdaptiveNavigationDestination(
-        icon: Icons.travel_explore_outlined,
-        selectedIcon: Icons.travel_explore,
-        label: t('travel'),
-      ),
-      AdaptiveNavigationDestination(
-        icon: Icons.public,
-        selectedIcon: Icons.group,
+      _AndroidNavItem(
+        icon: Icons.chat_bubble_outline,
         label: t('social'),
       ),
-      AdaptiveNavigationDestination(
-        icon: Icons.storefront_outlined,
-        selectedIcon: Icons.storefront,
+      _AndroidNavItem(
+        icon: Icons.event_note_outlined,
+        label: t('travel'),
+      ),
+      _AndroidNavItem(
+        icon: Icons.medication_outlined,
         label: t('shop'),
       ),
-      AdaptiveNavigationDestination(
-        icon: Icons.notifications_none,
-        selectedIcon: Icons.notifications,
+      _AndroidNavItem(
+        icon: Icons.monitor_heart_outlined,
         label: t('notifications'),
-        badgeCount: unreadNotifications > 0 ? unreadNotifications : null,
+        badgeCount: unreadNotifications,
       ),
-      AdaptiveNavigationDestination(
+      _AndroidNavItem(
         icon: Icons.more_horiz,
-        selectedIcon: Icons.more,
         label: t('more'),
       ),
     ];
-
-    final destinations =
-    isIOSPlatform ? iosDestinations : androidDestinations;
 
     return PopScope(
       canPop: false,
@@ -228,9 +227,10 @@ class DashBoardScreenState extends State<DashBoardScreen> {
           if (context.mounted) {
             if (!Navigator.of(context).canPop()) {
               showModalBottomSheet(
-                  backgroundColor: Colors.transparent,
-                  context: Get.context!,
-                  builder: (_) => const AppExitCard());
+                backgroundColor: Colors.transparent,
+                context: Get.context!,
+                builder: (_) => const AppExitCard(),
+              );
             }
           }
         }
@@ -239,22 +239,46 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       child: AdaptiveScaffold(
         minimizeBehavior: TabBarMinimizeBehavior.never,
         enableBlur: isIOSPlatform,
-        bottomNavigationBar: hideNav
+        // iOS dùng bottom bar native
+        bottomNavigationBar: (hideNav || !isIOSPlatform)
             ? null
             : AdaptiveBottomNavigationBar(
-          items: destinations,
+          items: iosDestinations,
           selectedIndex: _pageIndex,
           onTap: (index) => _handleNavigationTap(
             _screens[index],
             index,
           ),
-          useNativeBottomBar: isIOSPlatform,
+          useNativeBottomBar: true,
           selectedItemColor: navActiveColor,
         ),
-        body: PageStorage(
+        // Android: overlay bottom bar custom giống ảnh
+        body: isIOSPlatform
+            ? PageStorage(
           key: ValueKey<int>(_pageIndex),
           bucket: bucket,
           child: _screens[_pageIndex].screen,
+        )
+            : Stack(
+          children: [
+            PageStorage(
+              key: ValueKey<int>(_pageIndex),
+              bucket: bucket,
+              child: _screens[_pageIndex].screen,
+            ),
+            if (!hideNav)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: AndroidCurvedBottomBar(
+                  items: androidItems,
+                  currentIndex: _pageIndex,
+                  onTap: (index) =>
+                      _handleNavigationTap(_screens[index], index),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -282,6 +306,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     final bool isSocialTab =
         _socialTabIndex != null && index == _socialTabIndex;
     final bool isCurrent = _pageIndex == index;
+
     if (isSocialTab && isCurrent) {
       final SocialFeedScreenState? state = _socialFeedKey.currentState;
       if (state == null) return;
@@ -292,6 +317,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       }
       return;
     }
+
     _setPage(index);
   }
 
@@ -299,5 +325,197 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     final hsl = HSLColor.fromColor(color);
     final double newLightness = (hsl.lightness + amount).clamp(0.0, 1.0);
     return hsl.withLightness(newLightness).toColor();
+  }
+}
+
+// ------------------------------------------------------------------
+// Android bottom bar giống ảnh: thanh xám bo góc + avatar tròn chọc vào
+// ------------------------------------------------------------------
+
+class _AndroidNavItem {
+  final IconData icon;
+  final String label;
+  final int badgeCount;
+
+  _AndroidNavItem({
+    required this.icon,
+    required this.label,
+    this.badgeCount = 0,
+  });
+}
+
+class AndroidCurvedBottomBar extends StatelessWidget {
+  final List<_AndroidNavItem> items;
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+
+  const AndroidCurvedBottomBar({
+    super.key,
+    required this.items,
+    required this.currentIndex,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    final Color barColor = isDark
+        ? const Color(0xFF2C2C2E)
+        : const Color(0xFFF2F3F7); // xám nhạt như ảnh
+
+    return SafeArea(
+      minimum: const EdgeInsets.only(bottom: 6),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            // Thanh bottom bar
+            Container(
+              height: 64,
+              decoration: BoxDecoration(
+                color: barColor,
+                borderRadius: BorderRadius.circular(22),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 12,
+                    offset: const Offset(0, -2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: List.generate(
+                  items.length,
+                      (index) => Expanded(
+                    child: _AndroidNavItemWidget(
+                      item: items[index],
+                      selected: index == currentIndex,
+                      onTap: () => onTap(index),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // Nút tròn chọc vào thanh (avatar / quick action)
+            Positioned(
+              left: 18,
+              top: -18,
+              child: Container(
+                height: 48,
+                width: 48,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFF3A3A3C)
+                      : Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.12),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  Icons.person,
+                  color:
+                  isDark ? cs.onSurface : cs.primary.withOpacity(0.9),
+                  size: 24,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AndroidNavItemWidget extends StatelessWidget {
+  final _AndroidNavItem item;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _AndroidNavItemWidget({
+    required this.item,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    final Color iconColor =
+    selected ? cs.primary : cs.onSurface.withOpacity(0.7);
+    final FontWeight labelWeight =
+    selected ? FontWeight.w600 : FontWeight.w400;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 12, bottom: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  item.icon,
+                  size: 22,
+                  color: iconColor,
+                ),
+                if (item.badgeCount > 0)
+                  Positioned(
+                    right: -4,
+                    top: -4,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 14,
+                        minHeight: 14,
+                      ),
+                      child: Center(
+                        child: Text(
+                          item.badgeCount > 9
+                              ? '9+'
+                              : item.badgeCount.toString(),
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            fontSize: 8,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              item.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                fontSize: 10,
+                fontWeight: labelWeight,
+                color: cs.onSurface.withOpacity(selected ? 0.9 : 0.7),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
