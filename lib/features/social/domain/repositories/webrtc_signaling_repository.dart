@@ -207,10 +207,14 @@ class WebRTCSignalingRepository {
     final o = json['sdp_offer'];
     if (o is Map && o['sdp'] != null && '${o['sdp']}'.isNotEmpty) {
       sdpOffer = '${o['sdp']}';
+    } else if (o is String && o.isNotEmpty) {
+      sdpOffer = o;
     }
     final a = json['sdp_answer'];
     if (a is Map && a['sdp'] != null && '${a['sdp']}'.isNotEmpty) {
       sdpAnswer = '${a['sdp']}';
+    } else if (a is String && a.isNotEmpty) {
+      sdpAnswer = a;
     }
 
     final cands = json['ice_candidates'];
