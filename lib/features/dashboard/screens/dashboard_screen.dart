@@ -360,9 +360,9 @@ class AndroidMovingCircleBottomBar extends StatelessWidget {
             final double itemWidth = barWidth / items.length;
 
             // Kích thước vòng tròn
-            const double circleSize = 68;
+            const double circleSize = 70;
             // HẠ vòng tròn xuống gần chữ hơn (số nhỏ hơn => gần đáy hơn)
-            const double circleBottom = 30;
+            const double circleBottom = 40;
 
             final double circleCenterX = itemWidth * (currentIndex + 0.5);
             final double circleLeft = circleCenterX - circleSize / 2;
