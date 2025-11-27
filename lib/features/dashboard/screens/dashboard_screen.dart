@@ -1,33 +1,32 @@
 ﻿import 'dart:io' show Platform;
-
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:flutter/foundation.dart';
-
+import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/network_info.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:flutter_sixvalley_ecommerce/features/home/screens/home_screens.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/more/screens/more_screen_view.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/cart/controllers/cart_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/chat/controllers/chat_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/dashboard/models/navigation_model.dart';
-import 'package:flutter_sixvalley_ecommerce/features/deal/controllers/flash_deal_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/restock/controllers/restock_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/search_product/controllers/search_product_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/wishlist/controllers/wishlist_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/helper/network_info.dart';
-import 'package:flutter_sixvalley_ecommerce/features/splash/controllers/splash_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
-import 'package:flutter_sixvalley_ecommerce/features/dashboard/widgets/app_exit_card_widget.dart';
-import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
-import 'package:flutter_sixvalley_ecommerce/features/home/screens/aster_theme_home_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/home/screens/fashion_theme_home_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/home/screens/home_screens.dart';
-import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-import 'package:flutter_sixvalley_ecommerce/features/more/screens/more_screen_view.dart';
 import 'package:flutter_sixvalley_ecommerce/features/main_home/screens/main_home_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_notifications_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/notifications_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/splash/controllers/splash_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/home/screens/aster_theme_home_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/deal/controllers/flash_deal_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/dashboard/widgets/app_exit_card_widget.dart';
+import 'package:flutter_sixvalley_ecommerce/features/restock/controllers/restock_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/home/screens/fashion_theme_home_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/wishlist/controllers/wishlist_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/travel_screen.dart';
-import 'package:provider/provider.dart';
-import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_notifications_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/search_product/controllers/search_product_controller.dart';
+
 
 class DashBoardScreen extends StatefulWidget {
   const DashBoardScreen({super.key});
@@ -181,7 +180,6 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       ),
     ];
 
-    // Android nav items
     final List<_AndroidNavItem> androidItems = [
       _AndroidNavItem(
         icon: Icons.home_outlined,
@@ -359,9 +357,7 @@ class AndroidMovingCircleBottomBar extends StatelessWidget {
             final double barWidth = constraints.maxWidth;
             final double itemWidth = barWidth / items.length;
 
-            // Kích thước vòng tròn
             const double circleSize = 70;
-            // HẠ vòng tròn xuống gần chữ hơn (số nhỏ hơn => gần đáy hơn)
             const double circleBottom = 40;
 
             final double circleCenterX = itemWidth * (currentIndex + 0.5);
@@ -372,7 +368,6 @@ class AndroidMovingCircleBottomBar extends StatelessWidget {
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  // Thanh xám bo góc
                   Positioned(
                     left: 0,
                     right: 0,
@@ -405,7 +400,6 @@ class AndroidMovingCircleBottomBar extends StatelessWidget {
                     ),
                   ),
 
-                  // Vòng tròn to – di chuyển theo tab đang chọn
                   AnimatedPositioned(
                     duration: const Duration(milliseconds: 230),
                     curve: Curves.easeOutCubic,
@@ -473,10 +467,9 @@ class _AndroidNavItemWidget extends StatelessWidget {
     final FontWeight labelWeight =
     selected ? FontWeight.w600 : FontWeight.w400;
 
-    // Nếu selected: ẩn icon ở bar, nhưng vẫn chừa 1 khoảng nhỏ cho chữ sát vòng tròn
     Widget iconArea;
     if (selected) {
-      iconArea = const SizedBox(height: 16); // trước: 26
+      iconArea = const SizedBox(height: 16);
     } else {
       iconArea = Stack(
         clipBehavior: Clip.none,
@@ -520,7 +513,6 @@ class _AndroidNavItemWidget extends StatelessWidget {
       borderRadius: BorderRadius.circular(20),
       onTap: onTap,
       child: Padding(
-        // giảm top, tăng bottom tí cho chữ gần vòng tròn hơn
         padding: const EdgeInsets.only(top: 8, bottom: 10),
         child: Column(
           mainAxisSize: MainAxisSize.min,
