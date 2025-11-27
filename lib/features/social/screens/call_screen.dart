@@ -454,13 +454,9 @@ class _CallScreenState extends State<CallScreen> {
     try {
       final trans = await _pc!.getTransceivers();
       for (final t in trans) {
-        // Nếu có track gửi đi thì ép direction sendrecv để tránh tạo SDP recvonly
-        if (t.sender.track != null &&
-            t.direction != TransceiverDirection.SendRecv) {
-          await t.setDirection(TransceiverDirection.SendRecv);
-          _log(
-              'force transceiver ${t.mid ?? '-'} kind=${t.sender.track?.kind} to sendrecv (was ${t.direction})');
-        }
+        // Ép về sendrecv để tránh SDP recvonly (API version này không expose direction getter)
+        await t.setDirection(TransceiverDirection.SendRecv);
+        _log('force transceiver ${t.mid ?? '-'} kind=${t.sender.track?.kind} to sendrecv');
       }
     } catch (e, st) {
       _log('ensureSendRecvTransceivers error: $e', st: st);
