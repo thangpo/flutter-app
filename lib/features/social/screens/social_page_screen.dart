@@ -365,7 +365,12 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
             ),
 
           // Có danh sách page
-          if (pages.isNotEmpty) ..._buildPageListItems(context, pages),
+          if (pages.isNotEmpty)
+            ..._buildPageListItems(
+              context,
+              pages,
+              canEdit: true,
+            ),
 
           const SizedBox(height: 16),
 
@@ -835,6 +840,9 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
           case 'edit':
             _onEditPage(page);
             break;
+          case 'delete':
+            _confirmDeletePage(page);
+            break;
         }
       },
       itemBuilder: (ctx) => <PopupMenuEntry<String>>[
@@ -843,6 +851,14 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
           child: Text(
             getTranslated('edit_page', ctx) ??
                 'Chỉnh sửa trang',
+          ),
+        ),
+        const PopupMenuDivider(height: 6),
+        PopupMenuItem<String>(
+          value: 'delete',
+          child: Text(
+            getTranslated('delete_page', ctx) ?? 'Xóa trang',
+            style: TextStyle(color: Theme.of(ctx).colorScheme.error),
           ),
         ),
       ],
@@ -885,6 +901,110 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
           ),
         );
       }
+    }
+  }
+
+  Future<void> _confirmDeletePage(SocialGetPage page) async {
+    final theme = Theme.of(context);
+    final TextEditingController pwdCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    final pageCtrl = context.read<SocialPageController>();
+
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Text(
+            getTranslated('delete_page', ctx) ?? 'Xóa trang',
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: theme.colorScheme.error,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  getTranslated('delete_page_confirm', ctx) ??
+                      'Bạn có chắc muốn xóa trang này? Hành động không thể hoàn tác.',
+                  style: theme.textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: pwdCtrl,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: getTranslated('password', ctx) ?? 'Mật khẩu',
+                    border: const OutlineInputBorder(),
+                  ),
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? (getTranslated('password_required', ctx) ??
+                          'Vui lòng nhập mật khẩu')
+                      : null,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(getTranslated('cancel', ctx) ?? 'Hủy'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: theme.colorScheme.error,
+              ),
+              onPressed: () {
+                if (formKey.currentState?.validate() ?? false) {
+                  Navigator.of(ctx).pop(true);
+                }
+              },
+              child: Text(getTranslated('delete', ctx) ?? 'Xóa'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    final String password = pwdCtrl.text.trim();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          getTranslated('deleting_page', context) ?? 'Đang xóa trang...',
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+
+    final bool ok = await pageCtrl.deletePage(page: page, password: password);
+
+    if (!mounted) return;
+
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            getTranslated('delete_page_success', context) ?? 'Đã xóa trang.',
+          ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: theme.colorScheme.error,
+          content: Text(
+            pageCtrl.deletePageError ??
+                getTranslated('delete_page_failed', context) ??
+                'Xóa trang thất bại.',
+          ),
+        ),
+      );
     }
   }
 

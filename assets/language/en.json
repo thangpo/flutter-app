@@ -1568,5 +1568,14 @@
   "event_description_empty": "No description yet",
   "event_name_empty": "Untitled event",
   "edit_event": "Edit",
-  "create_event": "Create new"
+  "create_event": "Create new",
+  "edit_page": "Edit page",
+  "delete_page": "Delete page",
+  "delete_page_confirm": "Delete page confirm",
+  "promote_page": "Promote page",
+  "page_messages": "Page messages",
+  "page_messages_subtitle": "Track conversations between customers and your Pages",
+  "search_page_conversation": "Search conversations or Page name",
+  "my_pages": "My Pages",
+  "navigation_not_implemented": "Navigation for this tab is not implemented yet"
 }
