@@ -129,14 +129,19 @@ class _CallScreenState extends State<CallScreen> {
           await stream.addTrack(e.track);
         }
 
-        try {
-          _remoteRenderer.srcObject = stream;
-          _log(
-              'onTrack kind=${e.track.kind} id=${e.track.id} remoteStream=${stream.id}');
-        } catch (err, st) {
-          _log('onTrack set renderer error: $err', st: st);
+        // Chỉ gán renderer khi track video để tránh âm thanh ghi đè stream video
+        if (e.track.kind == 'video') {
+          try {
+            _remoteRenderer.srcObject = stream;
+            _log(
+                'onTrack kind=${e.track.kind} id=${e.track.id} remoteStream=${stream.id}');
+          } catch (err, st) {
+            _log('onTrack set renderer error: $err', st: st);
+          }
+          if (mounted) setState(() {});
+        } else {
+          _log('onTrack kind=${e.track.kind} id=${e.track.id} (ignored for renderer)');
         }
-        if (mounted) setState(() {});
       };
 
       // ICE local
