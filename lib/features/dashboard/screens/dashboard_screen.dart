@@ -31,13 +31,12 @@ import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 
 class DashBoardScreen extends StatefulWidget {
   const DashBoardScreen({super.key});
-
   @override
   DashBoardScreenState createState() => DashBoardScreenState();
 }
 
 class DashBoardScreenState extends State<DashBoardScreen> {
-  int _pageIndex = 0;
+  int _pageIndex = 1;
   late List<NavigationModel> _screens;
   final PageStorageBucket bucket = PageStorageBucket();
   final GlobalKey<SocialFeedScreenState> _socialFeedKey =
@@ -48,14 +47,12 @@ class DashBoardScreenState extends State<DashBoardScreen> {
   @override
   void initState() {
     super.initState();
-
     Provider.of<FlashDealController>(context, listen: false)
         .getFlashDealList(true, true);
     Provider.of<SplashController>(context, listen: false)
         .getBusinessPagesList('default');
     Provider.of<SplashController>(context, listen: false)
         .getBusinessPagesList('pages');
-
     if (Provider.of<AuthController>(context, listen: false).isLoggedIn()) {
       Provider.of<CartController>(context, listen: false).mergeGuestCart();
       Provider.of<WishListController>(context, listen: false).getWishList();
@@ -69,7 +66,6 @@ class DashBoardScreenState extends State<DashBoardScreen> {
 
     final SplashController splashController =
     Provider.of<SplashController>(context, listen: false);
-
     Provider.of<SearchProductController>(context, listen: false)
         .getAuthorList(null);
     Provider.of<SearchProductController>(context, listen: false)
@@ -135,7 +131,6 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     final cs = theme.colorScheme;
     final platformBrightness = MediaQuery.platformBrightnessOf(context);
     final bool isIOSPlatform = !kIsWeb && Platform.isIOS;
-
     final bool hideNav = (_socialTabIndex != null &&
         _pageIndex == _socialTabIndex &&
         !_showBottomNav);
@@ -152,7 +147,6 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       navActiveColor = _boostLightness(navActiveColor, 0.20);
     }
 
-    // iOS destinations (giữ nguyên)
     final List<AdaptiveNavigationDestination> iosDestinations = [
       AdaptiveNavigationDestination(
         icon: 'house.fill',
@@ -187,7 +181,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       ),
     ];
 
-    // Android nav items (icon + label)
+    // Android nav items
     final List<_AndroidNavItem> androidItems = [
       _AndroidNavItem(
         icon: Icons.home_outlined,
@@ -227,10 +221,9 @@ class DashBoardScreenState extends State<DashBoardScreen> {
           if (context.mounted) {
             if (!Navigator.of(context).canPop()) {
               showModalBottomSheet(
-                backgroundColor: Colors.transparent,
-                context: Get.context!,
-                builder: (_) => const AppExitCard(),
-              );
+                  backgroundColor: Colors.transparent,
+                  context: Get.context!,
+                  builder: (_) => const AppExitCard());
             }
           }
         }
@@ -239,8 +232,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       child: AdaptiveScaffold(
         minimizeBehavior: TabBarMinimizeBehavior.never,
         enableBlur: isIOSPlatform,
-        // iOS dùng bottom bar native
-        bottomNavigationBar: (hideNav || !isIOSPlatform)
+        bottomNavigationBar: hideNav || !isIOSPlatform
             ? null
             : AdaptiveBottomNavigationBar(
           items: iosDestinations,
@@ -249,10 +241,9 @@ class DashBoardScreenState extends State<DashBoardScreen> {
             _screens[index],
             index,
           ),
-          useNativeBottomBar: true,
+          useNativeBottomBar: isIOSPlatform,
           selectedItemColor: navActiveColor,
         ),
-        // Android: overlay bottom bar custom giống ảnh
         body: isIOSPlatform
             ? PageStorage(
           key: ValueKey<int>(_pageIndex),
@@ -271,7 +262,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
                 left: 0,
                 right: 0,
                 bottom: 0,
-                child: AndroidCutoutBottomBar(
+                child: AndroidMovingCircleBottomBar(
                   items: androidItems,
                   currentIndex: _pageIndex,
                   onTap: (index) =>
@@ -306,7 +297,6 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     final bool isSocialTab =
         _socialTabIndex != null && index == _socialTabIndex;
     final bool isCurrent = _pageIndex == index;
-
     if (isSocialTab && isCurrent) {
       final SocialFeedScreenState? state = _socialFeedKey.currentState;
       if (state == null) return;
@@ -317,7 +307,6 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       }
       return;
     }
-
     _setPage(index);
   }
 
@@ -327,10 +316,6 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     return hsl.withLightness(newLightness).toColor();
   }
 }
-
-// ------------------------------------------------------------------
-// Android bottom bar: thanh xám bo góc + vòng tròn to chứa icon selected
-// ------------------------------------------------------------------
 
 class _AndroidNavItem {
   final IconData icon;
@@ -344,12 +329,12 @@ class _AndroidNavItem {
   });
 }
 
-class AndroidCutoutBottomBar extends StatelessWidget {
+class AndroidMovingCircleBottomBar extends StatelessWidget {
   final List<_AndroidNavItem> items;
   final int currentIndex;
   final ValueChanged<int> onTap;
 
-  const AndroidCutoutBottomBar({
+  const AndroidMovingCircleBottomBar({
     super.key,
     required this.items,
     required this.currentIndex,
@@ -359,90 +344,107 @@ class AndroidCutoutBottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
+    final Color barColor =
+    isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE8EBF0);
     final Color scaffoldBg = theme.scaffoldBackgroundColor;
-    final Color barColor = isDark
-        ? const Color(0xFF2C2C2E)
-        : const Color(0xFFE8EBF0); // xám nhạt giống wireframe
 
     return SafeArea(
-      minimum: const EdgeInsets.only(bottom: 6),
-      child: SizedBox(
-        height: 90,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            // Thanh bottom bar
-            Positioned(
-              left: 12,
-              right: 12,
-              bottom: 0,
-              child: Container(
-                height: 60,
-                decoration: BoxDecoration(
-                  color: barColor,
-                  borderRadius: BorderRadius.circular(22),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
-                      blurRadius: 10,
-                      offset: const Offset(0, -1),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: List.generate(
-                    items.length,
-                        (index) => Expanded(
-                      child: _AndroidNavItemWidget(
-                        item: items[index],
-                        selected: index == currentIndex,
-                        onTap: () => onTap(index),
+      minimum: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final double barWidth = constraints.maxWidth;
+            final double itemWidth = barWidth / items.length;
+
+            // >>> TĂNG KÍCH THƯỚC Ở ĐÂY <<<
+            const double circleSize = 68;   // trước ~52
+            const double circleBottom = 44; // đẩy vòng tròn cao hơn chút
+
+            final double circleCenterX = itemWidth * (currentIndex + 0.5);
+            final double circleLeft = circleCenterX - circleSize / 2;
+
+            return SizedBox(
+              height: 120, // tổng chiều cao, trước 90
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // Thanh xám bo góc (cao hơn)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      height: 76, // trước 60
+                      decoration: BoxDecoration(
+                        color: barColor,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.08),
+                            blurRadius: 12,
+                            offset: const Offset(0, -1),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: List.generate(
+                          items.length,
+                              (index) => Expanded(
+                            child: _AndroidNavItemWidget(
+                              item: items[index],
+                              selected: index == currentIndex,
+                              onTap: () => onTap(index),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ),
-            ),
 
-            // Vòng tròn to ở góc trái, nền cùng màu scaffold → cảm giác hõ xuống
-            Positioned(
-              left: 22,
-              bottom: 32,
-              child: Container(
-                height: 54,
-                width: 54,
-                decoration: BoxDecoration(
-                  color: scaffoldBg,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    // viền nhẹ để nhìn như bo lõm vào thanh
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
+                  // Vòng tròn to – di chuyển theo tab đang chọn (to hơn)
+                  AnimatedPositioned(
+                    duration: const Duration(milliseconds: 230),
+                    curve: Curves.easeOutCubic,
+                    left: circleLeft,
+                    bottom: circleBottom,
+                    child: Container(
+                      height: circleSize,
+                      width: circleSize,
+                      decoration: BoxDecoration(
+                        color: scaffoldBg,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.08),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Container(
+                        margin: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color:
+                          theme.colorScheme.primary.withOpacity(0.10),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Icon(
+                            items[currentIndex].icon,
+                            size: 32, // icon trong vòng tròn to hơn (trước 26)
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ),
                     ),
-                  ],
-                ),
-                child: Container(
-                  margin: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: cs.primary.withOpacity(0.08),
-                    shape: BoxShape.circle,
                   ),
-                  child: Center(
-                    child: Icon(
-                      items[currentIndex].icon,
-                      size: 26,
-                      color: cs.primary,
-                    ),
-                  ),
-                ),
+                ],
               ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -466,65 +468,71 @@ class _AndroidNavItemWidget extends StatelessWidget {
     final cs = theme.colorScheme;
 
     final Color iconColor =
-    selected ? cs.onSurface : cs.onSurface.withOpacity(0.7);
+    selected ? cs.primary : cs.onSurface.withOpacity(0.7);
     final FontWeight labelWeight =
     selected ? FontWeight.w600 : FontWeight.w400;
 
+    // Nếu selected: ẩn icon ở bar, chỉ còn chữ
+    Widget iconArea;
+    if (selected) {
+      iconArea = const SizedBox(height: 26); // chừa chỗ cao hơn tí
+    } else {
+      iconArea = Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Icon(
+            item.icon,
+            size: 24, // icon dưới bar to hơn (trước 20)
+            color: iconColor,
+          ),
+          if (item.badgeCount > 0)
+            Positioned(
+              right: -4,
+              top: -4,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: const BoxDecoration(
+                  color: Colors.redAccent,
+                  shape: BoxShape.circle,
+                ),
+                constraints: const BoxConstraints(
+                  minWidth: 16,
+                  minHeight: 16,
+                ),
+                child: Center(
+                  child: Text(
+                    item.badgeCount > 9 ? '9+' : item.badgeCount.toString(),
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      fontSize: 9,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+
     return InkWell(
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(20),
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.only(top: 10, bottom: 6),
+        padding: const EdgeInsets.only(top: 12, bottom: 8),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Icon(
-                  item.icon,
-                  size: 20,
-                  color: iconColor,
-                ),
-                if (item.badgeCount > 0)
-                  Positioned(
-                    right: -4,
-                    top: -4,
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: const BoxDecoration(
-                        color: Colors.redAccent,
-                        shape: BoxShape.circle,
-                      ),
-                      constraints: const BoxConstraints(
-                        minWidth: 14,
-                        minHeight: 14,
-                      ),
-                      child: Center(
-                        child: Text(
-                          item.badgeCount > 9
-                              ? '9+'
-                              : item.badgeCount.toString(),
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            fontSize: 8,
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+            iconArea,
             const SizedBox(height: 4),
             Text(
               item.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.labelSmall?.copyWith(
-                fontSize: 10,
+                fontSize: 11.5, // chữ lớn hơn (trước 10)
                 fontWeight: labelWeight,
-                color: cs.onSurface.withOpacity(selected ? 0.95 : 0.7),
+                color: cs.onSurface.withOpacity(selected ? 0.95 : 0.75),
               ),
             ),
           ],
