@@ -359,25 +359,26 @@ class AndroidMovingCircleBottomBar extends StatelessWidget {
             final double barWidth = constraints.maxWidth;
             final double itemWidth = barWidth / items.length;
 
-            // >>> TĂNG KÍCH THƯỚC Ở ĐÂY <<<
-            const double circleSize = 68;   // trước ~52
-            const double circleBottom = 44; // đẩy vòng tròn cao hơn chút
+            // Kích thước vòng tròn
+            const double circleSize = 68;
+            // HẠ vòng tròn xuống gần chữ hơn (số nhỏ hơn => gần đáy hơn)
+            const double circleBottom = 30;
 
             final double circleCenterX = itemWidth * (currentIndex + 0.5);
             final double circleLeft = circleCenterX - circleSize / 2;
 
             return SizedBox(
-              height: 120, // tổng chiều cao, trước 90
+              height: 110,
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  // Thanh xám bo góc (cao hơn)
+                  // Thanh xám bo góc
                   Positioned(
                     left: 0,
                     right: 0,
                     bottom: 0,
                     child: Container(
-                      height: 76, // trước 60
+                      height: 76,
                       decoration: BoxDecoration(
                         color: barColor,
                         borderRadius: BorderRadius.circular(24),
@@ -404,7 +405,7 @@ class AndroidMovingCircleBottomBar extends StatelessWidget {
                     ),
                   ),
 
-                  // Vòng tròn to – di chuyển theo tab đang chọn (to hơn)
+                  // Vòng tròn to – di chuyển theo tab đang chọn
                   AnimatedPositioned(
                     duration: const Duration(milliseconds: 230),
                     curve: Curves.easeOutCubic,
@@ -434,7 +435,7 @@ class AndroidMovingCircleBottomBar extends StatelessWidget {
                         child: Center(
                           child: Icon(
                             items[currentIndex].icon,
-                            size: 32, // icon trong vòng tròn to hơn (trước 26)
+                            size: 32,
                             color: theme.colorScheme.primary,
                           ),
                         ),
@@ -472,17 +473,17 @@ class _AndroidNavItemWidget extends StatelessWidget {
     final FontWeight labelWeight =
     selected ? FontWeight.w600 : FontWeight.w400;
 
-    // Nếu selected: ẩn icon ở bar, chỉ còn chữ
+    // Nếu selected: ẩn icon ở bar, nhưng vẫn chừa 1 khoảng nhỏ cho chữ sát vòng tròn
     Widget iconArea;
     if (selected) {
-      iconArea = const SizedBox(height: 26); // chừa chỗ cao hơn tí
+      iconArea = const SizedBox(height: 16); // trước: 26
     } else {
       iconArea = Stack(
         clipBehavior: Clip.none,
         children: [
           Icon(
             item.icon,
-            size: 24, // icon dưới bar to hơn (trước 20)
+            size: 24,
             color: iconColor,
           ),
           if (item.badgeCount > 0)
@@ -519,18 +520,19 @@ class _AndroidNavItemWidget extends StatelessWidget {
       borderRadius: BorderRadius.circular(20),
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.only(top: 12, bottom: 8),
+        // giảm top, tăng bottom tí cho chữ gần vòng tròn hơn
+        padding: const EdgeInsets.only(top: 8, bottom: 10),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             iconArea,
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
               item.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.labelSmall?.copyWith(
-                fontSize: 11.5, // chữ lớn hơn (trước 10)
+                fontSize: 11.5,
                 fontWeight: labelWeight,
                 color: cs.onSurface.withOpacity(selected ? 0.95 : 0.75),
               ),
