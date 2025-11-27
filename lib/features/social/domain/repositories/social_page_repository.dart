@@ -627,10 +627,6 @@
         final String url =
             '${AppConstants.socialBaseUrl}${AppConstants.socialSendMessPage}?access_token=$token';
 
-        // Log URL và token để kiểm tra
-        print('Sending request to URL: $url');
-        print('Using token: $token');
-
         // Body: server_key, type, page_id, recipient_id, message_hash_id, ...
         final Map<String, dynamic> body = <String, dynamic>{
           'server_key': AppConstants.socialServerKey,
@@ -640,46 +636,32 @@
           'message_hash_id': messageHashId,
         };
 
-        // Log request body để kiểm tra
-        print('Request body: ${jsonEncode(body)}');
-
-        // Kiểm tra và log text nếu có
+        // Kiểm tra text nếu có
         if (text.trim().isNotEmpty) {
           body['text'] = text;
-          print("Text to be sent: $text");
         } else {
-          print("Text is empty or invalid");
           return ApiResponseModel.withError("Text cannot be empty");
         }
 
-        // Log các tham số optional nếu có
         if (file != null) {
           body['file'] = file;
-          print("File attached: ${file.filename}");
         }
 
         if (gif != null && gif.isNotEmpty) {
           body['gif'] = gif;
-          print("GIF attached: $gif");
         }
 
         if (imageUrl != null && imageUrl.isNotEmpty) {
           body['image_url'] = imageUrl;
-          print("Image URL attached: $imageUrl");
         }
 
         if (lng != null && lng.isNotEmpty) {
           body['lng'] = lng;
-          print("Longitude attached: $lng");
         }
 
         if (lat != null && lat.isNotEmpty) {
           body['lat'] = lat;
-          print("Latitude attached: $lat");
         }
-
-        // Log final body data
-        print("Final body to be sent: ${jsonEncode(body)}");
 
         final FormData formData = FormData.fromMap(body);
 
@@ -690,25 +672,17 @@
           options: Options(contentType: 'multipart/form-data'),
         );
 
-        // Log response status code và body
-        print('Response status code: ${response.statusCode}');
-        print('Response body: ${jsonEncode(response.data)}');
-
         // Kiểm tra và trả về phản hồi thành công
         if (response.statusCode == 200 && response.data['api_status'] == 200) {
           return ApiResponseModel.withSuccess(response);
         } else {
-          // Log API status và message nếu không thành công
           final String apiStatus = response.data['api_status'].toString();
           final String errorMessage = response.data['errors']?['error_text'] ??
               response.data['message'] ??
               'Unknown error';
-          print("API Error: Status: $apiStatus, Message: $errorMessage");
           return ApiResponseModel.withError('Failed to send message: $errorMessage');
         }
       } catch (e) {
-        // Log lỗi chi tiết
-        print('Error while sending message: $e');
         return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
       }
     }
