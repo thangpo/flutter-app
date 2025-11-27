@@ -178,7 +178,11 @@ class CallInviteForegroundListener {
     if (!raw.contains('call_invite')) return null;
 
     String? callIdStr = _extractValue(raw, 'call_id');
-    String? mediaStr = _extractValue(raw, 'media');
+    String? mediaStr = _extractValue(raw, 'media') ??
+        _extractValue(raw, 'media_type') ??
+        _extractValue(raw, 'call_type') ??
+        _extractValue(raw, 'type_two') ??
+        _extractValue(raw, 'call_media');
     String? tsStr = _extractValue(raw, 'ts');
 
     final callId = int.tryParse(callIdStr ?? '');

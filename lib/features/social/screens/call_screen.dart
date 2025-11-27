@@ -81,7 +81,8 @@ class _CallScreenState extends State<CallScreen> {
     if (!_viewAlive) return;
 
     try {
-      final isVideo = (widget.mediaType == 'video');
+      final isVideo =
+          (widget.mediaType == 'video') || (_cc.activeMediaType == 'video');
 
       _micOn = true;
       _camOn = isVideo;
@@ -275,7 +276,7 @@ class _CallScreenState extends State<CallScreen> {
             RTCSessionDescription(offer, 'offer'),
           );
           _remoteDescSet = true;
-          _log('callee setRemoteDescription(offer) len=${offer.length}');
+          _log('callee setRemoteDescription(offer) ${_sdpSummary(offer)}');
           _flushPendingCandidates();
         } catch (e) {
           final msg = '$e';
@@ -297,7 +298,7 @@ class _CallScreenState extends State<CallScreen> {
           });
           await _pc!.setLocalDescription(answer);
           await _cc.sendAnswer(answer.sdp!);
-          _log('callee answer created len=${answer.sdp?.length}');
+          _log('callee answer created ${_sdpSummary(answer.sdp ?? '')}');
         } catch (e) {
           final msg = '$e';
           if (!msg.contains('Called in wrong state')) {
@@ -319,7 +320,7 @@ class _CallScreenState extends State<CallScreen> {
           );
           _remoteDescSet = true;
           _answerHandled = true;
-          _log('caller setRemoteDescription(answer) len=${ans.length}');
+          _log('caller setRemoteDescription(answer) ${_sdpSummary(ans)}');
           _flushPendingCandidates();
         } catch (e) {
           _error('Lỗi set ANSWER: $e');
@@ -389,6 +390,25 @@ class _CallScreenState extends State<CallScreen> {
 
   void _log(String msg, {StackTrace? st}) {
     developer.log(msg, name: 'CallScreen', stackTrace: st);
+  }
+
+  String _sdpSummary(String sdp) {
+    // Quick summary for debugging: check if m=audio/video and direction lines.
+    final audio = sdp.contains('\nm=audio');
+    final video = sdp.contains('\nm=video');
+    String dir = '';
+    for (final line in [
+      'a=sendrecv',
+      'a=recvonly',
+      'a=sendonly',
+      'a=inactive',
+    ]) {
+      if (sdp.contains('\n$line')) {
+        dir = line.replaceFirst('a=', '');
+        break;
+      }
+    }
+    return 'audio=${audio ? 'y' : 'n'} video=${video ? 'y' : 'n'} dir=${dir.isEmpty ? '?' : dir} len=${sdp.length}';
   }
 
   Future<void> _disposeRTC() async {
