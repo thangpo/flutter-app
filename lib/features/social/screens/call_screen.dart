@@ -1,5 +1,6 @@
 // lib/features/social/screens/call_screen.dart
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:provider/provider.dart';
@@ -66,7 +67,9 @@ class _CallScreenState extends State<CallScreen> {
     try {
       await _localRenderer.initialize();
       await _remoteRenderer.initialize();
-    } catch (_) {}
+    } catch (e, st) {
+      _log('initRenderers error: $e', st: st);
+    }
 
     _startCallFlow();
   }
@@ -80,11 +83,14 @@ class _CallScreenState extends State<CallScreen> {
       _micOn = true;
       _camOn = isVideo;
       _speakerOn = true;
+      _log('startCallFlow | isCaller=${widget.isCaller} media=${widget.mediaType}');
 
       // bật loa ngoài
       try {
         await Helper.setSpeakerphoneOn(true);
-      } catch (_) {}
+      } catch (e, st) {
+        _log('setSpeakerphoneOn error: $e', st: st);
+      }
 
       // tạo PeerConnection
       final config = {
@@ -107,6 +113,7 @@ class _CallScreenState extends State<CallScreen> {
       };
 
       _pc = await createPeerConnection(config);
+      _log('PeerConnection created');
 
       // remote track
       _pc!.onTrack = (e) async {
@@ -120,7 +127,11 @@ class _CallScreenState extends State<CallScreen> {
 
         try {
           _remoteRenderer.srcObject = stream;
-        } catch (_) {}
+          _log(
+              'onTrack kind=${e.track.kind} id=${e.track.id} remoteStream=${stream.id}');
+        } catch (err, st) {
+          _log('onTrack set renderer error: $err', st: st);
+        }
         if (mounted) setState(() {});
       };
 
@@ -132,10 +143,13 @@ class _CallScreenState extends State<CallScreen> {
           sdpMid: c.sdpMid,
           sdpMLineIndex: c.sdpMLineIndex,
         );
+        _log(
+            'onIceCandidate mid=${c.sdpMid} mline=${c.sdpMLineIndex} len=${c.candidate?.length}');
       };
 
       // connection state
       _pc!.onConnectionState = (s) {
+        _log('connectionState -> $s');
         if (s == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
             s == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
             s == RTCPeerConnectionState.RTCPeerConnectionStateClosed) {
@@ -147,7 +161,10 @@ class _CallScreenState extends State<CallScreen> {
       _pc!.onAddStream = (MediaStream stream) async {
         try {
           _remoteRenderer.srcObject = stream;
-        } catch (_) {}
+          _log('onAddStream id=${stream.id} tracks=${stream.getTracks().length}');
+        } catch (err, st) {
+          _log('onAddStream set renderer error: $err', st: st);
+        }
         if (mounted) setState(() {});
       };
 
@@ -172,7 +189,11 @@ class _CallScreenState extends State<CallScreen> {
       _localStream = await navigator.mediaDevices.getUserMedia(constraints);
       try {
         _localRenderer.srcObject = _localStream;
-      } catch (_) {}
+        _log(
+            'local stream id=${_localStream?.id} tracks=${_localStream?.getTracks().length}');
+      } catch (err, st) {
+        _log('set local renderer error: $err', st: st);
+      }
 
       // Thêm sẵn transceiver recv-only để chắc chắn nhận remote (unified-plan iOS)
       try {
@@ -189,6 +210,7 @@ class _CallScreenState extends State<CallScreen> {
       // add local track vào PC
       for (var t in _localStream!.getTracks()) {
         await _pc!.addTrack(t, _localStream!);
+        _log('addTrack kind=${t.kind} id=${t.id}');
       }
 
       // tăng bitrate gửi đi (giống style cũ — KHÔNG dùng getParameters)
@@ -217,9 +239,11 @@ class _CallScreenState extends State<CallScreen> {
         });
         await _pc!.setLocalDescription(offer);
         await _cc.sendOffer(offer.sdp!);
+        _log('offer created len=${offer.sdp?.length}');
       }
-    } catch (e) {
+    } catch (e, st) {
       _error('Lỗi khởi tạo call: $e');
+      _log('startCallFlow error: $e', st: st);
       _hangup();
     }
   }
@@ -248,11 +272,13 @@ class _CallScreenState extends State<CallScreen> {
             RTCSessionDescription(offer, 'offer'),
           );
           _remoteDescSet = true;
+          _log('callee setRemoteDescription(offer) len=${offer.length}');
         } catch (e) {
           final msg = '$e';
           // Nếu WebRTC báo "wrong state" thì coi như đã set trước đó, bỏ qua
           if (!msg.contains('Called in wrong state')) {
             _error('Lỗi set remote OFFER: $e');
+            _log('callee setRemoteDescription(offer) error: $e');
           }
         }
       }
@@ -267,10 +293,12 @@ class _CallScreenState extends State<CallScreen> {
           });
           await _pc!.setLocalDescription(answer);
           await _cc.sendAnswer(answer.sdp!);
+          _log('callee answer created len=${answer.sdp?.length}');
         } catch (e) {
           final msg = '$e';
           if (!msg.contains('Called in wrong state')) {
             _error('Lỗi xử lý OFFER: $e');
+            _log('callee create/send answer error: $e');
           }
         }
       }
@@ -287,8 +315,10 @@ class _CallScreenState extends State<CallScreen> {
           );
           _remoteDescSet = true;
           _answerHandled = true;
+          _log('caller setRemoteDescription(answer) len=${ans.length}');
         } catch (e) {
           _error('Lỗi set ANSWER: $e');
+          _log('caller setRemoteDescription(answer) error: $e');
         }
       }
     }
@@ -304,7 +334,10 @@ class _CallScreenState extends State<CallScreen> {
           await _pc!.addCandidate(
             RTCIceCandidate(ic.candidate, ic.sdpMid, ic.sdpMLineIndex),
           );
-        } catch (_) {}
+          _log('addRemoteCandidate mid=${ic.sdpMid} mline=${ic.sdpMLineIndex}');
+        } catch (e, st) {
+          _log('addRemoteCandidate error: $e', st: st);
+        }
       }
     }
   }
@@ -326,6 +359,10 @@ class _CallScreenState extends State<CallScreen> {
   void _error(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  void _log(String msg, {StackTrace? st}) {
+    developer.log(msg, name: 'CallScreen', stackTrace: st);
   }
 
   Future<void> _disposeRTC() async {
