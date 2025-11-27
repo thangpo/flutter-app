@@ -297,6 +297,7 @@ class _CallScreenState extends State<CallScreen> {
             wantVideo: (_cc.activeMediaType == 'video' ||
                 widget.mediaType == 'video'),
           );
+          await _ensureSendRecvTransceivers();
 
           final answer = await _pc!.createAnswer({
             'offerToReceiveAudio': 1,
@@ -445,6 +446,24 @@ class _CallScreenState extends State<CallScreen> {
       }
     } catch (e, st) {
       _log('ensureLocalMedia addTrack error: $e', st: st);
+    }
+  }
+
+  Future<void> _ensureSendRecvTransceivers() async {
+    if (_pc == null) return;
+    try {
+      final trans = await _pc!.getTransceivers();
+      for (final t in trans) {
+        // Nếu có track gửi đi thì ép direction sendrecv để tránh tạo SDP recvonly
+        if (t.sender.track != null &&
+            t.direction != TransceiverDirection.SendRecv) {
+          await t.setDirection(TransceiverDirection.SendRecv);
+          _log(
+              'force transceiver ${t.mid ?? '-'} kind=${t.sender.track?.kind} to sendrecv (was ${t.direction})');
+        }
+      }
+    } catch (e, st) {
+      _log('ensureSendRecvTransceivers error: $e', st: st);
     }
   }
 
