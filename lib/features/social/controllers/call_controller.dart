@@ -255,7 +255,8 @@ class CallController extends ChangeNotifier {
       // ICE
       if (pkt.iceCandidates.isNotEmpty) {
         for (final c in pkt.iceCandidates) {
-          if (_seen.add(c.candidate)) {
+          final key = '${c.candidate}|${c.sdpMid}|${c.sdpMLineIndex}';
+          if (_seen.add(key)) {
             _iceCandidates.add(c);
           }
         }
