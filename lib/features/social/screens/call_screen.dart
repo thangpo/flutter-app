@@ -226,6 +226,12 @@ class _CallScreenState extends State<CallScreen> {
         _log('addTrack kind=${t.kind} id=${t.id}');
       }
 
+      // Fallback Plan-B: một số thiết bị chỉ gửi media khi addStream
+      try {
+        await _pc!.addStream(_localStream!);
+        _log('addStream fallback with localStream id=${_localStream?.id}');
+      } catch (_) {}
+
       // tăng bitrate gửi đi (giống style cũ — KHÔNG dùng getParameters)
       try {
         final senders = await _pc!.getSenders();
