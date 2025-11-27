@@ -253,6 +253,7 @@ class CallInviteForegroundListener {
   /// Chuẩn hóa media từ payload (media | call_type | type_two | call_media)
   static String? _extractMedia(Map<String, dynamic> data) {
     final raw = (data['media'] ??
+            data['media_type'] ?? // backend đôi khi dùng media_type
             data['call_type'] ??
             data['type_two'] ??
             data['call_media'])
