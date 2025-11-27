@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:provider/provider.dart';
 
+import '../domain/models/ice_candidate_lite.dart';
+
 import '../controllers/call_controller.dart';
 
 class CallScreen extends StatefulWidget {
@@ -45,6 +47,7 @@ class _CallScreenState extends State<CallScreen> {
   bool _remoteDescSet = false;
 
   final Set<String> _addedCandidates = {};
+  final List<IceCandidateLite> _pendingCandidates = [];
 
   // UI controls
   bool _micOn = true;
@@ -199,11 +202,11 @@ class _CallScreenState extends State<CallScreen> {
       try {
         await _pc!.addTransceiver(
           kind: RTCRtpMediaType.RTCRtpMediaTypeAudio,
-          init: RTCRtpTransceiverInit(direction: TransceiverDirection.RecvOnly),
+          init: RTCRtpTransceiverInit(direction: TransceiverDirection.SendRecv),
         );
         await _pc!.addTransceiver(
           kind: RTCRtpMediaType.RTCRtpMediaTypeVideo,
-          init: RTCRtpTransceiverInit(direction: TransceiverDirection.RecvOnly),
+          init: RTCRtpTransceiverInit(direction: TransceiverDirection.SendRecv),
         );
       } catch (_) {}
 
@@ -273,6 +276,7 @@ class _CallScreenState extends State<CallScreen> {
           );
           _remoteDescSet = true;
           _log('callee setRemoteDescription(offer) len=${offer.length}');
+          _flushPendingCandidates();
         } catch (e) {
           final msg = '$e';
           // Nếu WebRTC báo "wrong state" thì coi như đã set trước đó, bỏ qua
@@ -316,6 +320,7 @@ class _CallScreenState extends State<CallScreen> {
           _remoteDescSet = true;
           _answerHandled = true;
           _log('caller setRemoteDescription(answer) len=${ans.length}');
+          _flushPendingCandidates();
         } catch (e) {
           _error('Lỗi set ANSWER: $e');
           _log('caller setRemoteDescription(answer) error: $e');
@@ -330,23 +335,36 @@ class _CallScreenState extends State<CallScreen> {
         if (_addedCandidates.contains(key)) continue;
 
         if (!_remoteDescSet) {
-          // Chờ có remote description rồi mới add, tránh lỗi "remote description null"
+          _pendingCandidates.add(ic);
           _log(
-              'skip addRemoteCandidate (no remoteDesc yet) mid=${ic.sdpMid} mline=${ic.sdpMLineIndex}');
-          continue;
-        }
-
-        _addedCandidates.add(key);
-
-        try {
-          await _pc!.addCandidate(
-            RTCIceCandidate(ic.candidate, ic.sdpMid, ic.sdpMLineIndex),
-          );
-          _log('addRemoteCandidate mid=${ic.sdpMid} mline=${ic.sdpMLineIndex}');
-        } catch (e, st) {
-          _log('addRemoteCandidate error: $e', st: st);
+              'queue remoteCandidate (no remoteDesc yet) mid=${ic.sdpMid} mline=${ic.sdpMLineIndex}');
+        } else {
+          _addCandidate(ic, key);
         }
       }
+    }
+  }
+
+  Future<void> _addCandidate(IceCandidateLite ic, String key) async {
+    _addedCandidates.add(key);
+    try {
+      await _pc!.addCandidate(
+        RTCIceCandidate(ic.candidate, ic.sdpMid, ic.sdpMLineIndex),
+      );
+      _log('addRemoteCandidate mid=${ic.sdpMid} mline=${ic.sdpMLineIndex}');
+    } catch (e, st) {
+      _log('addRemoteCandidate error: $e', st: st);
+    }
+  }
+
+  void _flushPendingCandidates() {
+    if (!_remoteDescSet || _pendingCandidates.isEmpty) return;
+    final pending = List<IceCandidateLite>.from(_pendingCandidates);
+    _pendingCandidates.clear();
+    for (final ic in pending) {
+      final key = '${ic.candidate}|${ic.sdpMid}|${ic.sdpMLineIndex}';
+      if (_addedCandidates.contains(key)) continue;
+      _addCandidate(ic, key);
     }
   }
 
