@@ -292,6 +292,12 @@ class _CallScreenState extends State<CallScreen> {
       if (_remoteDescSet && !_offerHandled) {
         _offerHandled = true; // đánh dấu đã xử lý để tránh lặp
         try {
+          // Nếu chưa có local media (do payload sai mediaType), đảm bảo mở media trước khi answer
+          await _ensureLocalMedia(
+            wantVideo: (_cc.activeMediaType == 'video' ||
+                widget.mediaType == 'video'),
+          );
+
           final answer = await _pc!.createAnswer({
             'offerToReceiveAudio': 1,
             'offerToReceiveVideo': 1,
@@ -390,6 +396,56 @@ class _CallScreenState extends State<CallScreen> {
 
   void _log(String msg, {StackTrace? st}) {
     developer.log(msg, name: 'CallScreen', stackTrace: st);
+  }
+
+  Future<void> _ensureLocalMedia({required bool wantVideo}) async {
+    if (_pc == null) return;
+
+    // Tạo local stream nếu chưa có
+    if (_localStream == null) {
+      final constraints = {
+        'audio': true,
+        'video': wantVideo
+            ? {
+                'mandatory': {
+                  'minWidth': '720',
+                  'minHeight': '480',
+                  'maxWidth': '1280',
+                  'maxHeight': '720',
+                  'minFrameRate': '24',
+                  'maxFrameRate': '30',
+                },
+                'facingMode': 'user',
+              }
+            : false,
+      };
+      try {
+        _localStream = await navigator.mediaDevices.getUserMedia(constraints);
+        _localRenderer.srcObject = _localStream;
+        _log(
+            'ensureLocalMedia: created stream id=${_localStream?.id} tracks=${_localStream?.getTracks().length} video=$wantVideo');
+      } catch (e, st) {
+        _log('ensureLocalMedia getUserMedia error: $e', st: st);
+        return;
+      }
+    }
+
+    // Add missing tracks to PeerConnection
+    try {
+      final senders = await _pc!.getSenders();
+      final existingTrackIds = senders
+          .where((s) => s.track != null)
+          .map((s) => s.track!.id)
+          .toSet();
+      for (var t in _localStream!.getTracks()) {
+        if (!existingTrackIds.contains(t.id)) {
+          await _pc!.addTrack(t, _localStream!);
+          _log('ensureLocalMedia: addTrack kind=${t.kind} id=${t.id}');
+        }
+      }
+    } catch (e, st) {
+      _log('ensureLocalMedia addTrack error: $e', st: st);
+    }
   }
 
   String _sdpSummary(String sdp) {
