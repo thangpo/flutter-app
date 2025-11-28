@@ -97,9 +97,20 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     if (_handling) return;
     setState(() => _handling = true);
 
+    // Đảm bảo đã attach call trước khi gửi answer
+    if (_cc.activeCallId != widget.callId) {
+      _log('accept: attaching callId=${widget.callId} media=${widget.mediaType}');
+      _cc.attachCall(
+        callId: widget.callId,
+        mediaType: widget.mediaType,
+        initialStatus: 'ringing',
+      );
+    }
+
     // Chuẩn Messenger: bấm "Nghe" là vào luôn màn call,
     // không cần chờ server confirm 'answered'
     try {
+      _log('accept: action(answer) start callId=${widget.callId}');
       await _cc
           .action('answer')
           .timeout(const Duration(seconds: 2), onTimeout: () {
@@ -136,7 +147,17 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     if (_handling) return;
     setState(() => _handling = true);
 
+    if (_cc.activeCallId != widget.callId) {
+      _log('decline: attaching callId=${widget.callId} media=${widget.mediaType}');
+      _cc.attachCall(
+        callId: widget.callId,
+        mediaType: widget.mediaType,
+        initialStatus: 'ringing',
+      );
+    }
+
     try {
+      _log('decline: action(decline) start callId=${widget.callId}');
       await _cc
           .action('decline')
           .timeout(const Duration(seconds: 2), onTimeout: () {
