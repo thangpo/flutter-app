@@ -33,6 +33,7 @@ class _CallScreenState extends State<CallScreen> {
   RTCPeerConnection? _pc;
   MediaStream? _localStream;
   MediaStream? _remoteStream;
+  bool _localTracksAdded = false;
 
   final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
   final RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
@@ -225,6 +226,7 @@ class _CallScreenState extends State<CallScreen> {
         await _pc!.addTrack(t, _localStream!);
         _log('addTrack kind=${t.kind} id=${t.id}');
       }
+      _localTracksAdded = true;
 
       // tăng bitrate gửi đi (giống style cũ — KHÔNG dùng getParameters)
       try {
@@ -471,20 +473,23 @@ class _CallScreenState extends State<CallScreen> {
     }
 
     // Add missing tracks to PeerConnection
-    try {
-      final senders = await _pc!.getSenders();
-      final existingTrackIds = senders
-          .where((s) => s.track != null)
-          .map((s) => s.track!.id)
-          .toSet();
-      for (var t in _localStream!.getTracks()) {
-        if (!existingTrackIds.contains(t.id)) {
-          await _pc!.addTrack(t, _localStream!);
-          _log('ensureLocalMedia: addTrack kind=${t.kind} id=${t.id}');
+    if (!_localTracksAdded) {
+      try {
+        final senders = await _pc!.getSenders();
+        final existingTrackIds = senders
+            .where((s) => s.track != null)
+            .map((s) => s.track!.id)
+            .toSet();
+        for (var t in _localStream!.getTracks()) {
+          if (!existingTrackIds.contains(t.id)) {
+            await _pc!.addTrack(t, _localStream!);
+            _log('ensureLocalMedia: addTrack kind=${t.kind} id=${t.id}');
+          }
         }
+        _localTracksAdded = true;
+      } catch (e, st) {
+        _log('ensureLocalMedia addTrack error: $e', st: st);
       }
-    } catch (e, st) {
-      _log('ensureLocalMedia addTrack error: $e', st: st);
     }
   }
 
