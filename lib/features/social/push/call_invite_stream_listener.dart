@@ -414,11 +414,16 @@ class CallInviteForegroundListener {
     _routing = true;
 
     try {
-      ctx.read<CallController>().attachCall(
-            callId: inv.callId,
-            mediaType: inv.mediaType,
-            initialStatus: 'ringing',
-          );
+      final cc = ctx.read<CallController>();
+      if (cc.isCallHandled(inv.callId)) {
+        _routing = false;
+        return;
+      }
+      cc.attachCall(
+        callId: inv.callId,
+        mediaType: inv.mediaType,
+        initialStatus: 'ringing',
+      );
     } catch (_) {}
 
     nav

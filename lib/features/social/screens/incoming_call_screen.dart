@@ -50,6 +50,11 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
 
   void _attachIfNeeded() {
     if (!_viewAlive) return;
+    if (_cc.isCallHandled(widget.callId)) {
+      // Call �`A� k���t th��?c, kh��ng vA�o mA�n incoming n���a
+      Navigator.of(context).maybePop();
+      return;
+    }
     if (_cc.activeCallId != widget.callId) {
       _cc.attachCall(
         callId: widget.callId,

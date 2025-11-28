@@ -172,6 +172,7 @@ class SocialCallPushHandler {
 
     Future<void> _doAttachAndOpen(BuildContext ctx2) async {
       final cc = ctx2.read<CallController>();
+      if (cc.isCallHandled(callId)) return;
       try {
         cc.attachCall(callId: callId, mediaType: media);
       } catch (_) {}
