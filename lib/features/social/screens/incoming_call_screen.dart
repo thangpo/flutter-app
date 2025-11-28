@@ -34,6 +34,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
 
   bool _handling = false;
   bool _viewAlive = true;
+  bool _detaching = false;
 
   @override
   void initState() {
@@ -43,10 +44,12 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     _listener = _onControllerChanged;
     _cc.addListener(_listener);
 
-    _attachIfNeeded();
+    // Delay attach 1 frame để tránh notifyListeners trong lúc build gây assert
+    WidgetsBinding.instance.addPostFrameCallback((_) => _attachIfNeeded());
   }
 
   void _attachIfNeeded() {
+    if (!_viewAlive) return;
     if (_cc.activeCallId != widget.callId) {
       _cc.attachCall(
         callId: widget.callId,
@@ -69,6 +72,11 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   }
 
   Future<void> _safeDetachAndPop() async {
+    if (_detaching) return;
+    _detaching = true;
+    _viewAlive = false;
+    _cc.removeListener(_listener);
+
     try {
       await _cc.detachCall();
     } catch (_) {}
@@ -126,7 +134,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   @override
   void dispose() {
     _viewAlive = false;
-    _cc.removeListener(_listener);
+    if (!_detaching) {
+      _cc.removeListener(_listener);
+    }
     super.dispose();
   }
 
