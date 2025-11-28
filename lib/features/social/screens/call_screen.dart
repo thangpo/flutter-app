@@ -226,15 +226,21 @@ class _CallScreenState extends State<CallScreen> {
       } catch (_) {}
 
       // add local track vào PC
+      var addedOk = true;
       for (var t in _localStream!.getTracks()) {
         try {
           await _pc!.addTrack(t, _localStream!);
           _log('addTrack kind=${t.kind} id=${t.id}');
         } catch (e, st) {
+          addedOk = false;
           _log('addTrack error: $e', st: st);
         }
       }
-      _localTracksAdded = true;
+      _localTracksAdded = addedOk;
+      if (!addedOk) {
+        // retry gắn track nếu lần đầu lỗi (trạng thái thiết bị/permission)
+        await _ensureLocalMedia(wantVideo: isVideo);
+      }
 
       // tăng bitrate gửi đi (giống style cũ — KHÔNG dùng getParameters)
       try {
@@ -256,6 +262,9 @@ class _CallScreenState extends State<CallScreen> {
 
       // Caller tạo OFFER → gửi
       if (widget.isCaller) {
+        if (!_localTracksAdded || _localStream == null) {
+          await _ensureLocalMedia(wantVideo: isVideo);
+        }
         final offer = await _pc!.createOffer({
           'offerToReceiveAudio': 1,
           'offerToReceiveVideo': 1,
@@ -518,17 +527,19 @@ class _CallScreenState extends State<CallScreen> {
             .where((s) => s.track != null)
             .map((s) => s.track!.id)
             .toSet();
+        var ok = true;
         for (var t in _localStream!.getTracks()) {
           if (!existingTrackIds.contains(t.id)) {
             try {
               await _pc!.addTrack(t, _localStream!);
               _log('ensureLocalMedia: addTrack kind=${t.kind} id=${t.id}');
             } catch (e, st) {
+              ok = false;
               _log('ensureLocalMedia addTrack error: $e', st: st);
             }
           }
         }
-        _localTracksAdded = true;
+        _localTracksAdded = ok;
       } catch (e, st) {
         _log('ensureLocalMedia addTrack error: $e', st: st);
       }
@@ -788,4 +799,5 @@ class _CallScreenState extends State<CallScreen> {
     } catch (_) {}
   }
 }
+
 
