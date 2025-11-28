@@ -269,8 +269,10 @@ class CallController extends ChangeNotifier {
 
       // if ended -> stop + clear
       if (_callStatus == "declined" || _callStatus == "ended") {
+        final endedId = _callId;
         _stopPolling();
         _resetState(ended: true);
+        if (endedId != null) _handledCallIds.add(endedId);
         notifyListeners();
         return;
       }
