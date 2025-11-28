@@ -23,6 +23,7 @@ class CallController extends ChangeNotifier {
 
   final List<IceCandidateLite> _iceCandidates = [];
   final Set<String> _seen = {}; // dedup ICE
+  final Set<int> _handledCallIds = {}; // callId đã xử lý (chặn re-open)
 
   Timer? _pollTimer;
   bool _polling = false;
@@ -38,6 +39,8 @@ class CallController extends ChangeNotifier {
   String? get sdpOffer => _sdpOffer;
   String? get sdpAnswer => _sdpAnswer;
   List<IceCandidateLite> get iceCandidates => List.unmodifiable(_iceCandidates);
+  bool isCallHandled(int id) => _handledCallIds.contains(id);
+  void markCallHandled(int id) => _handledCallIds.add(id);
 
   // ===== INIT =====
   Future<void> init() async {
@@ -92,8 +95,10 @@ class CallController extends ChangeNotifier {
 
   /// Khi nhấn từ chối / peer từ chối / peer end
   Future<void> detachCall() async {
+    final id = _callId;
     _stopPolling();
     _resetState(ended: true);
+    if (id != null) _handledCallIds.add(id);
     notifyListeners();
   }
 
