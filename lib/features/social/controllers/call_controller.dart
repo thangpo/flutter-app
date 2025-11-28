@@ -262,9 +262,12 @@ class CallController extends ChangeNotifier {
         }
       }
 
-      // if ended → stop
+      // if ended -> stop + clear
       if (_callStatus == "declined" || _callStatus == "ended") {
         _stopPolling();
+        _resetState(ended: true);
+        notifyListeners();
+        return;
       }
 
       notifyListeners();
@@ -289,3 +292,4 @@ class CallController extends ChangeNotifier {
     super.dispose();
   }
 }
+
