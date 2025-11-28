@@ -47,6 +47,12 @@ class _CallScreenState extends State<CallScreen> {
   bool _offerHandled = false;
   bool _answerHandled = false;
   bool _remoteDescSet = false;
+  String? _localOfferSdp;
+  DateTime? _offerSentAt;
+  bool _offerResent = false;
+  String? _localOfferSdp;
+  DateTime? _offerSentAt;
+  bool _offerResent = false;
   bool _detached = false;
 
   final Set<String> _addedCandidates = {};
@@ -254,6 +260,8 @@ class _CallScreenState extends State<CallScreen> {
           'offerToReceiveVideo': 1,
         });
         await _pc!.setLocalDescription(offer);
+        _localOfferSdp = offer.sdp;
+        _offerSentAt = DateTime.now();
         await _cc.sendOffer(offer.sdp!);
         _log('offer created len=${offer.sdp?.length}');
       }
@@ -354,7 +362,23 @@ class _CallScreenState extends State<CallScreen> {
       }
     }
 
-    // ICE từ peer
+    
+    // CALLER fallback: n?u server chua tr? offer trong poll, resend 1 l?n sau 2s
+    if (widget.isCaller &&
+        !_offerResent &&
+        _localOfferSdp != null &&
+        _cc.sdpOffer == null &&
+        _offerSentAt != null &&
+        DateTime.now().difference(_offerSentAt!).inSeconds > 2) {
+      _offerResent = true;
+      try {
+        await _cc.sendOffer(_localOfferSdp!);
+        _log('resend offer len=');
+      } catch (e) {
+        _log('resend offer error: ');
+      }
+    }
+// ICE từ peer
     if (_cc.iceCandidates.isNotEmpty) {
       for (var ic in _cc.iceCandidates) {
         final key = '${ic.candidate}|${ic.sdpMid}|${ic.sdpMLineIndex}';
@@ -759,3 +783,4 @@ class _CallScreenState extends State<CallScreen> {
     } catch (_) {}
   }
 }
+
