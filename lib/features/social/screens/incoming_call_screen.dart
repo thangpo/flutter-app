@@ -1,4 +1,5 @@
 // lib/features/social/screens/incoming_call_screen.dart
+import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -56,6 +57,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
       return;
     }
     if (_cc.activeCallId != widget.callId) {
+      _log('attachCall callId=${widget.callId} media=${widget.mediaType}');
       _cc.attachCall(
         callId: widget.callId,
         mediaType: widget.mediaType,
@@ -98,8 +100,13 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     // Chuẩn Messenger: bấm "Nghe" là vào luôn màn call,
     // không cần chờ server confirm 'answered'
     try {
-      await _cc.action('answer');
-    } catch (_) {
+      await _cc
+          .action('answer')
+          .timeout(const Duration(seconds: 2), onTimeout: () {
+        _log('action(answer) timeout, continue to CallScreen');
+      });
+    } catch (e, st) {
+      _log('action(answer) error: $e', st: st);
       // Nếu lỗi mạng nhẹ thì vẫn cho user vào màn CallScreen,
       // WebRTC layer + polling sẽ tự xử lý tiếp.
     }
@@ -130,8 +137,14 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     setState(() => _handling = true);
 
     try {
-      await _cc.action('decline');
-    } catch (_) {}
+      await _cc
+          .action('decline')
+          .timeout(const Duration(seconds: 2), onTimeout: () {
+        _log('action(decline) timeout');
+      });
+    } catch (e, st) {
+      _log('action(decline) error: $e', st: st);
+    }
 
     await _safeDetachAndPop();
   }
@@ -230,5 +243,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
         ),
       ),
     );
+  }
+
+  void _log(String msg, {StackTrace? st}) {
+    developer.log(msg, name: 'IncomingCallScreen', stackTrace: st);
   }
 }
