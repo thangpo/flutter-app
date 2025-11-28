@@ -398,6 +398,9 @@ class _CallScreenState extends State<CallScreen> {
     try {
       await _cc.action('end');
     } catch (_) {}
+    try {
+      await _cc.detachCall();
+    } catch (_) {}
 
     _disposeRTC();
 
@@ -535,6 +538,9 @@ class _CallScreenState extends State<CallScreen> {
   }
 
   Future<void> _disposeRTC() async {
+    _localTracksAdded = false;
+    _remoteStream = null;
+
     try {
       await _pc?.close();
     } catch (_) {}
@@ -558,6 +564,9 @@ class _CallScreenState extends State<CallScreen> {
     _ending = true;
 
     _cc.removeListener(_callListener);
+    try {
+      _cc.detachCall();
+    } catch (_) {}
     _disposeRTC();
 
     try {
