@@ -50,9 +50,6 @@ class _CallScreenState extends State<CallScreen> {
   String? _localOfferSdp;
   DateTime? _offerSentAt;
   bool _offerResent = false;
-  String? _localOfferSdp;
-  DateTime? _offerSentAt;
-  bool _offerResent = false;
   bool _detached = false;
 
   final Set<String> _addedCandidates = {};
