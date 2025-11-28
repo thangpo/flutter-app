@@ -217,13 +217,19 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
                       FloatingActionButton(
                         heroTag: 'decline',
                         backgroundColor: Colors.red,
-                        onPressed: _onDecline,
+                        onPressed: () {
+                          _log('tap_decline callId=${widget.callId}');
+                          _onDecline();
+                        },
                         child: const Icon(Icons.call_end),
                       ),
                       FloatingActionButton(
                         heroTag: 'accept',
                         backgroundColor: Colors.green,
-                        onPressed: _onAccept,
+                        onPressed: () {
+                          _log('tap_accept callId=${widget.callId}');
+                          _onAccept();
+                        },
                         child: Icon(
                           isVideo ? Icons.videocam : Icons.call,
                         ),
