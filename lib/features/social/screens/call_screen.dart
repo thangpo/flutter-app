@@ -304,11 +304,12 @@ class _CallScreenState extends State<CallScreen> {
         _offerHandled = true; // đánh dấu đã xử lý để tránh lặp
         try {
           // Nếu chưa có local media (do payload sai mediaType), đảm bảo mở media trước khi answer
-          await _ensureLocalMedia(
-            wantVideo: (_cc.activeMediaType == 'video' ||
-                widget.mediaType == 'video'),
-          );
-          await _ensureSendRecvTransceivers();
+          if (!_localTracksAdded || _localStream == null) {
+            await _ensureLocalMedia(
+              wantVideo: (_cc.activeMediaType == 'video' ||
+                  widget.mediaType == 'video'),
+            );
+          }
 
           final answer = await _pc!.createAnswer({
             'offerToReceiveAudio': 1,
