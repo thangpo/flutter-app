@@ -227,8 +227,12 @@ class _CallScreenState extends State<CallScreen> {
 
       // add local track vào PC
       for (var t in _localStream!.getTracks()) {
-        await _pc!.addTrack(t, _localStream!);
-        _log('addTrack kind=${t.kind} id=${t.id}');
+        try {
+          await _pc!.addTrack(t, _localStream!);
+          _log('addTrack kind=${t.kind} id=${t.id}');
+        } catch (e, st) {
+          _log('addTrack error: $e', st: st);
+        }
       }
       _localTracksAdded = true;
 
@@ -516,8 +520,12 @@ class _CallScreenState extends State<CallScreen> {
             .toSet();
         for (var t in _localStream!.getTracks()) {
           if (!existingTrackIds.contains(t.id)) {
-            await _pc!.addTrack(t, _localStream!);
-            _log('ensureLocalMedia: addTrack kind=${t.kind} id=${t.id}');
+            try {
+              await _pc!.addTrack(t, _localStream!);
+              _log('ensureLocalMedia: addTrack kind=${t.kind} id=${t.id}');
+            } catch (e, st) {
+              _log('ensureLocalMedia addTrack error: $e', st: st);
+            }
           }
         }
         _localTracksAdded = true;
