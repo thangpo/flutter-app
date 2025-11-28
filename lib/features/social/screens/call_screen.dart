@@ -47,6 +47,7 @@ class _CallScreenState extends State<CallScreen> {
   bool _offerHandled = false;
   bool _answerHandled = false;
   bool _remoteDescSet = false;
+  bool _detached = false;
 
   final Set<String> _addedCandidates = {};
   final List<IceCandidateLite> _pendingCandidates = [];
@@ -288,6 +289,7 @@ class _CallScreenState extends State<CallScreen> {
           );
           _remoteDescSet = true;
           _log('callee setRemoteDescription(offer) ${_sdpSummary(offer)}');
+          _ensureSendRecvTransceivers();
           _flushPendingCandidates();
         } catch (e) {
           final msg = '$e';
@@ -343,6 +345,7 @@ class _CallScreenState extends State<CallScreen> {
           _remoteDescSet = true;
           _answerHandled = true;
           _log('caller setRemoteDescription(answer) ${_sdpSummary(ans)}');
+          _ensureSendRecvTransceivers();
           _flushPendingCandidates();
         } catch (e) {
           _error('Lỗi set ANSWER: $e');
@@ -399,13 +402,19 @@ class _CallScreenState extends State<CallScreen> {
     try {
       await _cc.action('end');
     } catch (_) {}
-    try {
-      await _cc.detachCall();
-    } catch (_) {}
+    await _detachController();
 
     _disposeRTC();
 
     if (mounted) Navigator.of(context).maybePop();
+  }
+
+  Future<void> _detachController() async {
+    if (_detached) return;
+    _detached = true;
+    try {
+      await _cc.detachCall();
+    } catch (_) {}
   }
 
   void _error(String msg) {
@@ -565,9 +574,8 @@ class _CallScreenState extends State<CallScreen> {
     _ending = true;
 
     _cc.removeListener(_callListener);
-    try {
-      _cc.detachCall();
-    } catch (_) {}
+    // TrA�nh notifyListeners trong khi tree �`ang lock khi dispose
+    scheduleMicrotask(_detachController);
     _disposeRTC();
 
     try {
