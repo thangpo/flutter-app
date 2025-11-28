@@ -13,6 +13,7 @@ import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart'
     show navigatorKey;
 
 import '../screens/incoming_call_screen.dart';
+import '../screens/call_screen.dart';
 import '../controllers/call_controller.dart';
 
 /// ===============================
@@ -167,6 +168,10 @@ class SocialCallPushHandler {
     final callerName = data['caller_name'];
     final callerAvatar = data['caller_avatar'];
 
+    developer.log('notif_action',
+        name: 'CallPush',
+        error: {'actionId': actionId, 'callId': callId, 'media': media});
+
     // Mở app nếu đang background/terminated
     // (trên Android, plugin đã đưa app foreground khi tap notif/action)
     final ctx = navigatorKey.currentContext;
@@ -178,7 +183,6 @@ class SocialCallPushHandler {
         cc.attachCall(callId: callId, mediaType: media);
       } catch (_) {}
 
-      // xử lý theo action
       if (actionId == 'decline_call') {
         try {
           await cc.action('decline');
@@ -186,7 +190,23 @@ class SocialCallPushHandler {
         return;
       }
 
-      // accept_call hoặc tap vào body (actionId == null / '')
+      if (actionId == 'accept_call') {
+        // chấp nhận ngay từ notif
+        try {
+          await cc
+              .action('answer')
+              .timeout(const Duration(seconds: 2), onTimeout: () {});
+        } catch (_) {}
+        _openCallScreen(
+          callId: callId,
+          media: media,
+          callerName: callerName,
+          peerAvatar: callerAvatar,
+        );
+        return;
+      }
+
+      // tap body: mở màn incoming để user chọn
       _openIncomingScreen(
         callId: callId,
         media: media,
@@ -219,6 +239,25 @@ class SocialCallPushHandler {
           callId: callId,
           mediaType: media,
           callerName: callerName,
+          peerAvatar: peerAvatar,
+        ),
+      ),
+    );
+  }
+
+  void _openCallScreen({
+    required int callId,
+    required String media,
+    String? callerName,
+    String? peerAvatar,
+  }) {
+    navigatorKey.currentState?.push(
+      MaterialPageRoute(
+        builder: (_) => CallScreen(
+          isCaller: false,
+          callId: callId,
+          mediaType: media,
+          peerName: callerName,
           peerAvatar: peerAvatar,
         ),
       ),
