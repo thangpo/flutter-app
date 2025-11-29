@@ -678,13 +678,13 @@
       required String recipientId,
       required String text,
       required String messageHashId,
-      MultipartFile? file,     // optional
-      MultipartFile? voiceFile, // optional (voice / audio)
-      String? voiceDuration,   // optional
-      String? gif,             // optional
-      String? imageUrl,        // optional
-      String? lng,             // optional
-      String? lat,             // optional
+      MultipartFile? file,
+      MultipartFile? voiceFile,
+      String? voiceDuration,
+      String? gif,
+      String? imageUrl,
+      String? lng,
+      String? lat,
     }) async {
       try {
         final String? token = _getSocialAccessToken();
@@ -695,8 +695,6 @@
         final String url =
             '${AppConstants.socialBaseUrl}${AppConstants.socialSendMessPage}?access_token=$token';
 
-        print('Sending request to URL: $url');
-        print('Using token: $token');
         final Map<String, dynamic> body = <String, dynamic>{
           'server_key': AppConstants.socialServerKey,
           'type': 'send',
@@ -705,103 +703,51 @@
           'message_hash_id': messageHashId,
         };
 
-        // Kiểm tra text nếu có
-        if (text.trim().isNotEmpty) {
-          body['text'] = text;
-        } else {
-          return ApiResponseModel.withError("Text cannot be empty");
-        }
-
-        if (file != null) {
-          body['file'] = file;
-        print('Request body: ${jsonEncode(body)}');
-
         final bool hasAttachment = file != null ||
             voiceFile != null ||
             (gif != null && gif.isNotEmpty) ||
             (imageUrl != null && imageUrl.isNotEmpty);
 
         final String safeText =
-            text.trim().isNotEmpty ? text : (hasAttachment ? ' ' : '');
-
+            text.trim().isNotEmpty ? text.trim() : (hasAttachment ? ' ' : '');
         if (safeText.isEmpty) {
-          print('Text is empty or invalid and no attachment provided');
           return ApiResponseModel.withError('Text or attachment is required');
         }
-
         body['text'] = safeText;
-        print('Text to be sent: $safeText');
 
         final MultipartFile? attachment = voiceFile ?? file;
         if (attachment != null) {
           body['file'] = attachment;
-          print('File attached: ${attachment.filename}');
         }
-
         if (voiceFile != null) {
           body['type_two'] = 'voice';
           if (voiceDuration != null && voiceDuration.isNotEmpty) {
             body['audio_duration'] = voiceDuration;
-            print('Voice duration: $voiceDuration');
           }
         }
-
-        if (gif != null && gif.isNotEmpty) {
-          body['gif'] = gif;
-
-          print('GIF attached: $gif');
-        }
-
-        if (imageUrl != null && imageUrl.isNotEmpty) {
-          body['image_url'] = imageUrl;
-
-          print('Image URL attached: $imageUrl');
-        }
-
-        if (lng != null && lng.isNotEmpty) {
-          body['lng'] = lng;
-
-          print('Longitude attached: $lng');
-        }
-
-        if (lat != null && lat.isNotEmpty) {
-          body['lat'] = lat;
-          print('Latitude attached: $lat');
-        }
-
-        // Avoid jsonEncode on MultipartFile, log a safe copy instead
-        final Map<String, dynamic> logBody = Map<String, dynamic>.from(body);
-        if (attachment != null) {
-          logBody['file'] = attachment.filename;
-        }
-        print('Final body to be sent: ${jsonEncode(logBody)}');
+        if (gif != null && gif.isNotEmpty) body['gif'] = gif;
+        if (imageUrl != null && imageUrl.isNotEmpty) body['image_url'] = imageUrl;
+        if (lng != null && lng.isNotEmpty) body['lng'] = lng;
+        if (lat != null && lat.isNotEmpty) body['lat'] = lat;
 
         final FormData formData = FormData.fromMap(body);
-
         final Response response = await dioClient.post(
           url,
           data: formData,
           options: Options(contentType: 'multipart/form-data'),
         );
 
-        print('Response status code: ${response.statusCode}');
-        print('Response body: ${jsonEncode(response.data)}');
-
         if (response.statusCode == 200 && response.data['api_status'] == 200) {
           return ApiResponseModel.withSuccess(response);
-        } else {
-          final String apiStatus = response.data['api_status'].toString();
-          final String errorMessage = response.data['errors']?['error_text'] ??
-              response.data['message'] ??
-              'Unknown error';
-          return ApiResponseModel.withError('Failed to send message: $errorMessage');
         }
+        final String errorMessage = response.data['errors']?['error_text'] ??
+            response.data['message'] ??
+            'Unknown error';
+        return ApiResponseModel.withError('Failed to send message: $errorMessage');
       } catch (e) {
         return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
       }
     }
-
-
 
     Future<ApiResponseModel<Response>> fetchPageMessages({
       required String pageId,
