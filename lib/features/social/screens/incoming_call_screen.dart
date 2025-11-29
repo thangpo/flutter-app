@@ -70,7 +70,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     if (!_viewAlive) return;
 
     final st = _cc.callStatus;
-    if (st == 'declined' || st == 'ended') {
+    // Pop khỏi incoming khi đối phương kết thúc/decline hoặc khi call đã answered ở nơi khác.
+    if (st == 'declined' || st == 'ended' || st == 'answered') {
+      _log('controllerChanged status=$st -> pop incoming callId=${widget.callId}');
       await _safeDetachAndPop();
     }
   }
