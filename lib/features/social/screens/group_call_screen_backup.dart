@@ -18,10 +18,6 @@ class GroupCallController extends ChangeNotifier {
   Timer? _pollTimer;
   bool _pollInFlight = false;
   int _tick = 0;
-  // ⏱ cấu hình poll
-  static const Duration _pollInterval = Duration(milliseconds: 300); // poll 0.3s
-  static const int _peersRefreshEveryNTicks = 10; // 10 * 0.3s ≈ 3s refresh peers
-  static const int _emptyPeersCloseThreshold = 10; // 10 tick trống ≈ 3s mới auto close
 
   void Function(Map<String, dynamic> ev)? onOffer;
   void Function(Map<String, dynamic> ev)? onAnswer;
@@ -45,10 +41,10 @@ class GroupCallController extends ChangeNotifier {
   void Function(Map<String, dynamic> call)? onIncoming;
 
   void watchGroupInbox(
-    String groupId, {
-    Duration period = const Duration(seconds: 3),
-    bool autoOpen = false, // giữ tham số cho tương thích
-  }) {
+      String groupId, {
+        Duration period = const Duration(seconds: 3),
+        bool autoOpen = false, // giữ tham số cho tương thích
+      }) {
     if (_watchGroupId != null && _watchGroupId != groupId) {
       stopWatchingInbox();
     }
@@ -199,9 +195,7 @@ class GroupCallController extends ChangeNotifier {
     if (currentCallId == null) return;
     _pollingEnabled = true;
     _pollTimer?.cancel();
-    _tick = 0;
-    _emptyPeersCount = 0;
-    _pollTimer = Timer.periodic(_pollInterval, (_) => _pollOnce());
+    _pollTimer = Timer.periodic(const Duration(seconds: 1), (_) => _pollOnce());
   }
 
   void _stopPolling() {
@@ -236,7 +230,7 @@ class GroupCallController extends ChangeNotifier {
       }
 
       // refresh peers mỗi 2s (prod có thể tăng 5s)
-      _tick = (_tick + 1) % _peersRefreshEveryNTicks;
+      _tick = (_tick + 1) % 2;
       if (_tick == 0) {
         final newPeers = await signaling.peers(callId: callId);
         final newSet = newPeers.toSet();
@@ -253,7 +247,7 @@ class GroupCallController extends ChangeNotifier {
         // ✅ Auto-close cho member nếu không còn ai trong 3 lần liên tiếp (~3s)
         if (!_isCreator) {
           _emptyPeersCount = participants.isEmpty ? (_emptyPeersCount + 1) : 0;
-          if (_emptyPeersCount >= _emptyPeersCloseThreshold) {
+          if (_emptyPeersCount >= 3) {
             _cleanup();
             return;
           }

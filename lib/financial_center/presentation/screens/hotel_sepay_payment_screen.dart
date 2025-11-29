@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import 'hotel_checkout_screen.dart';
-import 'hotel_booking_bill_screen.dart'; // 👈 THÊM IMPORT NÀY
+import 'hotel_booking_bill_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 
 class HotelSepayPaymentScreen extends StatefulWidget {
@@ -21,7 +21,6 @@ class HotelSepayPaymentScreen extends StatefulWidget {
   final String accountName;
   final String transferContent;
 
-  // thông tin người đặt
   final String firstName;
   final String lastName;
   final String email;
@@ -85,8 +84,6 @@ class _HotelSepayPaymentScreenState extends State<HotelSepayPaymentScreen> {
     super.dispose();
   }
 
-  // ================== AUTO CHECK GIỐNG TOUR ==================
-
   void _startAutoCheck() {
     final code = widget.bookingCode;
 
@@ -116,7 +113,7 @@ class _HotelSepayPaymentScreenState extends State<HotelSepayPaymentScreen> {
             });
 
             _timer?.cancel();
-            _showPaidDialog(status); // 👈 TRUYỀN STATUS VÀO
+            _showPaidDialog(status);
           }
         }
       } catch (e) {
@@ -124,8 +121,6 @@ class _HotelSepayPaymentScreenState extends State<HotelSepayPaymentScreen> {
       }
     });
   }
-
-  // ================== KHI ĐÃ THANH TOÁN THÀNH CÔNG ==================
 
   void _showPaidDialog(String status) {
     showDialog(
@@ -146,19 +141,15 @@ class _HotelSepayPaymentScreenState extends State<HotelSepayPaymentScreen> {
         actions: [
           TextButton(
             onPressed: () {
-              // đóng dialog
               Navigator.of(dialogCtx).pop();
-
-              // chuyển sang màn BILL, thay thế luôn màn SePay
               Navigator.of(context).pushReplacement(
                 MaterialPageRoute(
                   builder: (_) => HotelBookingBillScreen(
                     data: widget.data,
                     bookingCode: widget.bookingCode,
-                    bookingStatus: status,          // 'paid' / 'completed'
+                    bookingStatus: status,
                     paymentMethod: 'sepay',
-                    createdAt: DateTime.now(),      // hoặc fetch lại từ API nếu bố muốn chuẩn tuyệt đối
-
+                    createdAt: DateTime.now(),
                     firstName: widget.firstName,
                     lastName: widget.lastName,
                     email: widget.email,
@@ -178,8 +169,6 @@ class _HotelSepayPaymentScreenState extends State<HotelSepayPaymentScreen> {
     );
   }
 
-  // ================== TIỆN ÍCH ==================
-
   Future<void> _copyToClipboard(String text, String label) async {
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
@@ -189,8 +178,6 @@ class _HotelSepayPaymentScreenState extends State<HotelSepayPaymentScreen> {
       ),
     );
   }
-
-  // ================== CHECK TAY KHI USER BẤM NÚT ==================
 
   Future<void> _checkPaymentStatus() async {
     setState(() {
@@ -242,7 +229,7 @@ class _HotelSepayPaymentScreenState extends State<HotelSepayPaymentScreen> {
           _timer?.cancel();
           _isPaid = true;
           if (mounted) {
-            _showPaidDialog(status); // 👈 TRUYỀN STATUS VÀO
+            _showPaidDialog(status);
           }
         } else {
           if (!mounted) return;
@@ -288,8 +275,6 @@ class _HotelSepayPaymentScreenState extends State<HotelSepayPaymentScreen> {
     }
   }
 
-  // ================== UI ==================
-
   @override
   Widget build(BuildContext context) {
     final data = widget.data;
@@ -304,7 +289,6 @@ class _HotelSepayPaymentScreenState extends State<HotelSepayPaymentScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Tóm tắt đơn
             Card(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -399,7 +383,6 @@ class _HotelSepayPaymentScreenState extends State<HotelSepayPaymentScreen> {
 
             const SizedBox(height: 16),
 
-            // QR thanh toán
             Card(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -455,7 +438,6 @@ class _HotelSepayPaymentScreenState extends State<HotelSepayPaymentScreen> {
 
             const SizedBox(height: 16),
 
-            // Thông tin chuyển khoản
             Card(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -528,7 +510,6 @@ class _HotelSepayPaymentScreenState extends State<HotelSepayPaymentScreen> {
 
             const SizedBox(height: 16),
 
-            // Nút kiểm tra trạng thái
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(

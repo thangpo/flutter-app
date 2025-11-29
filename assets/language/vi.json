@@ -1556,6 +1556,15 @@
   "event_description_empty": "Chưa có mô tả",
   "event_name_empty": "Chưa có tên sự kiện",
   "event_name": "Tên sự kiện",
-  "event_description": "Mô tả sự kiện"
+  "event_description": "Mô tả sự kiện",
+  "edit_page": "Chỉnh sửa trang",
+  "delete_page": "Xóa trang",
+  "delete_page_confirm": "Xác nhận xóa trang",
+  "promote_page": "Quảng cáo",
+  "page_messages": "Tin nhắn Page",
+  "page_messages_subtitle": "Theo dõi hội thoại khách hàng và Page của bạn",
+  "search_page_conversation": "Tìm kiếm hội thoại hoặc tên Page",
+  "my_pages": "Page của tôi",
+  "navigation_not_implemented": "Chưa gắn điều hướng cho tab"
 }
 

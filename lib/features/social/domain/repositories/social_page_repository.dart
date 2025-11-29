@@ -331,7 +331,32 @@
           options: Options(contentType: 'multipart/form-data'),
         );
 
-        return ApiResponseModel.withSuccess(res);
+        dynamic data = res.data;
+
+        // backend �`A'i khi tr��� string -> decode
+        if (data is String) {
+          try {
+            data = jsonDecode(data);
+          } catch (_) {
+            return ApiResponseModel.withError('Invalid delete page response');
+          }
+        }
+
+        if (data is Map) {
+          final int status =
+              int.tryParse('${data['api_status'] ?? data['status'] ?? 400}') ??
+                  400;
+          if (status == 200) {
+            return ApiResponseModel.withSuccess(res);
+          }
+          final String message = (data['errors']?['error_text'] ??
+              data['message'] ??
+              'Failed to delete page')
+              .toString();
+          return ApiResponseModel.withError(message);
+        }
+
+        return ApiResponseModel.withError('Invalid delete page response');
       } catch (e) {
         return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
       }
@@ -368,6 +393,46 @@
         return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
       }
     }
+
+    Future<ApiResponseModel<Response>> deletePage({
+      required String pageId,
+      required String password, // 👈 thêm vào
+    }) async {
+      try {
+        final String? token = _getSocialAccessToken();
+        if (token == null || token.isEmpty) {
+          return ApiResponseModel.withError(
+            'Please log in to your social network account',
+          );
+        }
+
+        // https://social.vnshop247.com/api/delete_page?access_token=...
+        final String url =
+            '${AppConstants.socialBaseUrl}${AppConstants.socialDeletePage}?access_token=$token';
+
+        final formData = FormData.fromMap({
+          'server_key': AppConstants.socialServerKey,
+          'page_id': pageId,
+          // TÊN FIELD PHỤ THUỘC BACKEND:
+          // nếu backend dùng 'password' -> để 'password'
+          // nếu là 'current_password' -> đổi key tương ứng
+          'password': password,
+          // hoặc 'current_password': password,
+        });
+
+        final Response res = await dioClient.post(
+          url,
+          data: formData,
+          options: Options(contentType: 'multipart/form-data'),
+        );
+
+        return ApiResponseModel.withSuccess(res);
+      } catch (e) {
+        return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+      }
+    }
+
+
 
 
     /// Parse Response -> List<SocialArticleCategory>
@@ -605,29 +670,33 @@
         return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
       }
     }
+
+
+
     Future<ApiResponseModel<Response>> sendMessageToPage({
       required String pageId,
       required String recipientId,
       required String text,
       required String messageHashId,
       MultipartFile? file,     // optional
+      MultipartFile? voiceFile, // optional (voice / audio)
+      String? voiceDuration,   // optional
       String? gif,             // optional
       String? imageUrl,        // optional
       String? lng,             // optional
       String? lat,             // optional
     }) async {
       try {
-        // Lấy access_token social
         final String? token = _getSocialAccessToken();
         if (token == null || token.isEmpty) {
-          return ApiResponseModel.withError('Bạn chưa đăng nhập tài khoản social.');
+          return ApiResponseModel.withError('Please log in to your social account.');
         }
 
-        // URL: base + /api/page_chat + access_token
         final String url =
             '${AppConstants.socialBaseUrl}${AppConstants.socialSendMessPage}?access_token=$token';
 
-        // Body: server_key, type, page_id, recipient_id, message_hash_id, ...
+        print('Sending request to URL: $url');
+        print('Using token: $token');
         final Map<String, dynamic> body = <String, dynamic>{
           'server_key': AppConstants.socialServerKey,
           'type': 'send',
@@ -645,34 +714,79 @@
 
         if (file != null) {
           body['file'] = file;
+        print('Request body: ${jsonEncode(body)}');
+
+        final bool hasAttachment = file != null ||
+            voiceFile != null ||
+            (gif != null && gif.isNotEmpty) ||
+            (imageUrl != null && imageUrl.isNotEmpty);
+
+        final String safeText =
+            text.trim().isNotEmpty ? text : (hasAttachment ? ' ' : '');
+
+        if (safeText.isEmpty) {
+          print('Text is empty or invalid and no attachment provided');
+          return ApiResponseModel.withError('Text or attachment is required');
+        }
+
+        body['text'] = safeText;
+        print('Text to be sent: $safeText');
+
+        final MultipartFile? attachment = voiceFile ?? file;
+        if (attachment != null) {
+          body['file'] = attachment;
+          print('File attached: ${attachment.filename}');
+        }
+
+        if (voiceFile != null) {
+          body['type_two'] = 'voice';
+          if (voiceDuration != null && voiceDuration.isNotEmpty) {
+            body['audio_duration'] = voiceDuration;
+            print('Voice duration: $voiceDuration');
+          }
         }
 
         if (gif != null && gif.isNotEmpty) {
           body['gif'] = gif;
+
+          print('GIF attached: $gif');
         }
 
         if (imageUrl != null && imageUrl.isNotEmpty) {
           body['image_url'] = imageUrl;
+
+          print('Image URL attached: $imageUrl');
         }
 
         if (lng != null && lng.isNotEmpty) {
           body['lng'] = lng;
+
+          print('Longitude attached: $lng');
         }
 
         if (lat != null && lat.isNotEmpty) {
           body['lat'] = lat;
+          print('Latitude attached: $lat');
         }
+
+        // Avoid jsonEncode on MultipartFile, log a safe copy instead
+        final Map<String, dynamic> logBody = Map<String, dynamic>.from(body);
+        if (attachment != null) {
+          logBody['file'] = attachment.filename;
+        }
+        print('Final body to be sent: ${jsonEncode(logBody)}');
 
         final FormData formData = FormData.fromMap(body);
 
-        // Gửi yêu cầu POST đến API
         final Response response = await dioClient.post(
           url,
           data: formData,
           options: Options(contentType: 'multipart/form-data'),
         );
 
-        // Kiểm tra và trả về phản hồi thành công
+        print('Response status code: ${response.statusCode}');
+        print('Response body: ${jsonEncode(response.data)}');
+
         if (response.statusCode == 200 && response.data['api_status'] == 200) {
           return ApiResponseModel.withSuccess(response);
         } else {
