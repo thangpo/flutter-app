@@ -1,5 +1,6 @@
 // lib/features/social/push/push_call_handler.dart
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -12,6 +13,7 @@ import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart'
     show navigatorKey;
 
 import '../screens/incoming_call_screen.dart';
+import '../screens/call_screen.dart';
 import '../controllers/call_controller.dart';
 
 /// ===============================
@@ -161,9 +163,14 @@ class SocialCallPushHandler {
     final callId = int.tryParse('${data['call_id']}') ?? 0;
     if (callId <= 0) return;
 
-    final media = (data['media'] == 'video') ? 'video' : 'audio';
+    // Backend đôi lúc gửi media dưới các key khác (media_type/call_type/type_two/call_media)
+    final media = _extractMedia(data);
     final callerName = data['caller_name'];
     final callerAvatar = data['caller_avatar'];
+
+    developer.log('notif_action',
+        name: 'CallPush',
+        error: {'actionId': actionId, 'callId': callId, 'media': media});
 
     // Mở app nếu đang background/terminated
     // (trên Android, plugin đã đưa app foreground khi tap notif/action)
@@ -171,11 +178,11 @@ class SocialCallPushHandler {
 
     Future<void> _doAttachAndOpen(BuildContext ctx2) async {
       final cc = ctx2.read<CallController>();
+      if (cc.isCallHandled(callId)) return;
       try {
         cc.attachCall(callId: callId, mediaType: media);
       } catch (_) {}
 
-      // xử lý theo action
       if (actionId == 'decline_call') {
         try {
           await cc.action('decline');
@@ -183,7 +190,23 @@ class SocialCallPushHandler {
         return;
       }
 
-      // accept_call hoặc tap vào body (actionId == null / '')
+      if (actionId == 'accept_call') {
+        // chấp nhận ngay từ notif
+        try {
+          await cc
+              .action('answer')
+              .timeout(const Duration(seconds: 2), onTimeout: () {});
+        } catch (_) {}
+        _openCallScreen(
+          callId: callId,
+          media: media,
+          callerName: callerName,
+          peerAvatar: callerAvatar,
+        );
+        return;
+      }
+
+      // tap body: mở màn incoming để user chọn
       _openIncomingScreen(
         callId: callId,
         media: media,
@@ -220,6 +243,38 @@ class SocialCallPushHandler {
         ),
       ),
     );
+  }
+
+  void _openCallScreen({
+    required int callId,
+    required String media,
+    String? callerName,
+    String? peerAvatar,
+  }) {
+    navigatorKey.currentState?.push(
+      MaterialPageRoute(
+        builder: (_) => CallScreen(
+          isCaller: false,
+          callId: callId,
+          mediaType: media,
+          peerName: callerName,
+          peerAvatar: peerAvatar,
+        ),
+      ),
+    );
+  }
+
+  /// Chuẩn hóa media từ payload FCM / PHP (support nhiều key fallback)
+  String _extractMedia(Map<String, dynamic> data) {
+    final raw = (data['media'] ??
+            data['media_type'] ??
+            data['call_type'] ??
+            data['type_two'] ??
+            data['call_media'])
+        ?.toString()
+        .toLowerCase();
+
+    return (raw == 'video') ? 'video' : 'audio';
   }
 }
 

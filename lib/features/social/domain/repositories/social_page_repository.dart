@@ -697,7 +697,6 @@
 
         print('Sending request to URL: $url');
         print('Using token: $token');
-
         final Map<String, dynamic> body = <String, dynamic>{
           'server_key': AppConstants.socialServerKey,
           'type': 'send',
@@ -706,6 +705,15 @@
           'message_hash_id': messageHashId,
         };
 
+        // Kiểm tra text nếu có
+        if (text.trim().isNotEmpty) {
+          body['text'] = text;
+        } else {
+          return ApiResponseModel.withError("Text cannot be empty");
+        }
+
+        if (file != null) {
+          body['file'] = file;
         print('Request body: ${jsonEncode(body)}');
 
         final bool hasAttachment = file != null ||
@@ -740,16 +748,19 @@
 
         if (gif != null && gif.isNotEmpty) {
           body['gif'] = gif;
+
           print('GIF attached: $gif');
         }
 
         if (imageUrl != null && imageUrl.isNotEmpty) {
           body['image_url'] = imageUrl;
+
           print('Image URL attached: $imageUrl');
         }
 
         if (lng != null && lng.isNotEmpty) {
           body['lng'] = lng;
+
           print('Longitude attached: $lng');
         }
 
@@ -783,11 +794,9 @@
           final String errorMessage = response.data['errors']?['error_text'] ??
               response.data['message'] ??
               'Unknown error';
-          print('API Error: Status: $apiStatus, Message: $errorMessage');
           return ApiResponseModel.withError('Failed to send message: $errorMessage');
         }
       } catch (e) {
-        print('Error while sending message: $e');
         return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
       }
     }
