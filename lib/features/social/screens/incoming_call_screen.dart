@@ -71,23 +71,32 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
 
     final st = _cc.callStatus;
     // Pop khỏi incoming khi đối phương kết thúc/decline hoặc khi call đã answered ở nơi khác.
-    if (st == 'declined' || st == 'ended' || st == 'answered') {
-      _log('controllerChanged status=$st -> pop incoming callId=${widget.callId}');
-      await _safeDetachAndPop();
+    if (st == 'declined' || st == 'ended') {
+      _log(
+          'controllerChanged status=$st -> pop+detach incoming callId=${widget.callId}');
+      await _safeDetachAndPop(detach: true); // chỉ detach khi ended/declined
+    } else if (st == 'answered') {
+      _log(
+          'controllerChanged status=answered -> go to CallScreen callId=${widget.callId}');
+      if (mounted) _goToCallScreen(); // KHÔNG detach ở đây
     }
   }
 
-  Future<void> _safeDetachAndPop() async {
+  Future<void> _safeDetachAndPop({bool detach = false}) async {
     if (_detaching) return;
     _detaching = true;
     _viewAlive = false;
     _cc.removeListener(_listener);
 
     try {
-      await _cc.detachCall();
+      if (detach) {
+        await _cc.detachCall(); // chỉ detach khi thực sự kết thúc/decline
+      }
     } catch (_) {}
 
     if (mounted) {
+      // Tránh maybePop khi route scope không còn hợp lệ
+      // Nếu bạn đang dùng pushReplacement cho CallScreen, ở đây chỉ pop nếu còn trên stack.
       Navigator.of(context).maybePop();
     }
   }
@@ -97,7 +106,8 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     setState(() => _handling = true);
 
     if (_cc.activeCallId != widget.callId) {
-      _log('accept: attaching callId=${widget.callId} media=${widget.mediaType}');
+      _log(
+          'accept: attaching callId=${widget.callId} media=${widget.mediaType}');
       _cc.attachCall(
         callId: widget.callId,
         mediaType: widget.mediaType,
@@ -107,9 +117,8 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
 
     try {
       _log('accept: action(answer) start callId=${widget.callId}');
-      await _cc
-          .action('answer')
-          .timeout(const Duration(seconds: 2), onTimeout: () {
+      await _cc.action('answer').timeout(const Duration(seconds: 2),
+          onTimeout: () {
         _log('action(answer) timeout, continue to CallScreen');
       });
     } catch (e, st) {
@@ -144,7 +153,8 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     setState(() => _handling = true);
 
     if (_cc.activeCallId != widget.callId) {
-      _log('decline: attaching callId=${widget.callId} media=${widget.mediaType}');
+      _log(
+          'decline: attaching callId=${widget.callId} media=${widget.mediaType}');
       _cc.attachCall(
         callId: widget.callId,
         mediaType: widget.mediaType,
@@ -153,9 +163,8 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     }
 
     try {
-      await _cc
-          .action('decline')
-          .timeout(const Duration(seconds: 2), onTimeout: () {
+      await _cc.action('decline').timeout(const Duration(seconds: 2),
+          onTimeout: () {
         _log('action(decline) timeout');
       });
     } catch (e, st) {

@@ -69,6 +69,16 @@ class _CallScreenState extends State<CallScreen> {
     _callListener = _onCallUpdated;
     _cc.addListener(_callListener);
 
+    // NEW: nếu vì lý do gì controller đang không gắn call,
+    // tự attach lại để đảm bảo có polling/sdpOffer/ICE cho callee
+    if (_cc.activeCallId != widget.callId) {
+      _cc.attachCall(
+        callId: widget.callId,
+        mediaType: widget.mediaType,
+        initialStatus: 'answered', // vì đang vào CallScreen rồi
+      );
+    }
+
     _initRenderers();
   }
 
@@ -93,7 +103,8 @@ class _CallScreenState extends State<CallScreen> {
       _micOn = true;
       _camOn = isVideo;
       _speakerOn = true;
-      _log('startCallFlow | isCaller=${widget.isCaller} media=${widget.mediaType}');
+      _log(
+          'startCallFlow | isCaller=${widget.isCaller} media=${widget.mediaType}');
 
       // bật loa ngoài
       try {
@@ -122,6 +133,8 @@ class _CallScreenState extends State<CallScreen> {
         'sdpSemantics': 'unified-plan',
       };
 
+      await Future.microtask(_onCallUpdated);
+
       _pc = await createPeerConnection(config);
       _log('PeerConnection created');
 
@@ -149,7 +162,8 @@ class _CallScreenState extends State<CallScreen> {
           }
           if (mounted) setState(() {});
         } else {
-          _log('onTrack kind=${e.track.kind} id=${e.track.id} (ignored for renderer)');
+          _log(
+              'onTrack kind=${e.track.kind} id=${e.track.id} (ignored for renderer)');
         }
       };
 
@@ -179,7 +193,8 @@ class _CallScreenState extends State<CallScreen> {
       _pc!.onAddStream = (MediaStream stream) async {
         try {
           _remoteRenderer.srcObject = stream;
-          _log('onAddStream id=${stream.id} tracks=${stream.getTracks().length}');
+          _log(
+              'onAddStream id=${stream.id} tracks=${stream.getTracks().length}');
         } catch (err, st) {
           _log('onAddStream set renderer error: $err', st: st);
         }
@@ -236,7 +251,8 @@ class _CallScreenState extends State<CallScreen> {
           try {
             await _pc!.addTransceiver(
               track: t,
-              init: RTCRtpTransceiverInit(direction: TransceiverDirection.SendRecv),
+              init: RTCRtpTransceiverInit(
+                  direction: TransceiverDirection.SendRecv),
             );
             _log('addTransceiver fallback ok kind=${t.kind} id=${t.id}');
           } catch (e2, st2) {
@@ -304,7 +320,7 @@ class _CallScreenState extends State<CallScreen> {
     }
 
     // CALLEE xử lý OFFER
-        // CALLEE xử lý OFFER: set remote + trả lời đúng 1 lần
+    // CALLEE xử lý OFFER: set remote + trả lời đúng 1 lần
     if (!widget.isCaller) {
       final offer = _cc.sdpOffer;
 
@@ -360,7 +376,6 @@ class _CallScreenState extends State<CallScreen> {
       }
     }
 
-
     // CALLER nhận ANSWER
     if (widget.isCaller && !_answerHandled) {
       final ans = _cc.sdpAnswer;
@@ -381,7 +396,6 @@ class _CallScreenState extends State<CallScreen> {
       }
     }
 
-    
     // CALLER fallback: n?u server chua tr? offer trong poll, resend 1 l?n sau 2s
     if (widget.isCaller &&
         !_offerResent &&
@@ -543,16 +557,20 @@ class _CallScreenState extends State<CallScreen> {
               await _pc!.addTrack(t, _localStream!);
               _log('ensureLocalMedia: addTrack kind=${t.kind} id=${t.id}');
             } catch (e, st) {
-              _log('ensureLocalMedia addTrack error: $e, try transceiver', st: st);
+              _log('ensureLocalMedia addTrack error: $e, try transceiver',
+                  st: st);
               try {
                 await _pc!.addTransceiver(
                   track: t,
-                  init: RTCRtpTransceiverInit(direction: TransceiverDirection.SendRecv),
+                  init: RTCRtpTransceiverInit(
+                      direction: TransceiverDirection.SendRecv),
                 );
-                _log('ensureLocalMedia: addTransceiver fallback ok kind=${t.kind} id=${t.id}');
+                _log(
+                    'ensureLocalMedia: addTransceiver fallback ok kind=${t.kind} id=${t.id}');
               } catch (e2, st2) {
                 ok = false;
-                _log('ensureLocalMedia addTransceiver fallback error: $e2', st: st2);
+                _log('ensureLocalMedia addTransceiver fallback error: $e2',
+                    st: st2);
               }
             }
           }
@@ -571,7 +589,8 @@ class _CallScreenState extends State<CallScreen> {
       for (final t in trans) {
         // Ép về sendrecv để tránh SDP recvonly (API version này không expose direction getter)
         await t.setDirection(TransceiverDirection.SendRecv);
-        _log('force transceiver ${t.mid ?? '-'} kind=${t.sender.track?.kind} to sendrecv');
+        _log(
+            'force transceiver ${t.mid ?? '-'} kind=${t.sender.track?.kind} to sendrecv');
       }
     } catch (e, st) {
       _log('ensureSendRecvTransceivers error: $e', st: st);
@@ -580,9 +599,12 @@ class _CallScreenState extends State<CallScreen> {
 
   String _forceSendRecvSdp(String sdp) {
     // Thay thế mọi recvonly/sendonly/inactive thành sendrecv để chắc chắn gửi hình/tiếng
-    var patched = sdp.replaceAll(RegExp(r'^a=recvonly$', multiLine: true), 'a=sendrecv');
-    patched = patched.replaceAll(RegExp(r'^a=sendonly$', multiLine: true), 'a=sendrecv');
-    patched = patched.replaceAll(RegExp(r'^a=inactive$', multiLine: true), 'a=sendrecv');
+    var patched =
+        sdp.replaceAll(RegExp(r'^a=recvonly$', multiLine: true), 'a=sendrecv');
+    patched = patched.replaceAll(
+        RegExp(r'^a=sendonly$', multiLine: true), 'a=sendrecv');
+    patched = patched.replaceAll(
+        RegExp(r'^a=inactive$', multiLine: true), 'a=sendrecv');
     return patched;
   }
 
@@ -817,5 +839,3 @@ class _CallScreenState extends State<CallScreen> {
     } catch (_) {}
   }
 }
-
-
