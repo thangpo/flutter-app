@@ -232,8 +232,17 @@ class _CallScreenState extends State<CallScreen> {
           await _pc!.addTrack(t, _localStream!);
           _log('addTrack kind=${t.kind} id=${t.id}');
         } catch (e, st) {
-          addedOk = false;
-          _log('addTrack error: $e', st: st);
+          _log('addTrack error: $e, try addTransceiver', st: st);
+          try {
+            await _pc!.addTransceiver(
+              track: t,
+              init: RTCRtpTransceiverInit(direction: TransceiverDirection.SendRecv),
+            );
+            _log('addTransceiver fallback ok kind=${t.kind} id=${t.id}');
+          } catch (e2, st2) {
+            addedOk = false;
+            _log('addTransceiver fallback error: $e2', st: st2);
+          }
         }
       }
       _localTracksAdded = addedOk;
@@ -534,8 +543,17 @@ class _CallScreenState extends State<CallScreen> {
               await _pc!.addTrack(t, _localStream!);
               _log('ensureLocalMedia: addTrack kind=${t.kind} id=${t.id}');
             } catch (e, st) {
-              ok = false;
-              _log('ensureLocalMedia addTrack error: $e', st: st);
+              _log('ensureLocalMedia addTrack error: $e, try transceiver', st: st);
+              try {
+                await _pc!.addTransceiver(
+                  track: t,
+                  init: RTCRtpTransceiverInit(direction: TransceiverDirection.SendRecv),
+                );
+                _log('ensureLocalMedia: addTransceiver fallback ok kind=${t.kind} id=${t.id}');
+              } catch (e2, st2) {
+                ok = false;
+                _log('ensureLocalMedia addTransceiver fallback error: $e2', st: st2);
+              }
             }
           }
         }
