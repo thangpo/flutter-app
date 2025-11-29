@@ -32,7 +32,12 @@ class CartScreen extends StatefulWidget {
   final bool fromCheckout;
   final int sellerId;
   final bool showBackButton;
-  const CartScreen({super.key, this.fromCheckout = false, this.sellerId = 1, this.showBackButton = true});
+  const CartScreen({
+    super.key,
+    this.fromCheckout = false,
+    this.sellerId = 1,
+    this.showBackButton = true,
+  });
 
   @override
   CartScreenState createState() => CartScreenState();
@@ -40,13 +45,16 @@ class CartScreen extends StatefulWidget {
 
 class CartScreenState extends State<CartScreen> {
   Future<void> _loadData() async {
-    await Provider.of<CartController>(Get.context!, listen: false).getCartData(Get.context!);
+    await Provider.of<CartController>(Get.context!, listen: false)
+        .getCartData(Get.context!);
     Provider.of<CartController>(Get.context!, listen: false).setCartData();
-    Provider.of<ShippingController>(Get.context!, listen: false).getAdminShippingMethodList(Get.context!);
+    Provider.of<ShippingController>(Get.context!, listen: false)
+        .getAdminShippingMethodList(Get.context!);
   }
 
   Color _currentColor = Theme.of(Get.context!).cardColor;
   final Duration duration = const Duration(milliseconds: 500);
+
   void changeColor() {
     setState(() {
       _currentColor = (_currentColor == Theme.of(Get.context!).cardColor)
@@ -71,6 +79,7 @@ class CartScreenState extends State<CartScreen> {
     _loadData();
     super.initState();
   }
+
   final tooltipController = JustTheController();
 
   @override
@@ -146,8 +155,10 @@ class CartScreenState extends State<CartScreen> {
 
               double freeDeliveryAmountDiscount = 0;
               for (var seller in sellerGroupList) {
-                if (seller.freeDeliveryOrderAmount?.status == 1 && seller.isGroupItemChecked!) {
-                  freeDeliveryAmountDiscount += seller.freeDeliveryOrderAmount!.shippingCostSaved!;
+                if (seller.freeDeliveryOrderAmount?.status == 1 &&
+                    seller.isGroupItemChecked!) {
+                  freeDeliveryAmountDiscount +=
+                  seller.freeDeliveryOrderAmount!.shippingCostSaved!;
                 }
                 if (seller.shippingType == 'order_wise') {
                   orderTypeShipping.add(seller.shippingType);
@@ -159,13 +170,18 @@ class CartScreenState extends State<CartScreen> {
               }
 
               for (int i = 0; i < cart.cartList.length; i++) {
-                if (cart.cartList[i].isChecked!) {
-                  totalQuantity += cart.cartList[i].quantity!;
-                  amount += (cart.cartList[i].price! - cart.cartList[i].discount!) * cart.cartList[i].quantity!;
-                  discount += cart.cartList[i].discount! * cart.cartList[i].quantity!;
-                  if (cart.cartList[i].taxModel == "exclude") {
-                    tax += cart.cartList[i].tax! * cart.cartList[i].quantity!;
-                  }
+                final CartModel item = cart.cartList[i];
+                if (item.isChecked!) {
+                  final int qty = item.quantity ?? 1;
+                  final double price = item.price ?? 0;
+                  final double itemDiscount = item.discount ?? 0;
+                  final double itemTax = (item.tax ?? 0) * qty;
+
+                  totalQuantity += qty;
+                  amount += (price - itemDiscount) * qty;
+                  discount += itemDiscount * qty;
+
+                  tax += itemTax;
                 }
               }
 
@@ -175,7 +191,9 @@ class CartScreenState extends State<CartScreen> {
                 }
               }
 
-              final requiredMinOrderQtyCart = _getRequiredMinOrderQtyCartModel(sellerGroupList, cartProductList);
+              final requiredMinOrderQtyCart =
+              _getRequiredMinOrderQtyCartModel(
+                  sellerGroupList, cartProductList);
 
               return Scaffold(
                 bottomNavigationBar: (!cart.cartLoading && cartList.isNotEmpty)
@@ -195,37 +213,66 @@ class CartScreenState extends State<CartScreen> {
                             ? Column(
                           children: [
                             Padding(
-                              padding: const EdgeInsets.only(bottom: Dimensions.paddingSizeSmall),
+                              padding: const EdgeInsets.only(
+                                  bottom: Dimensions
+                                      .paddingSizeSmall),
                               child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                MainAxisAlignment
+                                    .spaceBetween,
                                 children: [
                                   Row(
                                     children: [
                                       Text(
                                         '${getTranslated('total_price', context)} ',
-                                        style: titilliumSemiBold.copyWith(
-                                          fontSize: Dimensions.fontSizeLarge,
-                                          color: Provider.of<ThemeController>(context, listen: false).darkTheme
-                                              ? Theme.of(context).hintColor
-                                              : Theme.of(context).primaryColor,
+                                        style: titilliumSemiBold
+                                            .copyWith(
+                                          fontSize: Dimensions
+                                              .fontSizeLarge,
+                                          color: Provider.of<
+                                              ThemeController>(
+                                              context,
+                                              listen: false)
+                                              .darkTheme
+                                              ? Theme.of(context)
+                                              .hintColor
+                                              : Theme.of(context)
+                                              .primaryColor,
                                         ),
                                       ),
                                       Text(
                                         '${getTranslated('inc_vat_tax', context)}',
-                                        style: titilliumSemiBold.copyWith(
-                                          fontSize: Dimensions.fontSizeSmall,
-                                          color: Theme.of(context).hintColor,
+                                        style: titilliumSemiBold
+                                            .copyWith(
+                                          fontSize: Dimensions
+                                              .fontSizeSmall,
+                                          color: Theme.of(context)
+                                              .hintColor,
                                         ),
                                       ),
                                     ],
                                   ),
                                   Text(
-                                    PriceConverter.convertPrice(context, amount + tax + shippingAmount - freeDeliveryAmountDiscount),
-                                    style: titilliumSemiBold.copyWith(
-                                      color: Provider.of<ThemeController>(context, listen: false).darkTheme
-                                          ? Theme.of(context).hintColor
-                                          : Theme.of(context).primaryColor,
-                                      fontSize: Dimensions.fontSizeLarge,
+                                    PriceConverter.convertPrice(
+                                      context,
+                                      amount +
+                                          tax +
+                                          shippingAmount -
+                                          freeDeliveryAmountDiscount,
+                                    ),
+                                    style:
+                                    titilliumSemiBold.copyWith(
+                                      color: Provider.of<
+                                          ThemeController>(
+                                          context,
+                                          listen: false)
+                                          .darkTheme
+                                          ? Theme.of(context)
+                                          .hintColor
+                                          : Theme.of(context)
+                                          .primaryColor,
+                                      fontSize: Dimensions
+                                          .fontSizeLarge,
                                     ),
                                   ),
                                 ],
@@ -238,86 +285,150 @@ class CartScreenState extends State<CartScreen> {
                                 bool stockOutProduct = false;
                                 bool closeShop = false;
 
-                                for (int index = 0; index < sellerGroupList.length; index++) {
+                                for (int index = 0;
+                                index <
+                                    sellerGroupList.length;
+                                index++) {
                                   double total = 0;
-                                  for (CartModel cart in cartProductList[index]) {
+                                  for (CartModel cart
+                                  in cartProductList[index]) {
                                     if (cart.isChecked == true) {
-                                      total += (cart.price! - cart.discount!) * cart.quantity!;
+                                      total +=
+                                          (cart.price! -
+                                              cart.discount!) *
+                                              cart.quantity!;
                                     }
                                   }
-                                  if (total < sellerGroupList[index].minimumOrderAmountInfo!) {
+                                  if (total <
+                                      sellerGroupList[index]
+                                          .minimumOrderAmountInfo!) {
                                     minimum = true;
                                   }
                                 }
 
-                                for (int index = 0; index < sellerGroupList.length; index++) {
-                                  for (CartModel cart in cartProductList[index]) {
+                                for (int index = 0;
+                                index <
+                                    sellerGroupList.length;
+                                index++) {
+                                  for (CartModel cart
+                                  in cartProductList[index]) {
                                     if (cart.isChecked == true &&
-                                        cart.quantity! > cart.productInfo!.totalCurrentStock! &&
-                                        cart.productType == "physical") {
+                                        cart.quantity! >
+                                            cart.productInfo!
+                                                .totalCurrentStock! &&
+                                        cart.productType ==
+                                            "physical") {
                                       stockOutProduct = true;
                                       break;
                                     }
                                   }
                                 }
 
-                                for (int index = 0; index < sellerGroupList.length; index++) {
-                                  final shop = sellerGroupList[index].shop;
-                                  if (shop?.vacationEndDate != null) {
-                                    bool vacationIsOn = ShopHelper.isVacationActive(
+                                for (int index = 0;
+                                index <
+                                    sellerGroupList.length;
+                                index++) {
+                                  final shop =
+                                      sellerGroupList[index].shop;
+                                  if (shop?.vacationEndDate !=
+                                      null) {
+                                    bool vacationIsOn =
+                                    ShopHelper
+                                        .isVacationActive(
                                       context,
-                                      startDate: shop?.vacationStartDate,
-                                      endDate: shop?.vacationEndDate,
-                                      vacationDurationType: shop?.vacationDurationType,
-                                      vacationStatus: shop?.vacationStatus,
-                                      isInHouseSeller: shop?.id == 0,
+                                      startDate: shop
+                                          ?.vacationStartDate,
+                                      endDate:
+                                      shop?.vacationEndDate,
+                                      vacationDurationType: shop
+                                          ?.vacationDurationType,
+                                      vacationStatus:
+                                      shop?.vacationStatus,
+                                      isInHouseSeller:
+                                      shop?.id == 0,
                                     );
-                                    if ((vacationIsOn || (shop?.temporaryClose ?? false)) &&
-                                        (sellerGroupList[index].isGroupItemChecked ?? false)) {
+                                    if ((vacationIsOn ||
+                                        (shop?.temporaryClose ??
+                                            false)) &&
+                                        (sellerGroupList[index]
+                                            .isGroupItemChecked ??
+                                            false)) {
                                       closeShop = true;
                                       break;
                                     }
                                   }
                                 }
 
-                                if (configProvider.configModel?.guestCheckOut == 0 &&
-                                    !Provider.of<AuthController>(context, listen: false).isLoggedIn()) {
+                                if (configProvider.configModel
+                                    ?.guestCheckOut ==
+                                    0 &&
+                                    !Provider.of<AuthController>(
+                                        context,
+                                        listen: false)
+                                        .isLoggedIn()) {
                                   showModalBottomSheet(
-                                    backgroundColor: Colors.transparent,
+                                    backgroundColor:
+                                    Colors.transparent,
                                     context: context,
-                                    builder: (_) => const NotLoggedInBottomSheetWidget(),
+                                    builder: (_) =>
+                                    const NotLoggedInBottomSheetWidget(),
                                   );
                                   return;
                                 }
 
-                                if (cart.cartList.isEmpty || !isItemChecked) {
-                                  showCustomSnackBar(getTranslated('please_select_items', context), context);
+                                if (cart.cartList.isEmpty ||
+                                    !isItemChecked) {
+                                  showCustomSnackBar(
+                                      getTranslated(
+                                          'please_select_items',
+                                          context),
+                                      context);
                                   return;
                                 }
 
                                 if (stockOutProduct) {
-                                  showCustomSnackBar(getTranslated('stock_out_product_in_your_cart', context), context);
+                                  showCustomSnackBar(
+                                      getTranslated(
+                                          'stock_out_product_in_your_cart',
+                                          context),
+                                      context);
                                   return;
                                 }
 
                                 if (closeShop) {
-                                  showCustomSnackBar(getTranslated('unavailable_shop_product_in_your_cart', context), context);
+                                  showCustomSnackBar(
+                                      getTranslated(
+                                          'unavailable_shop_product_in_your_cart',
+                                          context),
+                                      context);
                                   return;
                                 }
 
-                                if (shippingController.chosenShippingList.isEmpty && !onlyDigital) {
+                                if (shippingController
+                                    .chosenShippingList
+                                    .isEmpty &&
+                                    !onlyDigital) {
                                   changeColor();
-                                  showCustomSnackBar(getTranslated('select_all_shipping_method', context), context);
+                                  showCustomSnackBar(
+                                      getTranslated(
+                                          'select_all_shipping_method',
+                                          context),
+                                      context);
                                   return;
                                 }
 
                                 if (minimum) {
                                   changeColor();
-                                  showCustomSnackBar(getTranslated('some_shop_not_full_fill_minimum_order_amount', context), context);
+                                  showCustomSnackBar(
+                                      getTranslated(
+                                          'some_shop_not_full_fill_minimum_order_amount',
+                                          context),
+                                      context);
                                   return;
                                 }
 
-                                if (requiredMinOrderQtyCart != null) {
+                                if (requiredMinOrderQtyCart !=
+                                    null) {
                                   changeColor();
                                   showCustomSnackBar(
                                     '${getTranslated('to_order', context)} ${requiredMinOrderQtyCart!.productCart.name} ${getTranslated('min_order_quantity_is', context)} ${requiredMinOrderQtyCart!.productCart.productInfo?.minimumOrderQty}',
@@ -331,33 +442,56 @@ class CartScreenState extends State<CartScreen> {
                                 List<int?> fromDistrictIds = [];
                                 List<String?> fromWardIds = [];
                                 List<int> selectedCartIds = [];
-                                Map<String, int> groupToIndex = {};
+                                Map<String, int> groupToIndex =
+                                {};
 
                                 int locationIndex = 0;
 
-                                for (int index = 0; index < sellerGroupList.length; index++) {
-                                  final seller = sellerGroupList[index];
-                                  final items = cartProductList[index];
+                                for (int index = 0;
+                                index <
+                                    sellerGroupList.length;
+                                index++) {
+                                  final seller =
+                                  sellerGroupList[index];
+                                  final items =
+                                  cartProductList[index];
 
-                                  bool hasCheckedItem = items.any((c) => c.isChecked == true);
+                                  bool hasCheckedItem = items.any(
+                                          (c) => c.isChecked == true);
                                   if (!hasCheckedItem) continue;
 
-                                  if (groupToIndex.containsKey(seller.cartGroupId)) continue;
+                                  if (groupToIndex.containsKey(
+                                      seller.cartGroupId)) {
+                                    continue;
+                                  }
 
-                                  groupToIndex[seller.cartGroupId!] = locationIndex++;
+                                  groupToIndex[
+                                  seller.cartGroupId!] =
+                                  locationIndex++;
 
                                   if (seller.sellerIs == 'admin') {
-                                    fromDistrictIds.add(configProvider.configModel?.inHouseShop?.fromDistrictId);
-                                    fromWardIds.add(configProvider.configModel?.inHouseShop?.fromWardId);
+                                    fromDistrictIds.add(
+                                        configProvider
+                                            .configModel
+                                            ?.inHouseShop
+                                            ?.fromDistrictId);
+                                    fromWardIds.add(configProvider
+                                        .configModel
+                                        ?.inHouseShop
+                                        ?.fromWardId);
                                   } else {
-                                    fromDistrictIds.add(seller.shop?.fromDistrictId);
-                                    fromWardIds.add(seller.shop?.fromWardId);
+                                    fromDistrictIds.add(seller
+                                        .shop?.fromDistrictId);
+                                    fromWardIds
+                                        .add(seller.shop?.fromWardId);
                                   }
 
                                   for (var cart in items) {
                                     if (cart.isChecked == true) {
-                                      selectedCartIds.add(cart.id!);
-                                      if (cart.productType == 'physical') {
+                                      selectedCartIds
+                                          .add(cart.id!);
+                                      if (cart.productType ==
+                                          'physical') {
                                         totalPhysical++;
                                       }
                                     }
@@ -367,7 +501,11 @@ class CartScreenState extends State<CartScreen> {
                                 }
 
                                 if (selectedCartIds.isEmpty) {
-                                  showCustomSnackBar(getTranslated('please_select_items', context), context);
+                                  showCustomSnackBar(
+                                      getTranslated(
+                                          'please_select_items',
+                                          context),
+                                      context);
                                   return;
                                 }
 
@@ -377,34 +515,51 @@ class CartScreenState extends State<CartScreen> {
                                     builder: (_) => CheckoutScreen(
                                       cartList: cartList,
                                       totalOrderAmount: amount,
-                                      shippingFee: shippingAmount - freeDeliveryAmountDiscount,
+                                      shippingFee:
+                                      shippingAmount -
+                                          freeDeliveryAmountDiscount,
                                       discount: discount,
-                                      tax: tax,
+                                      tax: tax, // 👈 gửi tổng thuế
                                       quantity: totalQuantity,
-                                      onlyDigital: sellerGroupLength > 0 && totalPhysical == 0,
-                                      hasPhysical: totalPhysical > 0,
-                                      fromDistrictIds: fromDistrictIds,
+                                      onlyDigital:
+                                      sellerGroupLength > 0 &&
+                                          totalPhysical == 0,
+                                      hasPhysical:
+                                      totalPhysical > 0,
+                                      fromDistrictIds:
+                                      fromDistrictIds,
                                       fromWardIds: fromWardIds,
-                                      selectedCartIds: selectedCartIds,
+                                      selectedCartIds:
+                                      selectedCartIds,
                                     ),
                                   ),
                                 );
                               },
                               child: Container(
                                 decoration: BoxDecoration(
-                                  color: Theme.of(context).primaryColor,
-                                  borderRadius: BorderRadius.circular(Dimensions.paddingSizeSmall),
+                                  color: Theme.of(context)
+                                      .primaryColor,
+                                  borderRadius:
+                                  BorderRadius.circular(
+                                      Dimensions
+                                          .paddingSizeSmall),
                                 ),
                                 child: Center(
                                   child: Padding(
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: Dimensions.paddingSizeSmall,
-                                      vertical: Dimensions.fontSizeSmall,
+                                    padding:
+                                    EdgeInsets.symmetric(
+                                      horizontal: Dimensions
+                                          .paddingSizeSmall,
+                                      vertical: Dimensions
+                                          .fontSizeSmall,
                                     ),
                                     child: Text(
-                                      getTranslated('checkout', context)!,
-                                      style: titilliumSemiBold.copyWith(
-                                        fontSize: Dimensions.fontSizeDefault,
+                                      getTranslated('checkout',
+                                          context)!,
+                                      style: titilliumSemiBold
+                                          .copyWith(
+                                        fontSize: Dimensions
+                                            .fontSizeDefault,
                                         color: Colors.white,
                                       ),
                                     ),
@@ -418,7 +573,10 @@ class CartScreenState extends State<CartScreen> {
                   },
                 )
                     : null,
-                appBar: CustomAppBar(title: getTranslated('my_cart', context), isBackButtonExist: widget.showBackButton),
+                appBar: CustomAppBar(
+                  title: getTranslated('my_cart', context),
+                  isBackButtonExist: widget.showBackButton,
+                ),
                 body: Column(
                   children: [
                     if (!onlyDigital)
@@ -428,7 +586,8 @@ class CartScreenState extends State<CartScreen> {
                             context: context,
                             isScrollControlled: true,
                             backgroundColor: Colors.transparent,
-                            builder: (context) => const ShippingMethodBottomSheetWidget(
+                            builder: (context) =>
+                            const ShippingMethodBottomSheetWidget(
                               groupId: 'all_cart_group',
                               sellerIndex: 0,
                               sellerId: 1,
@@ -444,13 +603,16 @@ class CartScreenState extends State<CartScreen> {
                           ),
                           child: Container(
                             decoration: BoxDecoration(
-                              border: Border.all(width: 0.5, color: Colors.grey),
-                              borderRadius: const BorderRadius.all(Radius.circular(10)),
+                              border: Border.all(
+                                  width: 0.5, color: Colors.grey),
+                              borderRadius: const BorderRadius.all(
+                                  Radius.circular(10)),
                             ),
                             child: Padding(
                               padding: const EdgeInsets.all(8.0),
                               child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                MainAxisAlignment.spaceBetween,
                                 children: [
                                   Row(
                                     children: [
@@ -459,12 +621,18 @@ class CartScreenState extends State<CartScreen> {
                                         height: 15,
                                         child: Image.asset(
                                           Images.delivery,
-                                          color: Theme.of(context).textTheme.bodyLarge?.color,
+                                          color: Theme.of(context)
+                                              .textTheme
+                                              .bodyLarge
+                                              ?.color,
                                         ),
                                       ),
-                                      const SizedBox(width: Dimensions.paddingSizeExtraSmall),
+                                      const SizedBox(
+                                          width: Dimensions
+                                              .paddingSizeExtraSmall),
                                       Text(
-                                        getTranslated('choose_shipping', context)!,
+                                        getTranslated('choose_shipping',
+                                            context)!,
                                         style: textRegular,
                                         overflow: TextOverflow.ellipsis,
                                         maxLines: 1,
@@ -472,22 +640,48 @@ class CartScreenState extends State<CartScreen> {
                                     ],
                                   ),
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    mainAxisAlignment:
+                                    MainAxisAlignment.end,
                                     children: [
                                       Text(
-                                        (shippingController.shippingList == null ||
-                                            shippingController.chosenShippingList.isEmpty ||
-                                            shippingController.shippingList!.isEmpty ||
-                                            shippingController.shippingList![0].shippingMethodList == null ||
-                                            shippingController.shippingList![0].shippingIndex == -1)
+                                        (shippingController
+                                            .shippingList ==
+                                            null ||
+                                            shippingController
+                                                .chosenShippingList
+                                                .isEmpty ||
+                                            shippingController
+                                                .shippingList!
+                                                .isEmpty ||
+                                            shippingController
+                                                .shippingList![0]
+                                                .shippingMethodList ==
+                                                null ||
+                                            shippingController
+                                                .shippingList![0]
+                                                .shippingIndex ==
+                                                -1)
                                             ? ''
-                                            : shippingController.shippingList![0].shippingMethodList![shippingController.shippingList![0].shippingIndex!].title.toString(),
-                                        style: titilliumSemiBold.copyWith(color: Theme.of(context).hintColor),
+                                            : shippingController
+                                            .shippingList![0]
+                                            .shippingMethodList![
+                                        shippingController
+                                            .shippingList![0]
+                                            .shippingIndex!]
+                                            .title
+                                            .toString(),
+                                        style: titilliumSemiBold.copyWith(
+                                            color: Theme.of(context)
+                                                .hintColor),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
-                                      const SizedBox(width: Dimensions.paddingSizeExtraSmall),
-                                      Icon(Icons.keyboard_arrow_down, color: Theme.of(context).primaryColor),
+                                      const SizedBox(
+                                          width: Dimensions
+                                              .paddingSizeExtraSmall),
+                                      Icon(Icons.keyboard_arrow_down,
+                                          color: Theme.of(context)
+                                              .primaryColor),
                                     ],
                                   ),
                                 ],
@@ -497,7 +691,9 @@ class CartScreenState extends State<CartScreen> {
                         ),
                       ),
                     cart.cartLoading
-                        ? const Expanded(child: CartPageShimmerWidget())
+                        ? const Expanded(
+                      child: CartPageShimmerWidget(),
+                    )
                         : sellerList.isNotEmpty
                         ? Expanded(
                       child: Column(
@@ -505,75 +701,157 @@ class CartScreenState extends State<CartScreen> {
                           Expanded(
                             child: RefreshIndicator(
                               onRefresh: () async {
-                                if (Provider.of<AuthController>(context, listen: false).isLoggedIn()) {
-                                  await Provider.of<CartController>(context, listen: false).getCartData(context);
+                                if (Provider.of<AuthController>(
+                                    context,
+                                    listen: false)
+                                    .isLoggedIn()) {
+                                  await Provider.of<
+                                      CartController>(
+                                      context,
+                                      listen: false)
+                                      .getCartData(context);
                                 }
                               },
                               child: RepaintBoundary(
                                 child: ListView.builder(
                                   itemCount: sellerList.length,
-                                  padding: const EdgeInsets.all(0),
-                                  itemBuilder: (context, index) {
+                                  padding:
+                                  const EdgeInsets.all(0),
+                                  itemBuilder:
+                                      (context, index) {
                                     bool hasPhysical = false;
                                     double totalCost = 0;
                                     bool shopClose = false;
-                                    for (CartModel cart in cartProductList[index]) {
-                                      if (cart.isChecked ?? false) {
-                                        totalCost += (cart.price! - cart.discount!) * cart.quantity!;
+                                    for (CartModel cart
+                                    in cartProductList[
+                                    index]) {
+                                      if (cart.isChecked ??
+                                          false) {
+                                        totalCost +=
+                                            (cart.price! -
+                                                cart.discount!) *
+                                                cart.quantity!;
                                       }
                                     }
 
-                                    for (CartModel cart in cartProductList[index]) {
-                                      if (cart.productType == 'physical' && cart.isChecked!) {
+                                    for (CartModel cart
+                                    in cartProductList[
+                                    index]) {
+                                      if (cart.productType ==
+                                          'physical' &&
+                                          cart.isChecked!) {
                                         hasPhysical = true;
                                         totalPhysical += 1;
                                         break;
                                       }
                                     }
 
-                                    if (sellerGroupList[index].shop?.vacationEndDate != null) {
-                                      bool vacationIsOn = ShopHelper.isVacationActive(
+                                    if (sellerGroupList[index]
+                                        .shop
+                                        ?.vacationEndDate !=
+                                        null) {
+                                      bool vacationIsOn =
+                                      ShopHelper
+                                          .isVacationActive(
                                         context,
-                                        startDate: sellerGroupList[index].shop?.vacationStartDate,
-                                        endDate: sellerGroupList[index].shop?.vacationEndDate,
-                                        vacationDurationType: sellerGroupList[index].shop?.vacationDurationType,
-                                        vacationStatus: sellerGroupList[index].shop?.vacationStatus,
-                                        isInHouseSeller: sellerGroupList[index].shop?.id == 0,
+                                        startDate:
+                                        sellerGroupList[index]
+                                            .shop
+                                            ?.vacationStartDate,
+                                        endDate:
+                                        sellerGroupList[index]
+                                            .shop
+                                            ?.vacationEndDate,
+                                        vacationDurationType:
+                                        sellerGroupList[index]
+                                            .shop
+                                            ?.vacationDurationType,
+                                        vacationStatus:
+                                        sellerGroupList[index]
+                                            .shop
+                                            ?.vacationStatus,
+                                        isInHouseSeller:
+                                        sellerGroupList[index]
+                                            .shop
+                                            ?.id ==
+                                            0,
                                       );
 
-                                      if (vacationIsOn || (sellerGroupList[index].shop?.temporaryClose ?? false)) {
+                                      if (vacationIsOn ||
+                                          (sellerGroupList[index]
+                                              .shop
+                                              ?.temporaryClose ??
+                                              false)) {
                                         shopClose = true;
                                       }
                                     }
 
                                     return AnimatedContainer(
-                                      color: ((sellerGroupList[index].minimumOrderAmountInfo! > totalCost) ||
-                                          (shippingController.chosenShippingList.isEmpty && hasPhysical && sellerGroupList[index].isGroupItemChecked == true))
+                                      color: ((sellerGroupList[
+                                      index]
+                                          .minimumOrderAmountInfo! >
+                                          totalCost) ||
+                                          (shippingController
+                                              .chosenShippingList
+                                              .isEmpty &&
+                                              hasPhysical &&
+                                              sellerGroupList[index]
+                                                  .isGroupItemChecked ==
+                                                  true))
                                           ? _currentColor
-                                          : index.floor().isOdd
-                                          ? Theme.of(context).colorScheme.onSecondaryContainer
-                                          : Theme.of(context).canvasColor,
+                                          : index
+                                          .floor()
+                                          .isOdd
+                                          ? Theme.of(context)
+                                          .colorScheme
+                                          .onSecondaryContainer
+                                          : Theme.of(context)
+                                          .canvasColor,
                                       duration: duration,
                                       child: Padding(
-                                        padding: const EdgeInsets.only(bottom: Dimensions.paddingSizeSmall),
+                                        padding:
+                                        const EdgeInsets.only(
+                                          bottom: Dimensions
+                                              .paddingSizeSmall,
+                                        ),
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                          CrossAxisAlignment
+                                              .start,
                                           children: [
-                                            sellerGroupList[index].shopInfo!.isNotEmpty
+                                            sellerGroupList[index]
+                                                .shopInfo!
+                                                .isNotEmpty
                                                 ? Padding(
-                                              padding: const EdgeInsets.only(top: Dimensions.paddingSizeSmall),
+                                              padding:
+                                              const EdgeInsets
+                                                  .only(
+                                                top: Dimensions
+                                                    .paddingSizeSmall,
+                                              ),
                                               child: Row(
-                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                mainAxisAlignment:
+                                                MainAxisAlignment
+                                                    .spaceBetween,
                                                 children: [
                                                   Expanded(
-                                                    child: Padding(
-                                                      padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeSmall),
-                                                      child: Row(
+                                                    child:
+                                                    Padding(
+                                                      padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal:
+                                                        Dimensions.paddingSizeSmall,
+                                                      ),
+                                                      child:
+                                                      Row(
                                                         children: [
                                                           SizedBox(
-                                                            height: 24,
-                                                            width: 30,
-                                                            child: Checkbox(
+                                                            height:
+                                                            24,
+                                                            width:
+                                                            30,
+                                                            child:
+                                                            Checkbox(
                                                               visualDensity: VisualDensity.compact,
                                                               side: WidgetStateBorderSide.resolveWith(
                                                                     (states) => BorderSide(width: 2, color: Theme.of(context).colorScheme.tertiaryContainer),
@@ -592,7 +870,8 @@ class CartScreenState extends State<CartScreen> {
                                                             ),
                                                           ),
                                                           Flexible(
-                                                            child: InkWell(
+                                                            child:
+                                                            InkWell(
                                                               onTap: () => _storeScreenRouteCall(sellerGroupList[index]),
                                                               child: Text(
                                                                 sellerGroupList[index].shopInfo!,
@@ -601,21 +880,19 @@ class CartScreenState extends State<CartScreen> {
                                                                 textAlign: TextAlign.start,
                                                                 style: textBold.copyWith(
                                                                   fontSize: Dimensions.fontSizeLarge,
-                                                                  color: Provider.of<ThemeController>(context, listen: false).darkTheme
-                                                                      ? Theme.of(context).hintColor
-                                                                      : Theme.of(context).primaryColor,
+                                                                  color: Provider.of<ThemeController>(context, listen: false).darkTheme ? Theme.of(context).hintColor : Theme.of(context).primaryColor,
                                                                 ),
                                                               ),
                                                             ),
                                                           ),
                                                           Padding(
-                                                            padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeExtraSmall),
-                                                            child: Text(
+                                                            padding:
+                                                            const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeExtraSmall),
+                                                            child:
+                                                            Text(
                                                               '(${cartProductList[index].length})',
                                                               style: textBold.copyWith(
-                                                                color: Provider.of<ThemeController>(context, listen: false).darkTheme
-                                                                    ? Theme.of(context).hintColor
-                                                                    : Theme.of(context).primaryColor,
+                                                                color: Provider.of<ThemeController>(context, listen: false).darkTheme ? Theme.of(context).hintColor : Theme.of(context).primaryColor,
                                                                 fontSize: Dimensions.fontSizeLarge,
                                                               ),
                                                             ),
@@ -657,35 +934,72 @@ class CartScreenState extends State<CartScreen> {
                                               ),
                                             )
                                                 : const SizedBox(),
-                                            if (sellerGroupList[index].minimumOrderAmountInfo! > totalCost)
+                                            if (sellerGroupList[
+                                            index]
+                                                .minimumOrderAmountInfo! >
+                                                totalCost)
                                               Padding(
-                                                padding: const EdgeInsets.symmetric(
-                                                  horizontal: Dimensions.paddingSizeSmall,
-                                                  vertical: Dimensions.paddingSizeSmall,
+                                                padding:
+                                                const EdgeInsets
+                                                    .symmetric(
+                                                  horizontal: Dimensions
+                                                      .paddingSizeSmall,
+                                                  vertical: Dimensions
+                                                      .paddingSizeSmall,
                                                 ),
                                                 child: Text(
                                                   '${getTranslated('minimum_order_amount_is', context)} '
                                                       '${PriceConverter.convertPrice(context, sellerGroupList[index].minimumOrderAmountInfo)}',
-                                                  style: textRegular.copyWith(color: Theme.of(context).colorScheme.error),
+                                                  style: textRegular.copyWith(
+                                                      color: Theme.of(
+                                                          context)
+                                                          .colorScheme
+                                                          .error),
                                                 ),
                                               ),
                                             Card(
                                               child: Container(
-                                                padding: const EdgeInsets.only(bottom: Dimensions.paddingSizeLarge),
-                                                decoration: BoxDecoration(color: Theme.of(context).highlightColor),
+                                                padding:
+                                                const EdgeInsets
+                                                    .only(
+                                                  bottom: Dimensions
+                                                      .paddingSizeLarge,
+                                                ),
+                                                decoration:
+                                                BoxDecoration(
+                                                  color: Theme.of(
+                                                      context)
+                                                      .highlightColor,
+                                                ),
                                                 child: Column(
                                                   children: [
                                                     ListView.builder(
-                                                      physics: const NeverScrollableScrollPhysics(),
-                                                      shrinkWrap: true,
-                                                      padding: const EdgeInsets.all(0),
-                                                      itemCount: cartProductList[index].length,
-                                                      itemBuilder: (context, i) {
+                                                      physics:
+                                                      const NeverScrollableScrollPhysics(),
+                                                      shrinkWrap:
+                                                      true,
+                                                      padding:
+                                                      const EdgeInsets
+                                                          .all(0),
+                                                      itemCount:
+                                                      cartProductList[
+                                                      index]
+                                                          .length,
+                                                      itemBuilder:
+                                                          (context,
+                                                          i) {
                                                         return CartWidget(
-                                                          highLightColor: _currentColor,
-                                                          cartModel: cartProductList[index][i],
-                                                          index: cartProductIndexList[index][i],
-                                                          fromCheckout: widget.fromCheckout,
+                                                          highLightColor:
+                                                          _currentColor,
+                                                          cartModel:
+                                                          cartProductList[index]
+                                                          [i],
+                                                          index: cartProductIndexList[
+                                                          index]
+                                                          [i],
+                                                          fromCheckout:
+                                                          widget
+                                                              .fromCheckout,
                                                         );
                                                       },
                                                     ),
@@ -693,68 +1007,169 @@ class CartScreenState extends State<CartScreen> {
                                                 ),
                                               ),
                                             ),
-                                            if (sellerGroupList[index].freeDeliveryOrderAmount?.status == 1 && hasPhysical && sellerGroupList[index].isGroupItemChecked!)
+                                            if (sellerGroupList[index]
+                                                .freeDeliveryOrderAmount
+                                                ?.status ==
+                                                1 &&
+                                                hasPhysical &&
+                                                sellerGroupList[index]
+                                                    .isGroupItemChecked!)
                                               Padding(
-                                                padding: const EdgeInsets.only(
-                                                  bottom: Dimensions.paddingSizeSmall,
-                                                  left: Dimensions.paddingSizeDefault,
-                                                  right: Dimensions.paddingSizeDefault,
-                                                  top: Dimensions.paddingSizeSmall,
+                                                padding:
+                                                const EdgeInsets
+                                                    .only(
+                                                  bottom: Dimensions
+                                                      .paddingSizeSmall,
+                                                  left: Dimensions
+                                                      .paddingSizeDefault,
+                                                  right: Dimensions
+                                                      .paddingSizeDefault,
+                                                  top: Dimensions
+                                                      .paddingSizeSmall,
                                                 ),
                                                 child: Row(
                                                   children: [
                                                     SizedBox(
                                                       height: 16,
-                                                      child: Image.asset(
-                                                        Images.freeShipping,
-                                                        color: Provider.of<ThemeController>(context, listen: false).darkTheme
-                                                            ? Theme.of(context).hintColor
-                                                            : Theme.of(context).primaryColor,
+                                                      child:
+                                                      Image.asset(
+                                                        Images
+                                                            .freeShipping,
+                                                        color: Provider.of<ThemeController>(
+                                                            context,
+                                                            listen: false)
+                                                            .darkTheme
+                                                            ? Theme.of(
+                                                            context)
+                                                            .hintColor
+                                                            : Theme.of(
+                                                            context)
+                                                            .primaryColor,
                                                       ),
                                                     ),
-                                                    if (sellerGroupList[index].freeDeliveryOrderAmount!.amountNeed! > 0)
+                                                    if (sellerGroupList[
+                                                    index]
+                                                        .freeDeliveryOrderAmount!
+                                                        .amountNeed! >
+                                                        0)
                                                       Padding(
-                                                        padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeExtraSmall),
+                                                        padding: const EdgeInsets
+                                                            .symmetric(
+                                                          horizontal:
+                                                          Dimensions
+                                                              .paddingSizeExtraSmall,
+                                                        ),
                                                         child: Text(
-                                                          PriceConverter.convertPrice(context, sellerGroupList[index].freeDeliveryOrderAmount!.amountNeed!),
-                                                          style: textMedium.copyWith(color: Theme.of(context).primaryColor),
+                                                          PriceConverter.convertPrice(
+                                                              context,
+                                                              sellerGroupList[index]
+                                                                  .freeDeliveryOrderAmount!
+                                                                  .amountNeed!),
+                                                          style: textMedium.copyWith(
+                                                              color: Theme.of(context)
+                                                                  .primaryColor),
                                                         ),
                                                       ),
-                                                    sellerGroupList[index].freeDeliveryOrderAmount!.percentage! < 100
+                                                    sellerGroupList[index]
+                                                        .freeDeliveryOrderAmount!
+                                                        .percentage! <
+                                                        100
                                                         ? Text(
                                                       '${getTranslated('add_more_for_free_delivery', context)}',
-                                                      style: textMedium.copyWith(color: Theme.of(context).hintColor),
+                                                      style: textMedium.copyWith(
+                                                          color:
+                                                          Theme.of(context).hintColor),
                                                     )
                                                         : Padding(
-                                                      padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeExtraSmall),
-                                                      child: Text(
+                                                      padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal:
+                                                        Dimensions.paddingSizeExtraSmall,
+                                                      ),
+                                                      child:
+                                                      Text(
                                                         '${getTranslated('you_got_free_delivery', context)}',
-                                                        style: textMedium.copyWith(color: Colors.green),
+                                                        style: textMedium.copyWith(
+                                                            color:
+                                                            Colors.green),
                                                       ),
                                                     ),
                                                   ],
                                                 ),
                                               ),
-                                            if (sellerGroupList[index].freeDeliveryOrderAmount?.status == 1 && hasPhysical && sellerGroupList[index].isGroupItemChecked!)
+                                            if (sellerGroupList[index]
+                                                .freeDeliveryOrderAmount
+                                                ?.status ==
+                                                1 &&
+                                                hasPhysical &&
+                                                sellerGroupList[index]
+                                                    .isGroupItemChecked!)
                                               Padding(
-                                                padding: const EdgeInsets.fromLTRB(
-                                                  Dimensions.paddingSizeDefault,
+                                                padding:
+                                                const EdgeInsets
+                                                    .fromLTRB(
+                                                  Dimensions
+                                                      .paddingSizeDefault,
                                                   0,
-                                                  Dimensions.paddingSizeDefault,
-                                                  Dimensions.paddingSizeDefault,
+                                                  Dimensions
+                                                      .paddingSizeDefault,
+                                                  Dimensions
+                                                      .paddingSizeDefault,
                                                 ),
-                                                child: LinearPercentIndicator(
-                                                  padding: EdgeInsets.zero,
-                                                  barRadius: const Radius.circular(Dimensions.paddingSizeDefault),
-                                                  width: MediaQuery.of(context).size.width - 40,
+                                                child:
+                                                LinearPercentIndicator(
+                                                  padding:
+                                                  EdgeInsets.zero,
+                                                  barRadius:
+                                                  const Radius
+                                                      .circular(
+                                                    Dimensions
+                                                        .paddingSizeDefault,
+                                                  ),
+                                                  width: MediaQuery.of(
+                                                      context)
+                                                      .size
+                                                      .width -
+                                                      40,
                                                   lineHeight: 4.0,
-                                                  percent: sellerGroupList[index].freeDeliveryOrderAmount!.percentage! / 100,
-                                                  backgroundColor: Provider.of<ThemeController>(context, listen: false).darkTheme
-                                                      ? Theme.of(context).primaryColor.withValues(alpha: .5)
-                                                      : Theme.of(context).primaryColor.withValues(alpha: .2),
-                                                  progressColor: (sellerGroupList[index].freeDeliveryOrderAmount!.percentage! < 100 &&
-                                                      !Provider.of<ThemeController>(context, listen: false).darkTheme)
-                                                      ? Theme.of(context).colorScheme.onSecondary
+                                                  percent: sellerGroupList[
+                                                  index]
+                                                      .freeDeliveryOrderAmount!
+                                                      .percentage! /
+                                                      100,
+                                                  backgroundColor: Provider.of<
+                                                      ThemeController>(
+                                                      context,
+                                                      listen:
+                                                      false)
+                                                      .darkTheme
+                                                      ? Theme.of(
+                                                      context)
+                                                      .primaryColor
+                                                      .withValues(
+                                                      alpha:
+                                                      .5)
+                                                      : Theme.of(
+                                                      context)
+                                                      .primaryColor
+                                                      .withValues(
+                                                      alpha:
+                                                      .2),
+                                                  progressColor: (sellerGroupList[
+                                                  index]
+                                                      .freeDeliveryOrderAmount!
+                                                      .percentage! <
+                                                      100 &&
+                                                      !Provider.of<
+                                                          ThemeController>(
+                                                          context,
+                                                          listen:
+                                                          false)
+                                                          .darkTheme)
+                                                      ? Theme.of(
+                                                      context)
+                                                      .colorScheme
+                                                      .onSecondary
                                                       : Colors.green,
                                                 ),
                                               ),
@@ -788,7 +1203,8 @@ class CartScreenState extends State<CartScreen> {
     );
   }
 
-  ({CartModel productCart, CartModel sellerCart})? _getRequiredMinOrderQtyCartModel(
+  ({CartModel productCart, CartModel sellerCart})?
+  _getRequiredMinOrderQtyCartModel(
       List<CartModel> sellerGroupList,
       List<List<CartModel>> cartProductList,
       ) {
@@ -796,7 +1212,8 @@ class CartScreenState extends State<CartScreen> {
       final cartItemsInGroup = cartProductList[index];
       for (var cart in cartItemsInGroup) {
         if (cart.isChecked == true &&
-            cart.quantity! < (cart.productInfo?.minimumOrderQty ?? 1)) {
+            cart.quantity! <
+                (cart.productInfo?.minimumOrderQty ?? 1)) {
           return (
           productCart: cart,
           sellerCart: sellerGroupList[index],
@@ -815,14 +1232,46 @@ class CartScreenState extends State<CartScreen> {
           builder: (_) => TopSellerProductScreen(
             sellerId: 0,
             fromMore: false,
-            temporaryClose: Provider.of<SplashController>(context, listen: false).configModel?.inhouseTemporaryClose?.status ?? false,
-            vacationStatus: Provider.of<SplashController>(context, listen: false).configModel?.inhouseVacationAdd?.status,
-            vacationEndDate: Provider.of<SplashController>(context, listen: false).configModel?.inhouseVacationAdd?.vacationEndDate,
-            vacationStartDate: Provider.of<SplashController>(context, listen: false).configModel?.inhouseVacationAdd?.vacationStartDate,
-            vacationDurationType: Provider.of<SplashController>(context, listen: false).configModel?.inhouseVacationAdd?.vacationDurationType,
-            name: Provider.of<SplashController>(context, listen: false).configModel?.inHouseShop?.name,
-            banner: Provider.of<SplashController>(context, listen: false).configModel?.inHouseShop?.bannerFullUrl?.path,
-            image: Provider.of<SplashController>(context, listen: false).configModel?.inHouseShop?.imageFullUrl?.path,
+            temporaryClose:
+            Provider.of<SplashController>(context, listen: false)
+                .configModel
+                ?.inhouseTemporaryClose
+                ?.status ??
+                false,
+            vacationStatus: Provider.of<SplashController>(context,
+                listen: false)
+                .configModel
+                ?.inhouseVacationAdd
+                ?.status,
+            vacationEndDate: Provider.of<SplashController>(context,
+                listen: false)
+                .configModel
+                ?.inhouseVacationAdd
+                ?.vacationEndDate,
+            vacationStartDate: Provider.of<SplashController>(context,
+                listen: false)
+                .configModel
+                ?.inhouseVacationAdd
+                ?.vacationStartDate,
+            vacationDurationType:
+            Provider.of<SplashController>(context, listen: false)
+                .configModel
+                ?.inhouseVacationAdd
+                ?.vacationDurationType,
+            name: Provider.of<SplashController>(context, listen: false)
+                .configModel
+                ?.inHouseShop
+                ?.name,
+            banner: Provider.of<SplashController>(context, listen: false)
+                .configModel
+                ?.inHouseShop
+                ?.bannerFullUrl
+                ?.path,
+            image: Provider.of<SplashController>(context, listen: false)
+                .configModel
+                ?.inHouseShop
+                ?.imageFullUrl
+                ?.path,
           ),
         ),
       );
@@ -836,7 +1285,8 @@ class CartScreenState extends State<CartScreen> {
             vacationStatus: sellerList.shop?.vacationStatus,
             vacationEndDate: sellerList.shop?.vacationEndDate,
             vacationStartDate: sellerList.shop?.vacationStartDate,
-            vacationDurationType: sellerList.shop?.vacationDurationType,
+            vacationDurationType:
+            sellerList.shop?.vacationDurationType,
             name: sellerList.shop?.name,
             banner: sellerList.shop?.bannerFullUrl?.path,
             image: sellerList.shop?.imageFullUrl?.path,
@@ -846,17 +1296,21 @@ class CartScreenState extends State<CartScreen> {
     }
   }
 
-  String _getDistrictId(CartModel seller, SplashController configProvider) {
+  String _getDistrictId(
+      CartModel seller, SplashController configProvider) {
     if (seller.sellerIs == 'admin') {
-      final districtId = configProvider.configModel?.inHouseShop?.fromDistrictId;
+      final districtId =
+          configProvider.configModel?.inHouseShop?.fromDistrictId;
       return districtId?.toString() ?? 'N/A';
     }
     return seller.shop?.fromDistrictId?.toString() ?? 'N/A';
   }
 
-  String _getWardId(CartModel seller, SplashController configProvider) {
+  String _getWardId(
+      CartModel seller, SplashController configProvider) {
     if (seller.sellerIs == 'admin') {
-      final wardId = configProvider.configModel?.inHouseShop?.fromWardId;
+      final wardId =
+          configProvider.configModel?.inHouseShop?.fromWardId;
       return wardId?.toString() ?? 'N/A';
     }
     return seller.shop?.fromWardId ?? 'N/A';

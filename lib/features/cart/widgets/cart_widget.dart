@@ -1,26 +1,28 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_sixvalley_ecommerce/common/basewidget/custom_loader_widget.dart';
-import 'package:flutter_sixvalley_ecommerce/features/cart/domain/models/cart_model.dart';
-import 'package:flutter_sixvalley_ecommerce/features/cart/widgets/cart_quantity_button_widget.dart';
-import 'package:flutter_sixvalley_ecommerce/features/product_details/widgets/min_order_quanty_widget.dart';
-import 'package:flutter_sixvalley_ecommerce/helper/price_converter.dart';
-import 'package:flutter_sixvalley_ecommerce/localization/controllers/localization_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-import 'package:flutter_sixvalley_ecommerce/features/cart/controllers/cart_controller.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:flutter_sixvalley_ecommerce/utill/dimensions.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/custom_themes.dart';
-import 'package:flutter_sixvalley_ecommerce/utill/dimensions.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/price_converter.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/custom_image_widget.dart';
+import 'package:flutter_sixvalley_ecommerce/common/basewidget/custom_loader_widget.dart';
+import 'package:flutter_sixvalley_ecommerce/features/cart/domain/models/cart_model.dart';
+import 'package:flutter_sixvalley_ecommerce/features/cart/controllers/cart_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/controllers/localization_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/cart/widgets/cart_quantity_button_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/features/product_details/screens/product_details_screen.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_sixvalley_ecommerce/features/product_details/widgets/min_order_quanty_widget.dart';
+
 
 class CartWidget extends StatelessWidget {
   final CartModel? cartModel;
   final int index;
   final bool fromCheckout;
   final Color highLightColor;
+
   const CartWidget({
     super.key,
     this.cartModel,
@@ -31,8 +33,12 @@ class CartWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    bool minOrderQty = (cartModel?.productInfo?.minimumOrderQty ?? 0) > 1 &&
-      (cartModel?.quantity == null || (cartModel?.quantity ?? 0)  < (cartModel?.productInfo?.minimumOrderQty ?? 1));
+    bool minOrderQty =
+        (cartModel?.productInfo?.minimumOrderQty ?? 0) > 1 &&
+            (cartModel?.quantity == null ||
+                (cartModel?.quantity ?? 0) <
+                    (cartModel?.productInfo?.minimumOrderQty ?? 1));
+
     return Consumer<CartController>(builder: (context, cartProvider, _) {
       return Padding(
         padding: const EdgeInsets.fromLTRB(
@@ -51,7 +57,10 @@ class CartWidget extends StatelessWidget {
                 onPressed: (value) {
                   cartProvider.removeFromCartAPI(cartModel?.id, index);
                 },
-                backgroundColor: Theme.of(context).colorScheme.error.withValues(alpha: 0.05),
+                backgroundColor: Theme.of(context)
+                    .colorScheme
+                    .error
+                    .withValues(alpha: 0.05),
                 foregroundColor: Theme.of(context).colorScheme.error,
                 icon: CupertinoIcons.delete_solid,
                 label: getTranslated('delete', context),
@@ -61,25 +70,37 @@ class CartWidget extends StatelessWidget {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 500),
             decoration: BoxDecoration(
-              color: minOrderQty ? highLightColor : Theme.of(context).highlightColor,
-              borderRadius: BorderRadius.circular(Dimensions.paddingSizeExtraSmall),
+              color: minOrderQty
+                  ? highLightColor
+                  : Theme.of(context).highlightColor,
+              borderRadius:
+              BorderRadius.circular(Dimensions.paddingSizeExtraSmall),
               border: Border.all(
-                color: minOrderQty ? Theme.of(context).colorScheme.error.withValues(alpha: 0.40) :
-                Theme.of(context).primaryColor.withValues(alpha: 0.15),
+                color: minOrderQty
+                    ? Theme.of(context)
+                    .colorScheme
+                    .error
+                    .withValues(alpha: 0.40)
+                    : Theme.of(context)
+                    .primaryColor
+                    .withValues(alpha: 0.15),
                 width: minOrderQty ? 2 : 0.75,
               ),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Checkbox
                 Padding(
                   padding: EdgeInsets.only(
                     top: 0,
-                    left: Provider.of<LocalizationController>(context, listen: false).isLtr
+                    left: Provider.of<LocalizationController>(context,
+                        listen: false)
+                        .isLtr
                         ? Dimensions.paddingSizeSmall
                         : Dimensions.paddingSizeExtraSmall,
-                    right: Provider.of<LocalizationController>(context, listen: false).isLtr
+                    right: Provider.of<LocalizationController>(context,
+                        listen: false)
+                        .isLtr
                         ? Dimensions.paddingSizeExtraSmall
                         : Dimensions.paddingSizeSmall,
                   ),
@@ -92,7 +113,9 @@ class CartWidget extends StatelessWidget {
                       side: WidgetStateBorderSide.resolveWith(
                             (states) => BorderSide(
                           width: 2,
-                          color: Theme.of(context).colorScheme.tertiaryContainer,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .tertiaryContainer,
                         ),
                       ),
                       checkColor: Colors.white,
@@ -111,37 +134,62 @@ class CartWidget extends StatelessWidget {
                     ),
                   ),
                 ),
-
-                // Product details and quantity controls
-                Expanded(child: IntrinsicHeight(child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: [
-                    Flexible(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      Row(children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: Dimensions.paddingSizeSmall),
-                          child: _CartProductImageWidget(cartModel: cartModel),
-                        ),
-                        Expanded(child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: Dimensions.paddingSizeSmall,
-                            vertical: Dimensions.paddingSizeSmall,
+                Expanded(
+                  child: IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      children: [
+                        Flexible(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Row(
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: Dimensions.paddingSizeSmall,
+                                    ),
+                                    child: _CartProductImageWidget(
+                                      cartModel: cartModel,
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal:
+                                        Dimensions.paddingSizeSmall,
+                                        vertical:
+                                        Dimensions.paddingSizeSmall,
+                                      ),
+                                      child: _CartProductDetailsWidget(
+                                        cartModel: cartModel,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              MinOrderQuantityWidget(
+                                minOrderQty: cartModel
+                                    ?.productInfo?.minimumOrderQty ??
+                                    1,
+                                currentQty: cartModel?.quantity,
+                              ),
+                              const SizedBox(
+                                  height: Dimensions.paddingSizeSmall),
+                            ],
                           ),
-                          child: _CartProductDetailsWidget(cartModel: cartModel),
-                        )),
-
-                      ]),
-
-                      MinOrderQuantityWidget(minOrderQty: cartModel?.productInfo?.minimumOrderQty ?? 1, currentQty: cartModel?.quantity),
-                      const SizedBox(height: Dimensions.paddingSizeSmall),
-
-                    ])),
-                    const SizedBox(width: Dimensions.paddingSizeDefault),
-
-                    _CartQuantityControlsWidget(cartModel: cartModel, index: index),
-                  ],
-                ))),
+                        ),
+                        const SizedBox(
+                            width: Dimensions.paddingSizeDefault),
+                        _CartQuantityControlsWidget(
+                          cartModel: cartModel,
+                          index: index,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -151,11 +199,10 @@ class CartWidget extends StatelessWidget {
   }
 }
 
-
-
 class _CartQuantityControlsWidget extends StatelessWidget {
   final CartModel? cartModel;
   final int index;
+
   const _CartQuantityControlsWidget({
     required this.cartModel,
     required this.index,
@@ -165,16 +212,25 @@ class _CartQuantityControlsWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).primaryColor.withValues(alpha: 0.05),
-        border: Border.all(color: Theme.of(context).primaryColor.withValues(alpha: 0.075)),
+        color:
+        Theme.of(context).primaryColor.withValues(alpha: 0.05),
+        border: Border.all(
+          color: Theme.of(context)
+              .primaryColor
+              .withValues(alpha: 0.075),
+        ),
         borderRadius: const BorderRadius.only(
-          bottomRight: Radius.circular(Dimensions.paddingSizeExtraSmall),
-          topRight: Radius.circular(Dimensions.paddingSizeExtraSmall),
+          bottomRight:
+          Radius.circular(Dimensions.paddingSizeExtraSmall),
+          topRight:
+          Radius.circular(Dimensions.paddingSizeExtraSmall),
         ),
       ),
       width: 40,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: Dimensions.paddingSizeSmall),
+        padding: const EdgeInsets.symmetric(
+          vertical: Dimensions.paddingSizeSmall,
+        ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -194,14 +250,20 @@ class _CartQuantityControlsWidget extends StatelessWidget {
               index: index,
               isIncrement: true,
               quantity: cartModel!.quantity,
-              maxQty: cartModel!.productInfo?.totalCurrentStock,
+              maxQty:
+              cartModel!.productInfo?.totalCurrentStock,
               cartModel: cartModel,
-              minimumOrderQuantity: cartModel!.productInfo!.minimumOrderQty,
-              digitalProduct: cartModel!.productType == "digital" ? true : false,
+              minimumOrderQuantity:
+              cartModel!.productInfo!.minimumOrderQty,
+              digitalProduct:
+              cartModel!.productType == "digital"
+                  ? true
+                  : false,
             ),
-
-            Text(cartModel!.quantity.toString(), style: textRegular),
-
+            Text(
+              cartModel!.quantity.toString(),
+              style: textRegular,
+            ),
             cartModel?.decrement ?? false
                 ? Padding(
               padding: const EdgeInsets.all(8.0),
@@ -218,10 +280,15 @@ class _CartQuantityControlsWidget extends StatelessWidget {
               isIncrement: false,
               index: index,
               quantity: cartModel!.quantity,
-              maxQty: cartModel!.productInfo!.totalCurrentStock,
+              maxQty:
+              cartModel!.productInfo!.totalCurrentStock,
               cartModel: cartModel,
-              minimumOrderQuantity: cartModel!.productInfo!.minimumOrderQty,
-              digitalProduct: cartModel!.productType == "digital" ? true : false,
+              minimumOrderQuantity:
+              cartModel!.productInfo!.minimumOrderQty,
+              digitalProduct:
+              cartModel!.productType == "digital"
+                  ? true
+                  : false,
             ),
           ],
         ),
@@ -230,53 +297,63 @@ class _CartQuantityControlsWidget extends StatelessWidget {
   }
 }
 
-
 class _CartProductDetailsWidget extends StatelessWidget {
   final CartModel? cartModel;
+
   const _CartProductDetailsWidget({required this.cartModel});
 
   @override
   Widget build(BuildContext context) {
+    final cm = cartModel!;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Row(children: [
-          Expanded(
-            child: InkWell(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  PageRouteBuilder(
-                    transitionDuration: const Duration(milliseconds: 1000),
-                    pageBuilder: (context, anim1, anim2) =>
-                        ProductDetails(productId: cartModel?.productId, slug: cartModel?.slug),
+        Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    PageRouteBuilder(
+                      transitionDuration:
+                      const Duration(milliseconds: 1000),
+                      pageBuilder: (context, anim1, anim2) =>
+                          ProductDetails(
+                            productId: cm.productId,
+                            slug: cm.slug,
+                          ),
+                    ),
+                  );
+                },
+                child: Text(
+                  cm.name ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textMedium.copyWith(
+                    fontSize: Dimensions.fontSizeDefault,
+                    color: (cm.shop != null &&
+                        (cm.shop!.temporaryClose! ||
+                            cm.shop!.vacationStatus!))
+                        ? Theme.of(context).hintColor
+                        : Theme.of(context)
+                        .textTheme
+                        .bodyLarge
+                        ?.color,
                   ),
-                );
-              },
-              child: Text(
-                cartModel!.name!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: textMedium.copyWith(
-                  fontSize: Dimensions.fontSizeDefault,
-                  color: (cartModel!.shop != null &&
-                      (cartModel!.shop!.temporaryClose! ||
-                          cartModel!.shop!.vacationStatus!))
-                      ? Theme.of(context).hintColor
-                      : Theme.of(context).textTheme.bodyLarge?.color,
                 ),
               ),
             ),
-          ),
-          const SizedBox(width: Dimensions.paddingSizeSmall),
-        ]),
+            const SizedBox(width: Dimensions.paddingSizeSmall),
+          ],
+        ),
         const SizedBox(height: Dimensions.paddingSizeSmall),
 
-        // Price with discount
-        cartModel!.discount! > 0
+        cm.discount! > 0
             ? Text(
-          PriceConverter.convertPrice(context, cartModel!.price),
+          PriceConverter.convertPrice(context, cm.price),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: titilliumSemiBold.copyWith(
@@ -287,90 +364,120 @@ class _CartProductDetailsWidget extends StatelessWidget {
         )
             : const SizedBox(),
 
-        // Discounted price
         Text(
           PriceConverter.convertPrice(
             context,
-            cartModel!.price,
-            discount: cartModel!.discount,
+            cm.price,
+            discount: cm.discount,
             discountType: 'amount',
           ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: textBold.copyWith(
-            color: (cartModel!.shop != null &&
-                (cartModel!.shop!.temporaryClose! ||
-                    cartModel!.shop!.vacationStatus!))
+            color: (cm.shop != null &&
+                (cm.shop!.temporaryClose! ||
+                    cm.shop!.vacationStatus!))
                 ? Theme.of(context).hintColor
-                : Theme.of(context).textTheme.bodyMedium?.color,
+                : Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.color,
             fontSize: Dimensions.fontSizeDefault,
           ),
         ),
 
-        // Variation
-        (cartModel!.variant != null && cartModel!.variant!.isNotEmpty)
+        (cm.variant != null && cm.variant!.isNotEmpty)
             ? Padding(
-          padding: const EdgeInsets.only(top: Dimensions.paddingSizeExtraSmall),
-          child: Row(children: [
-            Flexible(child: Text(
-              cartModel?.variant ?? '',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: textRegular.copyWith(
-                fontSize: Dimensions.fontSizeDefault,
-                color: Theme.of(context).textTheme.bodyLarge?.color,
+          padding: const EdgeInsets.only(
+            top: Dimensions.paddingSizeExtraSmall,
+          ),
+          child: Row(
+            children: [
+              Flexible(
+                child: Text(
+                  cm.variant ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textRegular.copyWith(
+                    fontSize: Dimensions.fontSizeDefault,
+                    color: Theme.of(context)
+                        .textTheme
+                        .bodyLarge
+                        ?.color,
+                  ),
+                ),
               ),
-            )),
-          ]),
+            ],
+          ),
         )
             : const SizedBox(),
         const SizedBox(width: Dimensions.paddingSizeSmall),
 
-        // Tax info
-        cartModel!.taxModel == 'exclude'
-            ? Padding(
-          padding: const EdgeInsets.only(top: Dimensions.paddingSizeExtraSmall),
-          child: Text(
-            '(${getTranslated('tax', context)} : ${PriceConverter.convertPrice(context, cartModel?.tax)})',
-            style: textRegular.copyWith(
-              color: Theme.of(context).hintColor,
-              fontSize: Dimensions.fontSizeDefault,
-            ),
-          ),
-        )
-            : Padding(
-          padding: const EdgeInsets.only(top: Dimensions.paddingSizeExtraSmall),
-          child: Text(
-            '(${getTranslated('tax', context)} ${cartModel!.taxModel})',
-            style: textRegular.copyWith(
-              color: Theme.of(context).hintColor,
-              fontSize: Dimensions.fontSizeDefault,
-            ),
-          ),
+        Builder(
+          builder: (context) {
+            final double taxPerUnit = cm.tax ?? 0;
+            final int qty = cm.quantity ?? 1;
+            final double taxAmount = taxPerUnit * qty;
+
+            if (taxAmount <= 0) {
+              return const SizedBox.shrink();
+            }
+
+            String taxText;
+            if (cm.taxModel == 'exclude') {
+              taxText =
+              '(${getTranslated('tax', context)} : ${PriceConverter.convertPrice(context, taxAmount)})';
+            } else {
+              taxText =
+              '(${getTranslated('tax', context)} : ${PriceConverter.convertPrice(context, taxAmount)})';
+            }
+
+            return Padding(
+              padding: const EdgeInsets.only(
+                top: Dimensions.paddingSizeExtraSmall,
+              ),
+              child: Text(
+                taxText,
+                style: textRegular.copyWith(
+                  color: Theme.of(context).hintColor,
+                  fontSize: Dimensions.fontSizeDefault,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            );
+          },
         ),
 
-        // Shipping cost
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            cartModel!.shippingType != 'order_wise'
+            cm.shippingType != 'order_wise'
                 ? Padding(
-              padding: const EdgeInsets.only(top: Dimensions.paddingSizeExtraSmall),
+              padding: const EdgeInsets.only(
+                top: Dimensions.paddingSizeExtraSmall,
+              ),
               child: Row(
                 children: [
                   Text(
                     '${getTranslated('shipping_cost', context)}: ',
                     style: titilliumSemiBold.copyWith(
                       fontSize: Dimensions.fontSizeSmall,
-                      color: (cartModel!.shop != null &&
-                          (cartModel!.shop!.temporaryClose! ||
-                              cartModel!.shop!.vacationStatus!))
+                      color: (cm.shop != null &&
+                          (cm.shop!.temporaryClose! ||
+                              cm.shop!.vacationStatus!))
                           ? Theme.of(context).hintColor
-                          : Theme.of(context).textTheme.bodyLarge?.color,
+                          : Theme.of(context)
+                          .textTheme
+                          .bodyLarge
+                          ?.color,
                     ),
                   ),
                   Text(
-                    PriceConverter.convertPrice(context, cartModel!.shippingCost),
+                    PriceConverter.convertPrice(
+                      context,
+                      cm.shippingCost,
+                    ),
                     style: textRegular.copyWith(
                       fontSize: Dimensions.fontSizeSmall,
                       color: Theme.of(context).disabledColor,
@@ -383,9 +490,8 @@ class _CartProductDetailsWidget extends StatelessWidget {
           ],
         ),
 
-        // Out of stock warning
-        if (cartModel!.quantity! > cartModel!.productInfo!.totalCurrentStock! &&
-            cartModel?.productType == "physical")
+        if (cm.quantity! > cm.productInfo!.totalCurrentStock! &&
+            cm.productType == "physical")
           Text(
             "${getTranslated("out_of_stock", context)}",
             style: textRegular.copyWith(
@@ -400,18 +506,24 @@ class _CartProductDetailsWidget extends StatelessWidget {
 
 class _CartProductImageWidget extends StatelessWidget {
   final CartModel? cartModel;
+
   const _CartProductImageWidget({required this.cartModel});
 
   @override
   Widget build(BuildContext context) {
+    final cm = cartModel!;
+
     return InkWell(
       onTap: () {
         Navigator.push(
           context,
           PageRouteBuilder(
-            transitionDuration: const Duration(milliseconds: 1000),
-            pageBuilder: (context, anim1, anim2) =>
-                ProductDetails(productId: cartModel?.productId, slug: cartModel?.slug),
+            transitionDuration:
+            const Duration(milliseconds: 1000),
+            pageBuilder: (context, anim1, anim2) => ProductDetails(
+              productId: cm.productId,
+              slug: cm.slug,
+            ),
           ),
         );
       },
@@ -419,25 +531,31 @@ class _CartProductImageWidget extends StatelessWidget {
         children: [
           Container(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(Dimensions.paddingSizeExtraSmall),
+              borderRadius: BorderRadius.circular(
+                  Dimensions.paddingSizeExtraSmall),
               border: Border.all(
-                color: Theme.of(context).primaryColor.withValues(alpha: 0.10),
+                color: Theme.of(context)
+                    .primaryColor
+                    .withValues(alpha: 0.10),
                 width: 0.5,
               ),
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(Dimensions.paddingSizeExtraSmall),
+              borderRadius: BorderRadius.circular(
+                  Dimensions.paddingSizeExtraSmall),
               child: CustomImageWidget(
-                image: '${cartModel?.productInfo?.thumbnailFullUrl?.path}',
+                image:
+                '${cm.productInfo?.thumbnailFullUrl?.path}',
                 height: 70,
                 width: 70,
               ),
             ),
           ),
-          if (cartModel!.isProductAvailable! == 0)
+          if (cm.isProductAvailable! == 0)
             Container(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(Dimensions.paddingSizeExtraSmall),
+                borderRadius: BorderRadius.circular(
+                    Dimensions.paddingSizeExtraSmall),
                 color: Colors.black.withValues(alpha: 0.5),
               ),
               height: 70,
@@ -449,7 +567,7 @@ class _CartProductImageWidget extends StatelessWidget {
                   style: textMedium.copyWith(color: Colors.white),
                 ),
               ),
-            )
+            ),
         ],
       ),
     );

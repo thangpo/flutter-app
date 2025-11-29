@@ -1,31 +1,32 @@
 ﻿import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/network_info.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:flutter_sixvalley_ecommerce/features/home/screens/home_screens.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/more/screens/more_screen_view.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/cart/controllers/cart_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/chat/controllers/chat_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/dashboard/models/navigation_model.dart';
-import 'package:flutter_sixvalley_ecommerce/features/deal/controllers/flash_deal_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/restock/controllers/restock_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/search_product/controllers/search_product_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/wishlist/controllers/wishlist_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/helper/network_info.dart';
-import 'package:flutter_sixvalley_ecommerce/features/splash/controllers/splash_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
-import 'package:flutter_sixvalley_ecommerce/features/dashboard/widgets/app_exit_card_widget.dart';
-import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
-import 'package:flutter_sixvalley_ecommerce/features/home/screens/aster_theme_home_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/home/screens/fashion_theme_home_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/home/screens/home_screens.dart';
-import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-import 'package:flutter_sixvalley_ecommerce/features/more/screens/more_screen_view.dart';
 import 'package:flutter_sixvalley_ecommerce/features/main_home/screens/main_home_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_notifications_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/notifications_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/splash/controllers/splash_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/home/screens/aster_theme_home_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/deal/controllers/flash_deal_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/dashboard/widgets/app_exit_card_widget.dart';
+import 'package:flutter_sixvalley_ecommerce/features/restock/controllers/restock_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/home/screens/fashion_theme_home_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/wishlist/controllers/wishlist_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/travel_screen.dart';
-import 'package:provider/provider.dart';
-import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_notifications_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/search_product/controllers/search_product_controller.dart';
+
 
 class DashBoardScreen extends StatefulWidget {
   const DashBoardScreen({super.key});
@@ -38,7 +39,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
   late List<NavigationModel> _screens;
   final PageStorageBucket bucket = PageStorageBucket();
   final GlobalKey<SocialFeedScreenState> _socialFeedKey =
-      GlobalKey<SocialFeedScreenState>();
+  GlobalKey<SocialFeedScreenState>();
   int? _socialTabIndex;
   bool _showBottomNav = true;
 
@@ -63,7 +64,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     }
 
     final SplashController splashController =
-        Provider.of<SplashController>(context, listen: false);
+    Provider.of<SplashController>(context, listen: false);
     Provider.of<SearchProductController>(context, listen: false)
         .getAuthorList(null);
     Provider.of<SearchProductController>(context, listen: false)
@@ -83,13 +84,11 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         icon: Images.homeImage,
         screen: const MainHomeScreen(),
       ),
-
       NavigationModel(
         name: 'travel',
         icon: Images.TravelIcon,
         screen: const TravelScreen(isBackButtonExist: false),
       ),
-
       NavigationModel(
         name: 'social',
         icon: Images.SocialIcon,
@@ -98,37 +97,25 @@ class DashBoardScreenState extends State<DashBoardScreen> {
           onChromeVisibilityChanged: _handleChromeVisibilityChanged,
         ),
       ),
-
-      // NavigationModel(
-      //   name: 'friends',
-      //   icon: Images.friendImage,
-      //   screen: const FriendsScreen(),
-      // ),
-      // NavigationModel(
-      //     name: 'friends',
-      //     icon: Images.friendImage,
-      //     screen: const InboxScreen(isBackButtonExist: false)),
-
       NavigationModel(
         name: 'shop',
         icon: Images.storeIcon,
         screen: (splashController.configModel!.activeTheme == "default")
             ? const HomePage()
             : (splashController.configModel!.activeTheme == "theme_aster")
-                ? const AsterThemeHomeScreen()
-                : const FashionThemeHomePage(),
+            ? const AsterThemeHomeScreen()
+            : const FashionThemeHomePage(),
       ),
-
       NavigationModel(
-          name: 'notifications',
-          icon: Images.notification,
-          screen: const NotificationsScreen(isBackButtonExist: false)),
-
-      // NavigationModel(name: 'inbox', icon: Images.messageImage, screen: const InboxScreen(isBackButtonExist: false)),
-      // NavigationModel(name: 'cart', icon: Images.cartArrowDownImage, screen: const CartScreen(showBackButton: false), showCartIcon: true),
-      // NavigationModel(name: 'orders', icon: Images.shoppingImage, screen:  const OrderScreen(isBacButtonExist: false)),
+        name: 'notifications',
+        icon: Images.notification,
+        screen: const NotificationsScreen(isBackButtonExist: false),
+      ),
       NavigationModel(
-          name: 'more', icon: Images.moreImage, screen: const MoreScreen()),
+        name: 'more',
+        icon: Images.moreImage,
+        screen: const MoreScreen(),
+      ),
     ];
 
     _socialTabIndex =
@@ -148,8 +135,8 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         !_showBottomNav);
 
     final int unreadNotifications =
-        context.select<SocialNotificationsController, int>(
-      (ctrl) => ctrl.notifications.where((n) => n.seen == "0").length,
+    context.select<SocialNotificationsController, int>(
+          (ctrl) => ctrl.notifications.where((n) => n.seen == "0").length,
     );
 
     String t(String key) => getTranslated(key, context) ?? key;
@@ -193,42 +180,33 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       ),
     ];
 
-    final List<AdaptiveNavigationDestination> androidDestinations = [
-      AdaptiveNavigationDestination(
+    final List<_AndroidNavItem> androidItems = [
+      _AndroidNavItem(
         icon: Icons.home_outlined,
-        selectedIcon: Icons.home,
         label: t('home'),
       ),
-      AdaptiveNavigationDestination(
+      _AndroidNavItem(
         icon: Icons.travel_explore_outlined,
-        selectedIcon: Icons.travel_explore,
         label: t('travel'),
       ),
-      AdaptiveNavigationDestination(
+      _AndroidNavItem(
         icon: Icons.public,
-        selectedIcon: Icons.group,
         label: t('social'),
       ),
-      AdaptiveNavigationDestination(
+      _AndroidNavItem(
         icon: Icons.storefront_outlined,
-        selectedIcon: Icons.storefront,
         label: t('shop'),
       ),
-      AdaptiveNavigationDestination(
+      _AndroidNavItem(
         icon: Icons.notifications_none,
-        selectedIcon: Icons.notifications,
         label: t('notifications'),
-        badgeCount: unreadNotifications > 0 ? unreadNotifications : null,
+        badgeCount: unreadNotifications,
       ),
-      AdaptiveNavigationDestination(
+      _AndroidNavItem(
         icon: Icons.more_horiz,
-        selectedIcon: Icons.more,
         label: t('more'),
       ),
     ];
-
-    final destinations =
-        isIOSPlatform ? iosDestinations : androidDestinations;
 
     return PopScope(
       canPop: false,
@@ -252,22 +230,44 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       child: AdaptiveScaffold(
         minimizeBehavior: TabBarMinimizeBehavior.never,
         enableBlur: isIOSPlatform,
-        bottomNavigationBar: hideNav
+        bottomNavigationBar: hideNav || !isIOSPlatform
             ? null
             : AdaptiveBottomNavigationBar(
-                items: destinations,
-                selectedIndex: _pageIndex,
-                onTap: (index) => _handleNavigationTap(
-                  _screens[index],
-                  index,
-                ),
-                useNativeBottomBar: isIOSPlatform,
-                selectedItemColor: navActiveColor,
-              ),
-        body: PageStorage(
+          items: iosDestinations,
+          selectedIndex: _pageIndex,
+          onTap: (index) => _handleNavigationTap(
+            _screens[index],
+            index,
+          ),
+          useNativeBottomBar: isIOSPlatform,
+          selectedItemColor: navActiveColor,
+        ),
+        body: isIOSPlatform
+            ? PageStorage(
           key: ValueKey<int>(_pageIndex),
           bucket: bucket,
           child: _screens[_pageIndex].screen,
+        )
+            : Stack(
+          children: [
+            PageStorage(
+              key: ValueKey<int>(_pageIndex),
+              bucket: bucket,
+              child: _screens[_pageIndex].screen,
+            ),
+            if (!hideNav)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: AndroidMovingCircleBottomBar(
+                  items: androidItems,
+                  currentIndex: _pageIndex,
+                  onTap: (index) =>
+                      _handleNavigationTap(_screens[index], index),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -312,5 +312,226 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     final hsl = HSLColor.fromColor(color);
     final double newLightness = (hsl.lightness + amount).clamp(0.0, 1.0);
     return hsl.withLightness(newLightness).toColor();
+  }
+}
+
+class _AndroidNavItem {
+  final IconData icon;
+  final String label;
+  final int badgeCount;
+
+  _AndroidNavItem({
+    required this.icon,
+    required this.label,
+    this.badgeCount = 0,
+  });
+}
+
+class AndroidMovingCircleBottomBar extends StatelessWidget {
+  final List<_AndroidNavItem> items;
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+
+  const AndroidMovingCircleBottomBar({
+    super.key,
+    required this.items,
+    required this.currentIndex,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final Color barColor =
+    isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE8EBF0);
+    final Color scaffoldBg = theme.scaffoldBackgroundColor;
+
+    return SafeArea(
+      minimum: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final double barWidth = constraints.maxWidth;
+            final double itemWidth = barWidth / items.length;
+
+            const double circleSize = 70;
+            const double circleBottom = 40;
+
+            final double circleCenterX = itemWidth * (currentIndex + 0.5);
+            final double circleLeft = circleCenterX - circleSize / 2;
+
+            return SizedBox(
+              height: 110,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      height: 76,
+                      decoration: BoxDecoration(
+                        color: barColor,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.08),
+                            blurRadius: 12,
+                            offset: const Offset(0, -1),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: List.generate(
+                          items.length,
+                              (index) => Expanded(
+                            child: _AndroidNavItemWidget(
+                              item: items[index],
+                              selected: index == currentIndex,
+                              onTap: () => onTap(index),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  AnimatedPositioned(
+                    duration: const Duration(milliseconds: 230),
+                    curve: Curves.easeOutCubic,
+                    left: circleLeft,
+                    bottom: circleBottom,
+                    child: Container(
+                      height: circleSize,
+                      width: circleSize,
+                      decoration: BoxDecoration(
+                        color: scaffoldBg,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.08),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Container(
+                        margin: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color:
+                          theme.colorScheme.primary.withOpacity(0.10),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Icon(
+                            items[currentIndex].icon,
+                            size: 32,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _AndroidNavItemWidget extends StatelessWidget {
+  final _AndroidNavItem item;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _AndroidNavItemWidget({
+    required this.item,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    final Color iconColor =
+    selected ? cs.primary : cs.onSurface.withOpacity(0.7);
+    final FontWeight labelWeight =
+    selected ? FontWeight.w600 : FontWeight.w400;
+
+    Widget iconArea;
+    if (selected) {
+      iconArea = const SizedBox(height: 16);
+    } else {
+      iconArea = Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Icon(
+            item.icon,
+            size: 24,
+            color: iconColor,
+          ),
+          if (item.badgeCount > 0)
+            Positioned(
+              right: -4,
+              top: -4,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: const BoxDecoration(
+                  color: Colors.redAccent,
+                  shape: BoxShape.circle,
+                ),
+                constraints: const BoxConstraints(
+                  minWidth: 16,
+                  minHeight: 16,
+                ),
+                child: Center(
+                  child: Text(
+                    item.badgeCount > 9 ? '9+' : item.badgeCount.toString(),
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      fontSize: 9,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 8, bottom: 10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            iconArea,
+            const SizedBox(height: 2),
+            Text(
+              item.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                fontSize: 11.5,
+                fontWeight: labelWeight,
+                color: cs.onSurface.withOpacity(selected ? 0.95 : 0.75),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
