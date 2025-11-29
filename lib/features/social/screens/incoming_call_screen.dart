@@ -11,7 +11,7 @@ class IncomingCallScreen extends StatefulWidget {
   final String mediaType; // audio | video
 
   final String? callerName;
-  final String? callerAvatar; // ✅ giữ lại cho code cũ
+  final String? callerAvatar; // giữ cho code cũ
   final String? peerName; // dùng trong ChatScreen
   final String? peerAvatar; // avatar general
 
@@ -36,6 +36,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   bool _handling = false;
   bool _viewAlive = true;
   bool _detaching = false;
+  bool _declineRequested = false;
 
   @override
   void initState() {
@@ -52,7 +53,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   void _attachIfNeeded() {
     if (!_viewAlive) return;
     if (_cc.isCallHandled(widget.callId)) {
-      // Call �`A� k���t th��?c, kh��ng vA�o mA�n incoming n���a
       Navigator.of(context).maybePop();
       return;
     }
@@ -70,9 +70,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     if (!_viewAlive) return;
 
     final st = _cc.callStatus;
-
-    // Không auto sang CallScreen khi 'answered' nữa
-    // -> chỉ xử lý trường hợp đối phương cúp trước
     if (st == 'declined' || st == 'ended') {
       await _safeDetachAndPop();
     }
@@ -97,7 +94,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     if (_handling) return;
     setState(() => _handling = true);
 
-    // Đảm bảo đã attach call trước khi gửi answer
     if (_cc.activeCallId != widget.callId) {
       _log('accept: attaching callId=${widget.callId} media=${widget.mediaType}');
       _cc.attachCall(
@@ -107,8 +103,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
       );
     }
 
-    // Chuẩn Messenger: bấm "Nghe" là vào luôn màn call,
-    // không cần chờ server confirm 'answered'
     try {
       _log('accept: action(answer) start callId=${widget.callId}');
       await _cc
@@ -118,8 +112,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
       });
     } catch (e, st) {
       _log('action(answer) error: $e', st: st);
-      // Nếu lỗi mạng nhẹ thì vẫn cho user vào màn CallScreen,
-      // WebRTC layer + polling sẽ tự xử lý tiếp.
     }
 
     if (!mounted) return;
@@ -145,6 +137,8 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
 
   Future<void> _onDecline() async {
     if (_handling) return;
+    _declineRequested = true;
+    _log('decline: action(decline) start callId=${widget.callId}');
     setState(() => _handling = true);
 
     if (_cc.activeCallId != widget.callId) {
@@ -157,7 +151,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     }
 
     try {
-      _log('decline: action(decline) start callId=${widget.callId}');
       await _cc
           .action('decline')
           .timeout(const Duration(seconds: 2), onTimeout: () {
@@ -187,8 +180,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
 
     return WillPopScope(
       onWillPop: () async {
-        // Bấm back = từ chối cuộc gọi (giống Messenger)
-        if (!_handling) _onDecline();
+        if (!_handling) {
+          _log('onWillPop ignored (no auto-decline) callId=${widget.callId}');
+        }
         return false;
       },
       child: Scaffold(
