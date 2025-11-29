@@ -49,6 +49,14 @@ class SocialPageController with ChangeNotifier {
   bool _loadingPagePosts = false;
   bool _pagePostsInitialized = false;
   String? _pagePostsError;
+
+  // ================== DELETE PAGE ==================
+  bool _deletingPage = false;
+  String? _deletePageError;
+
+  bool get deletingPage => _deletingPage;
+  String? get deletePageError => _deletePageError;
+
   // ================== PAGE CHAT LIST ==================
   List<PageChatThread> _pageChatList = [];
   bool _loadingPageChatList = false;
@@ -719,21 +727,21 @@ class SocialPageController with ChangeNotifier {
 
       if (newer.isEmpty) return;
 
-      _pageMessages.addAll(
-        newer.map(
-              (m) => m.copyWith(
-            text: _tryDecodePageMessage(m.text, m.time),
-            displayText: _tryDecodePageMessage(m.displayText, m.time),
-            reply: m.reply == null
-                ? null
-                : m.reply!.copyWith(
-              text: _tryDecodePageMessage(m.reply!.text, m.reply!.time),
-              displayText: _tryDecodePageMessage(
-                  m.reply!.displayText, m.reply!.time),
-            ),
+      final mapped = newer.map(
+            (m) => m.copyWith(
+          text: _tryDecodePageMessage(m.text, m.time),
+          displayText: _tryDecodePageMessage(m.displayText, m.time),
+          reply: m.reply == null
+              ? null
+              : m.reply!.copyWith(
+            text: _tryDecodePageMessage(m.reply!.text, m.reply!.time),
+            displayText: _tryDecodePageMessage(
+                m.reply!.displayText, m.reply!.time),
           ),
         ),
       );
+
+      _pageMessages = _mergeMessagesUnique(_pageMessages, mapped);
 
       // 🔥 MUST HAVE — SORT THEO TIME
       _pageMessages.sort((a, b) => a.time.compareTo(b.time));
@@ -759,8 +767,10 @@ class SocialPageController with ChangeNotifier {
   // ============================================================
 
   Future<void> sendPageChatMessage({
-    required String text,
+    String text = '',
     MultipartFile? file,
+    MultipartFile? voiceFile,
+    String? voiceDuration,
     String? gif,
     String? imageUrl,
     String? lng,
@@ -772,6 +782,19 @@ class SocialPageController with ChangeNotifier {
       return;
     }
     if (_sendingPageMessage) return;
+
+    final bool hasAttachment = file != null ||
+        voiceFile != null ||
+        (gif != null && gif.isNotEmpty) ||
+        (imageUrl != null && imageUrl.isNotEmpty);
+    final String safeText =
+        text.trim().isNotEmpty ? text : (hasAttachment ? ' ' : '');
+
+    if (!hasAttachment && safeText.isEmpty) {
+      _pageMessagesError = 'Message is empty';
+      notifyListeners();
+      return;
+    }
 
     _sendingPageMessage = true;
     _pageMessagesError = null;
@@ -785,9 +808,11 @@ class SocialPageController with ChangeNotifier {
       await service.sendPageMessage(
         pageId: _currentChatPageId!.toString(),
         recipientId: _currentChatRecipientId!,
-        text: text,
+        text: safeText,
         messageHashId: hashId,
         file: file,
+        voiceFile: voiceFile,
+        voiceDuration: voiceDuration,
         gif: gif,
         imageUrl: imageUrl,
         lng: lng,
@@ -795,18 +820,18 @@ class SocialPageController with ChangeNotifier {
       );
 
       if (sent.isNotEmpty) {
-        _pageMessages.addAll(
-          sent.map((m) => m.copyWith(
-            text: _tryDecodePageMessage(m.text, m.time),
-            displayText: _tryDecodePageMessage(m.displayText, m.time),
-            reply: m.reply == null
-                ? null
-                : m.reply!.copyWith(
-              text: _tryDecodePageMessage(m.reply!.text, m.reply!.time),
-              displayText: _tryDecodePageMessage(m.reply!.displayText, m.reply!.time),
-            ),
-          )),
-        );
+        final mapped = sent.map((m) => m.copyWith(
+          text: _tryDecodePageMessage(m.text, m.time),
+          displayText: _tryDecodePageMessage(m.displayText, m.time),
+          reply: m.reply == null
+              ? null
+              : m.reply!.copyWith(
+            text: _tryDecodePageMessage(m.reply!.text, m.reply!.time),
+            displayText: _tryDecodePageMessage(m.reply!.displayText, m.reply!.time),
+          ),
+        ));
+
+        _pageMessages = _mergeMessagesUnique(_pageMessages, mapped);
 
 // 🔥 SORT THEO TIME ĐỂ ĐẢM BẢO TIN MỚI LUÔN XUỐNG DƯỚI
         _pageMessages.sort((a, b) => a.time.compareTo(b.time));
@@ -992,6 +1017,60 @@ class SocialPageController with ChangeNotifier {
   // ============================================================
   //                    CREATE / UPDATE PAGE
   // ============================================================
+  // ============================================================
+  //                    DELETE PAGE
+  // ============================================================
+
+  Future<bool> deletePage({
+    required SocialGetPage page,
+    required String password,
+  }) async {
+    if (_deletingPage) return false;
+
+    _deletingPage = true;
+    _deletePageError = null;
+    notifyListeners();
+
+    try {
+      // gọi service – yêu cầu bố đã khai báo trong interface:
+      // Future<bool> deletePage({required String pageId, required String password});
+      final bool ok = await service.deletePage(
+        pageId: page.pageId.toString(),
+        password: password,
+      );
+
+      if (!ok) {
+        _deletePageError ??= 'Failed to delete page';
+        return false;
+      }
+
+      // Xoá khỏi 3 list: myPages, suggestedPages, likedPages
+      _removePageFromStates(page.pageId);
+
+      notifyListeners();
+      return true;
+    } catch (e, st) {
+      debugPrint('deletePage ERROR: $e\n$st');
+      _deletePageError = e.toString();
+      return false;
+    } finally {
+      _deletingPage = false;
+      notifyListeners();
+    }
+  }
+
+  void _removePageFromStates(int pageId) {
+    for (final _PageListState state in <_PageListState>[
+      _myPagesState,
+      _recommendedState,
+      _likedPagesState,
+    ]) {
+      final List<SocialGetPage> current =
+      List<SocialGetPage>.from(state.items);
+      current.removeWhere((p) => p.pageId == pageId);
+      state.items = current;
+    }
+  }
 
   Future<bool> createPage({
     required String pageName,
@@ -1384,6 +1463,13 @@ class SocialPageController with ChangeNotifier {
 
     String _displayText() {
       if (message.displayText.isNotEmpty) return message.displayText;
+      final String lowerType = message.type.toLowerCase();
+      if (lowerType.contains('voice') || lowerType.contains('audio')) {
+        return '[Voice]';
+      }
+      if (lowerType.contains('image') || lowerType.contains('photo')) {
+        return '[Image]';
+      }
       if (message.text.isNotEmpty) return message.text;
       if (message.media.isNotEmpty) return '[Media]';
       return '';
@@ -1427,6 +1513,29 @@ class SocialPageController with ChangeNotifier {
       _pageChatList = list;
       notifyListeners();
     }
+  }
+
+  List<SocialPageMessage> _mergeMessagesUnique(
+      List<SocialPageMessage> current,
+      Iterable<SocialPageMessage> incoming) {
+    final Map<String, SocialPageMessage> map = <String, SocialPageMessage>{};
+
+    String _keyOf(SocialPageMessage m) {
+      if (m.id > 0) return 'id:${m.id}';
+      if (m.messageHashId.isNotEmpty) return 'hash:${m.messageHashId}';
+      return 'time:${m.time}_${m.text}';
+    }
+
+    for (final m in current) {
+      map[_keyOf(m)] = m;
+    }
+    for (final m in incoming) {
+      map[_keyOf(m)] = m;
+    }
+
+    final List<SocialPageMessage> merged = map.values.toList()
+      ..sort((a, b) => a.time.compareTo(b.time));
+    return merged;
   }
 
 }

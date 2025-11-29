@@ -31,7 +31,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
   bool _showTitle = false;
   late SocialGetPage _page;
 
-  // Tab đang chọn (Trang chủ, Giới thiệu, Video, Ảnh, Xem thêm)
+  // Tab đang chọn (Trang chủ/Bài viết, Giới thiệu)
   String _selectedTab = 'home';
 
   @override
@@ -97,7 +97,9 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
   }
 
   void _onMessage() {
-    _showToast(getTranslated('feature_coming_soon', context) ?? 'Sắp ra mắt');
+    _showToast(
+      getTranslated('feature_coming_soon', context) ?? 'Sắp ra mắt',
+    );
   }
 
   Future<void> _onEditPage() async {
@@ -126,17 +128,25 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
       setState(() {
         _page = ctrl.lastUpdatedPage!;
       });
-      _showToast(getTranslated('page_updated', context) ?? 'Đã cập nhật trang');
+      _showToast(
+        getTranslated('page_updated', context) ?? 'Đã cập nhật trang',
+      );
     } else if (ok) {
-      _showToast(getTranslated('page_updated', context) ?? 'Đã cập nhật trang');
+      _showToast(
+        getTranslated('page_updated', context) ?? 'Đã cập nhật trang',
+      );
     } else {
       _showToast(
-          getTranslated('update_failed', context) ?? 'Cập nhật thất bại');
+        getTranslated('update_failed', context) ?? 'Cập nhật thất bại',
+      );
     }
   }
 
   void _onAdvertise() {
-    _showToast('Tính năng quảng cáo đang phát triển');
+    _showToast(
+      getTranslated('ads_feature_coming_soon', context) ??
+          'Tính năng quảng cáo đang phát triển',
+    );
   }
 
   Future<void> _onCreatePost() async {
@@ -161,7 +171,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
     if (!mounted || created == null) return;
 
     final SocialPost resolved =
-        created.copyWith(pageId: created.pageId ?? _page.pageId.toString());
+    created.copyWith(pageId: created.pageId ?? _page.pageId.toString());
 
     context.read<SocialPageController>().prependPagePost(resolved);
   }
@@ -280,7 +290,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                       ),
                       const SizedBox(height: avatarRadius + 12),
 
-                      // Tên, username, category, stats, buttons
+                      // Tên, username, category, stats nhỏ, buttons
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(
@@ -314,7 +324,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                             ),
                             const SizedBox(height: 12),
 
-                            // Rating + lượt theo dõi
+                            // Rating + lượt theo dõi (nhỏ)
                             Column(
                               children: [
                                 if (page.rating > 0)
@@ -338,7 +348,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                                   ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  '${page.likesCount} người theo dõi',
+                                  '${page.likesCount} ${getTranslated('followers', context) ?? 'người theo dõi'}',
                                   style: theme.textTheme.bodySmall?.copyWith(
                                     color: theme.hintColor,
                                   ),
@@ -347,93 +357,75 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                             ),
                             const SizedBox(height: 16),
 
-                            // Stats: followers / posts
-                            IntrinsicHeight(
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: _buildStatItem(
-                                      context,
-                                      page.likesCount.toString(),
-                                      getTranslated('followers', context) ??
-                                          'Theo dõi',
-                                    ),
-                                  ),
-                                  VerticalDivider(
-                                    color: theme.dividerColor,
-                                    thickness: 1,
-                                    width: 20,
-                                  ),
-                                  Expanded(
-                                    child: _buildStatItem(
-                                      context,
-                                      page.usersPost.toString(),
-                                      getTranslated('posts', context) ??
-                                          'Bài viết',
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 20),
+                            // ❌ ĐÃ BỎ KHỐI STATS LỚN (followers/posts) Ở ĐÂY
 
                             // Buttons (Đang theo dõi / Nhắn tin) hoặc Chỉnh sửa / Quảng cáo
                             Row(
                               children: isPageOwner
                                   ? [
-                                      Expanded(
-                                        child: _buildActionButton(
-                                          context,
-                                          'Chỉnh sửa',
-                                          Icons.edit_outlined,
-                                          theme.canvasColor,
-                                          Colors.black87,
-                                          _onEditPage,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: _buildActionButton(
-                                          context,
-                                          'Quảng cáo',
-                                          Icons.campaign_outlined,
-                                          Colors.blue.shade50,
-                                          Colors.blue,
-                                          _onAdvertise,
-                                        ),
-                                      ),
-                                    ]
+                                Expanded(
+                                  child: _buildActionButton(
+                                    context,
+                                    getTranslated(
+                                        'edit_page', context) ??
+                                        'Chỉnh sửa',
+                                    Icons.edit_outlined,
+                                    theme.canvasColor,
+                                    Colors.black87,
+                                    _onEditPage,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: _buildActionButton(
+                                    context,
+                                    getTranslated(
+                                        'promote_page', context) ??
+                                        'Quảng cáo',
+                                    Icons.campaign_outlined,
+                                    Colors.blue.shade50,
+                                    Colors.blue,
+                                    _onAdvertise,
+                                  ),
+                                ),
+                              ]
                                   : [
-                                      Expanded(
-                                        child: _buildActionButton(
-                                          context,
-                                          page.isLiked
-                                              ? 'Đang theo dõi'
-                                              : 'Theo dõi',
-                                          page.isLiked
-                                              ? Icons.check
-                                              : Icons.add,
-                                          page.isLiked
-                                              ? theme.canvasColor
-                                              : theme.primaryColor,
-                                          page.isLiked
-                                              ? Colors.black87
-                                              : Colors.white,
-                                          _onFollowOrUnfollow,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: _buildActionButton(
-                                          context,
-                                          'Nhắn tin',
-                                          Icons.chat_bubble_outline,
-                                          theme.canvasColor,
-                                          Colors.black87,
-                                          _onMessage,
-                                        ),
-                                      ),
-                                    ],
+                                Expanded(
+                                  child: _buildActionButton(
+                                    context,
+                                    page.isLiked
+                                        ? (getTranslated('following',
+                                        context) ??
+                                        'Đang theo dõi')
+                                        : (getTranslated(
+                                        'follow', context) ??
+                                        'Theo dõi'),
+                                    page.isLiked
+                                        ? Icons.check
+                                        : Icons.add,
+                                    page.isLiked
+                                        ? theme.canvasColor
+                                        : theme.primaryColor,
+                                    page.isLiked
+                                        ? Colors.black87
+                                        : Colors.white,
+                                    _onFollowOrUnfollow,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: _buildActionButton(
+                                    context,
+                                    getTranslated(
+                                        'message', context) ??
+                                        'Nhắn tin',
+                                    Icons.chat_bubble_outline,
+                                    theme.canvasColor,
+                                    Colors.black87,
+                                    _onMessage,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -446,7 +438,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                 SliverToBoxAdapter(
                   child: Padding(
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(
@@ -454,27 +446,14 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                           _buildTabItem(
                             context,
                             id: 'home',
-                            label: 'Bài viết',
+                            label: getTranslated('posts', context) ??
+                                'Bài viết',
                           ),
                           _buildTabItem(
                             context,
                             id: 'about',
-                            label: 'Giới thiệu',
-                          ),
-                          _buildTabItem(
-                            context,
-                            id: 'video',
-                            label: 'Video',
-                          ),
-                          _buildTabItem(
-                            context,
-                            id: 'photos',
-                            label: 'Ảnh',
-                          ),
-                          _buildTabItem(
-                            context,
-                            id: 'more',
-                            label: 'Xem thêm',
+                            label: getTranslated('about', context) ??
+                                'Giới thiệu',
                           ),
                         ],
                       ),
@@ -539,7 +518,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          "Giới thiệu",
+                          getTranslated('about', context) ?? 'Giới thiệu',
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
@@ -578,7 +557,8 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                           ),
                           const SizedBox(width: 12),
                           Text(
-                            "Bạn đang nghĩ gì?",
+                            getTranslated('what_are_you_thinking', context) ??
+                                "Bạn đang nghĩ gì?",
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: theme.hintColor,
                             ),
@@ -601,7 +581,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Text(
-              "Bài viết",
+              getTranslated('posts', context) ?? "Bài viết",
               style: theme.textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
@@ -612,7 +592,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
         if (isNotInitialized)
           SliverList(
             delegate: SliverChildBuilderDelegate(
-              (context, index) => _buildSkeletonPost(context),
+                  (context, index) => _buildSkeletonPost(context),
               childCount: 3,
             ),
           )
@@ -642,7 +622,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
         else
           SliverList(
             delegate: SliverChildBuilderDelegate(
-              (context, index) {
+                  (context, index) {
                 if (index == posts.length) {
                   if (pageCtrl.hasMorePagePosts) {
                     return const Padding(
@@ -677,70 +657,44 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
     }
 
     // ABOUT TAB
-    if (_selectedTab == 'about') {
-      return [
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: theme.cardColor,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.03),
-                    blurRadius: 4,
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Giới thiệu",
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    (page.description != null && page.description!.isNotEmpty)
-                        ? page.description!
-                        : 'Trang này chưa có mô tả.',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      height: 1.4,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ];
-    }
-
-    // VIDEO / PHOTOS / MORE: placeholder
-    String label;
-    if (_selectedTab == 'video') {
-      label = 'Chưa có video nào.';
-    } else if (_selectedTab == 'photos') {
-      label = 'Chưa có ảnh nào.';
-    } else {
-      label = 'Tính năng đang phát triển.';
-    }
-
     return [
       SliverToBoxAdapter(
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 16),
-          child: Center(
-            child: Text(
-              label,
-              style:
-                  theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
-              textAlign: TextAlign.center,
+          padding: const EdgeInsets.all(16),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: theme.cardColor,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 4,
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  getTranslated('about', context) ?? "Giới thiệu",
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  (page.description != null &&
+                      page.description!.isNotEmpty)
+                      ? page.description!
+                      : (getTranslated('page_no_description', context) ??
+                      'Trang này chưa có mô tả.'),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    height: 1.4,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -770,13 +724,13 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
   }
 
   Widget _buildActionButton(
-    BuildContext context,
-    String label,
-    IconData icon,
-    Color bg,
-    Color text,
-    VoidCallback onTap,
-  ) {
+      BuildContext context,
+      String label,
+      IconData icon,
+      Color bg,
+      Color text,
+      VoidCallback onTap,
+      ) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
@@ -856,10 +810,10 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
   }
 
   Widget _buildTabItem(
-    BuildContext context, {
-    required String id,
-    required String label,
-  }) {
+      BuildContext context, {
+        required String id,
+        required String label,
+      }) {
     final theme = Theme.of(context);
     final bool selected = _selectedTab == id;
     final Color activeColor = theme.primaryColor;
