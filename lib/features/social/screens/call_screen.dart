@@ -90,6 +90,9 @@ class _CallScreenState extends State<CallScreen> {
       _log('initRenderers error: $e', st: st);
     }
 
+    // “đập” cập nhật sớm để không lỡ OFFER tới sát lúc này
+    Future.delayed(const Duration(milliseconds: 250), _onCallUpdated);
+
     _startCallFlow();
   }
 
@@ -132,8 +135,6 @@ class _CallScreenState extends State<CallScreen> {
         ],
         'sdpSemantics': 'unified-plan',
       };
-
-      await Future.microtask(_onCallUpdated);
 
       _pc = await createPeerConnection(config);
       _log('PeerConnection created');
@@ -305,6 +306,7 @@ class _CallScreenState extends State<CallScreen> {
       _log('startCallFlow error: $e', st: st);
       _hangup();
     }
+    await Future.microtask(_onCallUpdated);
   }
 
   /// Lắng nghe CallController để nhận OFFER / ANSWER / ICE
