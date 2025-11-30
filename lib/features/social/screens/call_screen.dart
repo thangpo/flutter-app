@@ -184,9 +184,17 @@ class _CallScreenState extends State<CallScreen> {
       _pc!.onConnectionState = (s) {
         _log('connectionState -> $s');
         if (s == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
-            s == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
             s == RTCPeerConnectionState.RTCPeerConnectionStateClosed) {
           _hangup();
+        } else if (s ==
+            RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
+          Future.delayed(const Duration(seconds: 3), () {
+            if (!_viewAlive || _pc == null) return;
+            if (_pc!.connectionState ==
+                RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
+              _hangup();
+            }
+          });
         }
       };
 
@@ -228,18 +236,6 @@ class _CallScreenState extends State<CallScreen> {
       } catch (err, st) {
         _log('set local renderer error: $err', st: st);
       }
-
-      // Thêm sẵn transceiver recv-only để chắc chắn nhận remote (unified-plan iOS)
-      try {
-        await _pc!.addTransceiver(
-          kind: RTCRtpMediaType.RTCRtpMediaTypeAudio,
-          init: RTCRtpTransceiverInit(direction: TransceiverDirection.SendRecv),
-        );
-        await _pc!.addTransceiver(
-          kind: RTCRtpMediaType.RTCRtpMediaTypeVideo,
-          init: RTCRtpTransceiverInit(direction: TransceiverDirection.SendRecv),
-        );
-      } catch (_) {}
 
       // add local track vào PC
       var addedOk = true;
@@ -334,8 +330,13 @@ class _CallScreenState extends State<CallScreen> {
           );
           _remoteDescSet = true;
           _log('callee setRemoteDescription(offer) ${_sdpSummary(offer)}');
-          _ensureSendRecvTransceivers();
           _flushPendingCandidates();
+
+          // Hoãn ép sendrecv một nhịp để tránh race/“transceiver disposed” trên Android
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (!_viewAlive || _pc == null || !_remoteDescSet) return;
+            _ensureSendRecvTransceivers();
+          });
         } catch (e) {
           final msg = '$e';
           // Nếu WebRTC báo "wrong state" thì coi như đã set trước đó, bỏ qua
@@ -351,7 +352,8 @@ class _CallScreenState extends State<CallScreen> {
         _offerHandled = true; // đánh dấu đã xử lý để tránh lặp
         try {
           // Nếu chưa có local media (do payload sai mediaType), đảm bảo mở media trước khi answer
-          if (!_localTracksAdded || _localStream == null) {
+          // Chỉ bổ sung nếu THIẾU stream; tránh addTrack lần 2 gây "addTrack failed"
+          if (_localStream == null) {
             await _ensureLocalMedia(
               wantVideo: (_cc.activeMediaType == 'video' ||
                   widget.mediaType == 'video'),
@@ -514,7 +516,8 @@ class _CallScreenState extends State<CallScreen> {
 
   Future<void> _ensureLocalMedia({required bool wantVideo}) async {
     if (_pc == null) return;
-
+    // Nếu đã add đầy đủ track rồi thì thôi, tránh add lại gây lỗi native
+    if (_localTracksAdded) return;
     // Tạo local stream nếu chưa có
     if (_localStream == null) {
       final constraints = {
@@ -589,10 +592,15 @@ class _CallScreenState extends State<CallScreen> {
     try {
       final trans = await _pc!.getTransceivers();
       for (final t in trans) {
-        // Ép về sendrecv để tránh SDP recvonly (API version này không expose direction getter)
-        await t.setDirection(TransceiverDirection.SendRecv);
-        _log(
-            'force transceiver ${t.mid ?? '-'} kind=${t.sender.track?.kind} to sendrecv');
+        try {
+          if (t.sender.track != null) {
+            await t.setDirection(TransceiverDirection.SendRecv);
+            _log(
+                'force transceiver ${t.mid ?? '-'} kind=${t.sender.track?.kind} to sendrecv');
+          }
+        } catch (e, st) {
+          _log('ensureSendRecvTransceivers skip(setDirection): $e', st: st);
+        }
       }
     } catch (e, st) {
       _log('ensureSendRecvTransceivers error: $e', st: st);
