@@ -60,6 +60,8 @@ class _CallScreenState extends State<CallScreen> {
   bool _camOn = true;
   bool _speakerOn = true;
 
+  bool _flowStarted = false;
+
   @override
   void initState() {
     super.initState();
@@ -69,17 +71,22 @@ class _CallScreenState extends State<CallScreen> {
     _callListener = _onCallUpdated;
     _cc.addListener(_callListener);
 
-    // NEW: nếu vì lý do gì controller đang không gắn call,
-    // tự attach lại để đảm bảo có polling/sdpOffer/ICE cho callee
+    // Nếu controller chưa attach, gắn lại để bảo đảm polling/SDP/ICE cho callee
     if (_cc.activeCallId != widget.callId) {
       _cc.attachCall(
         callId: widget.callId,
         mediaType: widget.mediaType,
-        initialStatus: 'answered', // vì đang vào CallScreen rồi
+        initialStatus: 'answered', // đang ở CallScreen rồi
       );
     }
 
-    _initRenderers();
+    // Quan trọng: đợi renderer initialize xong rồi mới start call flow
+    Future.microtask(() async {
+      await _initRenderers();
+      await _startCallFlow();
+      // “đập” cập nhật sớm để không lỡ OFFER tới sát lúc này
+      Future.delayed(const Duration(milliseconds: 250), _onCallUpdated);
+    });
   }
 
   Future<void> _initRenderers() async {
@@ -98,7 +105,8 @@ class _CallScreenState extends State<CallScreen> {
 
   Future<void> _startCallFlow() async {
     if (!_viewAlive) return;
-
+    if (_flowStarted) return; // chống chạy lặp
+    _flowStarted = true;
     try {
       final isVideo =
           (widget.mediaType == 'video') || (_cc.activeMediaType == 'video');
@@ -543,13 +551,20 @@ class _CallScreenState extends State<CallScreen> {
             : false,
       };
       try {
-        _localStream = await navigator.mediaDevices.getUserMedia(constraints);
-        _localRenderer.srcObject = _localStream;
+        if (_localRenderer.textureId != null) {
+          _localRenderer.srcObject = _localStream;
+        } else {
+          // retry rất ngắn khi texture chưa sẵn sàng
+          Future.delayed(const Duration(milliseconds: 50), () {
+            if (_viewAlive && _localRenderer.textureId != null) {
+              _localRenderer.srcObject = _localStream;
+            }
+          });
+        }
         _log(
-            'ensureLocalMedia: created stream id=${_localStream?.id} tracks=${_localStream?.getTracks().length} video=$wantVideo');
-      } catch (e, st) {
-        _log('ensureLocalMedia getUserMedia error: $e', st: st);
-        return;
+            'local stream id=${_localStream?.id} tracks=${_localStream?.getTracks().length}');
+      } catch (err, st) {
+        _log('set local renderer error: $err', st: st);
       }
     }
 

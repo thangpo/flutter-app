@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../controllers/call_controller.dart';
 import 'call_screen.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart' as webrtc;
 
 class IncomingCallScreen extends StatefulWidget {
   final int callId;
@@ -118,11 +119,13 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   }
 
   Future<void> _onAccept() async {
-    if (_locked || _accepting) return; // chống double-tap
+    if (_locked || _accepting) return;
     _locked = true;
     _accepting = true;
     setState(() => _handling = true);
 
+    // iOS: xin quyền trước để tránh popup đúng lúc chuyển route
+    await _ensureMediaPermissions();
     // ngắt listener để tránh race trong lúc điều hướng
     try {
       _cc.removeListener(_listener);
@@ -202,6 +205,21 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     }
 
     await _safeDetachAndPop(detach: true); // Decline mới detach + pop
+  }
+
+  Future<void> _ensureMediaPermissions() async {
+    try {
+      // "làm nóng" quyền mic trên iOS bằng cách xin 1 stream ngắn rồi đóng
+      final stream =
+          await webrtc.navigator.mediaDevices.getUserMedia({'audio': true});
+      // đóng gọn gàng
+      for (final t in stream.getTracks()) {
+        t.stop();
+      }
+      await stream.dispose();
+    } catch (_) {
+      // lần đầu iOS sẽ bật prompt; nếu user từ chối thì vẫn bắt ở chỗ answer
+    }
   }
 
   @override
