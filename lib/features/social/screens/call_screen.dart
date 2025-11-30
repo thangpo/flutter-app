@@ -183,6 +183,12 @@ class _CallScreenState extends State<CallScreen> {
       // connection state
       _pc!.onConnectionState = (s) {
         _log('connectionState -> $s');
+
+        // Đừng cúp máy khi callee chưa SRD — iOS có thể "Closed/Disconnected" thoáng khi đổi route
+        if (!_remoteDescSet && !widget.isCaller) {
+          return;
+        }
+
         if (s == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
             s == RTCPeerConnectionState.RTCPeerConnectionStateClosed) {
           _hangup();

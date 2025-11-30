@@ -37,7 +37,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   bool _viewAlive = true;
   bool _detaching = false;
   bool _declineRequested = false;
-
+  bool _locked = false; // đã chọn 1 hành động -> khóa mọi thứ
+  bool _accepting = false; // đang xử lý Accept
+  bool _declining = false; // đang xử lý Decline
   @override
   void initState() {
     super.initState();
@@ -70,15 +72,29 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     if (!_viewAlive) return;
 
     final st = _cc.callStatus;
-    // Pop khỏi incoming khi đối phương kết thúc/decline hoặc khi call đã answered ở nơi khác.
+
+    if (st == 'answered') {
+      // Nếu user CHƯA bấm Accept (chưa _locked), cho phép auto vào CallScreen.
+      // Còn đã Accept (_locked=true) thì không làm gì thêm, tránh đè luồng.
+      if (!_locked) {
+        _log(
+            'controllerChanged status=answered -> go to CallScreen callId=${widget.callId}');
+        if (mounted) _goToCallScreen();
+      }
+      return;
+    }
+
     if (st == 'declined' || st == 'ended') {
+      // Nếu đang/đã Accept thì phớt lờ declined/ended đến muộn
+      if (_accepting) {
+        _log(
+            'controllerChanged status=$st ignored (already accepting) callId=${widget.callId}');
+        return;
+      }
       _log(
           'controllerChanged status=$st -> pop+detach incoming callId=${widget.callId}');
-      await _safeDetachAndPop(detach: true); // chỉ detach khi ended/declined
-    } else if (st == 'answered') {
-      _log(
-          'controllerChanged status=answered -> go to CallScreen callId=${widget.callId}');
-      if (mounted) _goToCallScreen(); // KHÔNG detach ở đây
+      await _safeDetachAndPop(detach: true);
+      return;
     }
   }
 
@@ -102,9 +118,17 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   }
 
   Future<void> _onAccept() async {
-    if (_handling) return;
+    if (_locked || _accepting) return; // chống double-tap
+    _locked = true;
+    _accepting = true;
     setState(() => _handling = true);
 
+    // ngắt listener để tránh race trong lúc điều hướng
+    try {
+      _cc.removeListener(_listener);
+    } catch (_) {}
+
+    // đảm bảo đã attach (nếu cần)
     if (_cc.activeCallId != widget.callId) {
       _log(
           'accept: attaching callId=${widget.callId} media=${widget.mediaType}');
@@ -126,7 +150,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     }
 
     if (!mounted) return;
-    _goToCallScreen();
+    _goToCallScreen(); // KHÔNG detach ở đây
   }
 
   void _goToCallScreen() {
@@ -147,10 +171,15 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   }
 
   Future<void> _onDecline() async {
-    if (_handling) return;
+    if (_locked || _declining) return; // đã Accept rồi thì _locked = true
+    _locked = true;
+    _declining = true;
     _declineRequested = true;
-    _log('decline: action(decline) start callId=${widget.callId}');
     setState(() => _handling = true);
+
+    try {
+      _cc.removeListener(_listener);
+    } catch (_) {}
 
     if (_cc.activeCallId != widget.callId) {
       _log(
@@ -163,6 +192,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     }
 
     try {
+      _log('decline: action(decline) start callId=${widget.callId}');
       await _cc.action('decline').timeout(const Duration(seconds: 2),
           onTimeout: () {
         _log('action(decline) timeout');
@@ -171,7 +201,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
       _log('action(decline) error: $e', st: st);
     }
 
-    await _safeDetachAndPop();
+    await _safeDetachAndPop(detach: true); // Decline mới detach + pop
   }
 
   @override
