@@ -6,7 +6,6 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:provider/provider.dart';
 
 import '../domain/models/ice_candidate_lite.dart';
-
 import '../controllers/call_controller.dart';
 
 class CallScreen extends StatefulWidget {
@@ -71,20 +70,20 @@ class _CallScreenState extends State<CallScreen> {
     _callListener = _onCallUpdated;
     _cc.addListener(_callListener);
 
-    // Nếu controller chưa attach, gắn lại để bảo đảm polling/SDP/ICE cho callee
+    // Nếu controller chưa attach, gắn lại (đang ở CallScreen)
     if (_cc.activeCallId != widget.callId) {
       _cc.attachCall(
         callId: widget.callId,
         mediaType: widget.mediaType,
-        initialStatus: 'answered', // đang ở CallScreen rồi
+        initialStatus: 'answered',
       );
     }
 
-    // Quan trọng: đợi renderer initialize xong rồi mới start call flow
+    // Quan trọng: đợi init renderer xong rồi mới start flow
     Future.microtask(() async {
       await _initRenderers();
       await _startCallFlow();
-      // “đập” cập nhật sớm để không lỡ OFFER tới sát lúc này
+      // đập cập nhật sớm phòng trường hợp offer/answer đến sát lúc này
       Future.delayed(const Duration(milliseconds: 250), _onCallUpdated);
     });
   }
@@ -96,11 +95,9 @@ class _CallScreenState extends State<CallScreen> {
     } catch (e, st) {
       _log('initRenderers error: $e', st: st);
     }
-
-    // “đập” cập nhật sớm để không lỡ OFFER tới sát lúc này
+    // ❌ Đừng gọi _startCallFlow() ở đây nữa (đã gọi từ initState).
+    // Chỉ poke nhẹ controller để nếu OFFER/ANSWER tới sát thời điểm này thì vẫn bắt được:
     Future.delayed(const Duration(milliseconds: 250), _onCallUpdated);
-
-    _startCallFlow();
   }
 
   Future<void> _startCallFlow() async {
@@ -157,11 +154,10 @@ class _CallScreenState extends State<CallScreen> {
           await stream.addTrack(e.track);
         }
 
-        // Chỉ gán renderer khi track video để tránh âm thanh ghi đè stream video
         if (e.track.kind == 'video') {
           try {
             _remoteStream = stream;
-            _remoteRenderer.srcObject = stream;
+            _attachRemoteStream(stream); // ✅ dùng helper an toàn
             _log(
                 'onTrack kind=${e.track.kind} id=${e.track.id} remoteStream=${stream.id}');
             _logRemoteSizeLater();
@@ -215,7 +211,8 @@ class _CallScreenState extends State<CallScreen> {
       // Plan-B fallback (một số thiết bị Android gửi addStream)
       _pc!.onAddStream = (MediaStream stream) async {
         try {
-          _remoteRenderer.srcObject = stream;
+          _remoteStream = stream;
+          _attachRemoteStream(stream); // ✅ dùng helper an toàn
           _log(
               'onAddStream id=${stream.id} tracks=${stream.getTracks().length}');
         } catch (err, st) {
@@ -244,7 +241,17 @@ class _CallScreenState extends State<CallScreen> {
 
       _localStream = await navigator.mediaDevices.getUserMedia(constraints);
       try {
-        _localRenderer.srcObject = _localStream;
+        // ✅ chỉ gán khi renderer sẵn sàng, có retry
+        if (_localRenderer.textureId != null) {
+          _localRenderer.srcObject = _localStream;
+        } else {
+          Future.delayed(const Duration(milliseconds: 50), () {
+            if (mounted && _localRenderer.textureId != null) {
+              _localRenderer.srcObject = _localStream;
+              setState(() {});
+            }
+          });
+        }
         _log(
             'local stream id=${_localStream?.id} tracks=${_localStream?.getTracks().length}');
       } catch (err, st) {
@@ -278,18 +285,14 @@ class _CallScreenState extends State<CallScreen> {
         await _ensureLocalMedia(wantVideo: isVideo);
       }
 
-      // tăng bitrate gửi đi (giống style cũ — KHÔNG dùng getParameters)
+      // tăng bitrate gửi đi
       try {
         final senders = await _pc!.getSenders();
         for (var s in senders) {
           if (s.track?.kind == 'video') {
             await s.setParameters(
               RTCRtpParameters(
-                encodings: [
-                  RTCRtpEncoding(
-                    maxBitrate: 1500 * 1000, // ~1.5 Mbps
-                  ),
-                ],
+                encodings: [RTCRtpEncoding(maxBitrate: 1500 * 1000)],
               ),
             );
           }
@@ -332,28 +335,24 @@ class _CallScreenState extends State<CallScreen> {
     }
 
     // CALLEE xử lý OFFER
-    // CALLEE xử lý OFFER: set remote + trả lời đúng 1 lần
     if (!widget.isCaller) {
       final offer = _cc.sdpOffer;
 
-      // 1) Chỉ setRemoteDescription nếu chưa set
       if (offer != null && !_remoteDescSet) {
         try {
-          await _pc!.setRemoteDescription(
-            RTCSessionDescription(offer, 'offer'),
-          );
+          await _pc!
+              .setRemoteDescription(RTCSessionDescription(offer, 'offer'));
           _remoteDescSet = true;
           _log('callee setRemoteDescription(offer) ${_sdpSummary(offer)}');
           _flushPendingCandidates();
 
-          // Hoãn ép sendrecv một nhịp để tránh race/“transceiver disposed” trên Android
+          // Hoãn ép sendrecv một nhịp để tránh race
           Future.delayed(const Duration(milliseconds: 500), () {
             if (!_viewAlive || _pc == null || !_remoteDescSet) return;
             _ensureSendRecvTransceivers();
           });
         } catch (e) {
           final msg = '$e';
-          // Nếu WebRTC báo "wrong state" thì coi như đã set trước đó, bỏ qua
           if (!msg.contains('Called in wrong state')) {
             _error('Lỗi set remote OFFER: $e');
             _log('callee setRemoteDescription(offer) error: $e');
@@ -361,12 +360,9 @@ class _CallScreenState extends State<CallScreen> {
         }
       }
 
-      // 2) Khi đã có remote offer & chưa gửi answer → tạo answer 1 lần
       if (_remoteDescSet && !_offerHandled) {
-        _offerHandled = true; // đánh dấu đã xử lý để tránh lặp
+        _offerHandled = true;
         try {
-          // Nếu chưa có local media (do payload sai mediaType), đảm bảo mở media trước khi answer
-          // Chỉ bổ sung nếu THIẾU stream; tránh addTrack lần 2 gây "addTrack failed"
           if (_localStream == null) {
             await _ensureLocalMedia(
               wantVideo: (_cc.activeMediaType == 'video' ||
@@ -399,9 +395,7 @@ class _CallScreenState extends State<CallScreen> {
       final ans = _cc.sdpAnswer;
       if (ans != null && !_remoteDescSet) {
         try {
-          await _pc!.setRemoteDescription(
-            RTCSessionDescription(ans, 'answer'),
-          );
+          await _pc!.setRemoteDescription(RTCSessionDescription(ans, 'answer'));
           _remoteDescSet = true;
           _answerHandled = true;
           _log('caller setRemoteDescription(answer) ${_sdpSummary(ans)}');
@@ -414,7 +408,7 @@ class _CallScreenState extends State<CallScreen> {
       }
     }
 
-    // CALLER fallback: n?u server chua tr? offer trong poll, resend 1 l?n sau 2s
+    // CALLER fallback: if server chưa trả offer trong poll, resend sau 2s
     if (widget.isCaller &&
         !_offerResent &&
         _localOfferSdp != null &&
@@ -429,7 +423,8 @@ class _CallScreenState extends State<CallScreen> {
         _log('resend offer error: ');
       }
     }
-// ICE từ peer
+
+    // ICE từ peer
     if (_cc.iceCandidates.isNotEmpty) {
       for (var ic in _cc.iceCandidates) {
         final key = '${ic.candidate}|${ic.sdpMid}|${ic.sdpMLineIndex}';
@@ -466,6 +461,23 @@ class _CallScreenState extends State<CallScreen> {
       final key = '${ic.candidate}|${ic.sdpMid}|${ic.sdpMLineIndex}';
       if (_addedCandidates.contains(key)) continue;
       _addCandidate(ic, key);
+    }
+  }
+
+  void _attachRemoteStream(MediaStream stream) {
+    if (!mounted) return;
+    if (_remoteRenderer.textureId != null) {
+      _remoteRenderer.srcObject = stream;
+      if (mounted) setState(() {});
+    } else {
+      // retry ngắn nếu texture chưa sẵn
+      Future.delayed(const Duration(milliseconds: 50), () {
+        if (!mounted) return;
+        if (_remoteRenderer.textureId != null) {
+          _remoteRenderer.srcObject = stream;
+          setState(() {});
+        }
+      });
     }
   }
 
@@ -518,7 +530,6 @@ class _CallScreenState extends State<CallScreen> {
         final w = _remoteRenderer.videoWidth;
         final h = _remoteRenderer.videoHeight;
         if ((w == 0 || h == 0) && _remoteStream != null) {
-          // thử gán lại stream để renderer refresh
           _remoteRenderer.srcObject = _remoteStream;
           _log('remoteRenderer blank -> reattach stream ${_remoteStream?.id}');
           _logRemoteSizeLater();
@@ -530,9 +541,9 @@ class _CallScreenState extends State<CallScreen> {
 
   Future<void> _ensureLocalMedia({required bool wantVideo}) async {
     if (_pc == null) return;
-    // Nếu đã add đầy đủ track rồi thì thôi, tránh add lại gây lỗi native
     if (_localTracksAdded) return;
-    // Tạo local stream nếu chưa có
+
+    // ✅ Tạo local stream NẾU CHƯA có (bản cũ thiếu hẳn getUserMedia)
     if (_localStream == null) {
       final constraints = {
         'audio': true,
@@ -551,20 +562,22 @@ class _CallScreenState extends State<CallScreen> {
             : false,
       };
       try {
+        _localStream = await navigator.mediaDevices.getUserMedia(constraints);
         if (_localRenderer.textureId != null) {
           _localRenderer.srcObject = _localStream;
         } else {
-          // retry rất ngắn khi texture chưa sẵn sàng
           Future.delayed(const Duration(milliseconds: 50), () {
             if (_viewAlive && _localRenderer.textureId != null) {
               _localRenderer.srcObject = _localStream;
+              if (mounted) setState(() {});
             }
           });
         }
         _log(
             'local stream id=${_localStream?.id} tracks=${_localStream?.getTracks().length}');
       } catch (err, st) {
-        _log('set local renderer error: $err', st: st);
+        _log('ensureLocalMedia getUserMedia error: $err', st: st);
+        return;
       }
     }
 
@@ -629,7 +642,6 @@ class _CallScreenState extends State<CallScreen> {
   }
 
   String _forceSendRecvSdp(String sdp) {
-    // Thay thế mọi recvonly/sendonly/inactive thành sendrecv để chắc chắn gửi hình/tiếng
     var patched =
         sdp.replaceAll(RegExp(r'^a=recvonly$', multiLine: true), 'a=sendrecv');
     patched = patched.replaceAll(
@@ -640,7 +652,6 @@ class _CallScreenState extends State<CallScreen> {
   }
 
   String _sdpSummary(String sdp) {
-    // Quick summary for debugging: check if m=audio/video and direction lines.
     final audio = sdp.contains('\nm=audio');
     final video = sdp.contains('\nm=video');
     String dir = '';
@@ -648,7 +659,7 @@ class _CallScreenState extends State<CallScreen> {
       'a=sendrecv',
       'a=recvonly',
       'a=sendonly',
-      'a=inactive',
+      'a=inactive'
     ]) {
       if (sdp.contains('\n$line')) {
         dir = line.replaceFirst('a=', '');
@@ -685,7 +696,7 @@ class _CallScreenState extends State<CallScreen> {
     _ending = true;
 
     _cc.removeListener(_callListener);
-    // TrA�nh notifyListeners trong khi tree �`ang lock khi dispose
+    // Tránh notifyListeners trong khi tree đang lock khi dispose
     scheduleMicrotask(_detachController);
     _disposeRTC();
 
