@@ -1556,6 +1556,16 @@
   "event_description_empty": "Chưa có mô tả",
   "event_name_empty": "Chưa có tên sự kiện",
   "event_name": "Tên sự kiện",
-  "event_description": "Mô tả sự kiện"
+  "event_description": "Mô tả sự kiện",
+
+  "featured_hotels": "Khách sạn nổi bật",
+  "tour_loading_error": "Lỗi tải tour",
+  "contact_for_price": "Liên hệ để biết giá",
+  "tours_available": "Các tour có sẵn",
+  "all_tours": "Tất cả các tour",
+  "no_tours_here": "Không có tour nào ở đây",
+  "six_days_five_nights": "Sáu ngày năm đêm",
+  "fire_ice_trip": "Chuyến đi Lửa và Băng",
+  "for_one_person": "Cho một người"
 }
 
