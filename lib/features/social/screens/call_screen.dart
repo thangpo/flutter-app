@@ -56,6 +56,8 @@ class _CallScreenState extends State<CallScreen> {
   final Set<String> _sentCandidates = {};
   final List<IceCandidateLite> _pendingCandidates = [];
   bool _stableIceLogged = false;
+  Timer? _videoWatchdog;
+  int _videoBlankTicks = 0;
 
   // UI controls
   bool _micOn = true;
@@ -152,6 +154,7 @@ class _CallScreenState extends State<CallScreen> {
                 'onTrack kind=${e.track.kind} id=${e.track.id} remoteStream=${stream.id}');
             _logRemoteSizeLater();
             _kickRemoteRenderIfBlank();
+            _startVideoWatchdog();
           } catch (err, st) {
             _log('onTrack set renderer error: $err', st: st);
           }
@@ -566,6 +569,84 @@ class _CallScreenState extends State<CallScreen> {
     });
   }
 
+  void _startVideoWatchdog() {
+    _videoBlankTicks = 0;
+    _videoWatchdog?.cancel();
+    _videoWatchdog = Timer.periodic(const Duration(seconds: 2), (_) async {
+      if (!_viewAlive || _pc == null) return;
+      final state = _pc!.connectionState;
+      if (state != RTCPeerConnectionState.RTCPeerConnectionStateConnected &&
+          state != RTCPeerConnectionState.RTCPeerConnectionStateConnecting) {
+        return;
+      }
+      final w = _remoteRenderer.videoWidth;
+      final h = _remoteRenderer.videoHeight;
+      final blank = (w == 0 || h == 0);
+      final noFrames = await _noInboundVideo();
+      if (blank && noFrames) {
+        _videoBlankTicks++;
+        _log('remote video blank tick=$_videoBlankTicks (w=$w h=$h)');
+        if (_videoBlankTicks == 1) {
+          _kickRemoteRenderIfBlank();
+        } else if (_videoBlankTicks == 2) {
+          _forceVideoTrackRestart();
+        } else if (_videoBlankTicks >= 3) {
+          _tryRestartIce();
+          _videoBlankTicks = 0;
+        }
+      } else {
+        _videoBlankTicks = 0;
+      }
+    });
+  }
+
+  Future<bool> _noInboundVideo() async {
+    try {
+      final stats = await _pc?.getStats();
+      if (stats == null) return false;
+      for (final s in _iterateStats(stats)) {
+        final type = s['type'] ?? (s['values']?['type']);
+        final vals =
+            (s['values'] is Map) ? Map<String, dynamic>.from(s['values']) : s;
+        final mediaType = vals['mediaType'] ?? vals['kind'];
+        if (type == 'inbound-rtp' && mediaType == 'video') {
+          final frames = (vals['framesDecoded'] ?? vals['framesReceived'] ?? 0)
+              as num;
+          final bytes = (vals['bytesReceived'] ?? 0) as num;
+          if (frames > 0 || bytes > 5000) return false;
+        }
+      }
+    } catch (_) {}
+    return true;
+  }
+
+  Future<void> _forceVideoTrackRestart() async {
+    try {
+      final senders = await _pc?.getSenders() ?? [];
+      for (final s in senders) {
+        if (s.track?.kind == 'video') {
+          final t = s.track!;
+          t.enabled = false;
+          await Future.delayed(const Duration(milliseconds: 120));
+          t.enabled = true;
+          _log('restart local video track to kick remote render');
+          break;
+        }
+      }
+    } catch (e, st) {
+      _log('forceVideoTrackRestart error: $e', st: st);
+    }
+  }
+
+  Future<void> _tryRestartIce() async {
+    try {
+      await _pc?.restartIce();
+      _log('restartIce triggered (blank video)');
+    } catch (e, st) {
+      _log('restartIce failed: $e', st: st);
+    }
+  }
+
   String _iceType(String? cand) {
     if (cand == null) return '?';
     final m = RegExp(r'typ\s+(\w+)').firstMatch(cand);
@@ -827,6 +908,9 @@ class _CallScreenState extends State<CallScreen> {
     try {
       _localRenderer.dispose();
       _remoteRenderer.dispose();
+    } catch (_) {}
+    try {
+      _videoWatchdog?.cancel();
     } catch (_) {}
 
     super.dispose();
