@@ -1,5 +1,4 @@
-﻿
-import 'dart:io';
+﻿import 'dart:io';
 import 'dart:convert';
 
 import 'package:firebase_core/firebase_core.dart';
@@ -100,6 +99,10 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/
 import 'di_container.dart' as di;
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_page_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_page_service_interface.dart';
+
+// === ADD (nếu chưa có biến này) ===
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
 
 // =================== FIREBASE ANALYTICS INSTANCES ===================
 final FirebaseAnalytics analytics = FirebaseAnalytics.instance;
@@ -275,7 +278,20 @@ Future<void> _showIncomingCallNotification(Map<String, dynamic> data) async {
   );
 }
 
+// === ADD ===
+// Production: dùng UI hệ thống (iOS CallKit / Android ConnectionService)
+// -> KHÔNG đẩy màn IncomingCallScreen Flutter nữa
+class CallUiConfig {
+  static const bool useSystemIncomingUI = true;
+}
+
 void _handleCallInviteOpen(Map<String, dynamic> data) {
+  if (CallUiConfig.useSystemIncomingUI) {
+    // Đã có CallKit/ConnectionService lo UI. Không mở IncomingCallScreen Flutter nữa.
+    debugPrint('⚠️ Skip IncomingCallScreen (system UI in use)');
+    return;
+  }
+
   if (_incomingCallRouting) return;
   _incomingCallRouting = true;
 
@@ -303,7 +319,7 @@ void _handleCallInviteOpen(Map<String, dynamic> data) {
           builder: (_) => IncomingCallScreen(
             callId: callId,
             mediaType: media,
-            callerName: callerName ?? 'Cu?c g?i d?n',
+            callerName: callerName ?? 'Cuộc gọi đến',
             callerAvatar: callerAvatar,
           ),
         ),
@@ -419,6 +435,46 @@ Future<void> _handleCallSignal(Map<String, dynamic> data) async {
   } catch (_) {}
 }
 
+// === REPLACE this function ===
+Future<void> _ensureAndroidNotificationPermission() async {
+  if (!Platform.isAndroid) return;
+
+  final androidImpl =
+      flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+
+  if (androidImpl == null) {
+    debugPrint('🔔 No AndroidFlutterLocalNotificationsPlugin impl available.');
+    return;
+  }
+
+  bool? granted;
+
+  try {
+    // flutter_local_notifications v17+
+    granted = await androidImpl.requestNotificationsPermission();
+    debugPrint('🔔 requestNotificationsPermission() => $granted');
+  } catch (e1) {
+    try {
+      // Một số bản cũ dùng tên cũ (nếu có)
+      // ignore: deprecated_member_use
+      // granted = await androidImpl.requestPermission(); // có thể vẫn không tồn tại
+      debugPrint('🔔 requestPermission() not available on this version.');
+    } catch (e2) {
+      // bỏ qua
+    }
+  }
+
+  // Nếu SDK quá cũ, không có API xin quyền → log cảnh báo
+  if (granted == null) {
+    debugPrint(
+      '⚠️ flutter_local_notifications bản hiện tại không hỗ trợ xin POST_NOTIFICATIONS. '
+      'Trên Android 13+ bạn cần nâng cấp plugin (khuyến nghị v17+) '
+      'hoặc dùng permission_handler(Permission.notification).',
+    );
+  }
+}
+
 Future<void> main() async {
   HttpOverrides.global = MyHttpOverrides();
   WidgetsFlutterBinding.ensureInitialized();
@@ -468,12 +524,18 @@ Future<void> main() async {
   }
 
   // ==== SOCIAL FCM / CALL WIRING ====
-  FcmChatHandler.initialize(); // stream chat FCM
-  CallInviteForegroundListener
-      .start(); // m? m�n IncomingCall khi dang trong app
-  SocialCallPushHandler.I
-      .initLocalNotifications(); // local notif cho cu?c g?i (background)
-  await CallkitService.I.init(); // CallKit/ConnectionService incoming UI
+  // 1) Init UI hệ thống trước (CallKit/ConnectionService)
+  await CallkitService.I.init();
+
+  // 2) Local notifications (cho Android heads-up khi cần)
+  SocialCallPushHandler.I.initLocalNotifications();
+
+  // 3) Listener foreground cho call_invite qua FCM (nếu bạn dùng)
+  CallInviteForegroundListener.start();
+
+  // 4) FCM chat
+  FcmChatHandler.initialize();
+
   // SocialCallPushHandler.I.bindForegroundListener(); // KH�NG c?n d�ng n?a
 
   // =================== APP LIFECYCLE OBSERVER ===================
@@ -506,7 +568,8 @@ Future<void> main() async {
     await AnalyticsHelper.logAppOpen();
     await _debugPrintFcmToken();
   });
-
+  // === ADD (trước khi tạo channel) ===
+  await _ensureAndroidNotificationPermission();
   // t?o k�nh heads-up cho call_invite (cu, d�ng chung plugin global n?u c?n)
   await flutterLocalNotificationsPlugin
       .resolvePlatformSpecificImplementation<
@@ -845,6 +908,3 @@ class MyHttpOverrides extends HttpOverrides {
           (X509Certificate cert, String host, int port) => true;
   }
 }
-
-
-

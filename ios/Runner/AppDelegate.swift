@@ -11,110 +11,146 @@ import flutter_callkit_incoming
 @main
 @objc class AppDelegate: FlutterAppDelegate, PKPushRegistryDelegate {
 
-  var pushRegistry: PKPushRegistry?
+  // MARK: - Properties
+  private var pushRegistry: PKPushRegistry?
 
+  // MARK: - App lifecycle
   override func application(
     _ application: UIApplication,
-    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil
   ) -> Bool {
+
+    // Firebase
     FirebaseApp.configure()
+
+    // Google Maps (bật nếu bạn có API key)
     // GMSServices.provideAPIKey("YOUR_MAP_KEY_HERE")
+
+    // Flutter plugin auto-registrant
     GeneratedPluginRegistrant.register(with: self)
+
+    // Flutter Downloader
     FlutterDownloaderPlugin.setPluginRegistrantCallback(registerPlugins)
 
-    // PushKit (VoIP) init
+    // PushKit (VoIP)
     initPushKit()
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
-}
 
-private func registerPlugins(registry: FlutterPluginRegistry) {
-  if (!registry.hasPlugin("FlutterDownloaderPlugin")) {
-    FlutterDownloaderPlugin.register(with: registry.registrar(forPlugin: "FlutterDownloaderPlugin")!)
-  }
-}
-
-// MARK: - PushKit
-extension AppDelegate {
-
-  func initPushKit() {
-    pushRegistry = PKPushRegistry(queue: .main)
-    pushRegistry?.delegate = self
-    pushRegistry?.desiredPushTypes = [.voIP]
+  // MARK: - PushKit setup
+  private func initPushKit() {
+    let registry = PKPushRegistry(queue: .main)
+    registry.delegate = self
+    registry.desiredPushTypes = [.voIP]
+    self.pushRegistry = registry
+    print("[PUSHKIT] init done (desiredPushTypes=.voIP)")
   }
 
+  // MARK: - PKPushRegistryDelegate
+
+  /// VoIP token cập nhật (app cài lần đầu / token rotate)
   public func pushRegistry(_ registry: PKPushRegistry,
                            didUpdate pushCredentials: PKPushCredentials,
                            for type: PKPushType) {
-    let tokenData = pushCredentials.token
-    let deviceToken = tokenData.map { String(format: "%02x", $0) }.joined()
+    let deviceToken = pushCredentials.token.map { String(format: "%02x", $0) }.joined()
 
-    // (1) Báo token VoIP cho plugin như doc yêu cầu
+    // (1) Đưa token cho plugin (flutter_callkit_incoming)
     SwiftFlutterCallkitIncomingPlugin.sharedInstance?.setDevicePushTokenVoIP(deviceToken)
 
-    // (2) Nếu có accessToken thì upload về server của bạn
-    if let accessToken = UserDefaults.standard.string(forKey: "socialAccessToken"),
-       !accessToken.isEmpty,
-       let url = URL(string: "https://social.vnshop247.com/api/v2/endpoints/pushkit.php") {
-      var req = URLRequest(url: url)
-      req.httpMethod = "POST"
-      let body = "access_token=\(accessToken)&pushkit_token=\(deviceToken)"
-      req.httpBody = body.data(using: .utf8)
-      req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-      URLSession.shared.dataTask(with: req) { _, resp, err in
-        if let err = err {
-          print("pushkit upload error: \(err)")
-          return
-        }
-        if let http = resp as? HTTPURLResponse {
-          print("pushkit upload status=\(http.statusCode)")
-        }
-      }.resume()
-    } else {
-      print("PushKit token: \(deviceToken)")
+    // Log token để kiểm tra
+    print("[PUSHKIT] deviceToken=\(deviceToken)")
+
+    // (2) Đọc access token do Flutter lưu (shared_preferences prefix "flutter.")
+    let storedAccessToken = UserDefaults.standard.string(forKey: "flutter.social_access_token")
+    print("[PUSHKIT] flutter.social_access_token=\(storedAccessToken ?? "nil")")
+
+    // (3) Upload token lên server nếu có access token
+    guard
+      let accessToken = storedAccessToken, !accessToken.isEmpty,
+      let url = URL(string: "https://social.vnshop247.com/api/v2/endpoints/pushkit.php")
+    else {
+      // Chưa đăng nhập hoặc chưa có token → chỉ log
+      return
     }
+
+    // Build body x-www-form-urlencoded với percent-encode an toàn
+    var comps = URLComponents()
+    comps.queryItems = [
+      URLQueryItem(name: "access_token", value: accessToken),
+      URLQueryItem(name: "pushkit_token", value: deviceToken),
+    ]
+    let bodyData = comps.percentEncodedQuery?.data(using: .utf8)
+
+    var req = URLRequest(url: url)
+    req.httpMethod = "POST"
+    req.httpBody = bodyData
+    req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+
+    URLSession.shared.dataTask(with: req) { data, resp, err in
+      if let err = err {
+        print("[PUSHKIT] upload error: \(err)")
+        return
+      }
+      if let http = resp as? HTTPURLResponse {
+        print("[PUSHKIT] upload status=\(http.statusCode)")
+      }
+      if let data = data, let s = String(data: data, encoding: .utf8) {
+        print("[PUSHKIT] upload response=\(s)")
+      }
+    }.resume()
   }
 
+  /// Token VoIP bị vô hiệu (hiếm khi gặp)
   public func pushRegistry(_ registry: PKPushRegistry,
                            didInvalidatePushTokenFor type: PKPushType) {
-    print("PushKit token invalidated")
-    // clear token trong plugin
+    print("[PUSHKIT] token invalidated")
     SwiftFlutterCallkitIncomingPlugin.sharedInstance?.setDevicePushTokenVoIP("")
   }
 
+  /// Nhận VoIP push (kể cả khi app bị kill)
   public func pushRegistry(_ registry: PKPushRegistry,
                            didReceiveIncomingPushWith payload: PKPushPayload,
                            for type: PKPushType,
                            completion: @escaping () -> Void) {
 
-    // Lấy payload
+    // Một số backend gửi data ở key "data", một số gửi thẳng ở root
     let raw = payload.dictionaryPayload["data"] as? [AnyHashable: Any] ?? payload.dictionaryPayload
+
+    // Convert về [String: Any] cho chắc
     var dataDict: [String: Any] = [:]
     raw.forEach { key, value in dataDict["\(key)"] = value }
 
-    // Map sang model Data của plugin
-    let callId = (dataDict["call_id"] as? String) ?? UUID().uuidString
-    let callerName = (dataDict["caller_name"] as? String) ?? "Incoming call"
-    let handle = (dataDict["caller_name"] as? String) ?? "Caller"
-    let isVideo = ((dataDict["media"] as? String) == "video")
+    print("[PUSHKIT] incoming payload=\(dataDict)")
 
-    // Tạo đối tượng Data (đến từ module flutter_callkit_incoming)
+    // Map sang model Data của plugin flutter_callkit_incoming
+    let callId     = (dataDict["call_id"] as? String) ?? UUID().uuidString
+    let callerName = (dataDict["caller_name"] as? String) ?? "Incoming call"
+    let handle     = (dataDict["caller_handle"] as? String) ?? callerName
+    let isVideo    = ((dataDict["media"] as? String) == "video")
+
     let callData = flutter_callkit_incoming.Data(
       id: callId,
       nameCaller: callerName,
       handle: handle,
-      type: isVideo ? 1 : 0
+      type: isVideo ? 1 : 0 // 0=audio, 1=video (theo plugin)
     )
     callData.avatar = dataDict["caller_avatar"] as? String ?? ""
-    callData.extra = dataDict as NSDictionary
+    callData.extra  = dataDict as NSDictionary
 
-    // Gọi CallKit
+    print("[CALLKIT] showCallkitIncoming id=\(callId) video=\(isVideo)")
     SwiftFlutterCallkitIncomingPlugin.sharedInstance?.showCallkitIncoming(callData, fromPushKit: true)
 
-    // Hoàn tất
+    // Gọi completion hơi trễ để đảm bảo showCallkitIncoming đã dispatch xong
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
       completion()
     }
+  }
+}
+
+// MARK: - FlutterDownloader plugin registrant (yêu cầu bởi flutter_downloader)
+private func registerPlugins(registry: FlutterPluginRegistry) {
+  if !registry.hasPlugin("FlutterDownloaderPlugin") {
+    FlutterDownloaderPlugin.register(with: registry.registrar(forPlugin: "FlutterDownloaderPlugin")!)
   }
 }

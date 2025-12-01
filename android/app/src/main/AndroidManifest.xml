@@ -15,9 +15,11 @@
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
 
     <!-- Storage cũ (Android < 13) -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="29" />
 
     <!-- Location -->
@@ -28,7 +30,15 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+    <!-- Foreground service types cho cuộc gọi (Android 10+ / 14+) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+
+    <!-- Android 13+: phải xin quyền thông báo runtime -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Optional -->
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
@@ -77,7 +87,10 @@
             android:launchMode="singleTop"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize"
+            android:showOnLockScreen="true"
+            android:turnScreenOn="true"
+            tools:targetApi="o_mr1">
 
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
@@ -92,6 +105,7 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
 
+            <!-- Khi user bấm vào thông báo (kể cả full-screen) -->
             <intent-filter>
                 <action android:name="FLUTTER_NOTIFICATION_CLICK"/>
                 <category android:name="android.intent.category.DEFAULT"/>
@@ -101,9 +115,11 @@
         <meta-data android:name="flutterEmbedding" android:value="2"/>
 
         <!-- Facebook -->
-        <meta-data android:name="com.facebook.sdk.ApplicationId"
+        <meta-data
+            android:name="com.facebook.sdk.ApplicationId"
             android:value="@string/facebook_app_id"/>
-        <meta-data android:name="com.facebook.sdk.ClientToken"
+        <meta-data
+            android:name="com.facebook.sdk.ClientToken"
             android:value="@string/facebook_client_token"/>
 
         <activity
@@ -143,13 +159,15 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="vnshop247_channel" />
-        <service
-            android:name="com.google.firebase.messaging.FirebaseMessagingService"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT"/>
-            </intent-filter>
-        </service>
+
+        <!--
+          GỠ BỎ Khai báo sai dịch vụ FCM:
+          Bạn đang khai báo trực tiếp com.google.firebase.messaging.FirebaseMessagingService (lớp base/abstract).
+          Nếu bạn có subclass riêng (VD: .MyFirebaseMessagingService) thì KHAI BÁO subclass đó thay vì lớp base.
+          Vì hiện mã nguồn bạn không gửi subclass, mình xoá service này để tránh crash/ANR.
+        -->
+        <!-- (đã xoá block <service android:name="com.google.firebase.messaging.FirebaseMessagingService" ... />) -->
+
     </application>
 
 </manifest>
