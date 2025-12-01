@@ -1,15 +1,15 @@
-import 'package:flutter/material.dart';
-import 'package:shimmer/shimmer.dart';
 import 'package:intl/intl.dart';
+import 'package:shimmer/shimmer.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../services/hotel_service.dart';
-import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-import '../widgets/hotel_detail_app_bar.dart';
 import '../widgets/hotel_detail_body.dart';
 import '../widgets/hotel_book_button.dart';
+import '../widgets/hotel_detail_app_bar.dart';
 import '../screens/hotel_checkout_screen.dart';
-import '../widgets/hotel_rooms_section.dart'
-    show HotelBookingSummary, HotelSelectedRoom;
-
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
+import '../widgets/hotel_rooms_section.dart' show HotelBookingSummary, HotelSelectedRoom;
 
 class HotelDetailScreen extends StatefulWidget {
   final String slug;
@@ -24,6 +24,10 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
     with TickerProviderStateMixin {
   final HotelService _hotelService = HotelService();
   late Future<Map<String, dynamic>> _hotelFuture;
+
+  String _tr(BuildContext context, String key, String fallback) {
+    return getTranslated(key, context) ?? fallback;
+  }
 
   late AnimationController _animationController;
   late AnimationController _fabController;
@@ -74,10 +78,9 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
         _hotelDetail = hotel;
       });
     } catch (_) {
-      // lỗi sẽ được FutureBuilder xử lý, không cần setState thêm ở đây
+
     }
   }
-
 
   void _scrollToRooms() {
     final ctx = _roomsSectionKey.currentContext;
@@ -102,22 +105,27 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Provider.of<ThemeController>(context, listen: true);
+    final isDark = theme.darkTheme;
+
     final totalRoomsSelected = _bookingSummary?.totalRooms ?? 0;
 
+    final scaffoldBg = isDark ? const Color(0xFF0E1012) : Colors.grey[50];
+
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: scaffoldBg,
       body: RefreshIndicator(
         onRefresh: _refreshHotel,
-        color: Colors.blue[700],
+        color: isDark ? Colors.blue[400] : Colors.blue[700],
         child: FutureBuilder<Map<String, dynamic>>(
           future: _hotelFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return _buildShimmer();
+              return _buildShimmer(isDark);
             }
 
             if (snapshot.hasError || !snapshot.hasData) {
-              return _buildError(snapshot.error?.toString());
+              return _buildError(context, snapshot.error?.toString(), isDark);
             }
 
             final hotel = snapshot.data!;
@@ -133,13 +141,16 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
     );
   }
 
-  Widget _buildShimmer() {
+  Widget _buildShimmer(bool isDark) {
+    final baseColor = isDark ? Colors.grey[800]! : Colors.grey[200]!;
+    final highlightColor = isDark ? Colors.grey[700]! : Colors.white;
+
     return Shimmer.fromColors(
-      baseColor: Colors.grey[200]!,
-      highlightColor: Colors.white,
+      baseColor: baseColor,
+      highlightColor: highlightColor,
       child: ListView(
         children: [
-          Container(height: 350, color: Colors.white),
+          Container(height: 350, color: isDark ? Colors.grey[900] : Colors.white),
           Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -149,7 +160,7 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                   width: 250,
                   height: 28,
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isDark ? Colors.grey[900] : Colors.white,
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
@@ -158,7 +169,7 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                   width: 180,
                   height: 20,
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isDark ? Colors.grey[900] : Colors.white,
                     borderRadius: BorderRadius.circular(6),
                   ),
                 ),
@@ -167,7 +178,7 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                   width: double.infinity,
                   height: 120,
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isDark ? Colors.grey[900] : Colors.white,
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
@@ -179,7 +190,10 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
     );
   }
 
-  Widget _buildError(String? error) {
+  Widget _buildError(BuildContext context, String? error, bool isDark) {
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subText = isDark ? Colors.white70 : Colors.grey[600];
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -195,14 +209,18 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
           const SizedBox(height: 24),
           Text(
             getTranslated("error", context) ?? "Lỗi tải dữ liệu",
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+              color: textColor,
+            ),
           ),
           if (error != null)
             Padding(
               padding: const EdgeInsets.all(16),
               child: Text(
                 error,
-                style: TextStyle(color: Colors.grey[600]),
+                style: TextStyle(color: subText),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -210,7 +228,10 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
           ElevatedButton.icon(
             onPressed: _refreshHotel,
             icon: const Icon(Icons.refresh_rounded),
-            label: const Text("Thử lại", style: TextStyle(fontSize: 16)),
+            label: Text(
+              getTranslated('retry', context) ?? "Thử lại",
+              style: const TextStyle(fontSize: 16),
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.blue[700],
               foregroundColor: Colors.white,
@@ -271,7 +292,9 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
       _scrollToRooms();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Vui lòng chọn phòng trước khi đặt.'),
+          content: Text(
+              _tr(context, 'please_select_room_before_booking', 'Vui lòng chọn phòng trước khi đặt.')
+          ),
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(
@@ -282,8 +305,9 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
       return;
     }
 
-    final bookingData =
-    _hotelDetail != null ? _hotelDetail!['booking_data'] as Map<String, dynamic>? : null;
+    final bookingData = _hotelDetail != null
+        ? _hotelDetail!['booking_data'] as Map<String, dynamic>?
+        : null;
 
     _showBookingDialog(context, summary, bookingData);
   }
@@ -300,7 +324,8 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
     int adults = summary.adults;
     int children = summary.children;
 
-    List<HotelSelectedRoom> rooms = List<HotelSelectedRoom>.from(summary.rooms);
+    List<HotelSelectedRoom> rooms =
+    List<HotelSelectedRoom>.from(summary.rooms);
 
     final clearAllRooms = summary.clearAllRooms;
     final removeRoom = summary.removeRoom;
@@ -332,7 +357,6 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
         final parsed2 = int.tryParse(raw2);
         if (parsed2 != null) return parsed2;
       }
-
       return 0;
     }();
 
@@ -346,8 +370,20 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
+        final theme = Provider.of<ThemeController>(ctx, listen: true);
+        final isDark = theme.darkTheme;
+        final dialogBg = isDark ? const Color(0xFF181A1F) : Colors.white;
+
         return StatefulBuilder(
           builder: (ctx, setState) {
+            final theme = Provider.of<ThemeController>(ctx, listen: true);
+            final isDark = theme.darkTheme;
+
+            final Color cardBg = isDark ? const Color(0xFF1E1F23) : Colors.grey[50]!;
+            final Color cardBorder = isDark ? Colors.white10 : Colors.grey[200]!;
+            final Color primaryText = isDark ? Colors.white : Colors.black87;
+            final Color secondaryText = isDark ? Colors.white70 : Colors.grey[700]!;
+
             double _calcRoomLineTotal(HotelSelectedRoom r, int nights) {
               final int qty = r.quantity <= 0 ? 1 : r.quantity;
               final int usedNights = (nights > 0)
@@ -357,6 +393,7 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
 
               return perNight * usedNights * qty;
             }
+
             int nights = 0;
             if (start != null && end != null) {
               nights = end!.difference(start!).inDays;
@@ -410,13 +447,15 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                 curve: Curves.easeInOut,
               );
             }
+
             void handleNext() {
               if (currentStep == 0) {
                 if (rooms.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: const Text(
-                          'Bạn chưa chọn phòng nào. Vui lòng chọn phòng.'),
+                      content: Text(
+                          _tr(context, 'please_select_room', 'Bạn chưa chọn phòng nào. Vui lòng chọn phòng.')
+                      ),
                       behavior: SnackBarBehavior.floating,
                       margin: const EdgeInsets.all(16),
                       shape: RoundedRectangleBorder(
@@ -431,8 +470,9 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                 if (start == null || end == null) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: const Text(
-                          'Vui lòng chọn ngày nhận và trả phòng.'),
+                      content: Text(
+                          _tr(context, 'please_select_checkin_checkout', 'Vui lòng chọn ngày nhận và trả phòng.')
+                      ),
                       behavior: SnackBarBehavior.floating,
                       margin: const EdgeInsets.all(16),
                       shape: RoundedRectangleBorder(
@@ -452,8 +492,8 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
               if (start == null || end == null) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: const Text(
-                      'Vui lòng chọn ngày nhận và trả phòng trước khi đặt.',
+                    content: Text(
+                        _tr(context, 'please_select_checkin_checkout', 'Vui lòng chọn ngày nhận và trả phòng.')
                     ),
                     behavior: SnackBarBehavior.floating,
                     margin: const EdgeInsets.all(16),
@@ -469,8 +509,9 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
               if (diff < 1) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: const Text(
-                      'Ngày trả phòng phải sau ngày nhận phòng ít nhất 1 ngày.',
+                    content: Text(
+                        _tr(context, 'checkout_must_after_checkin_one_day',
+                            'Ngày trả phòng phải sau ngày nhận phòng ít nhất 1 ngày.')
                     ),
                     behavior: SnackBarBehavior.floating,
                     margin: const EdgeInsets.all(16),
@@ -485,8 +526,9 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
               if (rooms.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: const Text(
-                        'Bạn chưa chọn phòng nào. Vui lòng chọn phòng.'),
+                    content: Text(
+                        _tr(context, 'please_select_room', 'Bạn chưa chọn phòng nào. Vui lòng chọn phòng.')
+                    ),
                     behavior: SnackBarBehavior.floating,
                     margin: const EdgeInsets.all(16),
                     shape: RoundedRectangleBorder(
@@ -504,7 +546,8 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
               int childrenCapacity = 0;
 
               for (final r in rooms) {
-                final int perRoomAdults = (r.adultsPerRoom ?? r.maxGuests ?? 0);
+                final int perRoomAdults =
+                (r.adultsPerRoom ?? r.maxGuests ?? 0);
                 final int perRoomChildren = (r.childrenPerRoom ?? 0);
 
                 adultsCapacity += perRoomAdults * r.quantity;
@@ -516,11 +559,17 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                 showDialog(
                   context: context,
                   builder: (_) => AlertDialog(
-                    title: const Text('Vượt quá sức chứa'),
-                    content: const Text(
-                      'Số người lớn hoặc trẻ em vượt quá sức chứa '
-                          'của các phòng đã chọn.\n'
-                          'Vui lòng đặt thêm phòng hoặc chọn loại phòng khác.',
+                    title: Text(
+                      _tr(context, 'over_capacity_title', 'Vượt quá sức chứa'),
+                    ),
+                    content: Text(
+                      _tr(
+                        context,
+                        'over_capacity_message',
+                        'Số người lớn hoặc trẻ em vượt quá sức chứa '
+                            'của các phòng đã chọn.\n'
+                            'Vui lòng đặt thêm phòng hoặc chọn loại phòng khác.',
+                      ),
                     ),
                     actions: [
                       TextButton(
@@ -533,7 +582,6 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                 return;
               }
 
-              // Lấy danh sách extra được chọn
               final List<Map<String, dynamic>> selectedExtras = [];
               for (int i = 0; i < extraPriceItems.length; i++) {
                 if (extraSelected[i]) {
@@ -541,16 +589,76 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                 }
               }
 
-              // Đóng dialog trước
+              final hotelData = _hotelDetail ?? {};
+
+              String? hotelImage;
+              final gallery = hotelData['gallery'];
+              if (gallery is List && gallery.isNotEmpty) {
+                final first = gallery.first;
+                if (first is Map) {
+                  final u = (first['large'] ?? first['thumb'] ?? '').toString();
+                  if (u.isNotEmpty) {
+                    hotelImage = u;
+                  }
+                }
+              }
+
+              if (hotelImage == null || hotelImage.isEmpty) {
+                if (hotelData['image_url'] is String &&
+                    (hotelData['image_url'] as String).isNotEmpty) {
+                  hotelImage = hotelData['image_url'] as String;
+                } else if (hotelData['image'] is String &&
+                    (hotelData['image'] as String).isNotEmpty) {
+                  hotelImage = hotelData['image'] as String;
+                } else if (hotelData['banner_image'] is String &&
+                    (hotelData['banner_image'] as String).isNotEmpty) {
+                  hotelImage = hotelData['banner_image'] as String;
+                }
+              }
+
+              String? hotelLocation;
+              final locRaw = hotelData['location'];
+              if (locRaw is Map) {
+                hotelLocation = (locRaw['name'] ?? locRaw['title'])?.toString();
+              }
+              hotelLocation ??= (hotelData['address'] ?? hotelData['map_address'] ?? '')?.toString();
+              if (hotelLocation == 'null') hotelLocation = null;
+
+              double? hotelRating;
+              int? reviewCount;
+
+              final reviewSummaryRaw = hotelData['review_summary'];
+              if (reviewSummaryRaw is Map) {
+                hotelRating = double.tryParse(
+                  (reviewSummaryRaw['score'] ?? '').toString(),
+                ) ??
+                    0;
+                reviewCount = int.tryParse(
+                  (reviewSummaryRaw['total'] ??
+                      reviewSummaryRaw['review_count'] ??
+                      '')
+                      .toString(),
+                ) ??
+                    0;
+              } else {
+                hotelRating = double.tryParse(
+                  (hotelData['review_score'] ?? '').toString(),
+                ) ??
+                    0;
+                reviewCount = int.tryParse(
+                  (hotelData['review_count'] ?? '').toString(),
+                ) ??
+                    0;
+              }
+
               Navigator.of(ctx).pop();
 
-              // Đẩy sang màn checkout, truyền toàn bộ info màn 4
               Future.microtask(() {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => HotelCheckoutScreen(
                       data: HotelCheckoutData(
-                        hotelId: hotelId, // 👈 THÊM DÒNG NÀY
+                        hotelId: hotelId,
                         hotelSlug: widget.slug,
                         hotelName: _hotelDetail?['title']?.toString() ?? '',
                         checkIn: start!,
@@ -565,6 +673,10 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                         extrasTotal: extrasTotal,
                         buyerFeesTotal: buyerFeesTotal,
                         grandTotal: grandTotal,
+                        hotelImage: hotelImage,
+                        hotelRating: hotelRating,
+                        reviewCount: reviewCount,
+                        hotelLocation: hotelLocation,
                       ),
                     ),
                   ),
@@ -592,8 +704,10 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                 if (end != null && picked.isAfter(end!)) {
                   ScaffoldMessenger.of(rootScaffoldContext).showSnackBar(
                     SnackBar(
-                      content: const Text(
-                          'Ngày nhận phòng không được sau ngày trả phòng'),
+                      content: Text(
+                        _tr(rootScaffoldContext, 'checkin_cannot_after_checkout',
+                            'Ngày nhận phòng không được sau ngày trả phòng'),
+                      ),
                       behavior: SnackBarBehavior.floating,
                       margin: const EdgeInsets.all(16),
                       shape: RoundedRectangleBorder(
@@ -610,8 +724,10 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                 if (start != null && picked.isBefore(start!)) {
                   ScaffoldMessenger.of(rootScaffoldContext).showSnackBar(
                     SnackBar(
-                      content: const Text(
-                          'Ngày trả phòng không được trước ngày nhận phòng'),
+                      content: Text(
+                        _tr(rootScaffoldContext, 'checkout_cannot_before_checkin',
+                            'Ngày trả phòng không được trước ngày nhận phòng'),
+                      ),
                       behavior: SnackBarBehavior.floating,
                       margin: const EdgeInsets.all(16),
                       shape: RoundedRectangleBorder(
@@ -626,7 +742,9 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                 });
               }
             }
+
             return Dialog(
+              backgroundColor: dialogBg,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(18),
               ),
@@ -643,9 +761,9 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                           color: Colors.blue,
                         ),
                         const SizedBox(width: 8),
-                        const Text(
-                          'Xác nhận đặt phòng',
-                          style: TextStyle(
+                        Text(
+                          _tr(ctx, 'confirm_booking_title', 'Xác nhận đặt phòng'),
+                          style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
                           ),
@@ -661,7 +779,7 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
 
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: _buildStepTitle(currentStep),
+                      child: _buildStepTitle(context, currentStep),
                     ),
                     const SizedBox(height: 12),
 
@@ -683,14 +801,14 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
-                                  mainAxisAlignment:
-                                  MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    const Text(
-                                      'Phòng đã chọn',
+                                    Text(
+                                      getTranslated('selected_rooms', ctx) ?? 'Phòng đã chọn',
                                       style: TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w600,
+                                        color: primaryText,
                                       ),
                                     ),
                                     TextButton.icon(
@@ -713,9 +831,9 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                         size: 18,
                                         color: Colors.red,
                                       ),
-                                      label: const Text(
-                                        'Hủy tất cả',
-                                        style: TextStyle(color: Colors.red),
+                                      label: Text(
+                                        getTranslated('clear_all', ctx) ?? 'Hủy tất cả',
+                                        style: const TextStyle(color: Colors.red),
                                       ),
                                     ),
                                   ],
@@ -723,26 +841,23 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                 const SizedBox(height: 8),
                                 if (rooms.isEmpty)
                                   Text(
-                                    'Chưa có phòng nào, vui lòng quay lại chọn phòng.',
+                                    getTranslated('no_room_selected', ctx) ??
+                                        'Chưa có phòng nào, vui lòng quay lại chọn phòng.',
                                     style: TextStyle(
                                       fontSize: 13,
-                                      color: Colors.grey[700],
+                                      color: secondaryText,
                                     ),
                                   )
                                 else
                                   ...rooms.map((r) {
                                     final double lineTotal = _calcRoomLineTotal(r, nights);
                                     return Container(
-                                      margin:
-                                      const EdgeInsets.only(bottom: 8),
+                                      margin: const EdgeInsets.only(bottom: 8),
                                       padding: const EdgeInsets.all(10),
                                       decoration: BoxDecoration(
-                                        color: Colors.grey[50],
-                                        borderRadius:
-                                        BorderRadius.circular(10),
-                                        border: Border.all(
-                                          color: Colors.grey[200]!,
-                                        ),
+                                        color: cardBg,
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: cardBorder),
                                       ),
                                       child: Row(
                                         children: [
@@ -752,25 +867,29 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                               children: [
                                                 Text(
                                                   r.name,
-                                                  style: const TextStyle(
+                                                  style: TextStyle(
                                                     fontSize: 14,
                                                     fontWeight: FontWeight.w600,
+                                                    color: primaryText,
                                                   ),
                                                 ),
                                                 const SizedBox(height: 4),
                                                 Text(
-                                                  'Số phòng: ${r.quantity}',
+                                                  '${getTranslated('room_count', ctx) ?? 'Số phòng'}: ${r.quantity}',
                                                   style: TextStyle(
                                                     fontSize: 13,
-                                                    color: Colors.grey[700],
+                                                    color: secondaryText,
                                                   ),
                                                 ),
                                                 if (r.nights > 0)
                                                   Text(
-                                                    '${r.nights} đêm • ${_formatVndPrice(r.pricePerNight)} / đêm',
+                                                    '${r.nights} ${getTranslated('nights', ctx) ?? 'đêm'} • '
+                                                        '${_formatVndPrice(r.pricePerNight)} / ${getTranslated('per_night', ctx) ?? 'đêm'}',
                                                     style: TextStyle(
                                                       fontSize: 12,
-                                                      color: Colors.grey[600],
+                                                      color: isDark
+                                                          ? Colors.white60
+                                                          : Colors.grey[600],
                                                     ),
                                                   ),
                                               ],
@@ -790,12 +909,14 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                                 onPressed: () {
                                                   removeRoom?.call(r.id);
                                                   setState(() {
-                                                    rooms.removeWhere((element) => element.id == r.id);
+                                                    rooms.removeWhere(
+                                                            (element) => element.id == r.id);
                                                     if (rooms.isEmpty && currentStep != 0) {
                                                       currentStep = 0;
                                                       pageController.animateToPage(
                                                         0,
-                                                        duration: const Duration(milliseconds: 300),
+                                                        duration:
+                                                        const Duration(milliseconds: 300),
                                                         curve: Curves.easeInOut,
                                                       );
                                                     }
@@ -806,7 +927,9 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                                   color: Colors.red,
                                                   size: 20,
                                                 ),
-                                                tooltip: 'Xóa phòng này',
+                                                tooltip: getTranslated(
+                                                    'remove_this_room', ctx) ??
+                                                    'Xóa phòng này',
                                               ),
                                             ],
                                           ),
@@ -818,15 +941,17 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                             ),
                           ),
 
+                          // STEP 2 – Thời gian & số khách
                           SingleChildScrollView(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
-                                  'Thời gian lưu trú',
+                                Text(
+                                  getTranslated('stay_time', ctx) ?? 'Thời gian lưu trú',
                                   style: TextStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.w600,
+                                    color: primaryText,
                                   ),
                                 ),
                                 const SizedBox(height: 6),
@@ -834,36 +959,32 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                   children: [
                                     Expanded(
                                       child: OutlinedButton.icon(
-                                        onPressed: canEditStayInfo
-                                            ? () => pickDate(true)
-                                            : null,
+                                        onPressed:
+                                        canEditStayInfo ? () => pickDate(true) : null,
                                         icon: const Icon(
                                           Icons.login_rounded,
                                           size: 18,
                                         ),
                                         label: Text(
                                           start == null
-                                              ? 'Nhận phòng'
-                                              : DateFormat('dd/MM/yyyy')
-                                              .format(start!),
+                                              ? (getTranslated('check_in', ctx) ?? 'Nhận phòng')
+                                              : DateFormat('dd/MM/yyyy').format(start!),
                                         ),
                                       ),
                                     ),
                                     const SizedBox(width: 8),
                                     Expanded(
                                       child: OutlinedButton.icon(
-                                        onPressed: canEditStayInfo
-                                            ? () => pickDate(false)
-                                            : null,
+                                        onPressed:
+                                        canEditStayInfo ? () => pickDate(false) : null,
                                         icon: const Icon(
                                           Icons.logout_rounded,
                                           size: 18,
                                         ),
                                         label: Text(
                                           end == null
-                                              ? 'Trả phòng'
-                                              : DateFormat('dd/MM/yyyy')
-                                              .format(end!),
+                                              ? (getTranslated('check_out', ctx) ?? 'Trả phòng')
+                                              : DateFormat('dd/MM/yyyy').format(end!),
                                         ),
                                       ),
                                     ),
@@ -872,24 +993,26 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                 const SizedBox(height: 4),
                                 Text(
                                   nights > 0
-                                      ? 'Khoảng ngày: $dateText  •  $nights đêm'
-                                      : 'Khoảng ngày: $dateText',
+                                      ? '${getTranslated('date_range', ctx) ?? 'Khoảng ngày'}: '
+                                      '$dateText  •  $nights ${getTranslated('nights', ctx) ?? 'đêm'}'
+                                      : '${getTranslated('date_range', ctx) ?? 'Khoảng ngày'}: $dateText',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: Colors.grey[600],
+                                    color: isDark ? Colors.white60 : Colors.grey[600],
                                   ),
                                 ),
                                 const SizedBox(height: 16),
-                                const Text(
-                                  'Số khách',
+                                Text(
+                                  getTranslated('guests', ctx) ?? 'Số khách',
                                   style: TextStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.w600,
+                                    color: primaryText,
                                   ),
                                 ),
                                 const SizedBox(height: 6),
                                 _buildCounterRow(
-                                  label: 'Người lớn',
+                                  label: getTranslated('adults', ctx) ?? 'Người lớn',
                                   value: adults,
                                   min: 1,
                                   onChanged: (v) {
@@ -900,7 +1023,7 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                 ),
                                 const SizedBox(height: 8),
                                 _buildCounterRow(
-                                  label: 'Trẻ em',
+                                  label: getTranslated('children', ctx) ?? 'Trẻ em',
                                   value: children,
                                   min: 0,
                                   onChanged: (v) {
@@ -911,40 +1034,39 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                 ),
                                 const SizedBox(height: 12),
                                 Text(
-                                  'Giá phòng hiện tại: ${_formatVndPrice(roomsTotal)}',
-                                  style: const TextStyle(
+                                  '${getTranslated('current_room_price', ctx) ?? 'Giá phòng hiện tại'}: '
+                                      '${_formatVndPrice(roomsTotal)}',
+                                  style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w500,
+                                    color: primaryText,
                                   ),
                                 ),
                               ],
                             ),
                           ),
+
+                          // STEP 3 – Giá thêm / Phụ phí
                           SingleChildScrollView(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                if (extraPriceItems.isNotEmpty ||
-                                    buyerFeeItems.isNotEmpty) ...[
-                                  const Text(
-                                    'Giá thêm / Phụ phí',
+                                if (extraPriceItems.isNotEmpty || buyerFeeItems.isNotEmpty) ...[
+                                  Text(
+                                    getTranslated('extra_fee', ctx) ?? 'Giá thêm / Phụ phí',
                                     style: TextStyle(
                                       fontSize: 15,
                                       fontWeight: FontWeight.w600,
+                                      color: primaryText,
                                     ),
                                   ),
                                   const SizedBox(height: 6),
-                                  ...extraPriceItems
-                                      .asMap()
-                                      .entries
-                                      .map((entry) {
+                                  ...extraPriceItems.asMap().entries.map((entry) {
                                     final i = entry.key;
                                     final item = entry.value;
-                                    final name =
-                                    (item['name'] ?? '').toString();
+                                    final name = (item['name'] ?? '').toString();
                                     final priceHtml =
-                                    (item['price_html'] ?? '')
-                                        .toString();
+                                    (item['price_html'] ?? '').toString();
                                     return CheckboxListTile(
                                       contentPadding: EdgeInsets.zero,
                                       value: extraSelected[i],
@@ -953,13 +1075,16 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                           extraSelected[i] = v ?? false;
                                         });
                                       },
-                                      title: Text(name),
+                                      title: Text(
+                                        name,
+                                        style: TextStyle(color: primaryText),
+                                      ),
                                       subtitle: Text(
                                         priceHtml.isNotEmpty
                                             ? priceHtml
                                             : '${item['price'] ?? '0'} ₫',
                                         style: TextStyle(
-                                          color: Colors.grey[700],
+                                          color: secondaryText,
                                           fontSize: 13,
                                         ),
                                       ),
@@ -973,27 +1098,25 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                           'Phí dịch vụ')
                                           .toString();
                                       final priceHtml =
-                                      (fee['price_html'] ?? '')
-                                          .toString();
-                                      final price =
-                                      (fee['price'] ?? '').toString();
+                                      (fee['price_html'] ?? '').toString();
+                                      final price = (fee['price'] ?? '').toString();
                                       return ListTile(
-                                        contentPadding:
-                                        EdgeInsets.zero,
+                                        contentPadding: EdgeInsets.zero,
                                         leading: const Icon(
                                           Icons.info_outline_rounded,
                                           size: 20,
                                           color: Colors.orange,
                                         ),
-                                        title: Text(name),
+                                        title: Text(
+                                          name,
+                                          style: TextStyle(color: primaryText),
+                                        ),
                                         subtitle: Text(
-                                          'Đã bao gồm tự động • ' +
-                                              (priceHtml.isNotEmpty
-                                                  ? priceHtml
-                                                  : '$price ₫'),
+                                          '${getTranslated('auto_included', ctx) ?? 'Đã bao gồm tự động'} • '
+                                              '${priceHtml.isNotEmpty ? priceHtml : '$price ₫'}',
                                           style: TextStyle(
                                             fontSize: 13,
-                                            color: Colors.grey[700],
+                                            color: secondaryText,
                                           ),
                                         ),
                                       );
@@ -1001,19 +1124,20 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                   ],
                                 ] else
                                   Text(
-                                    'Không có phụ phí thêm nào.',
+                                    getTranslated('no_extra_fee', ctx) ??
+                                        'Không có phụ phí thêm nào.',
                                     style: TextStyle(
                                       fontSize: 13,
-                                      color: Colors.grey[700],
+                                      color: secondaryText,
                                     ),
                                   ),
-
                                 const SizedBox(height: 16),
                                 Text(
-                                  'Tổng tạm tính hiện tại:',
+                                  getTranslated('current_subtotal', ctx) ??
+                                      'Tổng tạm tính hiện tại:',
                                   style: TextStyle(
                                     fontSize: 13,
-                                    color: Colors.grey[600],
+                                    color: isDark ? Colors.white60 : Colors.grey[600],
                                   ),
                                 ),
                                 const SizedBox(height: 4),
@@ -1033,20 +1157,22 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
-                                  'Tổng kết đặt phòng',
+                                Text(
+                                  getTranslated('booking_summary', ctx) ??
+                                      'Tổng kết đặt phòng',
                                   style: TextStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.w600,
+                                    color: primaryText,
                                   ),
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'Phòng:',
+                                  getTranslated('rooms', ctx) ?? 'Phòng:',
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
-                                    color: Colors.grey[800],
+                                    color: primaryText,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
@@ -1054,9 +1180,12 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                   final int qty = r.quantity <= 0 ? 1 : r.quantity;
                                   final int usedNights = (nights > 0)
                                       ? nights
-                                      : (r.nights != null && r.nights! > 0 ? r.nights! : 1);
+                                      : (r.nights != null && r.nights! > 0
+                                      ? r.nights!
+                                      : 1);
 
-                                  final double lineTotal = _calcRoomLineTotal(r, nights);
+                                  final double lineTotal =
+                                  _calcRoomLineTotal(r, nights);
                                   return Padding(
                                     padding: const EdgeInsets.only(bottom: 4),
                                     child: Row(
@@ -1064,21 +1193,26 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                       children: [
                                         Expanded(
                                           child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                             children: [
                                               Text(
                                                 r.name,
-                                                style: const TextStyle(
+                                                style: TextStyle(
                                                   fontSize: 13,
                                                   fontWeight: FontWeight.w600,
+                                                  color: primaryText,
                                                 ),
                                               ),
                                               const SizedBox(height: 2),
                                               Text(
-                                                '$qty phòng • $usedNights đêm × ${_formatVndPrice(r.pricePerNight)} / đêm',
+                                                '$qty ${getTranslated('room', ctx) ?? 'phòng'} • '
+                                                    '$usedNights ${getTranslated('nights', ctx) ?? 'đêm'} × '
+                                                    '${_formatVndPrice(r.pricePerNight)} / '
+                                                    '${getTranslated('per_night', ctx) ?? 'đêm'}',
                                                 style: TextStyle(
                                                   fontSize: 12,
-                                                  color: Colors.grey[700],
+                                                  color: secondaryText,
                                                 ),
                                               ),
                                             ],
@@ -1086,9 +1220,10 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                         ),
                                         Text(
                                           _formatVndPrice(lineTotal),
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontSize: 13,
                                             fontWeight: FontWeight.w600,
+                                            color: primaryText,
                                           ),
                                         ),
                                       ],
@@ -1097,36 +1232,41 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                 }),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'Thời gian & khách:',
+                                  getTranslated('time_and_guests', ctx) ??
+                                      'Thời gian & khách:',
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
-                                    color: Colors.grey[800],
+                                    color: primaryText,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Ngày: $dateText'
-                                      '${nights > 0 ? '  •  $nights đêm' : ''}',
-                                  style: const TextStyle(
+                                  '${getTranslated('date', ctx) ?? 'Ngày'}: '
+                                      '$dateText${nights > 0 ? '  •  $nights ${getTranslated('nights', ctx) ?? 'đêm'}' : ''}',
+                                  style: TextStyle(
                                     fontSize: 13,
+                                    color: primaryText,
                                   ),
                                 ),
                                 Text(
-                                  '$adults người lớn, $children trẻ em',
-                                  style: const TextStyle(
+                                  '$adults ${getTranslated('adults', ctx) ?? 'người lớn'}, '
+                                      '$children ${getTranslated('children', ctx) ?? 'trẻ em'}',
+                                  style: TextStyle(
                                     fontSize: 13,
+                                    color: primaryText,
                                   ),
                                 ),
                                 const SizedBox(height: 8),
                                 if (extraPriceItems.isNotEmpty ||
                                     buyerFeeItems.isNotEmpty) ...[
                                   Text(
-                                    'Giá thêm & phụ phí:',
+                                    getTranslated('extra_fee_and_surcharge', ctx) ??
+                                        'Giá thêm & phụ phí:',
                                     style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
-                                      color: Colors.grey[800],
+                                      color: primaryText,
                                     ),
                                   ),
                                   const SizedBox(height: 4),
@@ -1134,24 +1274,21 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                     ...extraPriceItems
                                         .asMap()
                                         .entries
-                                        .where((e) =>
-                                    extraSelected[e.key])
+                                        .where((e) => extraSelected[e.key])
                                         .map((entry) {
                                       final item = entry.value;
                                       final name =
-                                      (item['name'] ?? '')
-                                          .toString();
+                                      (item['name'] ?? '').toString();
                                       final priceHtml =
-                                      (item['price_html'] ?? '')
-                                          .toString();
+                                      (item['price_html'] ?? '').toString();
                                       return Row(
                                         children: [
                                           Expanded(
                                             child: Text(
                                               name,
-                                              style:
-                                              const TextStyle(
+                                              style: TextStyle(
                                                 fontSize: 13,
+                                                color: primaryText,
                                               ),
                                             ),
                                           ),
@@ -1159,8 +1296,9 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                             priceHtml.isNotEmpty
                                                 ? priceHtml
                                                 : '${item['price'] ?? '0'} ₫',
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontSize: 13,
+                                              color: primaryText,
                                             ),
                                           ),
                                         ],
@@ -1168,24 +1306,21 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                     }),
                                   if (buyerFeeItems.isNotEmpty)
                                     ...buyerFeeItems.map((fee) {
-                                      final name = (fee['name'] ??
-                                          fee['type_name'] ??
-                                          'Phí dịch vụ')
+                                      final name =
+                                      (fee['name'] ?? fee['type_name'] ?? 'Phí dịch vụ')
                                           .toString();
                                       final priceHtml =
-                                      (fee['price_html'] ?? '')
-                                          .toString();
+                                      (fee['price_html'] ?? '').toString();
                                       final price =
-                                      (fee['price'] ?? '')
-                                          .toString();
+                                      (fee['price'] ?? '').toString();
                                       return Row(
                                         children: [
                                           Expanded(
                                             child: Text(
-                                              '$name (tự động)',
-                                              style:
-                                              const TextStyle(
+                                              '$name (${getTranslated('auto', ctx) ?? 'tự động'})',
+                                              style: TextStyle(
                                                 fontSize: 13,
+                                                color: primaryText,
                                               ),
                                             ),
                                           ),
@@ -1193,8 +1328,9 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                             priceHtml.isNotEmpty
                                                 ? priceHtml
                                                 : '$price ₫',
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontSize: 13,
+                                              color: primaryText,
                                             ),
                                           ),
                                         ],
@@ -1203,10 +1339,11 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                 ],
                                 const SizedBox(height: 12),
                                 Text(
-                                  'Tổng tạm tính cuối cùng:',
+                                  getTranslated('final_total_amount', ctx) ??
+                                      'Tổng tạm tính cuối cùng:',
                                   style: TextStyle(
                                     fontSize: 13,
-                                    color: Colors.grey[600],
+                                    color: isDark ? Colors.white60 : Colors.grey[600],
                                   ),
                                 ),
                                 const SizedBox(height: 4),
@@ -1231,7 +1368,7 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
-                          'Tổng tạm tính hiện tại: ${_formatVndPrice(grandTotal)}',
+                          '${_tr(context, "booking_current_subtotal", "Tổng tạm tính hiện tại:")} ${_formatVndPrice(grandTotal)}',
                           style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
@@ -1241,15 +1378,14 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                         Row(
                           children: [
                             if (currentStep > 0)
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: () => goToStep(currentStep - 1),
-                                  child: const Text('Quay lại'),
+                              OutlinedButton(
+                                onPressed: () => goToStep(currentStep - 1),
+                                child: Text(
+                                  _tr(context, 'back', 'Quay lại'),
                                 ),
                               ),
                             if (currentStep > 0)
                               const SizedBox(width: 8),
-
                             if (hasRooms)
                               Expanded(
                                 child: ElevatedButton(
@@ -1259,13 +1395,16 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.blue[700],
                                     foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                   ),
                                   child: Text(
-                                    currentStep < 3 ? 'Tiếp theo' : 'Đặt phòng',
+                                    currentStep < 3
+                                        ? _tr(context, 'next', 'Tiếp theo')
+                                        : _tr(context, 'book_now', 'Đặt phòng'),
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -1286,23 +1425,27 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
     );
   }
 
-  Widget _buildStepTitle(int currentStep) {
-    String title;
-    String subtitle = 'Bước ${currentStep + 1} / 4';
+  // =============== STEP TITLE ===============
 
+  Widget _buildStepTitle(BuildContext context, int currentStep) {
+    // "Bước"
+    final stepText = _tr(context, 'step', 'Bước');
+    String subtitle = '$stepText ${currentStep + 1} / 4';
+
+    String title;
     switch (currentStep) {
       case 0:
-        title = '1. Phòng đã chọn';
+        title = _tr(context, 'step1_selected_rooms', '1. Phòng đã chọn');
         break;
       case 1:
-        title = '2. Thời gian & số khách';
+        title = _tr(context, 'step2_stay_and_guests', '2. Thời gian & số khách');
         break;
       case 2:
-        title = '3. Giá thêm & phụ phí';
+        title = _tr(context, 'step3_extra_fees', '3. Giá thêm & phụ phí');
         break;
       case 3:
       default:
-        title = '4. Xác nhận & đặt phòng';
+        title = _tr(context, 'step4_confirm_and_book', '4. Xác nhận & đặt phòng');
         break;
     }
 
@@ -1328,33 +1471,6 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
           textAlign: TextAlign.center,
         ),
       ],
-    );
-  }
-
-  Widget _buildStepChip(String label, int index, int currentStep) {
-    final bool isActive = index == currentStep;
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-        decoration: BoxDecoration(
-          color: isActive ? Colors.blue[50] : Colors.grey[100],
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: isActive ? Colors.blue : Colors.grey[300]!,
-          ),
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-              color: isActive ? Colors.blue[800] : Colors.grey[700],
-            ),
-          ),
-        ),
-      ),
     );
   }
 

@@ -20,7 +20,8 @@ class IOSAppLaunchPageRoute extends PageRouteBuilder {
     pageBuilder: (context, animation, secondaryAnimation) => page,
     transitionDuration: const Duration(milliseconds: 450),
     reverseTransitionDuration: const Duration(milliseconds: 400),
-    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+    transitionsBuilder:
+        (context, animation, secondaryAnimation, child) {
       final scaleAnimation = Tween<double>(
         begin: 0.0,
         end: 1.0,
@@ -37,7 +38,8 @@ class IOSAppLaunchPageRoute extends PageRouteBuilder {
       ).animate(
         CurvedAnimation(
           parent: animation,
-          curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
+          curve:
+          const Interval(0.0, 0.5, curve: Curves.easeOut),
         ),
       );
 
@@ -47,7 +49,8 @@ class IOSAppLaunchPageRoute extends PageRouteBuilder {
       ).animate(
         CurvedAnimation(
           parent: animation,
-          curve: const Interval(0.3, 1.0, curve: Curves.easeInOut),
+          curve:
+          const Interval(0.3, 1.0, curve: Curves.easeInOut),
         ),
       );
 
@@ -62,7 +65,8 @@ class IOSAppLaunchPageRoute extends PageRouteBuilder {
             child: FadeTransition(
               opacity: fadeAnimation,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(radiusAnimation.value),
+                borderRadius: BorderRadius.circular(
+                    radiusAnimation.value),
                 child: child,
               ),
             ),
@@ -82,6 +86,8 @@ class TravelMenuWidget extends StatefulWidget {
 
 class _TravelMenuWidgetState extends State<TravelMenuWidget>
     with SingleTickerProviderStateMixin {
+  static const int _itemCount = 3;
+
   late AnimationController _controller;
   late List<Animation<double>> _fadeAnimations;
   late List<Animation<Offset>> _slideAnimations;
@@ -94,7 +100,7 @@ class _TravelMenuWidgetState extends State<TravelMenuWidget>
       vsync: this,
     );
 
-    _fadeAnimations = List.generate(3, (index) {
+    _fadeAnimations = List.generate(_itemCount, (index) {
       return Tween<double>(begin: 0.0, end: 1.0).animate(
         CurvedAnimation(
           parent: _controller,
@@ -107,7 +113,7 @@ class _TravelMenuWidgetState extends State<TravelMenuWidget>
       );
     });
 
-    _slideAnimations = List.generate(3, (index) {
+    _slideAnimations = List.generate(_itemCount, (index) {
       return Tween<Offset>(
         begin: const Offset(0, 0.5),
         end: Offset.zero,
@@ -134,120 +140,64 @@ class _TravelMenuWidgetState extends State<TravelMenuWidget>
 
   @override
   Widget build(BuildContext context) {
-    final themeController = Provider.of<ThemeController>(context, listen: false);
-    final bool darkTheme = themeController.darkTheme;
+    final isDark =
+        Provider.of<ThemeController>(context, listen: true).darkTheme;
 
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        // Liquid Glass Effect cho container chính
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: darkTheme
-              ? [
-            Colors.grey[900]!.withOpacity(0.8),
-            Colors.grey[900]!.withOpacity(0.6),
-          ]
-              : [
-            Colors.white.withOpacity(0.8),
-            Colors.white.withOpacity(0.5),
-          ],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(darkTheme ? 0.3 : 0.08),
-            blurRadius: 24,
-            offset: const Offset(0, -4),
-            spreadRadius: -8,
+      color: Theme.of(context).scaffoldBackgroundColor,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _buildAnimatedItem(
+            context: context,
+            index: 0,
+            icon: Icons.hotel_rounded,
+            title: getTranslated('hotel', context) ?? 'Hotels',
+            subtitle: 'Deals',
+            accentColor: const Color(0xFF7C6EFF),
+            isDark: isDark,
+            onTap: (position) {
+              // TODO: chuyển sang màn khách sạn
+            },
           ),
-          BoxShadow(
-            color: (darkTheme ? Colors.white : Colors.white).withOpacity(0.3),
-            blurRadius: 12,
-            offset: const Offset(0, -2),
+          _buildAnimatedItem(
+            context: context,
+            index: 1,
+            icon: Icons.flight_takeoff_rounded,
+            title: getTranslated('flight', context) ?? 'Flights',
+            subtitle: 'Deals',
+            accentColor: const Color(0xFF00C48C),
+            isDark: isDark,
+            onTap: (position) {
+              Navigator.push(
+                context,
+                IOSAppLaunchPageRoute(
+                  page: const FlightBookingScreen(),
+                  startPosition: position,
+                ),
+              );
+            },
+          ),
+          _buildAnimatedItem(
+            context: context,
+            index: 2,
+            icon: Icons.tour_rounded,
+            title: getTranslated('tour', context) ?? 'Tours',
+            subtitle: 'Deals',
+            accentColor: const Color(0xFF29B6F6),
+            isDark: isDark,
+            onTap: (position) {
+              Navigator.push(
+                context,
+                IOSAppLaunchPageRoute(
+                  page: const TourListScreen(),
+                  startPosition: position,
+                ),
+              );
+            },
           ),
         ],
-      ),
-      child: ClipRRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: darkTheme
-                    ? [
-                  Colors.white.withOpacity(0.05),
-                  Colors.white.withOpacity(0.02),
-                ]
-                    : [
-                  Colors.white.withOpacity(0.3),
-                  Colors.white.withOpacity(0.1),
-                ],
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildAnimatedItem(
-                  context: context,
-                  index: 0,
-                  icon: Icons.flight_takeoff,
-                  title: getTranslated('flight', context) ?? 'Đặt vé máy bay',
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFF6B9D), Color(0xFFFFC371)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  onTap: (position) {
-                    Navigator.push(
-                      context,
-                      IOSAppLaunchPageRoute(
-                        page: const FlightBookingScreen(),
-                        startPosition: position,
-                      ),
-                    );
-                  },
-                ),
-                _buildAnimatedItem(
-                  context: context,
-                  index: 1,
-                  icon: Icons.hotel,
-                  title: getTranslated('hotel', context) ?? 'Đặt khách sạn',
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFF9A56), Color(0xFFFFD15C)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  onTap: (position) {
-                    // TODO: chuyển sang trang khách sạn với hiệu ứng iOS
-                  },
-                ),
-                _buildAnimatedItem(
-                  context: context,
-                  index: 2,
-                  icon: Icons.tour,
-                  title: getTranslated('tour', context) ?? 'Tour du lịch',
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF4FC3F7), Color(0xFF29B6F6)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  onTap: (position) {
-                    Navigator.push(
-                      context,
-                      IOSAppLaunchPageRoute(
-                        page: const TourListScreen(),
-                        startPosition: position,
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -257,7 +207,9 @@ class _TravelMenuWidgetState extends State<TravelMenuWidget>
     required int index,
     required IconData icon,
     required String title,
-    required Gradient gradient,
+    required String subtitle,
+    required Color accentColor,
+    required bool isDark,
     required Function(Offset) onTap,
   }) {
     return FadeTransition(
@@ -267,7 +219,9 @@ class _TravelMenuWidgetState extends State<TravelMenuWidget>
         child: _TravelItem(
           icon: icon,
           title: title,
-          gradient: gradient,
+          subtitle: subtitle,
+          accentColor: accentColor,
+          isDark: isDark,
           onTap: onTap,
         ),
       ),
@@ -278,13 +232,17 @@ class _TravelMenuWidgetState extends State<TravelMenuWidget>
 class _TravelItem extends StatefulWidget {
   final IconData icon;
   final String title;
-  final Gradient gradient;
+  final String subtitle;
+  final Color accentColor;
+  final bool isDark;
   final Function(Offset) onTap;
 
   const _TravelItem({
     required this.icon,
     required this.title,
-    required this.gradient,
+    required this.subtitle,
+    required this.accentColor,
+    required this.isDark,
     required this.onTap,
   });
 
@@ -302,11 +260,11 @@ class _TravelItemState extends State<_TravelItem>
   void initState() {
     super.initState();
     _rippleController = AnimationController(
-      duration: const Duration(milliseconds: 200),
+      duration: const Duration(milliseconds: 160),
       vsync: this,
     );
 
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.92).animate(
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.94).animate(
       CurvedAnimation(
         parent: _rippleController,
         curve: Curves.easeInOut,
@@ -322,7 +280,8 @@ class _TravelItemState extends State<_TravelItem>
 
   Offset _getButtonPosition() {
     final RenderBox? renderBox =
-    _buttonKey.currentContext?.findRenderObject() as RenderBox?;
+    _buttonKey.currentContext?.findRenderObject()
+    as RenderBox?;
     if (renderBox != null) {
       final position = renderBox.localToGlobal(Offset.zero);
       final size = renderBox.size;
@@ -336,6 +295,10 @@ class _TravelItemState extends State<_TravelItem>
 
   @override
   Widget build(BuildContext context) {
+    final cardColor = widget.isDark
+        ? const Color(0xFF1E2230)
+        : Colors.white;
+
     return GestureDetector(
       onTapDown: (_) => _rippleController.forward(),
       onTapUp: (_) {
@@ -345,102 +308,66 @@ class _TravelItemState extends State<_TravelItem>
       onTapCancel: () => _rippleController.reverse(),
       child: ScaleTransition(
         scale: _scaleAnimation,
-        child: Column(
+        child: Container(
           key: _buttonKey,
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                // Liquid Glass Effect cho icon container
-                Container(
-                  height: 70,
-                  width: 70,
-                  decoration: BoxDecoration(
-                    gradient: widget.gradient,
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.3),
-                      width: 1.5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: widget.gradient.colors.first.withOpacity(0.4),
-                        blurRadius: 16,
-                        offset: const Offset(0, 8),
-                        spreadRadius: -4,
-                      ),
-                      BoxShadow(
-                        color: Colors.white.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(-2, -2),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(22),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              Colors.white.withOpacity(0.25),
-                              Colors.white.withOpacity(0.05),
-                            ],
-                          ),
-                        ),
-                        child: Center(
-                          child: Icon(
-                            widget.icon,
-                            color: Colors.white,
-                            size: 34,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+          width: 100,
+          padding: const EdgeInsets.symmetric(
+              horizontal: 10, vertical: 24),
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: widget.isDark
+                ? []
+                : [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                height: 36,
+                width: 36,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: widget.accentColor.withOpacity(0.12),
                 ),
-                // Enhanced glossy highlight
-                Positioned(
-                  top: 6,
-                  left: 10,
-                  right: 10,
-                  child: Container(
-                    height: 24,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.white.withOpacity(0.5),
-                          Colors.white.withOpacity(0.1),
-                          Colors.transparent,
-                        ],
-                        stops: const [0.0, 0.5, 1.0],
-                      ),
-                    ),
-                  ),
+                child: Icon(
+                  widget.icon,
+                  color: widget.accentColor,
+                  size: 20,
                 ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: 85,
-              child: Text(
+              ),
+              const SizedBox(height: 8),
+              Text(
                 widget.title,
                 textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: robotoRegular.copyWith(
                   fontSize: Dimensions.fontSizeSmall,
                   fontWeight: FontWeight.w600,
-                  letterSpacing: 0.2,
+                  color: widget.isDark
+                      ? Colors.white
+                      : const Color(0xFF1D1D26),
                 ),
-                maxLines: 2,
               ),
-            ),
-          ],
+              const SizedBox(height: 2),
+              Text(
+                widget.subtitle,
+                style: robotoRegular.copyWith(
+                  fontSize: Dimensions.fontSizeExtraSmall,
+                  color: widget.isDark
+                      ? Colors.white
+                      : const Color(0xFF9E9EAE),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

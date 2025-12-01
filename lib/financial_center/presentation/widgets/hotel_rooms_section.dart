@@ -18,6 +18,7 @@ class HotelSelectedRoom {
   final int? maxGuests;
   final int? adultsPerRoom;
   final int? childrenPerRoom;
+  final String? imageUrl;
 
   HotelSelectedRoom({
     required this.id,
@@ -29,6 +30,7 @@ class HotelSelectedRoom {
     this.maxGuests,
     this.adultsPerRoom,
     this.childrenPerRoom,
+    this.imageUrl,
   });
 }
 
@@ -103,6 +105,26 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
     });
   }
 
+  String? _getRoomImageUrl(Map room) {
+    final List<dynamic> gallery =
+        (room['gallery'] as List?) ?? <dynamic>[];
+
+    if (gallery.isNotEmpty) {
+      final first = gallery.first;
+      if (first is Map) {
+        final url =
+        (first['large'] ?? first['thumb'] ?? '').toString();
+        if (url.isNotEmpty) return url;
+      } else {
+        final url = first.toString();
+        if (url.isNotEmpty) return url;
+      }
+    }
+
+    final img = (room['image'] ?? '').toString();
+    return img.isNotEmpty ? img : null;
+  }
+
   void _initSelectedRooms(List<dynamic> rooms) {
     _selectedRooms.clear();
     for (final r in rooms) {
@@ -161,8 +183,7 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
       final String name =
       (room['title'] ?? room['name'] ?? '').toString();
 
-      final dynamic priceRaw =
-          room['price'] ?? room['min_price'] ?? 0;
+      final dynamic priceRaw = room['price'] ?? room['min_price'] ?? 0;
       final double priceDouble = priceRaw is num
           ? priceRaw.toDouble()
           : double.tryParse(priceRaw.toString()) ?? 0.0;
@@ -170,7 +191,8 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
       final bool isAvailabilityResult =
           room['price_text'] != null || room['price_html'] != null;
 
-      final double pricePerNight = isAvailabilityResult && nights > 0
+      final double pricePerNight =
+      isAvailabilityResult && nights > 0
           ? priceDouble / nights
           : priceDouble;
 
@@ -180,20 +202,18 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
 
       final int? adults = (room.containsKey('adults') ||
           room.containsKey('adults_html'))
-          ? _safeParseFirstInt(
-        room['adults'] ?? room['adults_html'],
-      )
+          ? _safeParseFirstInt(room['adults'] ?? room['adults_html'])
           : null;
 
       final int? children = (room.containsKey('children') ||
           room.containsKey('children_html'))
-          ? _safeParseFirstInt(
-        room['children'] ?? room['children_html'],
-      )
+          ? _safeParseFirstInt(room['children'] ?? room['children_html'])
           : null;
 
-      final double totalPrice =
-          pricePerNight * quantity * nights;
+      final double totalPrice = pricePerNight * quantity * nights;
+
+      // 👇 LẤY ẢNH PHÒNG Ở ĐÂY
+      final String? imageUrl = _getRoomImageUrl(room);
 
       selected.add(
         HotelSelectedRoom(
@@ -206,6 +226,7 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
           maxGuests: maxGuests,
           adultsPerRoom: adults,
           childrenPerRoom: children,
+          imageUrl: imageUrl, // 👈 GÁN
         ),
       );
     }

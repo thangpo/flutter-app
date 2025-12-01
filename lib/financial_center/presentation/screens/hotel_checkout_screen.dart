@@ -1,16 +1,16 @@
-import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:dio/dio.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
-import '../widgets/hotel_rooms_section.dart' show HotelSelectedRoom;
+import 'package:intl/intl.dart';
 import '../services/hotel_service.dart';
 import 'hotel_booking_bill_screen.dart';
+import 'package:flutter/material.dart';
 import 'hotel_sepay_payment_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../widgets/hotel_rooms_section.dart' show HotelSelectedRoom;
+import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:flutter_sixvalley_ecommerce/data/datasource/remote/dio/dio_client.dart';
 import 'package:flutter_sixvalley_ecommerce/data/datasource/remote/dio/logging_interceptor.dart';
 import 'package:flutter_sixvalley_ecommerce/features/profile/domain/repositories/profile_repository.dart';
-import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 
 class HotelCheckoutData {
   final int hotelId;
@@ -28,6 +28,10 @@ class HotelCheckoutData {
   final double extrasTotal;
   final double buyerFeesTotal;
   final double grandTotal;
+  final String? hotelImage;
+  final double? hotelRating;
+  final int? reviewCount;
+  final String? hotelLocation;
 
   HotelCheckoutData({
     required this.hotelId,
@@ -45,6 +49,10 @@ class HotelCheckoutData {
     required this.extrasTotal,
     required this.buyerFeesTotal,
     required this.grandTotal,
+    this.hotelImage,
+    this.hotelRating,
+    this.reviewCount,
+    this.hotelLocation,
   });
 }
 
@@ -73,7 +81,8 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
   final TextEditingController cityController = TextEditingController();
   final TextEditingController countryController =
   TextEditingController(text: 'Việt Nam');
-  final TextEditingController specialRequestController = TextEditingController();
+  final TextEditingController specialRequestController =
+  TextEditingController();
   final TextEditingController couponController = TextEditingController();
 
   String paymentMethod = 'offline_payment';
@@ -103,9 +112,7 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
       );
 
       await _loadUserData();
-    } catch (_) {
-      // nếu lỗi thì thôi, user tự nhập tay
-    }
+    } catch (_) {}
   }
 
   Future<void> _loadUserData() async {
@@ -149,8 +156,9 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
   double _calcRoomLineTotal(HotelSelectedRoom r) {
     final data = widget.data;
     final int qty = r.quantity <= 0 ? 1 : r.quantity;
-    final int usedNights =
-    data.nights > 0 ? data.nights : (r.nights != null && r.nights! > 0 ? r.nights! : 1);
+    final int usedNights = data.nights > 0
+        ? data.nights
+        : (r.nights != null && r.nights! > 0 ? r.nights! : 1);
     final double perNight = r.pricePerNight;
     return perNight * usedNights * qty;
   }
@@ -158,138 +166,108 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
   @override
   Widget build(BuildContext context) {
     final dateFmt = DateFormat('dd/MM/yyyy');
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final String title = _currentStep == 0
+        ? (getTranslated('hotel_booking_info', context) ??
+        'Thông tin đặt phòng')
+        : (getTranslated('guest_and_payment_info', context) ??
+        'Thông tin người đặt & thanh toán');
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          _currentStep == 0
-              ? 'Thông tin đặt phòng'
-              : 'Thông tin người đặt & thanh toán',
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: _currentStep == 0
+              ? _buildStep1(context, dateFmt, isDark)
+              : _buildStep2(context),
         ),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: _currentStep == 0
-            ? _buildStep1(context, dateFmt)
-            : _buildStep2(context),
       ),
     );
   }
 
-  // ===================== STEP 1: THÔNG TIN ĐẶT PHÒNG =====================
-
-  Widget _buildStep1(BuildContext context, DateFormat dateFmt) {
+  Widget _buildStep1(
+      BuildContext context, DateFormat dateFmt, bool isDark) {
     final data = widget.data;
 
     return ListView(
       children: [
-        Text(
-          data.hotelName,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          '${dateFmt.format(data.checkIn)} - '
-              '${dateFmt.format(data.checkOut)}  •  ${data.nights} đêm',
-        ),
-        Text(
-          '${data.adults} người lớn, ${data.children} trẻ em',
-        ),
-        const Divider(height: 32),
+        _buildHotelHeaderCard(context, dateFmt, data, isDark),
+        const SizedBox(height: 24),
 
-        const Text(
-          'Phòng đã chọn',
+        // Phòng đã chọn
+        Text(
+          getTranslated('selected_rooms', context) ?? 'Phòng đã chọn',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
+            color: isDark ? Colors.white : Colors.black87,
           ),
         ),
-        const SizedBox(height: 8),
-        ...data.rooms.map((r) {
-          final int qty = r.quantity <= 0 ? 1 : r.quantity;
-          final int usedNights =
-          data.nights > 0 ? data.nights : (r.nights != null && r.nights! > 0 ? r.nights! : 1);
-          final double perNight = r.pricePerNight;
-          final double lineTotal = _calcRoomLineTotal(r);
+        const SizedBox(height: 12),
 
-          return Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.grey[200]!),
+        if (data.rooms.isEmpty)
+          Text(
+            getTranslated('no_room_selected', context) ??
+                'Không có phòng nào, vui lòng quay lại chọn phòng.',
+            style: TextStyle(
+              fontSize: 13,
+              color: isDark ? Colors.white70 : Colors.grey[700],
             ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        r.name,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '$qty phòng • $usedNights đêm × ${_formatVnd(perNight)} / đêm',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[700],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Text(
-                  _formatVnd(lineTotal),
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.blue,
-                  ),
-                ),
-              ],
+          )
+        else
+          ...data.rooms.map(
+                (r) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _buildRoomCard(context, r, data, isDark),
             ),
-          );
-        }),
-        const SizedBox(height: 8),
+          ),
+
+        const SizedBox(height: 16),
         Row(
           children: [
-            const Expanded(
+            Expanded(
               child: Text(
-                'Tạm tính tiền phòng',
-                style: TextStyle(fontWeight: FontWeight.w500),
+                getTranslated('room_subtotal', context) ??
+                    'Tạm tính tiền phòng',
+                style: TextStyle(
+                  fontWeight: FontWeight.w500,
+                  color: isDark ? Colors.white70 : Colors.black87,
+                ),
               ),
             ),
             Text(
               _formatVnd(data.roomsTotal),
-              style: const TextStyle(fontWeight: FontWeight.w700),
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
             ),
           ],
         ),
 
         const Divider(height: 32),
 
-        const Text(
-          'Giá thêm (bạn đã chọn)',
+        // Giá thêm
+        Text(
+          getTranslated('extra_prices_selected', context) ??
+              'Giá thêm (bạn đã chọn)',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
+            color: isDark ? Colors.white : Colors.black87,
           ),
         ),
         const SizedBox(height: 8),
         if (data.selectedExtras.isEmpty)
           Text(
-            'Không có mục giá thêm nào.',
-            style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+            getTranslated('no_extra_selected', context) ??
+                'Không có mục giá thêm nào.',
+            style: TextStyle(
+              fontSize: 13,
+              color: isDark ? Colors.white70 : Colors.grey[700],
+            ),
           )
         else
           ...data.selectedExtras.map((e) {
@@ -308,14 +286,18 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
                   Expanded(
                     child: Text(
                       name,
-                      style: const TextStyle(fontSize: 13),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
                     ),
                   ),
                   Text(
                     displayPrice,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white : Colors.black87,
                     ),
                   ),
                 ],
@@ -326,15 +308,21 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
           const SizedBox(height: 4),
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Tổng giá thêm',
-                  style: TextStyle(fontWeight: FontWeight.w500),
+                  getTranslated('extra_total', context) ?? 'Tổng giá thêm',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                    color: isDark ? Colors.white70 : Colors.black87,
+                  ),
                 ),
               ),
               Text(
                 _formatVnd(data.extrasTotal),
-                style: const TextStyle(fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
               ),
             ],
           ),
@@ -342,18 +330,25 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
 
         const Divider(height: 32),
 
-        const Text(
-          'Phí dịch vụ (tự động)',
+        // Phí dịch vụ
+        Text(
+          getTranslated('service_fees_auto', context) ??
+              'Phí dịch vụ (tự động)',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
+            color: isDark ? Colors.white : Colors.black87,
           ),
         ),
         const SizedBox(height: 8),
         if (data.buyerFees.isEmpty)
           Text(
-            'Không có phí dịch vụ nào.',
-            style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+            getTranslated('no_service_fees', context) ??
+                'Không có phí dịch vụ nào.',
+            style: TextStyle(
+              fontSize: 13,
+              color: isDark ? Colors.white70 : Colors.grey[700],
+            ),
           )
         else
           ...data.buyerFees.map((fee) {
@@ -366,21 +361,29 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
                 ? priceHtml
                 : (rawPrice.isNotEmpty ? '$rawPrice ₫' : '0 ₫');
 
+            final autoText =
+                getTranslated('service_fee_auto_suffix', context) ??
+                    '(tự động áp dụng)';
+
             return Padding(
               padding: const EdgeInsets.only(bottom: 4),
               child: Row(
                 children: [
                   Expanded(
                     child: Text(
-                      '$name (tự động áp dụng)',
-                      style: const TextStyle(fontSize: 13),
+                      '$name $autoText',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
                     ),
                   ),
                   Text(
                     displayPrice,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white : Colors.black87,
                     ),
                   ),
                 ],
@@ -391,15 +394,22 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
           const SizedBox(height: 4),
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Tổng phí dịch vụ',
-                  style: TextStyle(fontWeight: FontWeight.w500),
+                  getTranslated('service_fees_total', context) ??
+                      'Tổng phí dịch vụ',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                    color: isDark ? Colors.white70 : Colors.black87,
+                  ),
                 ),
               ),
               Text(
                 _formatVnd(data.buyerFeesTotal),
-                style: const TextStyle(fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
               ),
             ],
           ),
@@ -407,41 +417,67 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
 
         const Divider(height: 32),
 
-        const Text(
-          'Tổng kết chi phí',
+        // Tổng kết chi phí
+        Text(
+          getTranslated('cost_summary', context) ?? 'Tổng kết chi phí',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w700,
+            color: isDark ? Colors.white : Colors.black87,
           ),
         ),
         const SizedBox(height: 8),
         Row(
           children: [
-            const Expanded(child: Text('Tiền phòng')),
+            Expanded(
+              child: Text(
+                getTranslated('room_cost', context) ?? 'Tiền phòng',
+                style: TextStyle(
+                  color: isDark ? Colors.white70 : Colors.black87,
+                ),
+              ),
+            ),
             Text(_formatVnd(data.roomsTotal)),
           ],
         ),
         Row(
           children: [
-            const Expanded(child: Text('Giá thêm (bạn chọn)')),
+            Expanded(
+              child: Text(
+                getTranslated('extra_cost', context) ??
+                    'Giá thêm (bạn chọn)',
+                style: TextStyle(
+                  color: isDark ? Colors.white70 : Colors.black87,
+                ),
+              ),
+            ),
             Text(_formatVnd(data.extrasTotal)),
           ],
         ),
         Row(
           children: [
-            const Expanded(child: Text('Phí dịch vụ (tự động)')),
+            Expanded(
+              child: Text(
+                getTranslated('service_fees_cost', context) ??
+                    'Phí dịch vụ (tự động)',
+                style: TextStyle(
+                  color: isDark ? Colors.white70 : Colors.black87,
+                ),
+              ),
+            ),
             Text(_formatVnd(data.buyerFeesTotal)),
           ],
         ),
         const SizedBox(height: 8),
         Row(
           children: [
-            const Expanded(
+            Expanded(
               child: Text(
-                'Tổng thanh toán',
+                getTranslated('grand_total', context) ?? 'Tổng thanh toán',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white : Colors.black87,
                 ),
               ),
             ),
@@ -457,11 +493,12 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
         ),
         const SizedBox(height: 4),
         Text(
-          'Công thức: tiền phòng (giá/đêm × số đêm × số phòng) '
-              '+ giá thêm (bạn chọn) + phí dịch vụ (tự động).',
+          getTranslated('cost_formula_note', context) ??
+              'Công thức: tiền phòng (giá/đêm × số đêm × số phòng) '
+                  '+ giá thêm (bạn chọn) + phí dịch vụ (tự động).',
           style: TextStyle(
             fontSize: 12,
-            color: Colors.grey[700],
+            color: isDark ? Colors.white54 : Colors.grey[700],
           ),
         ),
 
@@ -475,11 +512,11 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
                 _currentStep = 1;
               });
             },
-            child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
               child: Text(
-                'Tiếp theo',
-                style: TextStyle(fontSize: 16),
+                getTranslated('next', context) ?? 'Tiếp theo',
+                style: const TextStyle(fontSize: 16),
               ),
             ),
           ),
@@ -488,8 +525,6 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
     );
   }
 
-  // ===================== STEP 2: NGƯỜI ĐẶT + THANH TOÁN =====================
-
   Widget _buildStep2(BuildContext context) {
     final data = widget.data;
 
@@ -497,7 +532,6 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
       key: _formKey,
       child: ListView(
         children: [
-          // Tóm tắt nhanh
           Text(
             data.hotelName,
             style: const TextStyle(
@@ -507,7 +541,7 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Tổng thanh toán: ${_formatVnd(data.grandTotal)}',
+            '${getTranslated('grand_total', context) ?? 'Tổng thanh toán'}: ${_formatVnd(data.grandTotal)}',
             style: const TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -516,9 +550,9 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
           ),
           const SizedBox(height: 16),
 
-          const Text(
-            'Thông tin người đặt',
-            style: TextStyle(
+          Text(
+            getTranslated('guest_info', context) ?? 'Thông tin người đặt',
+            style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
             ),
@@ -526,59 +560,70 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
           const SizedBox(height: 8),
           _buildTextField(
             controller: firstNameController,
-            label: 'Họ',
+            label: getTranslated('first_name', context) ?? 'Họ',
             icon: Icons.person_outline,
-            validator: (v) =>
-            v == null || v.isEmpty ? 'Vui lòng nhập họ' : null,
+            validator: (v) => v == null || v.isEmpty
+                ? getTranslated('validation_first_name_required', context) ??
+                'Vui lòng nhập họ'
+                : null,
           ),
           _buildTextField(
             controller: lastNameController,
-            label: 'Tên',
+            label: getTranslated('last_name', context) ?? 'Tên',
             icon: Icons.person,
-            validator: (v) =>
-            v == null || v.isEmpty ? 'Vui lòng nhập tên' : null,
+            validator: (v) => v == null || v.isEmpty
+                ? getTranslated('validation_last_name_required', context) ??
+                'Vui lòng nhập tên'
+                : null,
           ),
           _buildTextField(
             controller: emailController,
-            label: 'Email',
+            label: getTranslated('email', context) ?? 'Email',
             icon: Icons.email_outlined,
             keyboardType: TextInputType.emailAddress,
-            validator: (v) =>
-            v == null || v.isEmpty ? 'Vui lòng nhập email' : null,
+            validator: (v) => v == null || v.isEmpty
+                ? getTranslated('validation_email_required', context) ??
+                'Vui lòng nhập email'
+                : null,
           ),
           _buildTextField(
             controller: phoneController,
-            label: 'Số điện thoại',
+            label:
+            getTranslated('phone_number', context) ?? 'Số điện thoại',
             icon: Icons.phone_outlined,
             keyboardType: TextInputType.phone,
           ),
           _buildTextField(
             controller: countryController,
-            label: 'Quốc gia',
+            label: getTranslated('country', context) ?? 'Quốc gia',
             icon: Icons.flag_outlined,
           ),
           _buildTextField(
             controller: cityController,
-            label: 'Thành phố / Tỉnh',
+            label:
+            getTranslated('city_province', context) ?? 'Thành phố / Tỉnh',
             icon: Icons.location_city_outlined,
           ),
           _buildTextField(
             controller: addressController,
-            label: 'Địa chỉ chi tiết',
+            label:
+            getTranslated('address_detail', context) ?? 'Địa chỉ chi tiết',
             icon: Icons.home_outlined,
           ),
           _buildTextField(
             controller: specialRequestController,
-            label: 'Yêu cầu đặc biệt',
+            label: getTranslated('special_request', context) ??
+                'Yêu cầu đặc biệt',
             icon: Icons.message_outlined,
             maxLines: 3,
           ),
 
           const SizedBox(height: 16),
 
-          const Text(
-            'Phương thức thanh toán',
-            style: TextStyle(
+          Text(
+            getTranslated('payment_method', context) ??
+                'Phương thức thanh toán',
+            style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
             ),
@@ -593,14 +638,20 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
               contentPadding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             ),
-            items: const [
+            items: [
               DropdownMenuItem(
                 value: 'offline_payment',
-                child: Text('Thanh toán tại khách sạn'),
+                child: Text(
+                  getTranslated('payment_offline', context) ??
+                      'Thanh toán tại khách sạn',
+                ),
               ),
               DropdownMenuItem(
                 value: 'sepay',
-                child: Text('Chuyển khoản qua SePay'),
+                child: Text(
+                  getTranslated('payment_sepay', context) ??
+                      'Chuyển khoản qua SePay',
+                ),
               ),
             ],
             onChanged: (v) {
@@ -614,12 +665,13 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
 
           _buildTextField(
             controller: couponController,
-            label: 'Mã giảm giá (nếu có)',
+            label: getTranslated('coupon_code_optional', context) ??
+                'Mã giảm giá (nếu có)',
             icon: Icons.discount_outlined,
             suffixIcon: IconButton(
               icon: const Icon(Icons.check_circle),
               onPressed: () {
-                // TODO: validate coupon nếu cần
+                // TODO: validate coupon
               },
             ),
           ),
@@ -635,16 +687,19 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
                       _currentStep = 0;
                     });
                   },
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Text('Quay lại'),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text(
+                      getTranslated('back', context) ?? 'Quay lại',
+                    ),
                   ),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton(
-                  onPressed: _isLoading ? null : () => _submitBooking(context),
+                  onPressed:
+                  _isLoading ? null : () => _submitBooking(context),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     child: _isLoading
@@ -656,9 +711,9 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
                         color: Colors.white,
                       ),
                     )
-                        : const Text(
-                      'Đặt phòng',
-                      style: TextStyle(fontSize: 16),
+                        : Text(
+                      getTranslated('book_now', context) ?? 'Đặt phòng',
+                      style: const TextStyle(fontSize: 16),
                     ),
                   ),
                 ),
@@ -666,6 +721,372 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildHotelHeaderCard(
+      BuildContext context,
+      DateFormat dateFmt,
+      HotelCheckoutData data,
+      bool isDark,
+      ) {
+    final String dateRange =
+        '${dateFmt.format(data.checkIn)} - ${dateFmt.format(data.checkOut)}';
+    final String guestText =
+        '${data.adults} ${getTranslated('adults', context) ?? 'người lớn'}, '
+        '${data.children} ${getTranslated('children', context) ?? 'trẻ em'}';
+
+    final double radius = 24;
+
+    return Container(
+      height: 220,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(radius),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (data.hotelImage != null && data.hotelImage!.isNotEmpty)
+              Image.network(
+                data.hotelImage!,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  color: Colors.grey[300],
+                  child: const Icon(Icons.hotel, size: 60, color: Colors.grey),
+                ),
+              )
+            else
+              Container(
+                color: Colors.grey[300],
+                child: const Icon(Icons.hotel, size: 60, color: Colors.grey),
+              ),
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withOpacity(0.35),
+                    Colors.black.withOpacity(0.7),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      GestureDetector(
+                        onTap: () => Navigator.of(context).pop(),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.35),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.arrow_back_rounded,
+                            size: 18,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.35),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.ios_share_rounded,
+                              size: 18,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.35),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.favorite_border_rounded,
+                              size: 18,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  if (data.hotelLocation != null &&
+                      data.hotelLocation!.isNotEmpty) ...[
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.location_on_rounded,
+                          size: 16,
+                          color: Colors.white70,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            data.hotelLocation!,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.white70,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                  ],
+                  Text(
+                    data.hotelName,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      height: 1.2,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      if (data.hotelRating != null &&
+                          data.hotelRating! > 0) ...[
+                        const Icon(
+                          Icons.star_rounded,
+                          size: 16,
+                          color: Colors.amber,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          data.hotelRating!.toStringAsFixed(1),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                        if (data.reviewCount != null) ...[
+                          const SizedBox(width: 4),
+                          Text(
+                            '(${data.reviewCount} ${getTranslated('reviews', context) ?? 'đánh giá'})',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ],
+                      const Spacer(),
+                      Row(
+                        children: [
+                          const CircleAvatar(
+                            radius: 10,
+                            backgroundColor: Colors.white24,
+                            child: Icon(Icons.person, size: 12, color: Colors.white),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            data.reviewCount != null
+                                ? '${data.reviewCount} ${getTranslated('reviews', context) ?? 'reviews'}'
+                                : '',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '$dateRange  •  ${data.nights} ${getTranslated('nights', context) ?? 'đêm'}  •  $guestText',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.white70,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRoomCard(
+      BuildContext context,
+      HotelSelectedRoom r,
+      HotelCheckoutData data,
+      bool isDark,
+      ) {
+    final int qty = r.quantity <= 0 ? 1 : r.quantity;
+    final int usedNights = data.nights > 0
+        ? data.nights
+        : (r.nights != null && r.nights! > 0 ? r.nights! : 1);
+    final double perNight = r.pricePerNight;
+    final double lineTotal = _calcRoomLineTotal(r);
+
+    final Color cardBg = isDark ? const Color(0xFF181A1F) : Colors.white;
+    final Color borderColor = isDark ? Colors.white10 : Colors.grey[200]!;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: borderColor),
+        boxShadow: [
+          if (!isDark)
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: SizedBox(
+                width: 72,
+                height: 72,
+                child: (r.imageUrl != null && r.imageUrl!.isNotEmpty)
+                    ? Image.network(
+                  r.imageUrl!,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    color: isDark
+                        ? const Color(0xFF262932)
+                        : Colors.grey[200],
+                    child: const Icon(
+                      Icons.bed_rounded,
+                      size: 32,
+                      color: Colors.grey,
+                    ),
+                  ),
+                )
+                    : Container(
+                  color: isDark
+                      ? const Color(0xFF262932)
+                      : Colors.grey[200],
+                  child: const Icon(
+                    Icons.bed_rounded,
+                    size: 32,
+                    color: Colors.grey,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    getTranslated('default_room_type', context) ??
+                        'Deluxe Room',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? Colors.white60 : Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    r.name,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '$qty ${getTranslated('rooms', context) ?? 'phòng'} • '
+                        '$usedNights ${getTranslated('nights', context) ?? 'đêm'} × ${_formatVnd(perNight)} / ${getTranslated('per_night', context) ?? 'đêm'}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? Colors.white70 : Colors.grey[700],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.star_rounded,
+                        size: 14,
+                        color: Colors.amber,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        getTranslated('line_total_label', context) ??
+                            'Giá tổng',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isDark ? Colors.white70 : Colors.grey[700],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  _formatVnd(lineTotal),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.blue,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '/${data.nights > 0 ? '${data.nights} ${getTranslated('nights', context) ?? 'đêm'}' : (getTranslated('room_booking', context) ?? 'đặt phòng')}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? Colors.white60 : Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -710,8 +1131,8 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
       final dio = Dio();
 
       final String startDate = DateFormat('yyyy-MM-dd').format(data.checkIn);
-      final String endDate   = DateFormat('yyyy-MM-dd').format(data.checkOut);
-      final int totalGuests  = data.adults + data.children;
+      final String endDate = DateFormat('yyyy-MM-dd').format(data.checkOut);
+      final int totalGuests = data.adults + data.children;
 
       final List<Map<String, dynamic>> roomsPayload = data.rooms.map((r) {
         final int qty = r.quantity <= 0 ? 1 : r.quantity;
@@ -729,7 +1150,6 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
         };
       }).toList();
 
-      // Body dùng chung cho cả store & sepay
       final body = {
         "object_model": "hotel",
         "object_id": data.hotelId,
@@ -758,7 +1178,6 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
         "buyer_fees": data.buyerFees,
       };
 
-      // ================== CASE 1: Thanh toán tại khách sạn ==================
       if (paymentMethod == 'offline_payment') {
         final response = await dio.post(
           '${AppConstants.travelBaseUrl}/bookings',
@@ -771,16 +1190,21 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
           ),
         );
 
-        if (response.statusCode == 201 && response.data['success'] == true) {
+        if (response.statusCode == 201 &&
+            response.data['success'] == true) {
           final bookingData = response.data['data'];
 
-          final createdAtString = bookingData['created_at']?.toString() ?? '';
+          final createdAtString =
+              bookingData['created_at']?.toString() ?? '';
           final createdAt =
               DateTime.tryParse(createdAtString) ?? DateTime.now();
 
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Đặt phòng thành công'),
+            SnackBar(
+              content: Text(
+                getTranslated('booking_success', context) ??
+                    'Đặt phòng thành công',
+              ),
               backgroundColor: Colors.green,
             ),
           );
@@ -792,7 +1216,8 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
               builder: (_) => HotelBookingBillScreen(
                 data: data,
                 bookingCode: bookingData['code']?.toString() ?? '',
-                bookingStatus: bookingData['status']?.toString() ?? 'unpaid',
+                bookingStatus:
+                bookingData['status']?.toString() ?? 'unpaid',
                 paymentMethod: paymentMethod,
                 createdAt: createdAt,
                 firstName: firstNameController.text,
@@ -807,11 +1232,13 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
             ),
           );
         } else {
+          final msg = response.data['message'] ??
+              (getTranslated('booking_error_generic', context) ??
+                  'Không thể đặt phòng');
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                'Lỗi: ${response.data['message'] ?? 'Không thể đặt phòng'}',
-              ),
+              content:
+              Text('${getTranslated('error_prefix', context) ?? 'Lỗi'}: $msg'),
               backgroundColor: Colors.red,
             ),
           );
@@ -820,7 +1247,6 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
         return;
       }
 
-      // ================== CASE 2: Thanh toán bằng SePay (QR) ==================
       if (paymentMethod == 'sepay') {
         final response = await dio.post(
           '${AppConstants.travelBaseUrl}/bookings/sepay/payment',
@@ -833,22 +1259,26 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
           ),
         );
 
-        if (response.statusCode == 200 && response.data['status'] == true) {
+        if (response.statusCode == 200 &&
+            response.data['status'] == true) {
           final dataRes = response.data['data'];
 
-          final bookingCode  = dataRes['order_code']?.toString() ?? '';
-          final paymentId    = dataRes['payment_id'];
-          final amount       = (dataRes['amount'] ?? 0) as num;
-          final qrLink       = dataRes['qr_link']?.toString() ?? '';
-          final bankAccount  = dataRes['bank_account']?.toString() ?? '';
-          final bankName     = dataRes['bank_name']?.toString() ?? '';
-          final accountName  = dataRes['account_name']?.toString() ?? '';
-          final rawContent   = dataRes['content']?.toString() ?? '';
-          final content      = Uri.decodeComponent(rawContent);
+          final bookingCode = dataRes['order_code']?.toString() ?? '';
+          final paymentId = dataRes['payment_id'];
+          final amount = (dataRes['amount'] ?? 0) as num;
+          final qrLink = dataRes['qr_link']?.toString() ?? '';
+          final bankAccount = dataRes['bank_account']?.toString() ?? '';
+          final bankName = dataRes['bank_name']?.toString() ?? '';
+          final accountName = dataRes['account_name']?.toString() ?? '';
+          final rawContent = dataRes['content']?.toString() ?? '';
+          final content = Uri.decodeComponent(rawContent);
 
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Tạo QR thanh toán thành công'),
+            SnackBar(
+              content: Text(
+                getTranslated('sepay_create_qr_success', context) ??
+                    'Tạo QR thanh toán thành công',
+              ),
               backgroundColor: Colors.green,
             ),
           );
@@ -879,10 +1309,13 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
             ),
           );
         } else {
+          final msg = response.data['message'] ??
+              (getTranslated('sepay_error_generic', context) ??
+                  'Không thể tạo QR thanh toán');
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                'Lỗi SePay: ${response.data['message'] ?? 'Không thể tạo QR thanh toán'}',
+                '${getTranslated('sepay_error_prefix', context) ?? 'Lỗi SePay'}: $msg',
               ),
               backgroundColor: Colors.red,
             ),
@@ -894,7 +1327,9 @@ class _HotelCheckoutScreenState extends State<HotelCheckoutScreen> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Đặt phòng thất bại: $e'),
+          content: Text(
+            '${getTranslated('booking_failed', context) ?? 'Đặt phòng thất bại'}: $e',
+          ),
           backgroundColor: Colors.red,
         ),
       );

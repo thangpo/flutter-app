@@ -1,5 +1,11 @@
+import 'dart:ui'; // BackdropFilter
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
+
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
+import 'package:provider/provider.dart';
 
 class BookingSuccessPage extends StatefulWidget {
   final Map<String, dynamic> bookingInfo;
@@ -10,25 +16,29 @@ class BookingSuccessPage extends StatefulWidget {
   State<BookingSuccessPage> createState() => _BookingSuccessPageState();
 }
 
-class _BookingSuccessPageState extends State<BookingSuccessPage> with SingleTickerProviderStateMixin {
+class _BookingSuccessPageState extends State<BookingSuccessPage>
+    with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _scaleAnimation;
-  late Animation<double> _fadeAnimation;
+  late NumberFormat _vndFormatter;
 
   @override
   void initState() {
     super.initState();
+
+    _vndFormatter = NumberFormat.currency(
+      locale: 'vi_VN',
+      symbol: '₫',
+      decimalDigits: 0,
+    );
+
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 900),
     );
 
     _scaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.elasticOut),
-    );
-
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
     );
 
     _animationController.forward();
@@ -40,417 +50,405 @@ class _BookingSuccessPageState extends State<BookingSuccessPage> with SingleTick
     super.dispose();
   }
 
+  int _calculateDays(String? start, String? end) {
+    if (start == null || end == null) return 0;
+    try {
+      final s = DateTime.parse(start);
+      final e = DateTime.parse(end);
+      return e.difference(s).inDays + 1;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  String _formatDate(String? raw) {
+    if (raw == null || raw.isEmpty || raw == 'N/A') return 'N/A';
+    try {
+      final d = DateTime.parse(raw);
+      final dd = d.day.toString().padLeft(2, '0');
+      final mm = d.month.toString().padLeft(2, '0');
+      final yyyy = d.year.toString();
+      return '$dd/$mm/$yyyy';
+    } catch (_) {
+      return raw;
+    }
+  }
+
+  String _t(String key, String fallback) {
+    return getTranslated(key, context) ?? fallback;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final info = widget.bookingInfo;
+
+    final themeCtrl = Provider.of<ThemeController>(context, listen: true);
+    final bool isDark = themeCtrl.darkTheme;
+
+    final String tourImage =
+    (info['tour_image'] ?? info['image'] ?? info['tour']?['image'] ?? '')
+        .toString();
+    final String tourName =
+    (info['tour_name'] ?? info['title'] ?? _t('your_trip', 'Your trip'))
+        .toString();
+    final String location =
+    (info['location'] ?? info['address'] ?? '').toString();
+
+    final String code = (info['code'] ?? '').toString();
+
+    final String startRaw = (info['start_date'] ?? 'N/A').toString();
+    final String endRaw = (info['end_date'] ?? 'N/A').toString();
+
+    final String startDate = _formatDate(startRaw);
+    final String endDate = _formatDate(endRaw);
+
+    final String guests =
+    (info['total_guests'] != null) ? '${info['total_guests']}' : '-';
+
+    String total;
+    if (info['total'] != null) {
+      final num? value = num.tryParse(info['total'].toString());
+      total = value != null
+          ? _vndFormatter.format(value)
+          : info['total'].toString();
+    } else {
+      total = 'N/A';
+    }
+
+    final int days = _calculateDays(info['start_date'], info['end_date']);
+
+    final String description = (info['tour_description'] ??
+        _t('booking_success_desc',
+            'Đặt tour của bạn đã được xác nhận. '
+                'Hãy chuẩn bị hành lý và tận hưởng chuyến đi sắp tới!'))
+        .toString();
+
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: Colors.black,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('Đặt tour thành công', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.teal.shade600,
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
-        centerTitle: true,
-        automaticallyImplyLeading: false,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () {
+            Navigator.of(context).popUntil((route) => route.isFirst);
+          },
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bookmark_border, color: Colors.white),
+            onPressed: () {},
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 40),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.teal.shade600, Colors.cyan.shade500],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(32),
-                  bottomRight: Radius.circular(32),
-                ),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: tourImage.isNotEmpty
+                ? Image.network(
+              tourImage,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                color: Colors.grey.shade400,
+                alignment: Alignment.center,
+                child: Icon(Icons.image_not_supported,
+                    size: 40, color: Colors.grey.shade700),
               ),
-              child: Column(
-                children: [
-                  ScaleTransition(
-                    scale: _scaleAnimation,
-                    child: Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 20,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        Icons.check_circle,
-                        color: Colors.teal.shade600,
-                        size: 80,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: Column(
-                      children: [
-                        const Text(
-                          'Đặt tour thành công!',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Cảm ơn bạn đã tin tưởng dịch vụ của chúng tôi',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.9),
-                            fontSize: 16,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+            )
+                : Container(
+              color: Colors.grey.shade400,
+              alignment: Alignment.center,
+              child: Icon(Icons.image_not_supported,
+                  size: 40, color: Colors.grey.shade700),
             ),
+          ),
 
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  const SizedBox(height: 8),
+          Positioned.fill(
+            child: Container(
+              color: Colors.black.withOpacity(isDark ? 0.35 : 0.2),
+            ),
+          ),
 
-                  Container(
-                    padding: const EdgeInsets.all(20),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(28),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Colors.teal.shade600, Colors.cyan.shade500],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.teal.shade300.withOpacity(0.5),
-                          blurRadius: 12,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
+                      color: Colors.black.withOpacity(isDark ? 0.45 : 0.32),
+                      borderRadius: BorderRadius.circular(28),
+                      border:
+                      Border.all(color: Colors.white.withOpacity(0.25)),
                     ),
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'MÃ ĐẶT TOUR',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 1.5,
+                        Text(
+                          tourName,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                widget.bookingInfo['code'] ?? 'N/A',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 2,
+                        const SizedBox(height: 4),
+                        if (location.isNotEmpty)
+                          Row(
+                            children: [
+                              const Icon(Icons.place,
+                                  size: 16, color: Colors.white70),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  location,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 13,
+                                  ),
                                 ),
-                                textAlign: TextAlign.center,
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            IconButton(
-                              icon: const Icon(Icons.copy, color: Colors.white),
-                              onPressed: () {
-                                Clipboard.setData(
-                                  ClipboardData(text: widget.bookingInfo['code'] ?? ''),
-                                );
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: const Row(
-                                      children: [
-                                        Icon(Icons.check_circle, color: Colors.white),
-                                        SizedBox(width: 8),
-                                        Text('Đã sao chép mã đặt tour'),
-                                      ],
-                                    ),
-                                    backgroundColor: Colors.teal.shade700,
-                                    behavior: SnackBarBehavior.floating,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
+                            ],
+                          ),
+
+                        const SizedBox(height: 8),
+
+                        if (code.isNotEmpty)
+                          InkWell(
+                            onTap: () {
+                              Clipboard.setData(ClipboardData(text: code));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: [
+                                      const Icon(Icons.check_circle,
+                                          color: Colors.white),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        _t('booking_code_copied',
+                                            'Đã sao chép mã đặt tour'),
+                                      ),
+                                    ],
+                                  ),
+                                  backgroundColor:
+                                  Colors.black.withOpacity(0.85),
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.18),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.max,
+                                children: [
+                                  const Icon(Icons.confirmation_number,
+                                      size: 14, color: Colors.white),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      code,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                     ),
                                   ),
-                                );
-                              },
+                                ],
+                              ),
+                            ),
+                          ),
+
+                        const SizedBox(height: 12),
+
+                        Row(
+                          children: [
+                            _InfoChip(
+                              icon: Icons.calendar_today,
+                              label: _t('start_date', 'Start'),
+                              value: startDate,
+                            ),
+                            const SizedBox(width: 8),
+                            _InfoChip(
+                              icon: Icons.event,
+                              label: _t('end_date', 'End'),
+                              value: endDate,
                             ),
                           ],
                         ),
+
                         const SizedBox(height: 8),
+
+                        Row(
+                          children: [
+                            _InfoChip(
+                              icon: Icons.people_alt_rounded,
+                              label: _t('guests', 'Guests'),
+                              value: guests,
+                            ),
+                            const SizedBox(width: 8),
+                            _InfoChip(
+                              icon: Icons.schedule,
+                              label: _t('days', 'Days'),
+                              value: days > 0 ? '$days' : '-',
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              _t('total', 'Total'),
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 13,
+                              ),
+                            ),
+                            Text(
+                              total,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 14),
+
                         Text(
-                          'Vui lòng lưu mã này để tra cứu booking',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.8),
+                          _t('description', 'Description'),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          description,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white70,
                             fontSize: 13,
+                            height: 1.4,
                           ),
-                          textAlign: TextAlign.center,
                         ),
-                      ],
-                    ),
-                  ),
 
-                  const SizedBox(height: 24),
+                        const SizedBox(height: 18),
 
-                  _buildInfoCard(
-                    icon: Icons.person,
-                    title: 'Thông tin khách hàng',
-                    children: [
-                      _buildInfoRow(
-                        Icons.account_circle,
-                        'Họ tên',
-                        '${widget.bookingInfo['first_name'] ?? ''} ${widget.bookingInfo['last_name'] ?? ''}',
-                      ),
-                      _buildInfoRow(
-                        Icons.email,
-                        'Email',
-                        widget.bookingInfo['email'] ?? 'N/A',
-                      ),
-                      _buildInfoRow(
-                        Icons.phone,
-                        'Số điện thoại',
-                        widget.bookingInfo['phone'] ?? 'N/A',
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  _buildInfoCard(
-                    icon: Icons.event_note,
-                    title: 'Chi tiết đặt tour',
-                    children: [
-                      _buildInfoRow(
-                        Icons.calendar_today,
-                        'Ngày bắt đầu',
-                        widget.bookingInfo['start_date'] ?? 'N/A',
-                      ),
-                      _buildInfoRow(
-                        Icons.event,
-                        'Ngày kết thúc',
-                        widget.bookingInfo['end_date'] ?? 'N/A',
-                      ),
-                      const Divider(height: 24),
-                      _buildInfoRow(
-                        Icons.people,
-                        'Tổng số khách',
-                        '${widget.bookingInfo['total_guests'] ?? 'N/A'} người',
-                        highlight: true,
-                      ),
-                      _buildInfoRow(
-                        Icons.payments,
-                        'Tổng tiền',
-                        '${widget.bookingInfo['total'] ?? 'N/A'} ₫',
-                        highlight: true,
-                        isPrice: true,
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.blue.shade200),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.info_outline, color: Colors.blue.shade700, size: 28),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'Thông tin chi tiết đã được gửi đến email của bạn. Vui lòng kiểm tra hộp thư.',
-                            style: TextStyle(
-                              color: Colors.blue.shade900,
-                              fontSize: 14,
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              Navigator.of(context)
+                                  .popUntil((route) => route.isFirst);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: Colors.black87,
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 14),
+                              shape: const StadiumBorder(),
+                              elevation: 0,
+                            ),
+                            child: Text(
+                              _t('back_to_home', 'Về trang chủ'),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ),
                       ],
                     ),
                   ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
-                  const SizedBox(height: 24),
+class _InfoChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
 
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () {
+  const _InfoChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
 
-                          },
-                          icon: Icon(Icons.receipt_long, color: Colors.teal.shade600),
-                          label: const Text('Chi tiết'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.teal.shade600,
-                            side: BorderSide(color: Colors.teal.shade300, width: 2),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () {
-                            Navigator.of(context).popUntil((route) => route.isFirst);
-                          },
-                          icon: const Icon(Icons.home, color: Colors.white),
-                          label: const Text('Về trang chủ'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.teal.shade600,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            elevation: 3,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 32),
-                ],
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 14, color: Colors.white),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 11,
+              ),
+            ),
+            const Spacer(),
+            Flexible(
+              child: Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildInfoCard({
-    required IconData icon,
-    required String title,
-    required List<Widget> children,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.teal.shade100.withOpacity(0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.teal.shade50,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(16),
-                topRight: Radius.circular(16),
-              ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.teal.shade100,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(icon, color: Colors.teal.shade700, size: 24),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.teal.shade900,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(children: children),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(
-      IconData icon,
-      String label,
-      String value, {
-        bool highlight = false,
-        bool isPrice = false,
-      }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            icon,
-            color: highlight ? Colors.teal.shade700 : Colors.grey.shade600,
-            size: 20,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: isPrice ? 20 : 16,
-                    fontWeight: highlight ? FontWeight.bold : FontWeight.w500,
-                    color: highlight ? Colors.teal.shade700 : Colors.black87,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

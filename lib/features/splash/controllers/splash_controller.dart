@@ -1,22 +1,23 @@
 import 'dart:async';
 import 'dart:convert';
-
 import 'package:drift/drift.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
-import 'package:flutter_sixvalley_ecommerce/data/local/cache_response.dart';
-import 'package:flutter_sixvalley_ecommerce/data/model/api_response.dart';
-import 'package:flutter_sixvalley_ecommerce/features/maintenance/maintenance_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/splash/domain/models/business_pages_model.dart';
-import 'package:flutter_sixvalley_ecommerce/features/splash/domain/models/config_model.dart';
-import 'package:flutter_sixvalley_ecommerce/features/splash/domain/services/splash_service_interface.dart';
+import 'package:provider/provider.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/api_checker.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_sixvalley_ecommerce/data/model/api_response.dart';
+import 'package:flutter_sixvalley_ecommerce/data/local/cache_response.dart';
+import 'package:flutter_sixvalley_ecommerce/features/maintenance/maintenance_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/splash/domain/models/config_model.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/firebase_token_updater.dart';
+import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
+import 'package:flutter_sixvalley_ecommerce/features/splash/domain/models/business_pages_model.dart';
+import 'package:flutter_sixvalley_ecommerce/features/splash/domain/services/splash_service_interface.dart';
+
+
 
 class SplashController extends ChangeNotifier {
   final SplashServiceInterface? splashServiceInterface;
@@ -273,4 +274,3 @@ class SplashController extends ChangeNotifier {
     return ModalRoute.of(_buildContext!)?.settings.name == 'MaintenanceScreen';
   }
 }
-

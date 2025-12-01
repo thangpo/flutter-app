@@ -1,4 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+
 import '../services/tour_service.dart';
 import '../widgets/tour_card.dart';
 import '../widgets/tour_filter_bar.dart';
@@ -14,41 +18,39 @@ class TourListScreen extends StatefulWidget {
 class _TourListScreenState extends State<TourListScreen> {
   List<dynamic> tours = [];
   bool isLoading = false;
-  bool isFilterExpanded = true;
-  final ScrollController _scrollController = ScrollController();
 
   static const Color oceanBlue = Color(0xFF0077BE);
   static const Color lightOceanBlue = Color(0xFF4DA8DA);
-  static const Color deepOceanBlue = Color(0xFF005A8D);
+
+  final List<String> _headerImages = [];
+  int _currentHeaderIndex = 0;
+  Timer? _headerTimer;
 
   @override
   void initState() {
     super.initState();
     _loadTours();
-    _scrollController.addListener(_onScroll);
   }
 
   @override
   void dispose() {
-    _scrollController.removeListener(_onScroll);
-    _scrollController.dispose();
+    _headerTimer?.cancel();
     super.dispose();
-  }
-
-  void _onScroll() {
-    if (_scrollController.offset > 50 && isFilterExpanded) {
-      setState(() => isFilterExpanded = false);
-    }
   }
 
   Future<void> _loadTours({
     String? title,
     int? locationId,
+    String? startDate,
+    String? endDate,
   }) async {
     setState(() => isLoading = true);
     try {
       List<dynamic> data;
-      if ((title == null || title.isEmpty) && locationId == null) {
+      if ((title == null || title.isEmpty) &&
+          locationId == null &&
+          startDate == null &&
+          endDate == null) {
         data = await TourService.fetchTours();
       } else {
         data = await TourService.searchTours(
@@ -57,156 +59,211 @@ class _TourListScreenState extends State<TourListScreen> {
         );
       }
 
-      setState(() {
-        tours = data;
-      });
+      setState(() => tours = data);
+      _prepareHeaderImages();
     } catch (e) {
       debugPrint("❌ Lỗi tải tour: $e");
     } finally {
-      setState(() => isLoading = false);
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
-  void _toggleFilter() {
-    setState(() {
-      isFilterExpanded = !isFilterExpanded;
+  void _prepareHeaderImages() {
+    _headerImages.clear();
+    for (final t in tours.take(5)) {
+      if (t is Map) {
+        final url = (t['image'] ??
+            t['banner'] ??
+            t['image_url'] ??
+            t['thumbnail']) as String?;
+        if (url != null && url.isNotEmpty) _headerImages.add(url);
+      }
+    }
+    if (_headerImages.isEmpty) {
+      _headerTimer?.cancel();
+      _currentHeaderIndex = 0;
+    } else {
+      _startHeaderTimer();
+    }
+  }
+
+  void _startHeaderTimer() {
+    _headerTimer?.cancel();
+    _headerTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (!mounted || _headerImages.isEmpty) return;
+      setState(() {
+        _currentHeaderIndex =
+            (_currentHeaderIndex + 1) % _headerImages.length;
+      });
     });
+  }
+
+  String? _getCurrentHeaderImage() {
+    if (_headerImages.isEmpty) return null;
+    return _headerImages[_currentHeaderIndex];
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final titleText =
+        getTranslated('explore_tours', context) ?? 'Khám phá Tour';
+
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      extendBodyBehindAppBar: true,
+      backgroundColor: isDark ? const Color(0xFF050816) : Colors.grey[100],
       appBar: AppBar(
-        title: const Text(
-          "Khám phá Tour",
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+        title: Text(
+          titleText,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
         ),
-        backgroundColor: oceanBlue,
+        backgroundColor: Colors.transparent,
         elevation: 0,
+        systemOverlayStyle: SystemUiOverlayStyle.light,
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: Column(
-        children: [
-          GestureDetector(
-            onTap: _toggleFilter,
-            child: Container(
-              margin: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.white, const Color(0xFFE8F4F8)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+      body: RefreshIndicator(
+        color: oceanBlue,
+        onRefresh: () => _loadTours(),
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            _buildHeaderSection(context),
+            Transform.translate(
+              offset: const Offset(0, -200),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: TourFilterBar(
+                  onFilter: ({
+                    String? title,
+                    String? location,
+                    int? locationId,
+                    String? startDate,
+                    String? endDate,
+                  }) {
+                    _loadTours(
+                      title: title,
+                      locationId: locationId,
+                      startDate: startDate,
+                      endDate: endDate,
+                    );
+                  },
                 ),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: oceanBlue.withOpacity(0.15),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: isLoading
+                  ? const Padding(
+                padding: EdgeInsets.only(top: 40),
+                child: Center(child: CircularProgressIndicator()),
+              )
+                  : (tours.isNotEmpty
+                  ? Column(
+                children: [
+                  ...tours.map((tour) => TourCard(tour: tour)),
+                ],
+              )
+                  : Column(
+                children: [
+                  const SizedBox(height: 40),
+                  Icon(
+                    Icons.search_off_rounded,
+                    size: 80,
+                    color: Colors.grey[400],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    getTranslated('no_tour_found', context) ??
+                        "Không tìm thấy tour nào",
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey[600],
+                    ),
                   ),
                 ],
+              )),
+            ),
+
+            const SizedBox(height: 24),
+
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: ArticleListWidget(),
+            ),
+
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderSection(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final headerImage = _getCurrentHeaderImage();
+
+    return SizedBox(
+      height: 300,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(32),
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [oceanBlue, lightOceanBlue],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(
-                        Icons.filter_list_rounded,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Text(
-                        'Tìm kiếm tour',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: deepOceanBlue,
-                        ),
-                      ),
-                    ),
-                    AnimatedRotation(
-                      turns: isFilterExpanded ? 0.5 : 0,
-                      duration: const Duration(milliseconds: 300),
-                      child: Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        color: oceanBlue,
-                        size: 28,
-                      ),
-                    ),
+              child: headerImage != null && headerImage.isNotEmpty
+                  ? Image.network(
+                headerImage,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) =>
+                    _buildHeaderFallbackBg(isDark),
+              )
+                  : _buildHeaderFallbackBg(isDark),
+            ),
+          ),
+
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(32),
+                ),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withOpacity(0.20),
+                    Colors.black.withOpacity(0.55),
                   ],
                 ),
               ),
             ),
           ),
-
-          AnimatedSize(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-            child: isFilterExpanded
-                ? TourFilterBar(
-              onFilter: ({
-                String? title,
-                String? location,
-                int? locationId,
-                String? startDate,
-                String? endDate,
-              }) {
-                _loadTours(
-                  title: title,
-                  locationId: locationId,
-                );
-              },
-            )
-                : const SizedBox.shrink(),
-          ),
-
-          Expanded(
-            child: isLoading
-                ? Center(child: CircularProgressIndicator(color: oceanBlue))
-                : RefreshIndicator(
-              color: oceanBlue,
-              onRefresh: () => _loadTours(),
-              child: ListView(
-                controller: _scrollController,
-                padding: const EdgeInsets.all(12),
-                children: [
-                  if (tours.isNotEmpty)
-                    ...tours.map((tour) => TourCard(tour: tour))
-                  else
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.search_off_rounded,
-                            size: 80, color: Colors.grey[400]),
-                        const SizedBox(height: 16),
-                        Text(
-                          "Không tìm thấy tour nào",
-                          style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                        ),
-                      ],
-                    ),
-
-                  const SizedBox(height: 24),
-
-                  const ArticleListWidget(),
-                ],
-              ),
-            ),
-          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderFallbackBg(bool isDark) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isDark
+              ? [const Color(0xFF0F172A), const Color(0xFF020617)]
+              : [oceanBlue, lightOceanBlue],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
       ),
     );
   }

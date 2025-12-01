@@ -1,10 +1,11 @@
-import 'dart:ui'; // THÊM import này cho BackdropFilter
-import 'package:flutter/material.dart';
+import 'dart:ui';
 import 'package:intl/intl.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/services/duffel_service.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/services/duffel_service.dart';
+
 
 class FlightListWidget extends StatefulWidget {
   const FlightListWidget({super.key});
@@ -29,7 +30,8 @@ class _FlightListWidgetState extends State<FlightListWidget>
       final data = await DuffelService.searchFlights(
         fromCode: "SGN",
         toCode: "HAN",
-        departureDate: DateFormat("yyyy-MM-dd").format(DateTime.now().add(const Duration(days: 7))),
+        departureDate: DateFormat("yyyy-MM-dd")
+            .format(DateTime.now().add(const Duration(days: 7))),
         adults: 1,
       );
       setState(() {
@@ -54,131 +56,38 @@ class _FlightListWidgetState extends State<FlightListWidget>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Provider.of<ThemeController>(context, listen: true).darkTheme;
+    final isDark =
+        Provider.of<ThemeController>(context, listen: true).darkTheme;
+
+    final Color sectionBg = isDark
+        ? const Color(0xFF05070D)
+        : Theme.of(context).scaffoldBackgroundColor;
 
     return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isDark
-              ? [
-            const Color(0xFF1A2332),
-            const Color(0xFF0D1117),
-          ]
-              : [
-            const Color(0xFF009DFF),
-            const Color(0xFF0080D6),
-          ],
-        ),
-      ),
+      color: sectionBg,
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Glass Header Section
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: isDark
-                          ? [
-                        Colors.white.withOpacity(0.08),
-                        Colors.white.withOpacity(0.04),
-                      ]
-                          : [
-                        Colors.white.withOpacity(0.25),
-                        Colors.white.withOpacity(0.15),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(isDark ? 0.15 : 0.3),
-                      width: 1.5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(isDark ? 0.3 : 0.1),
-                        blurRadius: 20,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.white.withOpacity(isDark ? 0.15 : 0.3),
-                                  Colors.white.withOpacity(isDark ? 0.08 : 0.15),
-                                ],
-                              ),
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.white.withOpacity(0.3),
-                                width: 1,
-                              ),
-                            ),
-                            child: Icon(
-                              Icons.flight_takeoff_rounded,
-                              color: Colors.white,
-                              size: 24,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  getTranslated("best_flight_deals", context) ?? "Ưu đãi vé máy bay",
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 0.3,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  getTranslated("most_popular_routes", context) ?? "Tuyến phổ biến nhất",
-                                  style: TextStyle(
-                                    color: Colors.white.withOpacity(0.8),
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
+            child: Text(
+              getTranslated("best_flight_deals", context) ??
+                  "Ưu đãi vé máy bay",
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.black87,
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
-          // Loading or Content
           _isLoading
               ? _SkeletonFlightList(isDark: isDark)
               : _flights.isEmpty
               ? _buildEmptyState(isDark)
-              : _buildFlightList(isDark),
+              : _buildFlightList(isDark, sectionBg),
         ],
       ),
     );
@@ -194,17 +103,7 @@ class _FlightListWidgetState extends State<FlightListWidget>
             margin: const EdgeInsets.symmetric(horizontal: 16),
             padding: const EdgeInsets.all(32),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: isDark
-                    ? [
-                  Colors.white.withOpacity(0.08),
-                  Colors.white.withOpacity(0.04),
-                ]
-                    : [
-                  Colors.white.withOpacity(0.2),
-                  Colors.white.withOpacity(0.1),
-                ],
-              ),
+              color: (isDark ? Colors.white : Colors.black).withOpacity(0.05),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: Colors.white.withOpacity(isDark ? 0.15 : 0.3),
@@ -217,25 +116,20 @@ class _FlightListWidgetState extends State<FlightListWidget>
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.white.withOpacity(0.2),
-                        Colors.white.withOpacity(0.1),
-                      ],
-                    ),
+                    color: Colors.white.withOpacity(0.1),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.flight_outlined,
                     size: 48,
-                    color: Colors.white,
+                    color: isDark ? Colors.white : Colors.black54,
                   ),
                 ),
                 const SizedBox(height: 16),
                 Text(
                   getTranslated("no_flights", context) ?? "Không có chuyến bay",
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: isDark ? Colors.white : Colors.black87,
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                   ),
@@ -248,64 +142,122 @@ class _FlightListWidgetState extends State<FlightListWidget>
     );
   }
 
-  Widget _buildFlightList(bool isDark) {
+  Widget _buildFlightList(bool isDark, Color sectionBg) {
     return Column(
-      children: _flights.take(6).map((flight) {
+      children: _flights
+          .asMap()
+          .entries
+          .take(6)
+          .map((entry) {
+        final index = entry.key;
+        final flight = entry.value;
+
         final slices = flight["slices"] as List<dynamic>? ?? [];
-        final segment = slices.isNotEmpty ? slices.first : {};
-        final origin = segment["origin"]?["iata_code"] ?? "???";
-        final destination = segment["destination"]?["iata_code"] ?? "???";
-        final departure = segment["segments"]?[0]?["departing_at"] ?? "";
-        final airlineName = flight["owner"]?["name"] ?? getTranslated("airline", context) ?? "Hãng bay";
+        final slice = slices.isNotEmpty ? slices.first : {};
+
+        final segments = slice["segments"] as List<dynamic>? ?? [];
+        final firstSegment = segments.isNotEmpty ? segments.first : {};
+        final lastSegment = segments.isNotEmpty ? segments.last : firstSegment;
+
+        final origin = slice["origin"]?["iata_code"] ?? "???";
+        final destination = slice["destination"]?["iata_code"] ?? "???";
+
+        final originAirport = slice["origin"]?["name"] ?? "";
+        final originCity = slice["origin"]?["city_name"] ?? "";
+
+        final destinationAirport = slice["destination"]?["name"] ?? "";
+        final destinationCity = slice["destination"]?["city_name"] ?? "";
+
+        final departure = firstSegment["departing_at"] ?? "";
+        final arrival = lastSegment["arriving_at"] ?? "";
+        final durationIso = firstSegment["duration"] ?? "";
+
+        final airlineName = flight["owner"]?["name"] ??
+            getTranslated("airline", context) ??
+            "Hãng bay";
         final totalAmount = flight["total_amount"] ?? "0";
-        final originalAmount = (double.parse(totalAmount) * 1.3).toString();
-        final discountPercent = ((1 - (double.parse(totalAmount) / double.parse(originalAmount))) * 100).round();
+
+        final cabin = firstSegment["cabin_class"] ?? "Economy";
+        final bool isBest = index == 0;
+        final String badgeText = isBest ? "Recommended" : cabin.toString();
+        final Color badgeColor =
+        isBest ? const Color(0xFF22C55E) : const Color(0xFF6366F1);
+
+        final seatsLeft = flight["seats_left"]?.toString() ?? "10";
 
         return _FlightCard(
           origin: origin,
           destination: destination,
           departure: departure,
+          arrival: arrival,
           airlineName: airlineName,
           totalAmount: totalAmount,
-          originalAmount: originalAmount,
-          discountPercent: discountPercent,
+          originAirport: originAirport,
+          originCity: originCity,
+          destinationAirport: destinationAirport,
+          destinationCity: destinationCity,
+          durationIso: durationIso,
+          badgeText: badgeText,
+          badgeColor: badgeColor,
+          seatsLeft: seatsLeft,
           formatCurrency: formatCurrency,
           isDark: isDark,
+          outerBackgroundColor: sectionBg,
         );
-      }).toList(),
+      })
+          .toList(),
     );
   }
 }
 
-// Flight Card với Liquid Glass Effect
 class _FlightCard extends StatefulWidget {
   final String origin;
   final String destination;
   final String departure;
+  final String arrival;
   final String airlineName;
   final String totalAmount;
-  final String originalAmount;
-  final int discountPercent;
+
+  final String originAirport;
+  final String originCity;
+  final String destinationAirport;
+  final String destinationCity;
+
+  final String durationIso;
+  final String badgeText;
+  final Color badgeColor;
+  final String seatsLeft;
+
   final String Function(String?) formatCurrency;
   final bool isDark;
+  final Color outerBackgroundColor;
 
   const _FlightCard({
     required this.origin,
     required this.destination,
     required this.departure,
+    required this.arrival,
     required this.airlineName,
     required this.totalAmount,
-    required this.originalAmount,
-    required this.discountPercent,
+    required this.originAirport,
+    required this.originCity,
+    required this.destinationAirport,
+    required this.destinationCity,
+    required this.durationIso,
+    required this.badgeText,
+    required this.badgeColor,
+    required this.seatsLeft,
     required this.formatCurrency,
     required this.isDark,
+    required this.outerBackgroundColor,
   });
 
   @override
   State<_FlightCard> createState() => _FlightCardState();
 }
 
-class _FlightCardState extends State<_FlightCard> with SingleTickerProviderStateMixin {
+class _FlightCardState extends State<_FlightCard>
+    with SingleTickerProviderStateMixin {
   late AnimationController _scaleController;
   late Animation<double> _scaleAnimation;
 
@@ -314,9 +266,9 @@ class _FlightCardState extends State<_FlightCard> with SingleTickerProviderState
     super.initState();
     _scaleController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 150),
+      duration: const Duration(milliseconds: 140),
     );
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.98).animate(
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.97).animate(
       CurvedAnimation(parent: _scaleController, curve: Curves.easeInOut),
     );
   }
@@ -327,8 +279,55 @@ class _FlightCardState extends State<_FlightCard> with SingleTickerProviderState
     super.dispose();
   }
 
+  String _formatTime(String raw) {
+    if (raw.isEmpty) return '--:--';
+    try {
+      final dt = DateTime.parse(raw);
+      return DateFormat('hh:mma').format(dt).toUpperCase();
+    } catch (_) {
+      return raw;
+    }
+  }
+
+  String _formatDateLabel(String raw) {
+    if (raw.isEmpty) return '--';
+    try {
+      final dt = DateTime.parse(raw);
+      return DateFormat('EEE dd MMM').format(dt);
+    } catch (_) {
+      return raw.split('T').first;
+    }
+  }
+
+  String _formatDuration(String iso) {
+    if (iso.isEmpty) return '';
+    final reg = RegExp(r'PT(?:(\d+)H)?(?:(\d+)M)?');
+    final m = reg.firstMatch(iso);
+    if (m == null) return '';
+    final h = m.group(1);
+    final mnt = m.group(2);
+    final buf = <String>[];
+    if (h != null) buf.add('${h}h');
+    if (mnt != null) buf.add('${mnt}m');
+    return buf.join(' ');
+  }
+
   @override
   Widget build(BuildContext context) {
+    final depTime = _formatTime(widget.departure);
+    final arrTime = _formatTime(widget.arrival);
+    final depDate = _formatDateLabel(widget.departure);
+    final arrDate = _formatDateLabel(widget.arrival);
+    final durationText = _formatDuration(widget.durationIso);
+    final Color cardBg =
+    widget.isDark ? const Color(0xFF0B1723) : const Color(0xFFE4F4FA);
+    final Color primaryBlue =
+    widget.isDark ? const Color(0xFF93C5FD) : const Color(0xFF004976);
+    final Color textMain =
+    widget.isDark ? Colors.white : const Color(0xFF0F172A);
+    final Color textSub =
+    widget.isDark ? Colors.white70 : const Color(0xFF4B5563);
+
     return GestureDetector(
       onTapDown: (_) => _scaleController.forward(),
       onTapUp: (_) => _scaleController.reverse(),
@@ -338,258 +337,225 @@ class _FlightCardState extends State<_FlightCard> with SingleTickerProviderState
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
+            color: cardBg,
             borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(widget.isDark ? 0.3 : 0.1),
-                blurRadius: 20,
+                color: Colors.black.withOpacity(widget.isDark ? 0.4 : 0.15),
+                blurRadius: 18,
                 offset: const Offset(0, 6),
                 spreadRadius: -4,
               ),
-              BoxShadow(
-                color: Colors.white.withOpacity(widget.isDark ? 0.05 : 0.3),
-                blurRadius: 12,
-                offset: const Offset(-2, -2),
-              ),
             ],
+            border: Border.all(
+              color: widget.isDark
+                  ? Colors.white.withOpacity(0.08)
+                  : const Color(0xFFBFDBFE),
+              width: 1,
+            ),
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(18),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: widget.isDark
-                        ? [
-                      Colors.grey[850]!.withOpacity(0.9),
-                      Colors.grey[900]!.withOpacity(0.85),
-                    ]
-                        : [
-                      Colors.white.withOpacity(0.95),
-                      Colors.white.withOpacity(0.9),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(widget.isDark ? 0.15 : 0.5),
-                    width: 1.5,
-                  ),
-                ),
-                child: Column(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
                   children: [
-                    // Header Section
-                    Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Row(
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Route with glass effect
-                                Row(
-                                  children: [
-                                    _GlassCodeBadge(
-                                      code: widget.origin,
-                                      isDark: widget.isDark,
-                                    ),
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                                      child: Icon(
-                                        Icons.arrow_forward_rounded,
-                                        size: 20,
-                                        color: widget.isDark ? Colors.white70 : Colors.black54,
-                                      ),
-                                    ),
-                                    _GlassCodeBadge(
-                                      code: widget.destination,
-                                      isDark: widget.isDark,
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 10),
-                                // Departure date
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.calendar_today_rounded,
-                                      size: 14,
-                                      color: widget.isDark ? Colors.white60 : Colors.black54,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      "${getTranslated("departure", context) ?? "Khởi hành"}: ${widget.departure.split('T').first}",
-                                      style: TextStyle(
-                                        color: widget.isDark ? Colors.white70 : Colors.black54,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                // Airline
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.flight_rounded,
-                                      size: 14,
-                                      color: widget.isDark ? Colors.white60 : Colors.black54,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Expanded(
-                                      child: Text(
-                                        widget.airlineName,
-                                        style: TextStyle(
-                                          color: widget.isDark ? Colors.white : Colors.black87,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                          Text(
+                            widget.origin,
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.5,
+                              color: primaryBlue,
                             ),
                           ),
-                          // Discount Badge
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: [
-                                      Color(0xFFFF5252),
-                                      Color(0xFFE53935),
-                                    ],
-                                  ),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: Colors.white.withOpacity(0.3),
-                                    width: 1,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.red.withOpacity(0.3),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: Text(
-                                  "-${widget.discountPercent}%",
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ),
+                          const SizedBox(height: 2),
+                          Text(
+                            widget.originAirport,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: textSub,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
                     ),
-
-                    // Divider with gradient
-                    Container(
-                      height: 1,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: widget.isDark
-                              ? [
-                            Colors.white.withOpacity(0.05),
-                            Colors.white.withOpacity(0.15),
-                            Colors.white.withOpacity(0.05),
-                          ]
-                              : [
-                            Colors.black.withOpacity(0.05),
-                            Colors.black.withOpacity(0.1),
-                            Colors.black.withOpacity(0.05),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    // Price Section
-                    ClipRRect(
-                      borderRadius: const BorderRadius.only(
-                        bottomLeft: Radius.circular(18),
-                        bottomRight: Radius.circular(18),
-                      ),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: widget.isDark
-                                  ? [
-                                Colors.white.withOpacity(0.03),
-                                Colors.white.withOpacity(0.01),
-                              ]
-                                  : [
-                                Colors.white.withOpacity(0.5),
-                                Colors.white.withOpacity(0.3),
-                              ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            widget.destination,
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.5,
+                              color: primaryBlue,
                             ),
                           ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              // Original price
-                              Text(
-                                NumberFormat.currency(locale: "vi_VN", symbol: "₫").format(double.parse(widget.originalAmount)),
-                                style: TextStyle(
-                                  color: widget.isDark ? Colors.white38 : Colors.black45,
-                                  decoration: TextDecoration.lineThrough,
-                                  fontSize: 13,
-                                  decorationThickness: 2,
-                                ),
-                              ),
-                              // Current prices
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  // Main price
-                                  Text(
-                                    widget.formatCurrency(widget.totalAmount),
-                                    style: TextStyle(
-                                      color: widget.isDark ? Colors.white : Colors.black,
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  // After tax price
-                                  Text(
-                                    "${getTranslated("after_tax_price", context) ?? "Giá sau thuế"}: ${widget.formatCurrency((double.parse(widget.totalAmount) * 2.96).toString())}",
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: widget.isDark ? Colors.white60 : Colors.black54,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
+                          const SizedBox(height: 2),
+                          Text(
+                            widget.destinationAirport,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: textSub,
+                            ),
+                            maxLines: 1,
+                            textAlign: TextAlign.right,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-              ),
+
+                const SizedBox(height: 10),
+
+                Column(
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: primaryBlue,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Container(
+                            height: 1.5,
+                            decoration: BoxDecoration(
+                              color: primaryBlue.withOpacity(0.4),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Transform.rotate(
+                          angle: -0.3,
+                          child: Icon(
+                            Icons.airplanemode_active,
+                            size: 20,
+                            color: primaryBlue,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Container(
+                            height: 1.5,
+                            decoration: BoxDecoration(
+                              color: primaryBlue.withOpacity(0.4),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: primaryBlue,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      durationText.isEmpty ? '—' : durationText,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: textSub,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Non-stop',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: textSub.withOpacity(0.9),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 10),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: _DateTimeInfo(
+                        alignRight: false,
+                        label: 'Depart',
+                        date: depDate,
+                        time: depTime,
+                        city: widget.originCity,
+                        textMain: textMain,
+                        textSub: textSub,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _DateTimeInfo(
+                        alignRight: true,
+                        label: 'Arrive',
+                        date: arrDate,
+                        time: arrTime,
+                        city: widget.destinationCity,
+                        textMain: textMain,
+                        textSub: textSub,
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 8),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        widget.airlineName,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: primaryBlue,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      widget.formatCurrency(widget.totalAmount),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: primaryBlue,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Per Adult',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: textSub,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ),
@@ -598,60 +564,77 @@ class _FlightCardState extends State<_FlightCard> with SingleTickerProviderState
   }
 }
 
-// Glass Code Badge Widget
-class _GlassCodeBadge extends StatelessWidget {
-  final String code;
-  final bool isDark;
+class _DateTimeInfo extends StatelessWidget {
+  final bool alignRight;
+  final String label;
+  final String date;
+  final String time;
+  final String city;
+  final Color textMain;
+  final Color textSub;
 
-  const _GlassCodeBadge({
-    required this.code,
-    required this.isDark,
+  const _DateTimeInfo({
+    required this.alignRight,
+    required this.label,
+    required this.date,
+    required this.time,
+    required this.city,
+    required this.textMain,
+    required this.textSub,
   });
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: isDark
-                  ? [
-                Colors.white.withOpacity(0.1),
-                Colors.white.withOpacity(0.05),
-              ]
-                  : [
-                Theme.of(context).primaryColor.withOpacity(0.15),
-                Theme.of(context).primaryColor.withOpacity(0.08),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: isDark
-                  ? Colors.white.withOpacity(0.2)
-                  : Theme.of(context).primaryColor.withOpacity(0.3),
-              width: 1,
-            ),
+    final TextAlign ta = alignRight ? TextAlign.right : TextAlign.left;
+    final CrossAxisAlignment ca =
+    alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start;
+
+    return Column(
+      crossAxisAlignment: ca,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: textSub,
           ),
-          child: Text(
-            code,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.white : Theme.of(context).primaryColor,
-              letterSpacing: 1,
-            ),
-          ),
+          textAlign: ta,
         ),
-      ),
+        const SizedBox(height: 2),
+        Text(
+          date,
+          style: TextStyle(
+            fontSize: 11,
+            color: textSub,
+          ),
+          textAlign: ta,
+        ),
+        const SizedBox(height: 2),
+        Text(
+          time,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: textMain,
+          ),
+          textAlign: ta,
+        ),
+        const SizedBox(height: 2),
+        Text(
+          city,
+          style: TextStyle(
+            fontSize: 11,
+            color: textSub,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: ta,
+        ),
+      ],
     );
   }
 }
 
-// === SKELETON LOADING với Glass Effect ===
 class _SkeletonFlightList extends StatelessWidget {
   final bool isDark;
 
@@ -660,7 +643,8 @@ class _SkeletonFlightList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      children: List.generate(6, (_) => _SkeletonFlightCard(isDark: isDark)).toList(),
+      children:
+      List.generate(3, (_) => _SkeletonFlightCard(isDark: isDark)).toList(),
     );
   }
 }
@@ -674,133 +658,25 @@ class _SkeletonFlightCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      height: 150,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.3 : 0.1),
-            blurRadius: 20,
-            offset: const Offset(0, 6),
-            spreadRadius: -4,
-          ),
-        ],
+        color: isDark ? const Color(0xFF101528) : Colors.grey[300],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: isDark
-                    ? [
-                  Colors.grey[850]!.withOpacity(0.8),
-                  Colors.grey[900]!.withOpacity(0.7),
-                ]
-                    : [
-                  Colors.white.withOpacity(0.9),
-                  Colors.white.withOpacity(0.8),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: Colors.white.withOpacity(isDark ? 0.15 : 0.5),
-                width: 1.5,
-              ),
-            ),
-            child: Column(
-              children: [
-                // Header
-                Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _ShimmerBox(height: 28, width: 140, borderRadius: 10, isDark: isDark),
-                            const SizedBox(height: 10),
-                            _ShimmerBox(height: 14, width: 180, borderRadius: 8, isDark: isDark),
-                            const SizedBox(height: 8),
-                            _ShimmerBox(height: 14, width: 120, borderRadius: 8, isDark: isDark),
-                          ],
-                        ),
-                      ),
-                      _ShimmerBox(height: 36, width: 60, borderRadius: 12, isDark: isDark),
-                    ],
-                  ),
-                ),
-                Container(
-                  height: 1,
-                  color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey[300],
-                ),
-                // Footer
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _ShimmerBox(height: 14, width: 100, borderRadius: 8, isDark: isDark),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          _ShimmerBox(height: 18, width: 120, borderRadius: 8, isDark: isDark),
-                          const SizedBox(height: 6),
-                          _ShimmerBox(height: 12, width: 140, borderRadius: 8, isDark: isDark),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+      child: const _ShimmerSkeleton(),
     );
   }
 }
 
-// === SHIMMER BOX ===
-class _ShimmerBox extends StatelessWidget {
-  final double height;
-  final double width;
-  final double borderRadius;
-  final bool isDark;
-
-  const _ShimmerBox({
-    required this.height,
-    required this.width,
-    required this.borderRadius,
-    required this.isDark,
-  });
+class _ShimmerSkeleton extends StatefulWidget {
+  const _ShimmerSkeleton();
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: height,
-      width: width,
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.08) : Colors.grey[300],
-        borderRadius: BorderRadius.circular(borderRadius),
-      ),
-      child: _Shimmer(isDark: isDark),
-    );
-  }
+  State<_ShimmerSkeleton> createState() => _ShimmerSkeletonState();
 }
 
-// === SHIMMER EFFECT ===
-class _Shimmer extends StatefulWidget {
-  final bool isDark;
-
-  const _Shimmer({required this.isDark});
-
-  @override
-  State<_Shimmer> createState() => _ShimmerState();
-}
-
-class _ShimmerState extends State<_Shimmer> with SingleTickerProviderStateMixin {
+class _ShimmerSkeletonState extends State<_ShimmerSkeleton>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
 
   @override
@@ -825,18 +701,13 @@ class _ShimmerState extends State<_Shimmer> with SingleTickerProviderStateMixin 
       builder: (_, __) {
         return Container(
           decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
             gradient: LinearGradient(
               begin: Alignment(-1.0 + _controller.value * 3, 0),
               end: Alignment(1.0 + _controller.value * 3, 0),
-              colors: widget.isDark
-                  ? [
+              colors: [
                 Colors.transparent,
-                Colors.white.withOpacity(0.1),
-                Colors.transparent,
-              ]
-                  : [
-                Colors.transparent,
-                Colors.white.withOpacity(0.4),
+                Colors.white.withOpacity(0.5),
                 Colors.transparent,
               ],
             ),
