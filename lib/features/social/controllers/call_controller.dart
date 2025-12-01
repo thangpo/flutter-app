@@ -28,6 +28,7 @@ class CallController extends ChangeNotifier {
   Timer? _pollTimer;
   bool _polling = false;
   bool _disposed = false;
+  bool _pollPaused = false;
 
   String? lastError;
 
@@ -214,6 +215,7 @@ class CallController extends ChangeNotifier {
     if (_polling) return;
 
     _polling = true;
+    _pollPaused = false;
     _pollTimer?.cancel();
 
     _pollOnce(); // chạy ngay 1 nhịp
@@ -230,8 +232,22 @@ class CallController extends ChangeNotifier {
     _pollTimer = null;
   }
 
+  /// Dừng poll khi ICE đã ổn định hoặc đã có realtime push.
+  void pausePolling() {
+    _pollPaused = true;
+    _stopPolling();
+  }
+
+  /// Cho phép bật lại (khi reconnect hoặc chưa đủ dữ liệu)
+  void resumePolling() {
+    if (_disposed || _polling) return;
+    _pollPaused = false;
+    _startPolling();
+  }
+
   Future<void> _pollOnce() async {
     if (_disposed) return;
+    if (_pollPaused) return;
 
     final id = _callId;
     if (id == null) return;
@@ -289,7 +305,38 @@ class CallController extends ChangeNotifier {
     _sdpAnswer = null;
     _iceCandidates.clear();
     _seen.clear();
+    _pollPaused = false;
     _callStatus = ended ? "ended" : "ringing";
+  }
+
+  /// Nhận tín hiệu realtime (FCM/WebSocket) để giảm phụ thuộc polling.
+  void ingestPushSignal({
+    required int callId,
+    String? sdpOffer,
+    String? sdpAnswer,
+    IceCandidateLite? candidate,
+    String? status,
+  }) {
+    if (_disposed) return;
+    if (_callId == null || _callId != callId) return;
+
+    if (sdpOffer != null && sdpOffer.isNotEmpty) {
+      _sdpOffer = sdpOffer;
+    }
+    if (sdpAnswer != null && sdpAnswer.isNotEmpty) {
+      _sdpAnswer = sdpAnswer;
+    }
+    if (candidate != null) {
+      final key =
+          '${candidate.candidate}|${candidate.sdpMid}|${candidate.sdpMLineIndex}';
+      if (_seen.add(key)) {
+        _iceCandidates.add(candidate);
+      }
+    }
+    if (status != null && status.isNotEmpty) {
+      _callStatus = status;
+    }
+    notifyListeners();
   }
 
   @override

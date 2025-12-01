@@ -83,6 +83,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/utils/firebase_token
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/push_navigation_helper.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/push/call_invite_stream_listener.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/push/push_call_handler.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/ice_candidate_lite.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/incoming_call_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/call_screen.dart';
@@ -385,6 +386,37 @@ Future<void> _scheduleGroupCallInviteOpen(Map<String, dynamic> data) async {
   });
 }
 
+Future<void> _handleCallSignal(Map<String, dynamic> data) async {
+  final ctx = navigatorKey.currentContext;
+  if (ctx == null) return;
+
+  final callId = int.tryParse('${data['call_id']}') ?? 0;
+  if (callId <= 0) return;
+
+  final offer = data['sdp_offer'] ?? data['offer'];
+  final answer = data['sdp_answer'] ?? data['answer'];
+  final status = (data['call_status'] ?? data['status'])?.toString();
+  IceCandidateLite? cand;
+  if (data['candidate'] != null && '${data['candidate']}'.isNotEmpty) {
+    cand = IceCandidateLite(
+      candidate: '${data['candidate']}',
+      sdpMid: data['sdp_mid']?.toString(),
+      sdpMLineIndex:
+          int.tryParse('${data['sdp_mline_index'] ?? data['mline'] ?? ''}'),
+    );
+  }
+
+  try {
+    ctx.read<CallController>().ingestPushSignal(
+          callId: callId,
+          sdpOffer: offer?.toString(),
+          sdpAnswer: answer?.toString(),
+          candidate: cand,
+          status: status,
+        );
+  } catch (_) {}
+}
+
 Future<void> main() async {
   HttpOverrides.global = MyHttpOverrides();
   WidgetsFlutterBinding.ensureInitialized();
@@ -567,6 +599,11 @@ Future<void> main() async {
     FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
       final data = message.data;
       debugPrint('🔥 onMessage(foreground) data= $data');
+
+      if ((data['type'] ?? '') == 'call_signal') {
+        await _handleCallSignal(data);
+        return;
+      }
 
       // ---- BỎ QUA TẤT CẢ THÔNG ĐIỆP LIÊN QUAN ĐẾN CUỘC GỌI ----
       final type = (data['type'] ?? '').toString();

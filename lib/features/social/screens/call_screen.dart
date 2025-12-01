@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../domain/models/ice_candidate_lite.dart';
 import '../controllers/call_controller.dart';
+import '../utils/ice_server_config.dart';
 
 class CallScreen extends StatefulWidget {
   final bool isCaller; // true: caller, false: callee
@@ -52,7 +53,9 @@ class _CallScreenState extends State<CallScreen> {
   bool _detached = false;
 
   final Set<String> _addedCandidates = {};
+  final Set<String> _sentCandidates = {};
   final List<IceCandidateLite> _pendingCandidates = [];
+  bool _stableIceLogged = false;
 
   // UI controls
   bool _micOn = true;
@@ -111,6 +114,7 @@ class _CallScreenState extends State<CallScreen> {
       _micOn = true;
       _camOn = isVideo;
       _speakerOn = true;
+      _stableIceLogged = false;
       _log(
           'startCallFlow | isCaller=${widget.isCaller} media=${widget.mediaType}');
 
@@ -123,21 +127,7 @@ class _CallScreenState extends State<CallScreen> {
 
       // tạo PeerConnection
       final config = {
-        'iceServers': [
-          {
-            'urls': ['stun:stun.l.google.com:19302'],
-          },
-          {
-            'urls': [
-              'turn:social.vnshop247.com:3478?transport=udp',
-              'turn:social.vnshop247.com:3478?transport=tcp',
-              'turn:147.93.98.63:3478?transport=udp',
-              'turn:147.93.98.63:3478?transport=tcp',
-            ],
-            'username': 'webrtc',
-            'credential': 'supersecret',
-          },
-        ],
+        'iceServers': kDefaultIceServers,
         'sdpSemantics': 'unified-plan',
       };
 
@@ -175,13 +165,30 @@ class _CallScreenState extends State<CallScreen> {
       // ICE local
       _pc!.onIceCandidate = (c) {
         if (c.candidate == null) return;
+        final key =
+            '${c.candidate}|${c.sdpMid ?? ''}|${c.sdpMLineIndex ?? ''}';
+        if (!_sentCandidates.add(key)) {
+          return;
+        }
+        final cType = _iceType(c.candidate);
         _cc.sendCandidate(
           candidate: c.candidate!,
           sdpMid: c.sdpMid,
           sdpMLineIndex: c.sdpMLineIndex,
         );
         _log(
-            'onIceCandidate mid=${c.sdpMid} mline=${c.sdpMLineIndex} len=${c.candidate?.length}');
+            'onIceCandidate mid=${c.sdpMid} mline=${c.sdpMLineIndex} len=${c.candidate?.length} type=$cType');
+      };
+
+      _pc!.onIceConnectionState = (state) {
+        _log('iceConnectionState -> $state');
+        if (state ==
+                RTCIceConnectionState.RTCIceConnectionStateConnected ||
+            state == RTCIceConnectionState.RTCIceConnectionStateCompleted) {
+          _cc.pausePolling();
+          _logSelectedCandidatePair();
+          _logMediaStats();
+        }
       };
 
       // connection state
@@ -447,7 +454,8 @@ class _CallScreenState extends State<CallScreen> {
       await _pc!.addCandidate(
         RTCIceCandidate(ic.candidate, ic.sdpMid, ic.sdpMLineIndex),
       );
-      _log('addRemoteCandidate mid=${ic.sdpMid} mline=${ic.sdpMLineIndex}');
+      _log(
+          'addRemoteCandidate mid=${ic.sdpMid} mline=${ic.sdpMLineIndex} type=${_iceType(ic.candidate)}');
     } catch (e, st) {
       _log('addRemoteCandidate error: $e', st: st);
     }
@@ -537,6 +545,100 @@ class _CallScreenState extends State<CallScreen> {
         }
       } catch (_) {}
     });
+  }
+
+  String _iceType(String? cand) {
+    if (cand == null) return '?';
+    final m = RegExp('typ\\\\s+(\\\\w+)').firstMatch(cand);
+    return m != null ? m.group(1)! : '?';
+  }
+
+  Future<void> _logSelectedCandidatePair() async {
+    if (_pc == null || _stableIceLogged) return;
+    try {
+      final stats = await _pc!.getStats();
+      Map<String, dynamic>? pair;
+      Map<String, dynamic>? local;
+      Map<String, dynamic>? remote;
+
+      for (final s in _iterateStats(stats)) {
+        final type = s['type'] ?? (s['values']?['type']);
+        final vals = (s['values'] is Map) ? Map<String, dynamic>.from(s['values']) : (s as Map<String, dynamic>);
+        if (type == 'candidate-pair' && vals['selected'] == true) {
+          pair = vals;
+        } else if (type == 'local-candidate') {
+          local ??= <String, dynamic>{};
+          local![vals['id'] ?? vals['candidateId'] ?? ''] = vals;
+        } else if (type == 'remote-candidate') {
+          remote ??= <String, dynamic>{};
+          remote![vals['id'] ?? vals['candidateId'] ?? ''] = vals;
+        }
+      }
+
+      if (pair != null) {
+        final lcId = pair['localCandidateId'] ?? pair['localCandidateIdRef'];
+        final rcId = pair['remoteCandidateId'] ?? pair['remoteCandidateIdRef'];
+        final lc = (local is Map<String, dynamic>)
+            ? (local[lcId] is Map ? Map<String, dynamic>.from(local[lcId]) : null)
+            : null;
+        final rc = (remote is Map<String, dynamic>)
+            ? (remote[rcId] is Map ? Map<String, dynamic>.from(remote[rcId]) : null)
+            : null;
+        _log(
+            'selected ICE pair: ${lc?['candidateType'] ?? '?'}(${lc?['protocol']}/${lc?['address']}:${lc?['port']}) <-> ${rc?['candidateType'] ?? '?'}(${rc?['protocol']}/${rc?['address']}:${rc?['port']})');
+        _stableIceLogged = true;
+      }
+    } catch (e, st) {
+      _log('logSelectedCandidatePair error: $e', st: st);
+    }
+  }
+
+  Future<void> _logMediaStats() async {
+    if (_pc == null) return;
+    try {
+      final stats = await _pc!.getStats();
+      Map<String, dynamic>? inboundVideo;
+      Map<String, dynamic>? outboundVideo;
+
+      for (final s in _iterateStats(stats)) {
+        final type = s['type'] ?? (s['values']?['type']);
+        final vals = (s['values'] is Map) ? Map<String, dynamic>.from(s['values']) : (s as Map<String, dynamic>);
+        final mediaType = vals['mediaType'] ?? vals['kind'];
+        if (type == 'inbound-rtp' && mediaType == 'video' && inboundVideo == null) {
+          inboundVideo = vals;
+        }
+        if (type == 'outbound-rtp' && mediaType == 'video' && outboundVideo == null) {
+          outboundVideo = vals;
+        }
+      }
+
+      if (inboundVideo != null || outboundVideo != null) {
+        final recvFps = inboundVideo?['framesPerSecond'] ?? inboundVideo?['googFrameRateReceived'];
+        final recvBytes = inboundVideo?['bytesReceived'];
+        final sendFps = outboundVideo?['framesPerSecond'] ?? outboundVideo?['googFrameRateSent'];
+        final sendBytes = outboundVideo?['bytesSent'];
+        _log(
+            'media stats video recv_fps=$recvFps recv_bytes=$recvBytes send_fps=$sendFps send_bytes=$sendBytes');
+      }
+    } catch (e, st) {
+      _log('logMediaStats error: $e', st: st);
+    }
+  }
+
+  Iterable<Map<String, dynamic>> _iterateStats(dynamic stats) sync* {
+    if (stats is Map) {
+      for (final v in stats.values) {
+        if (v is Map) {
+          yield Map<String, dynamic>.from(v);
+        }
+      }
+    } else if (stats is Iterable) {
+      for (final v in stats) {
+        if (v is Map) {
+          yield Map<String, dynamic>.from(v);
+        }
+      }
+    }
   }
 
   Future<void> _ensureLocalMedia({required bool wantVideo}) async {
@@ -672,6 +774,9 @@ class _CallScreenState extends State<CallScreen> {
   Future<void> _disposeRTC() async {
     _localTracksAdded = false;
     _remoteStream = null;
+    _addedCandidates.clear();
+    _sentCandidates.clear();
+    _pendingCandidates.clear();
 
     try {
       await _pc?.close();
