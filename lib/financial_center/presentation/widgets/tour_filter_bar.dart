@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import '../services/location_service.dart';
 
 class TourFilterBar extends StatefulWidget {
@@ -21,7 +22,7 @@ class _TourFilterBarState extends State<TourFilterBar> {
   final TextEditingController titleController = TextEditingController();
   DateTimeRange? selectedRange;
 
-  List<Map<String, dynamic>> locations = [];
+  List<LocationModel> _locations = [];
   int? selectedLocationId;
   bool isLoadingLocations = false;
 
@@ -38,12 +39,11 @@ class _TourFilterBarState extends State<TourFilterBar> {
   }
 
   Future<void> fetchLocations() async {
-    List<LocationModel> locations = [];
     setState(() => isLoadingLocations = true);
     try {
       final data = await LocationService.fetchLocations();
       setState(() {
-        locations = data;
+        _locations = data;
       });
     } catch (e) {
       debugPrint('Lỗi khi tải danh sách địa chỉ: $e');
@@ -85,9 +85,18 @@ class _TourFilterBarState extends State<TourFilterBar> {
 
     final locationId = selectedLocationId;
 
+    String? startDate;
+    String? endDate;
+    if (selectedRange != null) {
+      startDate = DateFormat('yyyy-MM-dd').format(selectedRange!.start);
+      endDate = DateFormat('yyyy-MM-dd').format(selectedRange!.end);
+    }
+
     widget.onFilter(
       title: title,
       locationId: locationId,
+      startDate: startDate,
+      endDate: endDate,
     );
   }
 
@@ -97,56 +106,83 @@ class _TourFilterBarState extends State<TourFilterBar> {
       selectedRange = null;
       selectedLocationId = null;
     });
-    widget.onFilter(title: null, locationId: null);
+    widget.onFilter(
+      title: null,
+      locationId: null,
+      startDate: null,
+      endDate: null,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final Color cardBg = isDark ? const Color(0xFF0B1120) : Colors.white;
+    final Color borderColor =
+    isDark ? Colors.white12 : lightOceanBlue.withOpacity(0.25);
+    final Color labelColor =
+    isDark ? Colors.white70 : deepOceanBlue.withOpacity(0.8);
+
+    String tr(String key, String fallback) =>
+        getTranslated(key, context) ?? fallback;
+
     return Container(
-      margin: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [lightBg, Colors.white],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
+        color: cardBg,
+        borderRadius: BorderRadius.circular(22),
         boxShadow: [
-          BoxShadow(
-            color: oceanBlue.withOpacity(0.15),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
+          if (!isDark)
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text(
+              tr('tour_filter_title', 'Tìm tour phù hợp'),
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white : deepOceanBlue,
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Tên tour
             TextField(
               controller: titleController,
               decoration: InputDecoration(
-                labelText: 'Tên tour',
-                labelStyle: TextStyle(color: oceanBlue.withOpacity(0.8)),
+                labelText: tr('tour_name', 'Tên tour'),
+                labelStyle: TextStyle(color: labelColor),
                 prefixIcon: const Icon(Icons.tour, color: oceanBlue),
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: isDark ? const Color(0xFF020617) : Colors.white,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(15),
-                  borderSide: BorderSide(color: lightOceanBlue.withOpacity(0.3)),
+                  borderSide: BorderSide(color: borderColor),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(15),
-                  borderSide: BorderSide(color: lightOceanBlue.withOpacity(0.3)),
+                  borderSide: BorderSide(color: borderColor),
                 ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(15),
-                  borderSide: const BorderSide(color: oceanBlue, width: 2),
+                focusedBorder: const OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(15)),
+                  borderSide: BorderSide(color: oceanBlue, width: 2),
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
+
+            // Địa điểm
             isLoadingLocations
                 ? Container(
               height: 60,
@@ -157,29 +193,36 @@ class _TourFilterBarState extends State<TourFilterBar> {
             )
                 : Container(
               decoration: BoxDecoration(
-                color: Colors.white,
+                color:
+                isDark ? const Color(0xFF020617) : Colors.white,
                 borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: lightOceanBlue.withOpacity(0.3)),
+                border: Border.all(color: borderColor),
               ),
               child: DropdownButtonFormField<int?>(
-                initialValue: selectedLocationId,
+                value: selectedLocationId,
                 decoration: InputDecoration(
-                  labelText: 'Chọn địa chỉ',
-                  labelStyle: TextStyle(color: oceanBlue.withOpacity(0.8)),
-                  prefixIcon: const Icon(Icons.location_on, color: oceanTeal),
+                  labelText: tr('location', 'Địa điểm'),
+                  labelStyle: TextStyle(color: labelColor),
+                  prefixIcon: const Icon(Icons.location_on,
+                      color: oceanTeal),
                   border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                ),
-                dropdownColor: Colors.white,
-                items: [
-                  const DropdownMenuItem<int?>(
-                    value: null,
-                    child: Text('Tất cả địa chỉ'),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 16,
                   ),
-                  ...locations.map((loc) {
+                ),
+                dropdownColor:
+                isDark ? const Color(0xFF020617) : Colors.white,
+                items: [
+                  DropdownMenuItem<int?>(
+                    value: null,
+                    child: Text(
+                        tr('all_locations', 'Tất cả địa điểm')),
+                  ),
+                  ..._locations.map((loc) {
                     return DropdownMenuItem<int?>(
-                      value: loc['id'] as int?,
-                      child: Text(loc['name'] ?? ''),
+                      value: loc.id,
+                      child: Text(loc.name ?? ''),
                     );
                   }),
                 ],
@@ -188,12 +231,15 @@ class _TourFilterBarState extends State<TourFilterBar> {
                 },
               ),
             ),
-            const SizedBox(height: 16),
+
+            const SizedBox(height: 14),
+
+            // Khoảng thời gian
             Container(
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? const Color(0xFF020617) : Colors.white,
                 borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: lightOceanBlue.withOpacity(0.3)),
+                border: Border.all(color: borderColor),
               ),
               child: InkWell(
                 onTap: _selectDateRange,
@@ -218,13 +264,16 @@ class _TourFilterBarState extends State<TourFilterBar> {
                       Expanded(
                         child: Text(
                           selectedRange == null
-                              ? 'Chọn khoảng thời gian'
-                              : '${DateFormat('dd/MM/yyyy').format(selectedRange!.start)} - ${DateFormat('dd/MM/yyyy').format(selectedRange!.end)}',
+                              ? tr('select_date_range', 'Chọn khoảng thời gian')
+                              : '${DateFormat('dd/MM/yyyy').format(selectedRange!.start)} - '
+                              '${DateFormat('dd/MM/yyyy').format(selectedRange!.end)}',
                           style: TextStyle(
                             fontSize: 15,
                             color: selectedRange == null
-                                ? oceanBlue.withOpacity(0.6)
-                                : deepOceanBlue,
+                                ? labelColor
+                                : (isDark
+                                ? Colors.white
+                                : deepOceanBlue),
                             fontWeight: selectedRange == null
                                 ? FontWeight.normal
                                 : FontWeight.w600,
@@ -234,16 +283,19 @@ class _TourFilterBarState extends State<TourFilterBar> {
                       Icon(
                         Icons.arrow_forward_ios_rounded,
                         size: 16,
-                        color: oceanBlue.withOpacity(0.5),
+                        color: labelColor,
                       ),
                     ],
                   ),
                 ),
               ),
             ),
-            const SizedBox(height: 20),
+
+            const SizedBox(height: 18),
+
             Row(
               children: [
+                // Nút tìm tour
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
@@ -255,7 +307,7 @@ class _TourFilterBarState extends State<TourFilterBar> {
                       borderRadius: BorderRadius.circular(15),
                       boxShadow: [
                         BoxShadow(
-                          color: oceanBlue.withOpacity(0.3),
+                          color: oceanBlue.withOpacity(0.35),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
@@ -264,10 +316,10 @@ class _TourFilterBarState extends State<TourFilterBar> {
                     child: ElevatedButton.icon(
                       onPressed: _applyFilter,
                       icon: const Icon(Icons.search_rounded, size: 22),
-                      label: const Text(
-                        'Tìm kiếm',
-                        style: TextStyle(
-                          fontSize: 16,
+                      label: Text(
+                        tr('search_tour', 'Tìm tour'),
+                        style: const TextStyle(
+                          fontSize: 15,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -275,7 +327,7 @@ class _TourFilterBarState extends State<TourFilterBar> {
                         backgroundColor: Colors.transparent,
                         foregroundColor: Colors.white,
                         shadowColor: Colors.transparent,
-                        minimumSize: const Size(double.infinity, 54),
+                        minimumSize: const Size(double.infinity, 50),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(15),
                         ),
@@ -284,18 +336,23 @@ class _TourFilterBarState extends State<TourFilterBar> {
                   ),
                 ),
                 const SizedBox(width: 12),
+                // Nút reset
                 Container(
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color:
+                    isDark ? const Color(0xFF020617) : Colors.white,
                     borderRadius: BorderRadius.circular(15),
-                    border: Border.all(color: lightOceanBlue.withOpacity(0.5), width: 2),
+                    border: Border.all(
+                      color: lightOceanBlue.withOpacity(0.6),
+                      width: 2,
+                    ),
                   ),
                   child: IconButton(
                     onPressed: _resetFilter,
                     icon: const Icon(Icons.refresh_rounded),
-                    tooltip: 'Xóa lọc',
+                    tooltip: tr('clear_filter', 'Xóa lọc'),
                     color: oceanBlue,
-                    iconSize: 26,
+                    iconSize: 24,
                     padding: const EdgeInsets.all(14),
                   ),
                 ),
