@@ -44,7 +44,7 @@ import flutter_callkit_incoming
     registry.delegate = self
     registry.desiredPushTypes = [.voIP]
     self.pushRegistry = registry
-    print("[PUSHKIT] init done (desiredPushTypes=.voIP)")
+    print("[PUSHKIT] init done (desiredPushTypes=.voIP, iOS \(UIDevice.current.systemVersion))")
   }
 
   // MARK: - PKPushRegistryDelegate
@@ -54,6 +54,10 @@ import flutter_callkit_incoming
                            didUpdate pushCredentials: PKPushCredentials,
                            for type: PKPushType) {
     let deviceToken = pushCredentials.token.map { String(format: "%02x", $0) }.joined()
+    guard deviceToken.range(of: "^[0-9a-f]+$", options: .regularExpression) != nil else {
+      print("[PUSHKIT] invalid hex token: \(deviceToken)")
+      return
+    }
 
     // (1) Đưa token cho plugin (flutter_callkit_incoming)
     SwiftFlutterCallkitIncomingPlugin.sharedInstance?.setDevicePushTokenVoIP(deviceToken)
@@ -68,7 +72,7 @@ import flutter_callkit_incoming
     // (3) Upload token lên server nếu có access token
     guard
       let accessToken = storedAccessToken, !accessToken.isEmpty,
-      let url = URL(string: "https://social.vnshop247.com/api/v2/endpoints/pushkit.php")
+      let url = URL(string: "https://social.vnshop247.com/api/pushkit")
     else {
       // Chưa đăng nhập hoặc chưa có token → chỉ log
       return
@@ -76,16 +80,22 @@ import flutter_callkit_incoming
 
     // Build body x-www-form-urlencoded với percent-encode an toàn
     var comps = URLComponents()
-    comps.queryItems = [
+    var items: [URLQueryItem] = [
       URLQueryItem(name: "access_token", value: accessToken),
       URLQueryItem(name: "pushkit_token", value: deviceToken),
     ]
+#if DEBUG
+    items.append(URLQueryItem(name: "apns_env", value: "sandbox"))
+#else
+    items.append(URLQueryItem(name: "apns_env", value: "prod"))
+#endif
+    comps.queryItems = items
     let bodyData = comps.percentEncodedQuery?.data(using: .utf8)
 
     var req = URLRequest(url: url)
     req.httpMethod = "POST"
     req.httpBody = bodyData
-    req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+    req.setValue("application/x-www-form-urlencoded; charset=utf-8", forHTTPHeaderField: "Content-Type")
 
     URLSession.shared.dataTask(with: req) { data, resp, err in
       if let err = err {
@@ -94,6 +104,9 @@ import flutter_callkit_incoming
       }
       if let http = resp as? HTTPURLResponse {
         print("[PUSHKIT] upload status=\(http.statusCode)")
+        if http.statusCode == 403 {
+          print("[PUSHKIT] access_token invalid/expired -> skip, wait app refresh token")
+        }
       }
       if let data = data, let s = String(data: data, encoding: .utf8) {
         print("[PUSHKIT] upload response=\(s)")
