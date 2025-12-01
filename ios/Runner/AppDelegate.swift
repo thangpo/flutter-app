@@ -46,7 +46,6 @@ extension AppDelegate {
   public func pushRegistry(_ registry: PKPushRegistry, didUpdate pushCredentials: PKPushCredentials, for type: PKPushType) {
     let tokenData = pushCredentials.token
     let token = tokenData.map { String(format: "%02x", $0) }.joined()
-    // Upload PushKit token
     if let accessToken = UserDefaults.standard.string(forKey: "socialAccessToken"),
        !accessToken.isEmpty,
        let url = URL(string: "https://social.vnshop247.com/api/v2/endpoints/pushkit.php") {
@@ -57,20 +56,20 @@ extension AppDelegate {
       req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
       URLSession.shared.dataTask(with: req) { _, resp, err in
         if let err = err {
-          print("📞 pushkit upload error: \(err)")
+          print("pushkit upload error: \(err)")
           return
         }
         if let http = resp as? HTTPURLResponse {
-          print("📞 pushkit upload status=\(http.statusCode)")
+          print("pushkit upload status=\(http.statusCode)")
         }
       }.resume()
     } else {
-      print("📞 PushKit token: \(token)")
+      print("PushKit token: \(token)")
     }
   }
 
   public func pushRegistry(_ registry: PKPushRegistry, didInvalidatePushTokenFor type: PKPushType) {
-    print("📞 PushKit token invalidated")
+    print("PushKit token invalidated")
   }
 
   public func pushRegistry(_ registry: PKPushRegistry, didReceiveIncomingPushWith payload: PKPushPayload, for type: PKPushType, completion: @escaping () -> Void) {
@@ -87,7 +86,7 @@ extension AppDelegate {
       "type": (data["media"] as? String) == "video" ? 1 : 0,
       "extra": data
     ]
-    FlutterCallkitIncoming.showCallkitIncoming(params)
+    FlutterCallkitIncomingPlugin.sharedInstance?.showCallkitIncoming(params)
     completion()
   }
 }
