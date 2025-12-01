@@ -168,8 +168,7 @@ class _CallScreenState extends State<CallScreen> {
       // ICE local
       _pc!.onIceCandidate = (c) {
         if (c.candidate == null) return;
-        final key =
-            '${c.candidate}|${c.sdpMid ?? ''}|${c.sdpMLineIndex ?? ''}';
+        final key = '${c.candidate}|${c.sdpMid ?? ''}|${c.sdpMLineIndex ?? ''}';
         if (!_sentCandidates.add(key)) {
           return;
         }
@@ -185,14 +184,12 @@ class _CallScreenState extends State<CallScreen> {
 
       _pc!.onIceConnectionState = (state) {
         _log('iceConnectionState -> $state');
-        if (state ==
-                RTCIceConnectionState.RTCIceConnectionStateConnected ||
+        if (state == RTCIceConnectionState.RTCIceConnectionStateConnected ||
             state == RTCIceConnectionState.RTCIceConnectionStateCompleted) {
           _cc.pausePolling();
           _logSelectedCandidatePair();
           _logMediaStats();
-        } else if (state ==
-            RTCIceConnectionState.RTCIceConnectionStateFailed) {
+        } else if (state == RTCIceConnectionState.RTCIceConnectionStateFailed) {
           _hangup();
         } else if (state ==
             RTCIceConnectionState.RTCIceConnectionStateDisconnected) {
@@ -203,8 +200,7 @@ class _CallScreenState extends State<CallScreen> {
               _hangup();
             }
           });
-        } else if (state ==
-            RTCIceConnectionState.RTCIceConnectionStateClosed) {
+        } else if (state == RTCIceConnectionState.RTCIceConnectionStateClosed) {
           _hangup();
         }
       };
@@ -515,8 +511,9 @@ class _CallScreenState extends State<CallScreen> {
     // Fire-and-forget end to tránh chờ network làm đơ UI
     unawaited(Future(() async {
       try {
-        await _cc.action('end').timeout(const Duration(seconds: 2),
-            onTimeout: () {});
+        await _cc
+            .action('end')
+            .timeout(const Duration(seconds: 2), onTimeout: () {});
       } catch (_) {}
     }));
     await _detachController();
@@ -610,8 +607,8 @@ class _CallScreenState extends State<CallScreen> {
             (s['values'] is Map) ? Map<String, dynamic>.from(s['values']) : s;
         final mediaType = vals['mediaType'] ?? vals['kind'];
         if (type == 'inbound-rtp' && mediaType == 'video') {
-          final frames = (vals['framesDecoded'] ?? vals['framesReceived'] ?? 0)
-              as num;
+          final frames =
+              (vals['framesDecoded'] ?? vals['framesReceived'] ?? 0) as num;
           final bytes = (vals['bytesReceived'] ?? 0) as num;
           if (frames > 0 || bytes > 5000) return false;
         }
@@ -663,7 +660,9 @@ class _CallScreenState extends State<CallScreen> {
 
       for (final s in _iterateStats(stats)) {
         final type = s['type'] ?? (s['values']?['type']);
-        final vals = (s['values'] is Map) ? Map<String, dynamic>.from(s['values']) : (s as Map<String, dynamic>);
+        final vals = (s['values'] is Map)
+            ? Map<String, dynamic>.from(s['values'])
+            : (s as Map<String, dynamic>);
         if (type == 'candidate-pair' && vals['selected'] == true) {
           pair = vals;
         } else if (type == 'local-candidate') {
@@ -679,10 +678,14 @@ class _CallScreenState extends State<CallScreen> {
         final lcId = pair['localCandidateId'] ?? pair['localCandidateIdRef'];
         final rcId = pair['remoteCandidateId'] ?? pair['remoteCandidateIdRef'];
         final lc = (local is Map<String, dynamic>)
-            ? (local[lcId] is Map ? Map<String, dynamic>.from(local[lcId]) : null)
+            ? (local[lcId] is Map
+                ? Map<String, dynamic>.from(local[lcId])
+                : null)
             : null;
         final rc = (remote is Map<String, dynamic>)
-            ? (remote[rcId] is Map ? Map<String, dynamic>.from(remote[rcId]) : null)
+            ? (remote[rcId] is Map
+                ? Map<String, dynamic>.from(remote[rcId])
+                : null)
             : null;
         _log(
             'selected ICE pair: ${lc?['candidateType'] ?? '?'}(${lc?['protocol']}/${lc?['address']}:${lc?['port']}) <-> ${rc?['candidateType'] ?? '?'}(${rc?['protocol']}/${rc?['address']}:${rc?['port']})');
@@ -702,20 +705,28 @@ class _CallScreenState extends State<CallScreen> {
 
       for (final s in _iterateStats(stats)) {
         final type = s['type'] ?? (s['values']?['type']);
-        final vals = (s['values'] is Map) ? Map<String, dynamic>.from(s['values']) : (s as Map<String, dynamic>);
+        final vals = (s['values'] is Map)
+            ? Map<String, dynamic>.from(s['values'])
+            : (s as Map<String, dynamic>);
         final mediaType = vals['mediaType'] ?? vals['kind'];
-        if (type == 'inbound-rtp' && mediaType == 'video' && inboundVideo == null) {
+        if (type == 'inbound-rtp' &&
+            mediaType == 'video' &&
+            inboundVideo == null) {
           inboundVideo = vals;
         }
-        if (type == 'outbound-rtp' && mediaType == 'video' && outboundVideo == null) {
+        if (type == 'outbound-rtp' &&
+            mediaType == 'video' &&
+            outboundVideo == null) {
           outboundVideo = vals;
         }
       }
 
       if (inboundVideo != null || outboundVideo != null) {
-        final recvFps = inboundVideo?['framesPerSecond'] ?? inboundVideo?['googFrameRateReceived'];
+        final recvFps = inboundVideo?['framesPerSecond'] ??
+            inboundVideo?['googFrameRateReceived'];
         final recvBytes = inboundVideo?['bytesReceived'];
-        final sendFps = outboundVideo?['framesPerSecond'] ?? outboundVideo?['googFrameRateSent'];
+        final sendFps = outboundVideo?['framesPerSecond'] ??
+            outboundVideo?['googFrameRateSent'];
         final sendBytes = outboundVideo?['bytesSent'];
         _log(
             'media stats video recv_fps=$recvFps recv_bytes=$recvBytes send_fps=$sendFps send_bytes=$sendBytes');
