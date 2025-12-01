@@ -335,6 +335,9 @@ class CallController extends ChangeNotifier {
     }
     if (status != null && status.isNotEmpty) {
       _callStatus = status;
+      if (status == "ended" || status == "declined") {
+        _stopPolling();
+      }
     }
     notifyListeners();
   }

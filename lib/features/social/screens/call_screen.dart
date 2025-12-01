@@ -205,7 +205,7 @@ class _CallScreenState extends State<CallScreen> {
           _hangup();
         } else if (s ==
             RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
-          Future.delayed(const Duration(seconds: 3), () {
+          Future.delayed(const Duration(seconds: 1), () {
             if (!_viewAlive || _pc == null) return;
             if (_pc!.connectionState ==
                 RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
