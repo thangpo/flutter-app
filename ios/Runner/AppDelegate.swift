@@ -80,7 +80,15 @@ import flutter_callkit_incoming
 
     // Build body x-www-form-urlencoded với percent-encode an toàn
     var comps = URLComponents()
+    // server_key đọc từ Info.plist (SOCIAL_SERVER_KEY) để tránh hardcode trong mã
+    let serverKey = (Bundle.main.object(forInfoDictionaryKey: "SOCIAL_SERVER_KEY") as? String) ?? ""
+    if serverKey.isEmpty {
+      print("[PUSHKIT] missing SOCIAL_SERVER_KEY in Info.plist")
+      return
+    }
+
     var items: [URLQueryItem] = [
+      URLQueryItem(name: "server_key", value: serverKey),
       URLQueryItem(name: "access_token", value: accessToken),
       URLQueryItem(name: "pushkit_token", value: deviceToken),
     ]
