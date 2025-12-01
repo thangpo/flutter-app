@@ -221,7 +221,7 @@ class CallController extends ChangeNotifier {
     _pollOnce(); // chạy ngay 1 nhịp
 
     _pollTimer = Timer.periodic(
-      const Duration(milliseconds: 900),
+      const Duration(milliseconds: 500),
       (_) => _pollOnce(),
     );
   }

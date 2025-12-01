@@ -188,6 +188,21 @@ class _CallScreenState extends State<CallScreen> {
           _cc.pausePolling();
           _logSelectedCandidatePair();
           _logMediaStats();
+        } else if (state ==
+            RTCIceConnectionState.RTCIceConnectionStateFailed) {
+          _hangup();
+        } else if (state ==
+            RTCIceConnectionState.RTCIceConnectionStateDisconnected) {
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (!_viewAlive || _pc == null) return;
+            if (_pc!.iceConnectionState ==
+                RTCIceConnectionState.RTCIceConnectionStateDisconnected) {
+              _hangup();
+            }
+          });
+        } else if (state ==
+            RTCIceConnectionState.RTCIceConnectionStateClosed) {
+          _hangup();
         }
       };
 
@@ -205,7 +220,7 @@ class _CallScreenState extends State<CallScreen> {
           _hangup();
         } else if (s ==
             RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
-          Future.delayed(const Duration(seconds: 1), () {
+          Future.delayed(const Duration(milliseconds: 300), () {
             if (!_viewAlive || _pc == null) return;
             if (_pc!.connectionState ==
                 RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
