@@ -30,9 +30,9 @@ import flutter_callkit_incoming
 }
 
 private func registerPlugins(registry: FlutterPluginRegistry) {
-    if (!registry.hasPlugin("FlutterDownloaderPlugin")) {
-       FlutterDownloaderPlugin.register(with: registry.registrar(forPlugin: "FlutterDownloaderPlugin")!)
-    }
+  if (!registry.hasPlugin("FlutterDownloaderPlugin")) {
+    FlutterDownloaderPlugin.register(with: registry.registrar(forPlugin: "FlutterDownloaderPlugin")!)
+  }
 }
 
 // MARK: - PushKit
@@ -55,7 +55,7 @@ extension AppDelegate {
       let body = "access_token=\(accessToken)&pushkit_token=\(token)"
       req.httpBody = body.data(using: .utf8)
       req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-      URLSession.shared.dataTask(with: req) { data, resp, err in
+      URLSession.shared.dataTask(with: req) { _, resp, err in
         if let err = err {
           print("📞 pushkit upload error: \(err)")
           return
@@ -74,10 +74,14 @@ extension AppDelegate {
   }
 
   public func pushRegistry(_ registry: PKPushRegistry, didReceiveIncomingPushWith payload: PKPushPayload, for type: PKPushType, completion: @escaping () -> Void) {
-    let data = payload.dictionaryPayload["data"] as? [String: Any] ?? payload.dictionaryPayload
+    let raw = payload.dictionaryPayload["data"] as? [AnyHashable: Any] ?? payload.dictionaryPayload
+    var data: [String: Any] = [:]
+    raw.forEach { key, value in
+      data["\(key)"] = value
+    }
     let params: [String: Any] = [
       "id": "\(data["call_id"] ?? UUID().uuidString)",
-      "nameCaller": (data["caller_name"] as? String) ?? "Cuộc gọi đến",
+      "nameCaller": (data["caller_name"] as? String) ?? "Incoming call",
       "avatar": data["caller_avatar"] ?? "",
       "handle": (data["caller_name"] as? String) ?? "Caller",
       "type": (data["media"] as? String) == "video" ? 1 : 0,
