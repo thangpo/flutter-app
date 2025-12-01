@@ -60,9 +60,9 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
         elevation: 0,
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         titleSpacing: 0,
-        title: const Text(
-          'Trang',
-          style: TextStyle(fontWeight: FontWeight.w600),
+        title: Text(
+          getTranslated('pages', context) ?? 'Trang',
+          style: const TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
       body: Column(
@@ -99,15 +99,18 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'Tin nhắn Page',
-                              style: TextStyle(
+                            Text(
+                              getTranslated('page_messages', context) ??
+                                  'Tin nhắn Page',
+                              style: const TextStyle(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 15,
                               ),
                             ),
                             Text(
-                              'Theo dõi hội thoại khách hàng và Page của bạn',
+                              getTranslated(
+                                  'page_messages_subtitle', context) ??
+                                  'Theo dõi hội thoại khách hàng và Page của bạn',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: cs.onSurface.withOpacity(.65),
@@ -124,16 +127,18 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                   controller: _searchCtrl,
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
-                    hintText: 'Tìm kiếm hội thoại hoặc tên Page',
+                    hintText:
+                    getTranslated('search_page_conversation', context) ??
+                        'Tìm kiếm hội thoại hoặc tên Page',
                     prefixIcon: const Icon(Icons.search),
                     suffixIcon: _searchCtrl.text.isNotEmpty
                         ? IconButton(
-                            icon: const Icon(Icons.close),
-                            onPressed: () {
-                              _searchCtrl.clear();
-                              setState(() {});
-                            },
-                          )
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        _searchCtrl.clear();
+                        setState(() {});
+                      },
+                    )
                         : null,
                     filled: true,
                     fillColor: cs.surfaceVariant.withOpacity(.35),
@@ -147,13 +152,14 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                 Row(
                   children: [
                     _MiniTabChip(
-                      label: 'Tất cả',
+                      label: getTranslated('all', context) ?? 'Tất cả',
                       selected: _tabIndex == 0,
                       onTap: () => setState(() => _tabIndex = 0),
                     ),
                     const SizedBox(width: 8),
                     _MiniTabChip(
-                      label: 'Page của tôi',
+                      label:
+                      getTranslated('my_pages', context) ?? 'Page của tôi',
                       selected: _tabIndex == 1,
                       onTap: () => setState(() => _tabIndex = 1),
                     ),
@@ -164,29 +170,33 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
           ),
 
           // LIST
-          // LIST - ĐÃ BỎ BO GÓC + ĐƯỜNG KẺ + NỀN TRẮNG KHI CÓ TIN NHẮN MỚI
           Expanded(
             child: pageCtrl.loadingPageChatList
                 ? const Center(child: CircularProgressIndicator())
                 : RefreshIndicator(
               onRefresh: () => pageCtrl.refreshPageChatList(),
-              child: ListView.builder(  // Đổi từ separated → builder để không có divider
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 8),
                 itemCount: threads.length,
                 itemBuilder: (_, index) {
                   final item = threads[index];
 
-                  // === TAB FILTER: Chỉ hiển thị "Page của tôi" khi chọn tab đó ===
+                  // TAB FILTER
                   if (_tabIndex == 1 && !item.isMyPage) {
                     return const SizedBox.shrink();
                   }
 
                   final bool isOwner = item.isMyPage;
                   final String displayName = isOwner
-                      ? (item.peerName.isNotEmpty ? item.peerName : item.pageTitle)
+                      ? (item.peerName.isNotEmpty
+                      ? item.peerName
+                      : item.pageTitle)
                       : item.pageTitle;
-                  final String subtitle = isOwner ? '(${item.pageName})' : '@${item.pageName}';
-                  final String avatarUrl = isOwner && item.peerAvatar.isNotEmpty
+                  final String subtitle =
+                  isOwner ? '(${item.pageName})' : '@${item.pageName}';
+                  final String avatarUrl =
+                  isOwner && item.peerAvatar.isNotEmpty
                       ? item.peerAvatar
                       : item.avatar;
                   final String avatarFallback = displayName.isNotEmpty
@@ -194,18 +204,26 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                       : '?';
 
                   final String chatTitle = item.isMyPage
-                      ? (item.peerName.isNotEmpty ? item.peerName : item.pageTitle)
+                      ? (item.peerName.isNotEmpty
+                      ? item.peerName
+                      : item.pageTitle)
                       : item.pageTitle;
-                  final String chatAvatar = item.isMyPage && item.peerAvatar.isNotEmpty
+                  final String chatAvatar =
+                  item.isMyPage && item.peerAvatar.isNotEmpty
                       ? item.peerAvatar
                       : item.avatar;
 
                   return InkWell(
                     onTap: () {
-                      final recipientId = item.isMyPage ? item.userId : item.ownerId;
+                      final recipientId =
+                      item.isMyPage ? item.userId : item.ownerId;
 
-                      context.read<SocialPageController>().markPageThreadRead(
-                          item.pageId, peerId: recipientId);
+                      context
+                          .read<SocialPageController>()
+                          .markPageThreadRead(
+                        item.pageId,
+                        peerId: recipientId,
+                      );
 
                       Navigator.push(
                         context,
@@ -221,8 +239,9 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                       );
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 10), // Chỉ padding dọc
-                      color: Colors.transparent, // Không nền
+                      padding:
+                      const EdgeInsets.symmetric(vertical: 10),
+                      color: Colors.transparent,
                       child: Row(
                         children: [
                           // AVATAR
@@ -234,11 +253,17 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                                 backgroundImage: avatarUrl.isNotEmpty
                                     ? NetworkImage(avatarUrl)
                                     : null,
-                                backgroundColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(.3),
+                                backgroundColor: Theme.of(context)
+                                    .colorScheme
+                                    .surfaceVariant
+                                    .withOpacity(.3),
                                 child: avatarUrl.isEmpty
                                     ? Text(
                                   avatarFallback,
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                  ),
                                 )
                                     : null,
                               ),
@@ -249,14 +274,21 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                                   child: Container(
                                     padding: const EdgeInsets.all(2),
                                     decoration: BoxDecoration(
-                                      color: Theme.of(context).colorScheme.primary,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .primary,
                                       shape: BoxShape.circle,
                                       border: Border.all(
-                                        color: Theme.of(context).scaffoldBackgroundColor,
+                                        color: Theme.of(context)
+                                            .scaffoldBackgroundColor,
                                         width: 2.5,
                                       ),
                                     ),
-                                    child: const Icon(Icons.check, size: 13, color: Colors.white),
+                                    child: const Icon(
+                                      Icons.check,
+                                      size: 13,
+                                      color: Colors.white,
+                                    ),
                                   ),
                                 ),
                             ],
@@ -267,7 +299,8 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                           // INFO
                           Expanded(
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              crossAxisAlignment:
+                              CrossAxisAlignment.start,
                               children: [
                                 Row(
                                   children: [
@@ -276,7 +309,8 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                                         displayName,
                                         style: TextStyle(
                                           fontSize: 15.5,
-                                          fontWeight: item.unreadCount > 0
+                                          fontWeight:
+                                          item.unreadCount > 0
                                               ? FontWeight.w700
                                               : FontWeight.w600,
                                         ),
@@ -288,7 +322,10 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                                       item.lastMessageTime,
                                       style: TextStyle(
                                         fontSize: 12,
-                                        color: Theme.of(context).colorScheme.onSurface.withOpacity(.6),
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurface
+                                            .withOpacity(.6),
                                       ),
                                     ),
                                   ],
@@ -298,7 +335,10 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                                   subtitle,
                                   style: TextStyle(
                                     fontSize: 13,
-                                    color: Theme.of(context).colorScheme.onSurface.withOpacity(.7),
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withOpacity(.7),
                                   ),
                                 ),
                                 const SizedBox(height: 6),
@@ -306,10 +346,17 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                                   item.lastMessage,
                                   style: TextStyle(
                                     fontSize: 14,
-                                    fontWeight: item.unreadCount > 0 ? FontWeight.w600 : FontWeight.w400,
+                                    fontWeight: item.unreadCount > 0
+                                        ? FontWeight.w600
+                                        : FontWeight.w400,
                                     color: item.unreadCount > 0
-                                        ? Theme.of(context).colorScheme.onSurface
-                                        : Theme.of(context).colorScheme.onSurface.withOpacity(.8),
+                                        ? Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        : Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withOpacity(.8),
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -317,20 +364,6 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                               ],
                             ),
                           ),
-
-                          // Optional: nếu muốn giữ badge unread nhỏ ở góc phải
-                          // if (item.unreadCount > 0)
-                          //   Padding(
-                          //     padding: const EdgeInsets.only(left: 8),
-                          //     child: CircleAvatar(
-                          //       radius: 10,
-                          //       backgroundColor: Theme.of(context).colorScheme.primary,
-                          //       child: Text(
-                          //         item.unreadCount > 99 ? '99+' : item.unreadCount.toString(),
-                          //         style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                          //       ),
-                          //     ),
-                          //   ),
                         ],
                       ),
                     ),
@@ -342,7 +375,7 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
         ],
       ),
 
-      // === FOOTER NAV (floating iOS style, đồng bộ với GroupChatsScreen) ===
+      // FOOTER NAV
       bottomNavigationBar: Padding(
         padding: EdgeInsets.only(
           left: 16,
@@ -351,14 +384,12 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
         ),
         child: _GroupFooterNav(
           currentIndex: 1, // màn Page messages
-          chatBadgeCount: 0, // TODO: map từ tổng unread chat thường nếu có
-          showNotifDot:
-              false, // TODO: có thể map dot cho nhóm nếu có totalGroupUnread
+          chatBadgeCount: 0,
+          showNotifDot: false,
           onTap: (i) {
             if (i == 1) return; // đang ở tab Pages rồi
 
             if (i == 0) {
-              // Điều hướng về màn “Đoạn chat”
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -370,7 +401,6 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
             }
 
             if (i == 2) {
-              // Điều hướng sang Nhóm chat
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -381,9 +411,14 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
               return;
             }
 
-            // TODO: gắn màn Menu (i == 3)
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Chưa gắn điều hướng cho tab $i')),
+              SnackBar(
+                content: Text(
+                  getTranslated(
+                      'navigation_not_implemented', context) ??
+                      'Chưa gắn điều hướng cho tab $i',
+                ),
+              ),
             );
           },
         ),
@@ -443,12 +478,12 @@ class _UnreadBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const SizedBox.shrink(); // unused after removing badge display
+    return const SizedBox.shrink(); // unused
   }
 }
 
 /// =====================
-/// Footer Nav (floating, iOS-like) – copy từ GroupChatsScreen
+/// Footer Nav
 /// =====================
 class _GroupFooterNav extends StatelessWidget {
   final int currentIndex;
@@ -542,24 +577,26 @@ class _GroupFooterNav extends StatelessWidget {
             item(
               index: 0,
               icon: Icons.chat_bubble,
-              label: getTranslated('chat_section', context)!,
+              label:
+              getTranslated('chat_section', context) ?? 'Đoạn chat',
               badge: chatBadgeCount,
             ),
             item(
               index: 1,
               icon: Icons.flag_outlined,
-              label: 'Pages',
+              label: getTranslated('pages', context) ?? 'Pages',
             ),
             item(
               index: 2,
               icon: Icons.groups,
-              label: getTranslated('group_chat', context)!,
+              label:
+              getTranslated('group_chat', context) ?? 'Nhóm chat',
               dot: showNotifDot,
             ),
             item(
               index: 3,
               icon: Icons.menu,
-              label: getTranslated('menu', context)!,
+              label: getTranslated('menu', context) ?? 'Menu',
             ),
           ],
         ),

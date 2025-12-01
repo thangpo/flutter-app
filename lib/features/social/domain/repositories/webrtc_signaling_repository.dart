@@ -1,8 +1,9 @@
-// G:\flutter-app\lib\features\social\domain\repositories\webrtc_signaling_repository.dart
 import 'dart:convert';
+import 'dart:developer' as developer;
+
+import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 
 import '../models/ice_candidate_lite.dart';
 
@@ -39,6 +40,7 @@ class WebRTCSignalingRepository {
     String? serverKey,
     this.accessTokenKey = 'socialAccessToken',
     http.Client? client,
+    this.enableLogging = true,
   })  : baseUrl =
             (baseUrl ?? AppConstants.baseUrl).replaceAll(RegExp(r'/$'), ''),
         serverKey = serverKey ?? _defaultServerKey,
@@ -46,17 +48,23 @@ class WebRTCSignalingRepository {
 
   final http.Client _client;
   final String baseUrl;
+  final bool enableLogging;
 
-  /// ⚠️ Điền server_key WoWonder thật tại đây HOẶC truyền qua constructor
-  static const String _defaultServerKey = 'f6e69c898ddd643154c9bd4b152555842e26a868-d195c100005dddb9f1a30a67a5ae42d4-19845955';
+  /// Mặc định dùng server_key WoWonder, có thể truyền qua constructor
+  static const String _defaultServerKey =
+      'f6e69c898ddd643154c9bd4b152555842e26a868-d195c100005dddb9f1a30a67a5ae42d4-19845955';
   final String serverKey;
 
   final String accessTokenKey;
+  static const String _logName = 'WebRTCSignaling';
 
-  /// Nếu server chưa route `/api/webrtc`, đổi return thành:
-  ///   return '$baseUrl/api/webrtc.php';
+  void _log(String message, {Object? error, StackTrace? stack}) {
+    if (!enableLogging) return;
+    developer.log(message, name: _logName, error: error, stackTrace: stack);
+  }
+
+  /// Nếu server chưa có route `/api/webrtc`, có thể đổi endpoint ở đây.
   String get _endpoint => '$baseUrl/api-v2.php';
-
 
   Future<String> _getAccessToken() async {
     final sp = await SharedPreferences.getInstance();
@@ -70,28 +78,32 @@ class WebRTCSignalingRepository {
   }
 
   Future<Map<String, dynamic>> _multipartPost(
-      Map<String, String> fields) async {
+    Map<String, String> fields,
+  ) async {
     final uri = Uri.parse(_endpoint);
     final req = http.MultipartRequest('POST', uri);
 
     req.fields['server_key'] = serverKey;
     req.fields['access_token'] = await _getAccessToken();
 
-    // ✅ báo cho PHP biết đây là router webrtc
+    // báo cho PHP biết đây là router webrtc
     req.fields['type'] = 'webrtc';
 
-    // ✅ giữ loại hành động riêng (create, offer, answer, ...)
+    // xác định sub_type (create, offer, answer, ...)
     final subType = fields['type'];
     fields.remove('type');
     req.fields['sub_type'] = subType ?? '';
 
     req.fields.addAll(fields);
+    _log('POST $_endpoint subType=$subType fields=${req.fields.keys.toList()}');
 
     final streamed = await _client.send(req);
     final res = await http.Response.fromStream(streamed);
     if (res.statusCode != 200) {
-      throw Exception(
-          'WebRTC API ${subType ?? '?'} thất bại (HTTP ${res.statusCode}): ${res.body}');
+      final msg =
+          'WebRTC API ${subType ?? '?'} failed (HTTP ${res.statusCode}): ${res.body}';
+      _log(msg);
+      throw Exception(msg);
     }
     final Map<String, dynamic> json = jsonDecode(res.body);
     final apiStatus = json['api_status'];
@@ -100,11 +112,14 @@ class WebRTCSignalingRepository {
           json['error'] ??
           json['error_message'] ??
           'Unknown error';
-      throw Exception('WebRTC API ${subType ?? '?'} lỗi: $err');
+      final msg = 'WebRTC API ${subType ?? '?'} error: $err';
+      _log(msg);
+      throw Exception(msg);
     }
+    _log(
+        'WebRTC API ${subType ?? '?'} ok api_status=$apiStatus keys=${json.keys.toList()}');
     return json;
   }
-
 
   // ------------------------
   // Public APIs
@@ -114,6 +129,7 @@ class WebRTCSignalingRepository {
     required int recipientId,
     required String mediaType, // 'audio' | 'video'
   }) async {
+    _log('create(recipient=$recipientId, mediaType=$mediaType)');
     final json = await _multipartPost({
       'type': 'create',
       'recipient_id': recipientId.toString(),
@@ -127,10 +143,12 @@ class WebRTCSignalingRepository {
     }
     final status = (json['status'] ?? 'ringing').toString();
     final mtype = (json['media_type'] ?? mediaType).toString();
+    _log('create -> callId=$id status=$status mediaType=$mtype');
     return CreateCallResult(callId: id, status: status, mediaType: mtype);
   }
 
   Future<void> offer({required int callId, required String sdp}) async {
+    _log('offer(callId=$callId, sdpLen=${sdp.length})');
     await _multipartPost({
       'type': 'offer',
       'call_id': '$callId',
@@ -139,6 +157,7 @@ class WebRTCSignalingRepository {
   }
 
   Future<void> answer({required int callId, required String sdp}) async {
+    _log('answer(callId=$callId, sdpLen=${sdp.length})');
     await _multipartPost({
       'type': 'answer',
       'call_id': '$callId',
@@ -152,6 +171,8 @@ class WebRTCSignalingRepository {
     String? sdpMid,
     int? sdpMLineIndex,
   }) async {
+    _log(
+        'candidate(callId=$callId, mid=${sdpMid ?? '-'}, mline=${sdpMLineIndex ?? '-'}, len=${candidate.length})');
     final fields = <String, String>{
       'type': 'candidate',
       'call_id': '$callId',
@@ -164,6 +185,7 @@ class WebRTCSignalingRepository {
   }
 
   Future<PollResult> poll({required int callId}) async {
+    _log('poll(callId=$callId)');
     final json = await _multipartPost({
       'type': 'poll',
       'call_id': '$callId',
@@ -185,10 +207,14 @@ class WebRTCSignalingRepository {
     final o = json['sdp_offer'];
     if (o is Map && o['sdp'] != null && '${o['sdp']}'.isNotEmpty) {
       sdpOffer = '${o['sdp']}';
+    } else if (o is String && o.isNotEmpty) {
+      sdpOffer = o;
     }
     final a = json['sdp_answer'];
     if (a is Map && a['sdp'] != null && '${a['sdp']}'.isNotEmpty) {
       sdpAnswer = '${a['sdp']}';
+    } else if (a is String && a.isNotEmpty) {
+      sdpAnswer = a;
     }
 
     final cands = json['ice_candidates'];
@@ -204,6 +230,9 @@ class WebRTCSignalingRepository {
       }
     }
 
+    _log(
+        'poll -> status=$callStatus media=$mediaType offer=${sdpOffer != null} answer=${sdpAnswer != null} ice=${ice.length}');
+
     return PollResult(
       callStatus: callStatus,
       mediaType: mediaType,
@@ -215,12 +244,14 @@ class WebRTCSignalingRepository {
 
   /// action: 'answer' | 'decline' | 'end'
   Future<String> action({required int callId, required String action}) async {
+    _log('action(callId=$callId, action=$action)');
     final json = await _multipartPost({
       'type': 'action',
       'call_id': '$callId',
       'action': action,
     });
     final status = (json['status'] ?? '').toString();
+    _log('action -> status=$status');
     return status.isEmpty ? 'ended' : status;
   }
 }

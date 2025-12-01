@@ -97,6 +97,7 @@ class AppConstants {
   static const String socialSendMessPage='/api/page_chat';
   static const String socialGetPageChatList='/api/page_chat';
   static const String socialGetChatPage='/api/page_chat';
+  static const String socialDeletePage='/api/delete_page';
   //follow
   static const String socialFollowUser = '/api/follow-user';
   static const String socialUpdateDataUser = '/api/update-user-data';

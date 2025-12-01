@@ -1317,7 +1317,7 @@
   "update_social_only": "Social profile updated. E-commerce not synced because you are not logged in.",
   "update_success": "Profile updated successfully",
   "update_error": "Update failed",
-  "messages": "Messages",
+  "messages": "Mess",
   "chat_section": "Chat",
   "create_group_chat": "Create group chat",
   "no_friends_yet": "No friends yet.",
@@ -1602,5 +1602,14 @@
   "sepay_payment": "Sepay payment",
   "scan_this_qr": "Scan this qr",
   "auto_update_after": "Auto update after",
-  "booking_success_desc": "Booking success desc"
+  "booking_success_desc": "Booking success desc",
+  "edit_page": "Edit page",
+  "delete_page": "Delete page",
+  "delete_page_confirm": "Delete page confirm",
+  "promote_page": "Promote page",
+  "page_messages": "Page messages",
+  "page_messages_subtitle": "Track conversations between customers and your Pages",
+  "search_page_conversation": "Search conversations or Page name",
+  "my_pages": "My Pages",
+  "navigation_not_implemented": "Navigation for this tab is not implemented yet"
 }

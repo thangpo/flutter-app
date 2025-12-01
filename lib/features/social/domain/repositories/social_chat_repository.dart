@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
-
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
@@ -174,7 +173,7 @@ class SocialChatRepository {
         await http.post(url, body: body).timeout(const Duration(seconds: 20));
 
     if (kDebugMode) {
-      debugPrint('get_user_messages -> ${res.statusCode} ${res.body}');
+      // debugPrint('get_user_messages -> ${res.statusCode} ${res.body}');
     }
     if (res.statusCode != 200) _throwApi(res.body, httpCode: res.statusCode);
 
@@ -206,7 +205,7 @@ class SocialChatRepository {
     }).timeout(const Duration(seconds: 15));
 
     if (kDebugMode) {
-      debugPrint('read_chats -> ${res.statusCode} ${res.body}');
+      // debugPrint('read_chats -> ${res.statusCode} ${res.body}');
     }
     if (res.statusCode != 200) _throwApi(res.body, httpCode: res.statusCode);
   }
@@ -270,7 +269,7 @@ class SocialChatRepository {
       final res = await http.Response.fromStream(streamed);
 
       if (kDebugMode) {
-        debugPrint('send-message[multipart] -> ${res.statusCode} ${res.body}');
+        // debugPrint('send-message[multipart] -> ${res.statusCode} ${res.body}');
       }
       if (res.statusCode != 200) _throwApi(res.body, httpCode: res.statusCode);
 
@@ -296,7 +295,7 @@ class SocialChatRepository {
         await http.post(url, body: fields).timeout(const Duration(seconds: 20));
 
     if (kDebugMode) {
-      debugPrint('send-message[form] -> ${res.statusCode} ${res.body}');
+      // debugPrint('send-message[form] -> ${res.statusCode} ${res.body}');
     }
     if (res.statusCode != 200) _throwApi(res.body, httpCode: res.statusCode);
 
@@ -330,7 +329,7 @@ class SocialChatRepository {
     final res = await http.Response.fromStream(streamed);
 
     if (kDebugMode) {
-      debugPrint('react_message -> ${res.statusCode} ${res.body}');
+      // debugPrint('react_message -> ${res.statusCode} ${res.body}');
     }
 
     if (res.statusCode != 200) {
@@ -361,8 +360,8 @@ class SocialChatRepository {
       );
 
       if (resp.statusCode != 200) {
-        debugPrint(
-            'deleteMessage httpStatus != 200: ${resp.statusCode} ${resp.body}');
+        // debugPrint(
+        //     'deleteMessage httpStatus != 200: ${resp.statusCode} ${resp.body}');
         return false;
       }
 
@@ -377,11 +376,10 @@ class SocialChatRepository {
 
       return status == 200;
     } catch (e, st) {
-      debugPrint('deleteMessage error: $e\n$st');
+      // debugPrint('deleteMessage error: $e\n$st');
       return false;
     }
   }
-
 
   // ================= SEARCH USERS (forward) =================
   /// Tìm người dùng WoWonder để chuyển tiếp tin nhắn
@@ -414,7 +412,7 @@ class SocialChatRepository {
           await http.post(uri, body: body).timeout(const Duration(seconds: 20));
 
       if (kDebugMode) {
-        debugPrint('searchUsers -> ${res.statusCode} ${res.body}');
+        // debugPrint('searchUsers -> ${res.statusCode} ${res.body}');
       }
 
       if (res.statusCode != 200) {
@@ -492,7 +490,7 @@ class SocialChatRepository {
         await http.post(url, body: body).timeout(const Duration(seconds: 20));
 
     if (kDebugMode) {
-      debugPrint('getChatMedia[$mediaType] -> ${res.statusCode} ${res.body}');
+      // debugPrint('getChatMedia[$mediaType] -> ${res.statusCode} ${res.body}');
     }
 
     if (res.statusCode != 200) {
@@ -519,8 +517,7 @@ class SocialChatRepository {
     return out;
   }
 
-
-Future<List> getMedia({
+  Future<List> getMedia({
     required String token,
     required String peerId,
     required String mediaType,
@@ -544,6 +541,4 @@ Future<List> getMedia({
 
     return List<Map<String, dynamic>>.from(map["data"] ?? []);
   }
-
-
 }

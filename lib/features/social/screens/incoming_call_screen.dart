@@ -1,4 +1,5 @@
 // lib/features/social/screens/incoming_call_screen.dart
+import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -34,6 +35,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
 
   bool _handling = false;
   bool _viewAlive = true;
+  bool _detaching = false;
 
   @override
   void initState() {
@@ -43,11 +45,19 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     _listener = _onControllerChanged;
     _cc.addListener(_listener);
 
-    _attachIfNeeded();
+    // Delay attach 1 frame để tránh notifyListeners trong lúc build gây assert
+    WidgetsBinding.instance.addPostFrameCallback((_) => _attachIfNeeded());
   }
 
   void _attachIfNeeded() {
+    if (!_viewAlive) return;
+    if (_cc.isCallHandled(widget.callId)) {
+      // Call �`A� k���t th��?c, kh��ng vA�o mA�n incoming n���a
+      Navigator.of(context).maybePop();
+      return;
+    }
     if (_cc.activeCallId != widget.callId) {
+      _log('attachCall callId=${widget.callId} media=${widget.mediaType}');
       _cc.attachCall(
         callId: widget.callId,
         mediaType: widget.mediaType,
@@ -69,6 +79,11 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   }
 
   Future<void> _safeDetachAndPop() async {
+    if (_detaching) return;
+    _detaching = true;
+    _viewAlive = false;
+    _cc.removeListener(_listener);
+
     try {
       await _cc.detachCall();
     } catch (_) {}
@@ -82,11 +97,27 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     if (_handling) return;
     setState(() => _handling = true);
 
+    // Đảm bảo đã attach call trước khi gửi answer
+    if (_cc.activeCallId != widget.callId) {
+      _log('accept: attaching callId=${widget.callId} media=${widget.mediaType}');
+      _cc.attachCall(
+        callId: widget.callId,
+        mediaType: widget.mediaType,
+        initialStatus: 'ringing',
+      );
+    }
+
     // Chuẩn Messenger: bấm "Nghe" là vào luôn màn call,
     // không cần chờ server confirm 'answered'
     try {
-      await _cc.action('answer');
-    } catch (_) {
+      _log('accept: action(answer) start callId=${widget.callId}');
+      await _cc
+          .action('answer')
+          .timeout(const Duration(seconds: 2), onTimeout: () {
+        _log('action(answer) timeout, continue to CallScreen');
+      });
+    } catch (e, st) {
+      _log('action(answer) error: $e', st: st);
       // Nếu lỗi mạng nhẹ thì vẫn cho user vào màn CallScreen,
       // WebRTC layer + polling sẽ tự xử lý tiếp.
     }
@@ -116,9 +147,25 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     if (_handling) return;
     setState(() => _handling = true);
 
+    if (_cc.activeCallId != widget.callId) {
+      _log('decline: attaching callId=${widget.callId} media=${widget.mediaType}');
+      _cc.attachCall(
+        callId: widget.callId,
+        mediaType: widget.mediaType,
+        initialStatus: 'ringing',
+      );
+    }
+
     try {
-      await _cc.action('decline');
-    } catch (_) {}
+      _log('decline: action(decline) start callId=${widget.callId}');
+      await _cc
+          .action('decline')
+          .timeout(const Duration(seconds: 2), onTimeout: () {
+        _log('action(decline) timeout');
+      });
+    } catch (e, st) {
+      _log('action(decline) error: $e', st: st);
+    }
 
     await _safeDetachAndPop();
   }
@@ -126,7 +173,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   @override
   void dispose() {
     _viewAlive = false;
-    _cc.removeListener(_listener);
+    if (!_detaching) {
+      _cc.removeListener(_listener);
+    }
     super.dispose();
   }
 
@@ -189,13 +238,19 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
                       FloatingActionButton(
                         heroTag: 'decline',
                         backgroundColor: Colors.red,
-                        onPressed: _onDecline,
+                        onPressed: () {
+                          _log('tap_decline callId=${widget.callId}');
+                          _onDecline();
+                        },
                         child: const Icon(Icons.call_end),
                       ),
                       FloatingActionButton(
                         heroTag: 'accept',
                         backgroundColor: Colors.green,
-                        onPressed: _onAccept,
+                        onPressed: () {
+                          _log('tap_accept callId=${widget.callId}');
+                          _onAccept();
+                        },
                         child: Icon(
                           isVideo ? Icons.videocam : Icons.call,
                         ),
@@ -215,5 +270,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
         ),
       ),
     );
+  }
+
+  void _log(String msg, {StackTrace? st}) {
+    developer.log(msg, name: 'IncomingCallScreen', stackTrace: st);
   }
 }

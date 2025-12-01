@@ -164,6 +164,56 @@ class SocialPageService implements SocialPageServiceInterface {
     // request lỗi
     return false;
   }
+  // ───────────────── DELETE PAGE ─────────────────
+  @override
+  Future<bool> deletePage({
+    required String pageId,
+    required String password,
+  }) async {
+    final ApiResponseModel<Response> resp =
+    await socialPageRepository.deletePage(
+      pageId: pageId,
+      password: password,
+    );
+
+    if (resp.isSuccess && resp.response != null) {
+      dynamic data = resp.response!.data;
+
+      // Backend đôi khi trả string → decode JSON
+      if (data is String) {
+        try {
+          data = jsonDecode(data);
+        } catch (_) {
+          // nếu không decode được thì xử lý như bên dưới
+        }
+      }
+
+      if (data is Map) {
+        final int status =
+            int.tryParse('${data['api_status'] ?? data['status'] ?? 400}') ??
+                400;
+
+        if (status == 200) {
+          // xoá thành công
+          return true;
+        }
+
+        final String message = (data['errors']?['error_text'] ??
+            data['message'] ??
+            'Failed to delete page')
+            .toString();
+        throw Exception(message);
+      }
+
+      // data không phải Map → coi như lỗi
+      throw Exception('Invalid delete page response');
+    }
+
+    // request fail / lỗi HTTP
+    ApiChecker.checkApi(resp);
+    return false;
+  }
+
 
 
 
@@ -577,24 +627,30 @@ class SocialPageService implements SocialPageServiceInterface {
 
   /// ───────────────── PAGE CHAT: SEND MESSAGE ─────────────────
   @override
+    /// PAGE CHAT: SEND MESSAGE
+  @override
   Future<List<SocialPageMessage>> sendPageMessage({
     required String pageId,
-    required String recipientId, // người nhận tin nhắn
+    required String recipientId, // receiver id
     required String text,
     required String messageHashId,
     MultipartFile? file,
+    MultipartFile? voiceFile,
+    String? voiceDuration,
     String? gif,
     String? imageUrl,
     String? lng,
     String? lat,
   }) async {
     final ApiResponseModel<Response> resp =
-    await socialPageRepository.sendMessageToPage(
+        await socialPageRepository.sendMessageToPage(
       pageId: pageId,
-      recipientId: recipientId,  // Đảm bảo recipientId là đúng
+      recipientId: recipientId,
       text: text,
       messageHashId: messageHashId,
       file: file,
+      voiceFile: voiceFile,
+      voiceDuration: voiceDuration,
       gif: gif,
       imageUrl: imageUrl,
       lng: lng,
@@ -609,22 +665,16 @@ class SocialPageService implements SocialPageServiceInterface {
 
       final dynamic data = resp.response!.data;
       final String message = (data?['errors']?['error_text'] ??
-          data?['message'] ??
-          'Failed to send page message')
+              data?['message'] ??
+              'Failed to send page message')
           .toString();
-      throw Exception(message);
+      return <SocialPageMessage>[];
     }
 
-    ApiChecker.checkApi(resp);
-    return <SocialPageMessage>[];  // fallback nếu checkApi không throw
+    return <SocialPageMessage>[];
   }
 
-
-
-
-
-
-  /// ───────────────── PAGE CHAT: FETCH MESSAGES ─────────────────
+/// ───────────────── PAGE CHAT: FETCH MESSAGES ─────────────────
   @override
   Future<List<SocialPageMessage>> getPageMessages({
     required String pageId,

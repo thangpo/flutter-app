@@ -178,7 +178,11 @@ class CallInviteForegroundListener {
     if (!raw.contains('call_invite')) return null;
 
     String? callIdStr = _extractValue(raw, 'call_id');
-    String? mediaStr = _extractValue(raw, 'media');
+    String? mediaStr = _extractValue(raw, 'media') ??
+        _extractValue(raw, 'media_type') ??
+        _extractValue(raw, 'call_type') ??
+        _extractValue(raw, 'type_two') ??
+        _extractValue(raw, 'call_media');
     String? tsStr = _extractValue(raw, 'ts');
 
     final callId = int.tryParse(callIdStr ?? '');
@@ -253,6 +257,7 @@ class CallInviteForegroundListener {
   /// Chuẩn hóa media từ payload (media | call_type | type_two | call_media)
   static String? _extractMedia(Map<String, dynamic> data) {
     final raw = (data['media'] ??
+            data['media_type'] ?? // backend đôi khi dùng media_type
             data['call_type'] ??
             data['type_two'] ??
             data['call_media'])
@@ -409,11 +414,16 @@ class CallInviteForegroundListener {
     _routing = true;
 
     try {
-      ctx.read<CallController>().attachCall(
-            callId: inv.callId,
-            mediaType: inv.mediaType,
-            initialStatus: 'ringing',
-          );
+      final cc = ctx.read<CallController>();
+      if (cc.isCallHandled(inv.callId)) {
+        _routing = false;
+        return;
+      }
+      cc.attachCall(
+        callId: inv.callId,
+        mediaType: inv.mediaType,
+        initialStatus: 'ringing',
+      );
     } catch (_) {}
 
     nav

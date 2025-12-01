@@ -44,6 +44,12 @@ post_install do |installer|
     target.build_configurations.each do |config|
       # Đồng bộ target iOS
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+
+      # Bật quyền camera + mic cho permission_handler trên iOS
+      definitions = config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= []
+      definitions << '$(inherited)' unless definitions.include?('$(inherited)')
+      definitions << 'PERMISSION_CAMERA=1' unless definitions.include?('PERMISSION_CAMERA=1')
+      definitions << 'PERMISSION_MICROPHONE=1' unless definitions.include?('PERMISSION_MICROPHONE=1')
     end
   end
 end

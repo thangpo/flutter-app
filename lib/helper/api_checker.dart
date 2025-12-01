@@ -20,6 +20,11 @@ class ApiChecker {
     final BuildContext? context = Get.context ?? navigatorKey.currentContext;
     final String errorText = apiResponse.error?.toString() ?? '';
 
+    // Bỏ qua log spam khi lỗi rỗng hoặc chỉ là "Unexpected error occured"
+    if (errorText.isEmpty || errorText == 'Unexpected error occured') {
+      return;
+    }
+
     if (_shouldForceLogout(apiResponse, errorText) && context != null) {
       final bool missingToken =
           errorText.contains(_missingSocialTokenText);
@@ -109,4 +114,3 @@ class ApiChecker {
     return error;
   }
 }
-

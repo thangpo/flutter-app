@@ -83,6 +83,8 @@ abstract class SocialPageServiceInterface {
     required String text,
     required String messageHashId,
     MultipartFile? file,
+    MultipartFile? voiceFile,
+    String? voiceDuration,
     String? gif,
     String? imageUrl,
     String? lng,
@@ -102,5 +104,9 @@ abstract class SocialPageServiceInterface {
     int offset,
   });
   Future<PageUserBrief?> getUserDataById({required String userId});
+  Future<bool> deletePage({
+    required String pageId,
+    required String password,
+  });
 
 }

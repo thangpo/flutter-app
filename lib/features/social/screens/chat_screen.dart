@@ -1305,8 +1305,14 @@ class _ChatScreenState extends State<ChatScreen> {
 
                               if (inv != null && !inv.isExpired()) {
                                 final callId = inv.callId;
-                                if (!isMe && !_handledIncoming.contains(callId)) {
+                                final cc =
+                                    Provider.of<CallController>(context, listen: false);
+                                final alreadyHandled = _handledIncoming.contains(callId) ||
+                                    cc.isCallHandled(callId);
+
+                                if (!isMe && !alreadyHandled) {
                                   _handledIncoming.add(callId);
+                                  cc.markCallHandled(callId);
 
                                   WidgetsBinding.instance
                                       .addPostFrameCallback((_) {
