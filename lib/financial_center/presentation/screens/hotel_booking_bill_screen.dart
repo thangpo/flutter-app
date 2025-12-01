@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'hotel_checkout_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import '../widgets/hotel_rooms_section.dart' show HotelSelectedRoom;
+
 
 class HotelBookingBillScreen extends StatelessWidget {
   final HotelCheckoutData data;
