@@ -13,6 +13,7 @@ import '../controllers/call_controller.dart';
 import '../controllers/group_call_controller.dart';
 import '../domain/models/call_invite.dart';
 import '../fcm/fcm_chat_handler.dart';
+import 'callkit_service.dart';
 import '../screens/incoming_call_screen.dart';
 import '../screens/group_call_screen.dart';
 import '../screens/group_incoming_call_screen.dart';
@@ -28,7 +29,8 @@ class CallInviteForegroundListener {
   static bool _routing = false;
 
   static void _log(String tag, dynamic data) {
-    debugPrint('[CALL-LISTENER][$tag] ${data is String ? data : jsonEncode(data)}');
+    debugPrint(
+        '[CALL-LISTENER][$tag] ${data is String ? data : jsonEncode(data)}');
   }
 
   /// Gọi sau khi navigatorKey + Providers sẵn (thường sau MultiProvider).
@@ -79,7 +81,8 @@ class CallInviteForegroundListener {
     final isGroupFlag = _isTrue(data['is_group']);
 
     final raw = data['text']?.toString() ?? '';
-    _log('fcm_onMessage', {'type': type, 'is_group': isGroupFlag, 'data': data, 'text': raw});
+    _log('fcm_onMessage',
+        {'type': type, 'is_group': isGroupFlag, 'data': data, 'text': raw});
 
     final callerName =
         data['sender_name']?.toString() ?? data['caller_name']?.toString();
@@ -89,7 +92,8 @@ class CallInviteForegroundListener {
     // ----------- GROUP CALL -----------
     if (data.containsKey('group_id') &&
         (type == 'call_invite_group' ||
-            type == 'call_invite' || // PHP backend đang gửi type=call_invite + is_group
+            type ==
+                'call_invite' || // PHP backend đang gửi type=call_invite + is_group
             isGroupFlag ||
             data.containsKey('call_id'))) {
       final gid = _extractGroupId(data);
@@ -124,8 +128,8 @@ class CallInviteForegroundListener {
     if (raw.isNotEmpty) {
       final normalized = _normalizeCallPayload(raw);
       if (normalized.contains('call_invite')) {
-        final inv =
-            CallInvite.tryParse(normalized) ?? _parseLooseCallInvite(normalized);
+        final inv = CallInvite.tryParse(normalized) ??
+            _parseLooseCallInvite(normalized);
         if (inv != null && !inv.isExpired()) {
           if (_handledCallIds.add(inv.callId)) {
             _openIncoming(
@@ -268,10 +272,8 @@ class CallInviteForegroundListener {
   }
 
   static String _extractGroupId(Map<String, dynamic> data) {
-    final v = data['group_id'] ??
-        data['groupId'] ??
-        data['groupID'] ??
-        data['gid'];
+    final v =
+        data['group_id'] ?? data['groupId'] ?? data['groupID'] ?? data['gid'];
     return (v ?? '').toString();
   }
 
@@ -333,7 +335,7 @@ class CallInviteForegroundListener {
         if (decoded is Map<String, dynamic>) {
           m = decoded;
         } else if (decoded is Map) {
-            m = decoded.map((k, v) => MapEntry(k.toString(), v));
+          m = decoded.map((k, v) => MapEntry(k.toString(), v));
         }
       }
     } catch (_) {}
@@ -377,7 +379,8 @@ class CallInviteForegroundListener {
     final key = '$callId|$groupId';
     if (!_handledGroupCalls.add(key)) return;
 
-    _log('open_group_ui', {'call_id': callId, 'group_id': groupId, 'media': media});
+    _log('open_group_ui',
+        {'call_id': callId, 'group_id': groupId, 'media': media});
 
     _openGroupIncoming(
       callId: callId,
@@ -390,24 +393,36 @@ class CallInviteForegroundListener {
   // =====================================================
   // ================= OPEN UI: 1-1 ======================
   // =====================================================
-  static void _openIncoming(
+  // Đổi kiểu trả về: Future<void>
+  static Future<void> _openIncoming(
     CallInvite inv, {
     String? callerName,
     String? callerAvatar,
-  }) {
+  }) async {
+    // 1) Đợi mọi action accept từ CallKit chạy xong (attachCall, open CallScreen, v.v.)
+    await CallkitService.I.flushPendingActions();
+
+    // 2) Nếu cuộc gọi đã được handle (đã bấm "Nghe" từ CallKit) thì KHÔNG mở màn incoming nữa
+    if (CallkitService.I.isServerCallHandled(inv.callId)) {
+      return;
+    }
+
+    // 3) Tránh push chồng màn (đang routing)
     if (_routing) return;
 
     final nav = navigatorKey.currentState;
     final ctx = nav?.overlay?.context ?? navigatorKey.currentContext;
 
-    if (nav == null || ctx == null || !ctx.mounted) {
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _openIncoming(
+    // 4) Nếu chưa có context, chờ frame kế rồi gọi lại (vẫn async, không đệ quy vô hạn)
+    if (nav == null || ctx == null || !(ctx.mounted)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        // fire-and-forget; không cần await ở đây
+        _openIncoming(
           inv,
           callerName: callerName,
           callerAvatar: callerAvatar,
-        ),
-      );
+        );
+      });
       return;
     }
 
@@ -415,33 +430,42 @@ class CallInviteForegroundListener {
 
     try {
       final cc = ctx.read<CallController>();
-      // Bỏ qua nếu đã được CallKit / logic khác attach & set trạng thái != ringing (đã nhận hoặc kết thúc)
+
+      // 5) Bỏ qua nếu call này đã được attach & không còn 'ringing'
       if (cc.isCallHandled(inv.callId) ||
           (cc.activeCallId == inv.callId && cc.callStatus != 'ringing')) {
         _routing = false;
         return;
       }
+
+      // 6) Đến đây mới attach trạng thái 'ringing' để hiển thị incoming trong-app
       cc.attachCall(
         callId: inv.callId,
         mediaType: inv.mediaType,
         initialStatus: 'ringing',
       );
-    } catch (_) {}
 
-    nav
-        .push(
-      MaterialPageRoute(
-        builder: (_) => IncomingCallScreen(
-          callId: inv.callId,
-          mediaType: inv.mediaType,
-          callerName: callerName,
-          callerAvatar: callerAvatar,
+      // 7) Trước khi push, kiểm tra lại lần nữa đề phòng race hiếm gặp
+      if (CallkitService.I.isServerCallHandled(inv.callId)) {
+        _routing = false;
+        return;
+      }
+
+      await nav.push(
+        MaterialPageRoute(
+          builder: (_) => IncomingCallScreen(
+            callId: inv.callId,
+            mediaType: inv.mediaType,
+            callerName: callerName,
+            callerAvatar: callerAvatar,
+          ),
         ),
-      ),
-    )
-        .whenComplete(() {
+      );
+    } catch (_) {
+      // giữ app an toàn nếu có lỗi
+    } finally {
       _routing = false;
-    });
+    }
   }
 
   // =====================================================
