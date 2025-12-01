@@ -494,9 +494,13 @@ class _CallScreenState extends State<CallScreen> {
     if (_ending) return;
     _ending = true;
 
-    try {
-      await _cc.action('end');
-    } catch (_) {}
+    // Fire-and-forget end to tránh chờ network làm đơ UI
+    unawaited(Future(() async {
+      try {
+        await _cc.action('end').timeout(const Duration(seconds: 2),
+            onTimeout: () {});
+      } catch (_) {}
+    }));
     await _detachController();
 
     _disposeRTC();
@@ -549,7 +553,7 @@ class _CallScreenState extends State<CallScreen> {
 
   String _iceType(String? cand) {
     if (cand == null) return '?';
-    final m = RegExp('typ\\\\s+(\\\\w+)').firstMatch(cand);
+    final m = RegExp(r'typ\s+(\w+)').firstMatch(cand);
     return m != null ? m.group(1)! : '?';
   }
 
