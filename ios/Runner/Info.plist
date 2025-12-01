@@ -53,7 +53,9 @@
 	<key>NSFaceIDUsageDescription</key>
 	<string>Ứng dụng cần dùng Face ID để xác thực.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Ứng dụng cần vị trí để quản lý địa chỉ giao hàng.</string>
+	<string>Ung dung can quyen truy cap vi tri khi su dung de quan ly dia chi giao nhan va hien thi dich vu gan ban.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Ung dung can quyen truy cap vi tri lien tuc de duy tri cac tinh nang giao nhan va thong bao vi tri ngay ca khi ban dang su dung thiet bi.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Cho phép ứng dụng dùng micro để ghi âm và gửi tin nhắn thoại.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
