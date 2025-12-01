@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+
 import 'hotel_rooms_section.dart';
 import 'hotel_review_section.dart';
 
-class HotelDetailBody extends StatelessWidget {
+class HotelDetailBody extends StatefulWidget {
   final Map<String, dynamic> hotel;
   final Key? roomsSectionKey;
   final ValueChanged<HotelBookingSummary>? onBookingSummaryChanged;
@@ -17,11 +21,22 @@ class HotelDetailBody extends StatelessWidget {
   });
 
   @override
+  State<HotelDetailBody> createState() => _HotelDetailBodyState();
+}
+
+class _HotelDetailBodyState extends State<HotelDetailBody> {
+  int _currentTab = 0;
+
+  @override
   Widget build(BuildContext context) {
-    return _buildHotelInfo(context, hotel);
+    final theme = Provider.of<ThemeController>(context, listen: true);
+    final isDark = theme.darkTheme;
+
+    return _buildHotelInfo(context, widget.hotel, isDark);
   }
 
-  Widget _buildHotelInfo(BuildContext context, Map<String, dynamic> hotel) {
+  Widget _buildHotelInfo(
+      BuildContext context, Map<String, dynamic> hotel, bool isDark) {
     final String title = (hotel['title'] ?? hotel['name'] ?? '').toString();
     final String locationText = (hotel['location'] is Map)
         ? (hotel['location']?['name'] ?? '').toString()
@@ -70,17 +85,14 @@ class HotelDetailBody extends StatelessWidget {
     final dynamic roomsRaw = hotel['rooms'];
     final List<dynamic> rooms = roomsRaw is List ? roomsRaw : const [];
 
-    // Map term_id -> tên term để map cho room
     final Map<int, String> roomTermNameMap = {};
     for (final attr in attributes) {
       if (attr is Map && attr['terms'] is List) {
         for (final t in (attr['terms'] as List)) {
           if (t is Map) {
             final int? termId = int.tryParse(t['id']?.toString() ?? '');
-            final String name = (t['translation']?['name'] ??
-                t['name'] ??
-                '')
-                .toString();
+            final String name =
+            (t['translation']?['name'] ?? t['name'] ?? '').toString();
             if (termId != null && name.isNotEmpty) {
               roomTermNameMap[termId] = name;
             }
@@ -93,11 +105,42 @@ class HotelDetailBody extends StatelessWidget {
     (hotel['policy'] ?? hotel['extra_info'] ?? hotel['term'] ?? '')
         .toString();
     final String contentHtml = (hotel['content'] ?? '').toString();
+    final bgColor = isDark ? const Color(0xFF111315) : Colors.white;
+    final primaryText = isDark ? Colors.white : Colors.black87;
+    final secondaryText = isDark ? Colors.white70 : Colors.grey[700];
+
+    Widget currentTabView;
+    if (_currentTab == 0) {
+      currentTabView = _buildDescriptionTab(
+        hotel: hotel,
+        contentHtml: contentHtml,
+        policyHtml: policyHtml,
+        isDark: isDark,
+      );
+    } else if (_currentTab == 1) {
+      currentTabView = _buildLocationFacilityTab(
+        hotel: hotel,
+        address: address,
+        lat: lat,
+        lng: lng,
+        attributes: attributes,
+        rawTerms: rawTerms,
+        isDark: isDark,
+      );
+    } else {
+      currentTabView = _buildReviewTab(
+        context: context,
+        score: score,
+        reviewCount: reviewCount,
+        reviews: reviews,
+        isDark: isDark,
+      );
+    }
 
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.only(
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(24),
           topRight: Radius.circular(24),
         ),
@@ -105,290 +148,128 @@ class HotelDetailBody extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          /// --- Header: tên, điểm, vị trí, giá ---
           Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Title + Score
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       child: Text(
                         title,
-                        style: const TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: primaryText,
                           height: 1.3,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    if (score > 0)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.blue[700],
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.blue.withOpacity(0.3),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
+                    if (priceText.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            '$priceText ₫',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: primaryText,
                             ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.star_rounded,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  score.toStringAsFixed(1),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '/Đêm',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: secondaryText,
                             ),
-                            if (reviewCount > 0) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                '$reviewCount đánh giá',
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.9),
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
+                    ],
                   ],
                 ),
-
-                const SizedBox(height: 12),
-
-                // Location
-                if (locationText.isNotEmpty)
+                const SizedBox(height: 6),
+                if (locationText.isNotEmpty || address.isNotEmpty)
                   Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.blue[50],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          Icons.location_on_rounded,
-                          size: 18,
-                          color: Colors.blue[700],
-                        ),
+                      Icon(
+                        Icons.location_on_outlined,
+                        size: 16,
+                        color: secondaryText,
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 4),
                       Expanded(
                         child: Text(
-                          locationText,
+                          locationText.isNotEmpty ? locationText : address,
                           style: TextStyle(
-                            color: Colors.grey[700],
-                            fontSize: 15,
+                            fontSize: 13,
+                            color: secondaryText,
                           ),
                         ),
                       ),
                     ],
                   ),
-
-                const SizedBox(height: 20),
-
-                // Price card
-                if (priceText.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Colors.blue[700]!, Colors.blue[500]!],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+                const SizedBox(height: 6),
+                if (score > 0)
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.star_rounded,
+                        size: 16,
+                        color: Colors.amber,
                       ),
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.blue.withOpacity(0.3),
-                          blurRadius: 12,
-                          offset: const Offset(0, 6),
+                      const SizedBox(width: 4),
+                      Text(
+                        score.toStringAsFixed(1),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: primaryText,
                         ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "Giá từ",
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.9),
-                                fontSize: 14,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              "$priceText ₫",
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 24,
-                              ),
-                            ),
-                          ],
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '($reviewCount đánh giá)',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: secondaryText,
                         ),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Icon(
-                            Icons.payments_rounded,
-                            color: Colors.white,
-                            size: 32,
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
               ],
             ),
           ),
 
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
 
-          /// --- Thông tin tổng quan (sao, check-in/out, min night) ---
-          _buildBasicInfoSection(hotel),
+          _buildBasicInfoSection(hotel, isDark),
 
-          /// --- Mô tả ---
-          if (contentHtml.isNotEmpty)
-            _buildSection(
-              title: "Mô tả",
-              icon: Icons.description_rounded,
-              child: Html(
-                data: contentHtml,
-                style: {
-                  "p": Style(
-                    fontSize: FontSize(15),
-                    lineHeight: LineHeight(1.7),
-                    color: Colors.grey[800],
-                  ),
-                  "strong": Style(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                },
-              ),
-            ),
+          const SizedBox(height: 12),
 
-          /// --- Địa chỉ ---
-          if (address.isNotEmpty)
-            _buildSection(
-              title: "Địa chỉ",
-              icon: Icons.location_city_rounded,
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.grey[50],
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey[200]!),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.blue[50],
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(
-                        Icons.pin_drop_rounded,
-                        color: Colors.blue[700],
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        address,
-                        style: TextStyle(
-                          color: Colors.grey[800],
-                          fontSize: 15,
-                          height: 1.5,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          _buildTabs(isDark),
 
-          /// --- Map preview ---
-          if (lat != null &&
-              lng != null &&
-              lat.isNotEmpty &&
-              lng.isNotEmpty)
-            _buildMapPreview(lat, lng),
+          const SizedBox(height: 12),
 
-          /// --- Amenities ---
-          if (attributes.isNotEmpty || rawTerms.isNotEmpty)
-            _buildAmenitiesSection(attributes, rawTerms),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: currentTabView,
+          ),
 
-          /// --- Rooms (gắn key ở đây) ---
+          const SizedBox(height: 24),
+
           if (rooms.isNotEmpty)
             HotelRoomsSection(
-              key: roomsSectionKey,
+              key: widget.roomsSectionKey,
               hotelId: hotel['id'] ?? 0,
               rooms: rooms,
               roomTermNameMap: roomTermNameMap,
-              onBookingSummaryChanged: onBookingSummaryChanged,
-            ),
-
-          /// --- Reviews ---
-          if (score > 0 || reviews.isNotEmpty)
-            HotelReviewSection(
-              score: score,
-              reviewCount: reviewCount,
-              reviews: reviews,
-            ),
-
-          /// --- Policy ---
-          if (policyHtml.isNotEmpty)
-            _buildSection(
-              title: "Chính sách & lưu ý",
-              icon: Icons.rule_folder_rounded,
-              child: Html(
-                data: policyHtml,
-                style: {
-                  "p": Style(
-                    fontSize: FontSize(15),
-                    lineHeight: LineHeight(1.6),
-                    color: Colors.grey[800],
-                  ),
-                },
-              ),
+              onBookingSummaryChanged: widget.onBookingSummaryChanged,
             ),
 
           const SizedBox(height: 100),
@@ -397,45 +278,221 @@ class HotelDetailBody extends StatelessWidget {
     );
   }
 
-  Widget _buildSection({
-    required String title,
-    required IconData icon,
-    required Widget child,
-  }) {
+  Widget _buildTabs(bool isDark) {
+    final labels = ['Mô tả', 'Vị trí & ích', 'Đánh giá'];
+    final bg = isDark ? const Color(0xFF181A1F) : Colors.grey[100];
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.blue[50],
-                  borderRadius: BorderRadius.circular(8),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Container(
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          children: List.generate(labels.length, (index) {
+            final selected = index == _currentTab;
+            return Expanded(
+              child: GestureDetector(
+                onTap: () {
+                  setState(() => _currentTab = index);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      vertical: 10, horizontal: 6),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? (isDark ? Colors.blue[700] : Colors.white)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Center(
+                    child: Text(
+                      labels[index],
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight:
+                        selected ? FontWeight.w600 : FontWeight.w400,
+                        color: selected
+                            ? (isDark ? Colors.white : Colors.blue[700])
+                            : (isDark ? Colors.white70 : Colors.grey[700]),
+                      ),
+                    ),
+                  ),
                 ),
-                child: Icon(icon, size: 20, color: Colors.blue[700]),
               ),
-              const SizedBox(width: 10),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          child,
-        ],
+            );
+          }),
+        ),
       ),
     );
   }
 
-  Widget _buildBasicInfoSection(Map<String, dynamic> hotel) {
+  Widget _buildDescriptionTab({
+    required Map<String, dynamic> hotel,
+    required String contentHtml,
+    required String policyHtml,
+    required bool isDark,
+  }) {
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final greyText = isDark ? Colors.white70 : Colors.grey[800];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (contentHtml.isNotEmpty)
+          Html(
+            data: contentHtml,
+            style: {
+              "html": Style(
+                backgroundColor: Colors.transparent,
+              ),
+              "body": Style(
+                backgroundColor: Colors.transparent,
+              ),
+              "p": Style(
+                fontSize: FontSize(15),
+                lineHeight: LineHeight(1.7),
+                color: greyText,
+              ),
+              "strong": Style(
+                fontWeight: FontWeight.bold,
+                color: textColor,
+              ),
+            },
+          ),
+        if (policyHtml.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Text(
+            "Chính sách & lưu ý",
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: textColor,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Html(
+            data: policyHtml,
+            style: {
+              "html": Style(
+                backgroundColor: Colors.transparent,
+              ),
+              "body": Style(
+                backgroundColor: Colors.transparent,
+              ),
+              "p": Style(
+                fontSize: FontSize(15),
+                lineHeight: LineHeight(1.6),
+                color: greyText,
+              ),
+            },
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildLocationFacilityTab({
+    required Map<String, dynamic> hotel,
+    required String address,
+    required String? lat,
+    required String? lng,
+    required List<dynamic> attributes,
+    required List<dynamic> rawTerms,
+    required bool isDark,
+  }) {
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final greyText = isDark ? Colors.white70 : Colors.grey[800];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (address.isNotEmpty)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.location_on_rounded,
+                  size: 20, color: Colors.blue[400]),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  address,
+                  style: TextStyle(
+                    fontSize: 14,
+                    height: 1.5,
+                    color: greyText,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+        const SizedBox(height: 12),
+
+        if (lat != null &&
+            lng != null &&
+            lat.isNotEmpty &&
+            lng.isNotEmpty)
+          _buildMapPreview(lat, lng, isDark),
+
+        const SizedBox(height: 18),
+
+        if (attributes.isNotEmpty || rawTerms.isNotEmpty) ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Tiện nghi & dịch vụ',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: textColor,
+                ),
+              ),
+              Text(
+                'Xem tất cả',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.blue[600],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _buildAmenitiesSection(attributes, rawTerms, isDark),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildReviewTab({
+    required BuildContext context,
+    required double score,
+    required int reviewCount,
+    required List<dynamic> reviews,
+    required bool isDark,
+  }) {
+    if (score <= 0 && reviews.isEmpty) {
+      return Text(
+        getTranslated('no_reviews_yet', context) ??
+            'Chưa có đánh giá nào.',
+        style: TextStyle(
+          fontSize: 14,
+          color: isDark ? Colors.white70 : Colors.grey[700],
+        ),
+      );
+    }
+
+    return HotelReviewSection(
+      score: score,
+      reviewCount: reviewCount,
+      reviews: reviews,
+    );
+  }
+
+  Widget _buildBasicInfoSection(Map<String, dynamic> hotel, bool isDark) {
     final String starText = (hotel['star_rate'] ??
         hotel['star'] ??
         hotel['review_score_total'] ??
@@ -454,32 +511,35 @@ class HotelDetailBody extends StatelessWidget {
       items.add(_buildInfoChip(
         icon: Icons.hotel_class_rounded,
         label: "$starText sao",
+        isDark: isDark,
       ));
     }
     if (checkIn.isNotEmpty) {
       items.add(_buildInfoChip(
         icon: Icons.login_rounded,
         label: "Nhận phòng: $checkIn",
+        isDark: isDark,
       ));
     }
     if (checkOut.isNotEmpty) {
       items.add(_buildInfoChip(
         icon: Icons.logout_rounded,
         label: "Trả phòng: $checkOut",
+        isDark: isDark,
       ));
     }
     if (minNight.isNotEmpty) {
       items.add(_buildInfoChip(
         icon: Icons.nights_stay_rounded,
         label: "Tối thiểu $minNight đêm",
+        isDark: isDark,
       ));
     }
 
     if (items.isEmpty) return const SizedBox();
 
-    return _buildSection(
-      title: "Thông tin tổng quan",
-      icon: Icons.info_outline_rounded,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
       child: Wrap(
         spacing: 10,
         runSpacing: 10,
@@ -488,13 +548,20 @@ class HotelDetailBody extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoChip({required IconData icon, required String label}) {
+  Widget _buildInfoChip({
+    required IconData icon,
+    required String label,
+    required bool isDark,
+  }) {
+    final bg = isDark ? const Color(0xFF1D2025) : Colors.grey[50];
+    final border = isDark ? Colors.white10 : Colors.grey[200];
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
+        color: bg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
+        border: Border.all(color: border!),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -504,9 +571,9 @@ class HotelDetailBody extends StatelessWidget {
           Flexible(
             child: Text(
               label,
-              style: const TextStyle(
-                fontSize: 14,
-                color: Colors.black87,
+              style: TextStyle(
+                fontSize: 13,
+                color: isDark ? Colors.white : Colors.black87,
               ),
             ),
           ),
@@ -515,92 +582,93 @@ class HotelDetailBody extends StatelessWidget {
     );
   }
 
-  Widget _buildMapPreview(String lat, String lng) {
-    return _buildSection(
-      title: "Vị trí trên bản đồ",
-      icon: Icons.map_rounded,
-      child: GestureDetector(
-        onTap: () =>
-            launchUrl(Uri.parse('https://maps.google.com/?q=$lat,$lng')),
-        child: Container(
-          height: 200,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Stack(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  color: Colors.grey[200],
-                  child: const Center(
-                    child: Icon(
-                      Icons.map_rounded,
-                      size: 60,
-                      color: Colors.grey,
-                    ),
+  Widget _buildMapPreview(String lat, String lng, bool isDark) {
+    final cardBg = isDark ? const Color(0xFF1E1F23) : Colors.white;
+
+    return GestureDetector(
+      onTap: () =>
+          launchUrl(Uri.parse('https://maps.google.com/?q=$lat,$lng')),
+      child: Container(
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.12),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        height: 190,
+        child: Stack(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                color: isDark ? const Color(0xFF25272C) : Colors.grey[200],
+                child: const Center(
+                  child: Icon(
+                    Icons.map_rounded,
+                    size: 60,
+                    color: Colors.grey,
                   ),
                 ),
               ),
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
-                      colors: [
-                        Colors.blue[700]!.withOpacity(0.95),
-                        Colors.transparent,
+            ),
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.35),
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(16),
+                    bottomRight: Radius.circular(16),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: const [
+                        Icon(Icons.near_me_rounded,
+                            color: Colors.white, size: 18),
+                        SizedBox(width: 6),
+                        Text(
+                          'Google Maps',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                       ],
                     ),
-                    borderRadius: const BorderRadius.only(
-                      bottomLeft: Radius.circular(16),
-                      bottomRight: Radius.circular(16),
-                    ),
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.near_me_rounded,
+                    const Text(
+                      'Xem bản đồ',
+                      style: TextStyle(
                         color: Colors.white,
-                        size: 18,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
                       ),
-                      SizedBox(width: 8),
-                      Text(
-                        'Nhấn để xem trên Google Maps',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
+
   Widget _buildAmenitiesSection(
-      List<dynamic> attributes,
-      List<dynamic> rawTerms,
-      ) {
+      List<dynamic> attributes, List<dynamic> rawTerms, bool isDark) {
     final List<Widget> sections = [];
 
     for (final attr in attributes) {
@@ -608,53 +676,58 @@ class HotelDetailBody extends StatelessWidget {
         sections.add(
           _buildAttributeSection(
             Map<String, dynamic>.from(attr as Map),
+            isDark,
           ),
         );
       }
     }
 
     if (rawTerms.isNotEmpty) {
+      sections.add(const SizedBox(height: 8));
       sections.add(
-        _buildSection(
-          title: "Tiện nghi",
-          icon: Icons.spa_rounded,
-          child: Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: rawTerms.map((t) {
-              final name = (t is Map)
-                  ? (t['translation']?['name'] ??
-                  t['name'] ??
-                  t['display_name'] ??
-                  '')
-                  .toString()
-                  : t.toString();
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: rawTerms.map((t) {
+            final name = (t is Map)
+                ? (t['translation']?['name'] ??
+                t['name'] ??
+                t['display_name'] ??
+                '')
+                .toString()
+                : t.toString();
 
-              if (name.isEmpty) return const SizedBox.shrink();
+            if (name.isEmpty) return const SizedBox.shrink();
 
-              return _buildAmenityChip(name);
-            }).toList(),
-          ),
+            return _buildAmenityChip(name, isDark);
+          }).toList(),
         ),
       );
     }
 
-    return Column(children: sections);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: sections,
+    );
   }
 
-  Widget _buildAmenityChip(String name) {
+  Widget _buildAmenityChip(String name, bool isDark) {
+    final bg = isDark ? const Color(0xFF1E1F23) : Colors.white;
+    final border = isDark ? Colors.white10 : Colors.blue[100];
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: bg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.blue[100]!),
+        border: Border.all(color: border!),
         boxShadow: [
-          BoxShadow(
-            color: Colors.blue.withOpacity(0.08),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
+          if (!isDark)
+            BoxShadow(
+              color: Colors.blue.withOpacity(0.06),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
         ],
       ),
       child: Row(
@@ -676,10 +749,10 @@ class HotelDetailBody extends StatelessWidget {
           Flexible(
             child: Text(
               name,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: Colors.black87,
+                color: isDark ? Colors.white : Colors.black87,
               ),
             ),
           ),
@@ -688,7 +761,8 @@ class HotelDetailBody extends StatelessWidget {
     );
   }
 
-  Widget _buildAttributeSection(Map<String, dynamic> attr) {
+  Widget _buildAttributeSection(
+      Map<String, dynamic> attr, bool isDark) {
     final terms = attr['terms'] as List? ?? [];
     if (terms.isEmpty) return const SizedBox();
 
@@ -706,43 +780,62 @@ class HotelDetailBody extends StatelessWidget {
       sectionIcon = Icons.room_service_rounded;
     }
 
-    return _buildSection(
-      title: attrName,
-      icon: sectionIcon,
-      child: Wrap(
-        spacing: 10,
-        runSpacing: 10,
-        children: terms.asMap().entries.map((entry) {
-          final index = entry.key;
-          final term = entry.value;
-          final name = (term is Map)
-              ? (term['translation']?['name'] ??
-              term['name'] ??
-              term['display_name'] ??
-              '')
-              .toString()
-              : term.toString();
+    final titleColor = isDark ? Colors.white : Colors.black87;
 
-          if (name.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Icon(sectionIcon, size: 18, color: Colors.blue[600]),
+            const SizedBox(width: 8),
+            Text(
+              attrName,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: titleColor,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: terms.asMap().entries.map((entry) {
+            final index = entry.key;
+            final term = entry.value;
+            final name = (term is Map)
+                ? (term['translation']?['name'] ??
+                term['name'] ??
+                term['display_name'] ??
+                '')
+                .toString()
+                : term.toString();
 
-          return TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0.0, end: 1.0),
-            duration: Duration(milliseconds: 300 + (index * 50)),
-            curve: Curves.easeOutBack,
-            builder: (context, value, child) {
-              final double opacity = value.clamp(0.0, 1.0);
-              return Transform.scale(
-                scale: value,
-                child: Opacity(
-                  opacity: opacity,
-                  child: child,
-                ),
-              );
-            },
-            child: _buildAmenityChip(name),
-          );
-        }).toList(),
-      ),
+            if (name.isEmpty) return const SizedBox.shrink();
+
+            return TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.0, end: 1.0),
+              duration: Duration(milliseconds: 250 + (index * 40)),
+              curve: Curves.easeOutBack,
+              builder: (context, value, child) {
+                final double opacity = value.clamp(0.0, 1.0);
+                return Transform.scale(
+                  scale: value,
+                  child: Opacity(
+                    opacity: opacity,
+                    child: child,
+                  ),
+                );
+              },
+              child: _buildAmenityChip(name, isDark),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 }
