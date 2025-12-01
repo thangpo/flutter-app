@@ -1,3 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
@@ -17,10 +20,6 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
-
-	<key>NSFaceIDUsageDescription</key>
-	<string>Ứng dụng cần dùng Face ID để xác thực.</string>
-
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -32,62 +31,50 @@
 			</array>
 		</dict>
 	</array>
-
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
-
 	<key>FacebookAppID</key>
 	<string>592472151910119</string>
 	<key>FacebookClientToken</key>
 	<string>cb35f1ec4b6240aad802c5c2b1cdc910</string>
 	<key>FacebookDisplayName</key>
 	<string>VNShop247</string>
-
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
-
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
-
-	<!-- ✅ GỘP: chỉ còn 1 khóa camera, diễn giải dễ hiểu -->
 	<key>NSCameraUsageDescription</key>
 	<string>Cho phép ứng dụng dùng camera để chụp và gửi ảnh.</string>
-
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Cho phép ứng dụng truy cập thư viện ảnh để chọn và gửi ảnh.</string>
-
-	<!-- ✅ Khuyến nghị nếu có lưu ảnh/video vào Photos -->
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Cho phép ứng dụng lưu ảnh/video vào thư viện.</string>
-
-	<!-- ✅ Bổ sung cho ghi âm (record) -->
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Cho phép ứng dụng dùng micro để ghi âm và gửi tin nhắn thoại.</string>
-
+	<key>NSFaceIDUsageDescription</key>
+	<string>Ứng dụng cần dùng Face ID để xác thực.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Ứng dụng cần vị trí để quản lý địa chỉ giao hàng.</string>
-
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Cho phép ứng dụng dùng micro để ghi âm và gửi tin nhắn thoại.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Cho phép ứng dụng lưu ảnh/video vào thư viện.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Cho phép ứng dụng truy cập thư viện ảnh để chọn và gửi ảnh.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
-
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
 		<string>remote-notification</string>
+		<string>voip</string>
+		<string>audio</string>
 	</array>
-
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
-
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
@@ -101,7 +88,7 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
 </dict>
+</plist>
