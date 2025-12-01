@@ -415,7 +415,9 @@ class CallInviteForegroundListener {
 
     try {
       final cc = ctx.read<CallController>();
-      if (cc.isCallHandled(inv.callId)) {
+      // Bỏ qua nếu đã được CallKit / logic khác attach & set trạng thái != ringing (đã nhận hoặc kết thúc)
+      if (cc.isCallHandled(inv.callId) ||
+          (cc.activeCallId == inv.callId && cc.callStatus != 'ringing')) {
         _routing = false;
         return;
       }

@@ -5,13 +5,14 @@ import 'package:provider/provider.dart';
 
 import '../controllers/call_controller.dart';
 import 'call_screen.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart' as webrtc;
 
 class IncomingCallScreen extends StatefulWidget {
   final int callId;
   final String mediaType; // audio | video
 
   final String? callerName;
-  final String? callerAvatar; // ✅ giữ lại cho code cũ
+  final String? callerAvatar; // giữ cho code cũ
   final String? peerName; // dùng trong ChatScreen
   final String? peerAvatar; // avatar general
 
@@ -36,7 +37,10 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   bool _handling = false;
   bool _viewAlive = true;
   bool _detaching = false;
-
+  bool _declineRequested = false;
+  bool _locked = false; // đã chọn 1 hành động -> khóa mọi thứ
+  bool _accepting = false; // đang xử lý Accept
+  bool _declining = false; // đang xử lý Decline
   @override
   void initState() {
     super.initState();
@@ -52,7 +56,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   void _attachIfNeeded() {
     if (!_viewAlive) return;
     if (_cc.isCallHandled(widget.callId)) {
-      // Call �`A� k���t th��?c, kh��ng vA�o mA�n incoming n���a
       Navigator.of(context).maybePop();
       return;
     }
@@ -71,35 +74,67 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
 
     final st = _cc.callStatus;
 
-    // Không auto sang CallScreen khi 'answered' nữa
-    // -> chỉ xử lý trường hợp đối phương cúp trước
+    if (st == 'answered') {
+      // Nếu user CHƯA bấm Accept (chưa _locked), cho phép auto vào CallScreen.
+      // Còn đã Accept (_locked=true) thì không làm gì thêm, tránh đè luồng.
+      if (!_locked) {
+        _log(
+            'controllerChanged status=answered -> go to CallScreen callId=${widget.callId}');
+        if (mounted) _goToCallScreen();
+      }
+      return;
+    }
+
     if (st == 'declined' || st == 'ended') {
-      await _safeDetachAndPop();
+      // Nếu đang/đã Accept thì phớt lờ declined/ended đến muộn
+      if (_accepting) {
+        _log(
+            'controllerChanged status=$st ignored (already accepting) callId=${widget.callId}');
+        return;
+      }
+      _log(
+          'controllerChanged status=$st -> pop+detach incoming callId=${widget.callId}');
+      await _safeDetachAndPop(detach: true);
+      return;
     }
   }
 
-  Future<void> _safeDetachAndPop() async {
+  Future<void> _safeDetachAndPop({bool detach = false}) async {
     if (_detaching) return;
     _detaching = true;
     _viewAlive = false;
     _cc.removeListener(_listener);
 
     try {
-      await _cc.detachCall();
+      if (detach) {
+        await _cc.detachCall(); // chỉ detach khi thực sự kết thúc/decline
+      }
     } catch (_) {}
 
     if (mounted) {
+      // Tránh maybePop khi route scope không còn hợp lệ
+      // Nếu bạn đang dùng pushReplacement cho CallScreen, ở đây chỉ pop nếu còn trên stack.
       Navigator.of(context).maybePop();
     }
   }
 
   Future<void> _onAccept() async {
-    if (_handling) return;
+    if (_locked || _accepting) return;
+    _locked = true;
+    _accepting = true;
     setState(() => _handling = true);
 
-    // Đảm bảo đã attach call trước khi gửi answer
+    // iOS: xin quyền trước để tránh popup đúng lúc chuyển route
+    await _ensureMediaPermissions();
+    // ngắt listener để tránh race trong lúc điều hướng
+    try {
+      _cc.removeListener(_listener);
+    } catch (_) {}
+
+    // đảm bảo đã attach (nếu cần)
     if (_cc.activeCallId != widget.callId) {
-      _log('accept: attaching callId=${widget.callId} media=${widget.mediaType}');
+      _log(
+          'accept: attaching callId=${widget.callId} media=${widget.mediaType}');
       _cc.attachCall(
         callId: widget.callId,
         mediaType: widget.mediaType,
@@ -107,23 +142,18 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
       );
     }
 
-    // Chuẩn Messenger: bấm "Nghe" là vào luôn màn call,
-    // không cần chờ server confirm 'answered'
     try {
       _log('accept: action(answer) start callId=${widget.callId}');
-      await _cc
-          .action('answer')
-          .timeout(const Duration(seconds: 2), onTimeout: () {
+      await _cc.action('answer').timeout(const Duration(seconds: 2),
+          onTimeout: () {
         _log('action(answer) timeout, continue to CallScreen');
       });
     } catch (e, st) {
       _log('action(answer) error: $e', st: st);
-      // Nếu lỗi mạng nhẹ thì vẫn cho user vào màn CallScreen,
-      // WebRTC layer + polling sẽ tự xử lý tiếp.
     }
 
     if (!mounted) return;
-    _goToCallScreen();
+    _goToCallScreen(); // KHÔNG detach ở đây
   }
 
   void _goToCallScreen() {
@@ -144,11 +174,19 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   }
 
   Future<void> _onDecline() async {
-    if (_handling) return;
+    if (_locked || _declining) return; // đã Accept rồi thì _locked = true
+    _locked = true;
+    _declining = true;
+    _declineRequested = true;
     setState(() => _handling = true);
 
+    try {
+      _cc.removeListener(_listener);
+    } catch (_) {}
+
     if (_cc.activeCallId != widget.callId) {
-      _log('decline: attaching callId=${widget.callId} media=${widget.mediaType}');
+      _log(
+          'decline: attaching callId=${widget.callId} media=${widget.mediaType}');
       _cc.attachCall(
         callId: widget.callId,
         mediaType: widget.mediaType,
@@ -158,16 +196,30 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
 
     try {
       _log('decline: action(decline) start callId=${widget.callId}');
-      await _cc
-          .action('decline')
-          .timeout(const Duration(seconds: 2), onTimeout: () {
+      await _cc.action('decline').timeout(const Duration(seconds: 2),
+          onTimeout: () {
         _log('action(decline) timeout');
       });
     } catch (e, st) {
       _log('action(decline) error: $e', st: st);
     }
 
-    await _safeDetachAndPop();
+    await _safeDetachAndPop(detach: true); // Decline mới detach + pop
+  }
+
+  Future<void> _ensureMediaPermissions() async {
+    try {
+      // "làm nóng" quyền mic trên iOS bằng cách xin 1 stream ngắn rồi đóng
+      final stream =
+          await webrtc.navigator.mediaDevices.getUserMedia({'audio': true});
+      // đóng gọn gàng
+      for (final t in stream.getTracks()) {
+        t.stop();
+      }
+      await stream.dispose();
+    } catch (_) {
+      // lần đầu iOS sẽ bật prompt; nếu user từ chối thì vẫn bắt ở chỗ answer
+    }
   }
 
   @override
@@ -187,8 +239,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
 
     return WillPopScope(
       onWillPop: () async {
-        // Bấm back = từ chối cuộc gọi (giống Messenger)
-        if (!_handling) _onDecline();
+        if (!_handling) {
+          _log('onWillPop ignored (no auto-decline) callId=${widget.callId}');
+        }
         return false;
       },
       child: Scaffold(

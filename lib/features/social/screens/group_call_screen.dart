@@ -10,6 +10,7 @@ import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart' show naviga
 
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_call_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_chat_controller.dart';
+import '../utils/ice_server_config.dart';
 
 class GroupCallScreen extends StatefulWidget {
   final String groupId;
@@ -216,25 +217,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     if (_pcByUser.containsKey(peerId)) return;
 
     final config = {
-      'iceServers': [
-        {
-          'urls': [
-            'stun:stun.l.google.com:19302',
-            'stun:stun1.l.google.com:19302',
-          ],
-        },
-        // TURN fallback
-        {
-          'urls': [
-            'turn:social.vnshop247.com:3478?transport=udp',
-            'turn:social.vnshop247.com:3478?transport=tcp',
-            'turn:147.93.98.63:3478?transport=udp',
-            'turn:147.93.98.63:3478?transport=tcp',
-          ],
-          'username': 'webrtc',
-          'credential': 'supersecret',
-        },
-      ],
+      'iceServers': kDefaultIceServers,
       'sdpSemantics': 'unified-plan',
       // 'iceTransportPolicy': 'relay',
       'bundlePolicy': 'max-bundle',

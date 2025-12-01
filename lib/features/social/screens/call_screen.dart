@@ -6,8 +6,8 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:provider/provider.dart';
 
 import '../domain/models/ice_candidate_lite.dart';
-
 import '../controllers/call_controller.dart';
+import '../utils/ice_server_config.dart';
 
 class CallScreen extends StatefulWidget {
   final bool isCaller; // true: caller, false: callee
@@ -53,12 +53,18 @@ class _CallScreenState extends State<CallScreen> {
   bool _detached = false;
 
   final Set<String> _addedCandidates = {};
+  final Set<String> _sentCandidates = {};
   final List<IceCandidateLite> _pendingCandidates = [];
+  bool _stableIceLogged = false;
+  Timer? _videoWatchdog;
+  int _videoBlankTicks = 0;
 
   // UI controls
   bool _micOn = true;
   bool _camOn = true;
   bool _speakerOn = true;
+
+  bool _flowStarted = false;
 
   @override
   void initState() {
@@ -69,7 +75,22 @@ class _CallScreenState extends State<CallScreen> {
     _callListener = _onCallUpdated;
     _cc.addListener(_callListener);
 
-    _initRenderers();
+    // Nếu controller chưa attach, gắn lại (đang ở CallScreen)
+    if (_cc.activeCallId != widget.callId) {
+      _cc.attachCall(
+        callId: widget.callId,
+        mediaType: widget.mediaType,
+        initialStatus: 'answered',
+      );
+    }
+
+    // Quan trọng: đợi init renderer xong rồi mới start flow
+    Future.microtask(() async {
+      await _initRenderers();
+      await _startCallFlow();
+      // đập cập nhật sớm phòng trường hợp offer/answer đến sát lúc này
+      Future.delayed(const Duration(milliseconds: 250), _onCallUpdated);
+    });
   }
 
   Future<void> _initRenderers() async {
@@ -79,13 +100,15 @@ class _CallScreenState extends State<CallScreen> {
     } catch (e, st) {
       _log('initRenderers error: $e', st: st);
     }
-
-    _startCallFlow();
+    // ❌ Đừng gọi _startCallFlow() ở đây nữa (đã gọi từ initState).
+    // Chỉ poke nhẹ controller để nếu OFFER/ANSWER tới sát thời điểm này thì vẫn bắt được:
+    Future.delayed(const Duration(milliseconds: 250), _onCallUpdated);
   }
 
   Future<void> _startCallFlow() async {
     if (!_viewAlive) return;
-
+    if (_flowStarted) return; // chống chạy lặp
+    _flowStarted = true;
     try {
       final isVideo =
           (widget.mediaType == 'video') || (_cc.activeMediaType == 'video');
@@ -93,7 +116,9 @@ class _CallScreenState extends State<CallScreen> {
       _micOn = true;
       _camOn = isVideo;
       _speakerOn = true;
-      _log('startCallFlow | isCaller=${widget.isCaller} media=${widget.mediaType}');
+      _stableIceLogged = false;
+      _log(
+          'startCallFlow | isCaller=${widget.isCaller} media=${widget.mediaType}');
 
       // bật loa ngoài
       try {
@@ -104,21 +129,7 @@ class _CallScreenState extends State<CallScreen> {
 
       // tạo PeerConnection
       final config = {
-        'iceServers': [
-          {
-            'urls': ['stun:stun.l.google.com:19302'],
-          },
-          {
-            'urls': [
-              'turn:social.vnshop247.com:3478?transport=udp',
-              'turn:social.vnshop247.com:3478?transport=tcp',
-              'turn:147.93.98.63:3478?transport=udp',
-              'turn:147.93.98.63:3478?transport=tcp',
-            ],
-            'username': 'webrtc',
-            'credential': 'supersecret',
-          },
-        ],
+        'iceServers': kDefaultIceServers,
         'sdpSemantics': 'unified-plan',
       };
 
@@ -135,51 +146,96 @@ class _CallScreenState extends State<CallScreen> {
           await stream.addTrack(e.track);
         }
 
-        // Chỉ gán renderer khi track video để tránh âm thanh ghi đè stream video
         if (e.track.kind == 'video') {
           try {
             _remoteStream = stream;
-            _remoteRenderer.srcObject = stream;
+            _attachRemoteStream(stream); // ✅ dùng helper an toàn
             _log(
                 'onTrack kind=${e.track.kind} id=${e.track.id} remoteStream=${stream.id}');
             _logRemoteSizeLater();
             _kickRemoteRenderIfBlank();
+            _startVideoWatchdog();
           } catch (err, st) {
             _log('onTrack set renderer error: $err', st: st);
           }
           if (mounted) setState(() {});
         } else {
-          _log('onTrack kind=${e.track.kind} id=${e.track.id} (ignored for renderer)');
+          _log(
+              'onTrack kind=${e.track.kind} id=${e.track.id} (ignored for renderer)');
         }
       };
 
       // ICE local
       _pc!.onIceCandidate = (c) {
         if (c.candidate == null) return;
+        final key = '${c.candidate}|${c.sdpMid ?? ''}|${c.sdpMLineIndex ?? ''}';
+        if (!_sentCandidates.add(key)) {
+          return;
+        }
+        final cType = _iceType(c.candidate);
         _cc.sendCandidate(
           candidate: c.candidate!,
           sdpMid: c.sdpMid,
           sdpMLineIndex: c.sdpMLineIndex,
         );
         _log(
-            'onIceCandidate mid=${c.sdpMid} mline=${c.sdpMLineIndex} len=${c.candidate?.length}');
+            'onIceCandidate mid=${c.sdpMid} mline=${c.sdpMLineIndex} len=${c.candidate?.length} type=$cType');
+      };
+
+      _pc!.onIceConnectionState = (state) {
+        _log('iceConnectionState -> $state');
+        if (state == RTCIceConnectionState.RTCIceConnectionStateConnected ||
+            state == RTCIceConnectionState.RTCIceConnectionStateCompleted) {
+          _cc.pausePolling();
+          _logSelectedCandidatePair();
+          _logMediaStats();
+        } else if (state == RTCIceConnectionState.RTCIceConnectionStateFailed) {
+          _hangup();
+        } else if (state ==
+            RTCIceConnectionState.RTCIceConnectionStateDisconnected) {
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (!_viewAlive || _pc == null) return;
+            if (_pc!.iceConnectionState ==
+                RTCIceConnectionState.RTCIceConnectionStateDisconnected) {
+              _hangup();
+            }
+          });
+        } else if (state == RTCIceConnectionState.RTCIceConnectionStateClosed) {
+          _hangup();
+        }
       };
 
       // connection state
       _pc!.onConnectionState = (s) {
         _log('connectionState -> $s');
+
+        // Đừng cúp máy khi callee chưa SRD — iOS có thể "Closed/Disconnected" thoáng khi đổi route
+        if (!_remoteDescSet && !widget.isCaller) {
+          return;
+        }
+
         if (s == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
-            s == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
             s == RTCPeerConnectionState.RTCPeerConnectionStateClosed) {
           _hangup();
+        } else if (s ==
+            RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (!_viewAlive || _pc == null) return;
+            if (_pc!.connectionState ==
+                RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
+              _hangup();
+            }
+          });
         }
       };
 
       // Plan-B fallback (một số thiết bị Android gửi addStream)
       _pc!.onAddStream = (MediaStream stream) async {
         try {
-          _remoteRenderer.srcObject = stream;
-          _log('onAddStream id=${stream.id} tracks=${stream.getTracks().length}');
+          _remoteStream = stream;
+          _attachRemoteStream(stream); // ✅ dùng helper an toàn
+          _log(
+              'onAddStream id=${stream.id} tracks=${stream.getTracks().length}');
         } catch (err, st) {
           _log('onAddStream set renderer error: $err', st: st);
         }
@@ -206,24 +262,22 @@ class _CallScreenState extends State<CallScreen> {
 
       _localStream = await navigator.mediaDevices.getUserMedia(constraints);
       try {
-        _localRenderer.srcObject = _localStream;
+        // ✅ chỉ gán khi renderer sẵn sàng, có retry
+        if (_localRenderer.textureId != null) {
+          _localRenderer.srcObject = _localStream;
+        } else {
+          Future.delayed(const Duration(milliseconds: 50), () {
+            if (mounted && _localRenderer.textureId != null) {
+              _localRenderer.srcObject = _localStream;
+              setState(() {});
+            }
+          });
+        }
         _log(
             'local stream id=${_localStream?.id} tracks=${_localStream?.getTracks().length}');
       } catch (err, st) {
         _log('set local renderer error: $err', st: st);
       }
-
-      // Thêm sẵn transceiver recv-only để chắc chắn nhận remote (unified-plan iOS)
-      try {
-        await _pc!.addTransceiver(
-          kind: RTCRtpMediaType.RTCRtpMediaTypeAudio,
-          init: RTCRtpTransceiverInit(direction: TransceiverDirection.SendRecv),
-        );
-        await _pc!.addTransceiver(
-          kind: RTCRtpMediaType.RTCRtpMediaTypeVideo,
-          init: RTCRtpTransceiverInit(direction: TransceiverDirection.SendRecv),
-        );
-      } catch (_) {}
 
       // add local track vào PC
       var addedOk = true;
@@ -232,8 +286,18 @@ class _CallScreenState extends State<CallScreen> {
           await _pc!.addTrack(t, _localStream!);
           _log('addTrack kind=${t.kind} id=${t.id}');
         } catch (e, st) {
-          addedOk = false;
-          _log('addTrack error: $e', st: st);
+          _log('addTrack error: $e, try addTransceiver', st: st);
+          try {
+            await _pc!.addTransceiver(
+              track: t,
+              init: RTCRtpTransceiverInit(
+                  direction: TransceiverDirection.SendRecv),
+            );
+            _log('addTransceiver fallback ok kind=${t.kind} id=${t.id}');
+          } catch (e2, st2) {
+            addedOk = false;
+            _log('addTransceiver fallback error: $e2', st: st2);
+          }
         }
       }
       _localTracksAdded = addedOk;
@@ -242,18 +306,14 @@ class _CallScreenState extends State<CallScreen> {
         await _ensureLocalMedia(wantVideo: isVideo);
       }
 
-      // tăng bitrate gửi đi (giống style cũ — KHÔNG dùng getParameters)
+      // tăng bitrate gửi đi
       try {
         final senders = await _pc!.getSenders();
         for (var s in senders) {
           if (s.track?.kind == 'video') {
             await s.setParameters(
               RTCRtpParameters(
-                encodings: [
-                  RTCRtpEncoding(
-                    maxBitrate: 1500 * 1000, // ~1.5 Mbps
-                  ),
-                ],
+                encodings: [RTCRtpEncoding(maxBitrate: 1500 * 1000)],
               ),
             );
           }
@@ -280,6 +340,7 @@ class _CallScreenState extends State<CallScreen> {
       _log('startCallFlow error: $e', st: st);
       _hangup();
     }
+    await Future.microtask(_onCallUpdated);
   }
 
   /// Lắng nghe CallController để nhận OFFER / ANSWER / ICE
@@ -295,23 +356,24 @@ class _CallScreenState extends State<CallScreen> {
     }
 
     // CALLEE xử lý OFFER
-        // CALLEE xử lý OFFER: set remote + trả lời đúng 1 lần
     if (!widget.isCaller) {
       final offer = _cc.sdpOffer;
 
-      // 1) Chỉ setRemoteDescription nếu chưa set
       if (offer != null && !_remoteDescSet) {
         try {
-          await _pc!.setRemoteDescription(
-            RTCSessionDescription(offer, 'offer'),
-          );
+          await _pc!
+              .setRemoteDescription(RTCSessionDescription(offer, 'offer'));
           _remoteDescSet = true;
           _log('callee setRemoteDescription(offer) ${_sdpSummary(offer)}');
-          _ensureSendRecvTransceivers();
           _flushPendingCandidates();
+
+          // Hoãn ép sendrecv một nhịp để tránh race
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (!_viewAlive || _pc == null || !_remoteDescSet) return;
+            _ensureSendRecvTransceivers();
+          });
         } catch (e) {
           final msg = '$e';
-          // Nếu WebRTC báo "wrong state" thì coi như đã set trước đó, bỏ qua
           if (!msg.contains('Called in wrong state')) {
             _error('Lỗi set remote OFFER: $e');
             _log('callee setRemoteDescription(offer) error: $e');
@@ -319,12 +381,10 @@ class _CallScreenState extends State<CallScreen> {
         }
       }
 
-      // 2) Khi đã có remote offer & chưa gửi answer → tạo answer 1 lần
       if (_remoteDescSet && !_offerHandled) {
-        _offerHandled = true; // đánh dấu đã xử lý để tránh lặp
+        _offerHandled = true;
         try {
-          // Nếu chưa có local media (do payload sai mediaType), đảm bảo mở media trước khi answer
-          if (!_localTracksAdded || _localStream == null) {
+          if (_localStream == null) {
             await _ensureLocalMedia(
               wantVideo: (_cc.activeMediaType == 'video' ||
                   widget.mediaType == 'video'),
@@ -351,15 +411,12 @@ class _CallScreenState extends State<CallScreen> {
       }
     }
 
-
     // CALLER nhận ANSWER
     if (widget.isCaller && !_answerHandled) {
       final ans = _cc.sdpAnswer;
       if (ans != null && !_remoteDescSet) {
         try {
-          await _pc!.setRemoteDescription(
-            RTCSessionDescription(ans, 'answer'),
-          );
+          await _pc!.setRemoteDescription(RTCSessionDescription(ans, 'answer'));
           _remoteDescSet = true;
           _answerHandled = true;
           _log('caller setRemoteDescription(answer) ${_sdpSummary(ans)}');
@@ -372,8 +429,7 @@ class _CallScreenState extends State<CallScreen> {
       }
     }
 
-    
-    // CALLER fallback: n?u server chua tr? offer trong poll, resend 1 l?n sau 2s
+    // CALLER fallback: if server chưa trả offer trong poll, resend sau 2s
     if (widget.isCaller &&
         !_offerResent &&
         _localOfferSdp != null &&
@@ -388,7 +444,8 @@ class _CallScreenState extends State<CallScreen> {
         _log('resend offer error: ');
       }
     }
-// ICE từ peer
+
+    // ICE từ peer
     if (_cc.iceCandidates.isNotEmpty) {
       for (var ic in _cc.iceCandidates) {
         final key = '${ic.candidate}|${ic.sdpMid}|${ic.sdpMLineIndex}';
@@ -411,7 +468,8 @@ class _CallScreenState extends State<CallScreen> {
       await _pc!.addCandidate(
         RTCIceCandidate(ic.candidate, ic.sdpMid, ic.sdpMLineIndex),
       );
-      _log('addRemoteCandidate mid=${ic.sdpMid} mline=${ic.sdpMLineIndex}');
+      _log(
+          'addRemoteCandidate mid=${ic.sdpMid} mline=${ic.sdpMLineIndex} type=${_iceType(ic.candidate)}');
     } catch (e, st) {
       _log('addRemoteCandidate error: $e', st: st);
     }
@@ -428,14 +486,36 @@ class _CallScreenState extends State<CallScreen> {
     }
   }
 
+  void _attachRemoteStream(MediaStream stream) {
+    if (!mounted) return;
+    if (_remoteRenderer.textureId != null) {
+      _remoteRenderer.srcObject = stream;
+      if (mounted) setState(() {});
+    } else {
+      // retry ngắn nếu texture chưa sẵn
+      Future.delayed(const Duration(milliseconds: 50), () {
+        if (!mounted) return;
+        if (_remoteRenderer.textureId != null) {
+          _remoteRenderer.srcObject = stream;
+          setState(() {});
+        }
+      });
+    }
+  }
+
   /// End call
   Future<void> _hangup() async {
     if (_ending) return;
     _ending = true;
 
-    try {
-      await _cc.action('end');
-    } catch (_) {}
+    // Fire-and-forget end to tránh chờ network làm đơ UI
+    unawaited(Future(() async {
+      try {
+        await _cc
+            .action('end')
+            .timeout(const Duration(seconds: 2), onTimeout: () {});
+      } catch (_) {}
+    }));
     await _detachController();
 
     _disposeRTC();
@@ -477,7 +557,6 @@ class _CallScreenState extends State<CallScreen> {
         final w = _remoteRenderer.videoWidth;
         final h = _remoteRenderer.videoHeight;
         if ((w == 0 || h == 0) && _remoteStream != null) {
-          // thử gán lại stream để renderer refresh
           _remoteRenderer.srcObject = _remoteStream;
           _log('remoteRenderer blank -> reattach stream ${_remoteStream?.id}');
           _logRemoteSizeLater();
@@ -487,10 +566,197 @@ class _CallScreenState extends State<CallScreen> {
     });
   }
 
+  void _startVideoWatchdog() {
+    _videoBlankTicks = 0;
+    _videoWatchdog?.cancel();
+    _videoWatchdog = Timer.periodic(const Duration(seconds: 2), (_) async {
+      if (!_viewAlive || _pc == null) return;
+      final state = _pc!.connectionState;
+      if (state != RTCPeerConnectionState.RTCPeerConnectionStateConnected &&
+          state != RTCPeerConnectionState.RTCPeerConnectionStateConnecting) {
+        return;
+      }
+      final w = _remoteRenderer.videoWidth;
+      final h = _remoteRenderer.videoHeight;
+      final blank = (w == 0 || h == 0);
+      final noFrames = await _noInboundVideo();
+      if (blank && noFrames) {
+        _videoBlankTicks++;
+        _log('remote video blank tick=$_videoBlankTicks (w=$w h=$h)');
+        if (_videoBlankTicks == 1) {
+          _kickRemoteRenderIfBlank();
+        } else if (_videoBlankTicks == 2) {
+          _forceVideoTrackRestart();
+        } else if (_videoBlankTicks >= 3) {
+          _tryRestartIce();
+          _videoBlankTicks = 0;
+        }
+      } else {
+        _videoBlankTicks = 0;
+      }
+    });
+  }
+
+  Future<bool> _noInboundVideo() async {
+    try {
+      final stats = await _pc?.getStats();
+      if (stats == null) return false;
+      for (final s in _iterateStats(stats)) {
+        final type = s['type'] ?? (s['values']?['type']);
+        final vals =
+            (s['values'] is Map) ? Map<String, dynamic>.from(s['values']) : s;
+        final mediaType = vals['mediaType'] ?? vals['kind'];
+        if (type == 'inbound-rtp' && mediaType == 'video') {
+          final frames =
+              (vals['framesDecoded'] ?? vals['framesReceived'] ?? 0) as num;
+          final bytes = (vals['bytesReceived'] ?? 0) as num;
+          if (frames > 0 || bytes > 5000) return false;
+        }
+      }
+    } catch (_) {}
+    return true;
+  }
+
+  Future<void> _forceVideoTrackRestart() async {
+    try {
+      final senders = await _pc?.getSenders() ?? [];
+      for (final s in senders) {
+        if (s.track?.kind == 'video') {
+          final t = s.track!;
+          t.enabled = false;
+          await Future.delayed(const Duration(milliseconds: 120));
+          t.enabled = true;
+          _log('restart local video track to kick remote render');
+          break;
+        }
+      }
+    } catch (e, st) {
+      _log('forceVideoTrackRestart error: $e', st: st);
+    }
+  }
+
+  Future<void> _tryRestartIce() async {
+    try {
+      await _pc?.restartIce();
+      _log('restartIce triggered (blank video)');
+    } catch (e, st) {
+      _log('restartIce failed: $e', st: st);
+    }
+  }
+
+  String _iceType(String? cand) {
+    if (cand == null) return '?';
+    final m = RegExp(r'typ\s+(\w+)').firstMatch(cand);
+    return m != null ? m.group(1)! : '?';
+  }
+
+  Future<void> _logSelectedCandidatePair() async {
+    if (_pc == null || _stableIceLogged) return;
+    try {
+      final stats = await _pc!.getStats();
+      Map<String, dynamic>? pair;
+      Map<String, dynamic>? local;
+      Map<String, dynamic>? remote;
+
+      for (final s in _iterateStats(stats)) {
+        final type = s['type'] ?? (s['values']?['type']);
+        final vals = (s['values'] is Map)
+            ? Map<String, dynamic>.from(s['values'])
+            : (s as Map<String, dynamic>);
+        if (type == 'candidate-pair' && vals['selected'] == true) {
+          pair = vals;
+        } else if (type == 'local-candidate') {
+          local ??= <String, dynamic>{};
+          local![vals['id'] ?? vals['candidateId'] ?? ''] = vals;
+        } else if (type == 'remote-candidate') {
+          remote ??= <String, dynamic>{};
+          remote![vals['id'] ?? vals['candidateId'] ?? ''] = vals;
+        }
+      }
+
+      if (pair != null) {
+        final lcId = pair['localCandidateId'] ?? pair['localCandidateIdRef'];
+        final rcId = pair['remoteCandidateId'] ?? pair['remoteCandidateIdRef'];
+        final lc = (local is Map<String, dynamic>)
+            ? (local[lcId] is Map
+                ? Map<String, dynamic>.from(local[lcId])
+                : null)
+            : null;
+        final rc = (remote is Map<String, dynamic>)
+            ? (remote[rcId] is Map
+                ? Map<String, dynamic>.from(remote[rcId])
+                : null)
+            : null;
+        _log(
+            'selected ICE pair: ${lc?['candidateType'] ?? '?'}(${lc?['protocol']}/${lc?['address']}:${lc?['port']}) <-> ${rc?['candidateType'] ?? '?'}(${rc?['protocol']}/${rc?['address']}:${rc?['port']})');
+        _stableIceLogged = true;
+      }
+    } catch (e, st) {
+      _log('logSelectedCandidatePair error: $e', st: st);
+    }
+  }
+
+  Future<void> _logMediaStats() async {
+    if (_pc == null) return;
+    try {
+      final stats = await _pc!.getStats();
+      Map<String, dynamic>? inboundVideo;
+      Map<String, dynamic>? outboundVideo;
+
+      for (final s in _iterateStats(stats)) {
+        final type = s['type'] ?? (s['values']?['type']);
+        final vals = (s['values'] is Map)
+            ? Map<String, dynamic>.from(s['values'])
+            : (s as Map<String, dynamic>);
+        final mediaType = vals['mediaType'] ?? vals['kind'];
+        if (type == 'inbound-rtp' &&
+            mediaType == 'video' &&
+            inboundVideo == null) {
+          inboundVideo = vals;
+        }
+        if (type == 'outbound-rtp' &&
+            mediaType == 'video' &&
+            outboundVideo == null) {
+          outboundVideo = vals;
+        }
+      }
+
+      if (inboundVideo != null || outboundVideo != null) {
+        final recvFps = inboundVideo?['framesPerSecond'] ??
+            inboundVideo?['googFrameRateReceived'];
+        final recvBytes = inboundVideo?['bytesReceived'];
+        final sendFps = outboundVideo?['framesPerSecond'] ??
+            outboundVideo?['googFrameRateSent'];
+        final sendBytes = outboundVideo?['bytesSent'];
+        _log(
+            'media stats video recv_fps=$recvFps recv_bytes=$recvBytes send_fps=$sendFps send_bytes=$sendBytes');
+      }
+    } catch (e, st) {
+      _log('logMediaStats error: $e', st: st);
+    }
+  }
+
+  Iterable<Map<String, dynamic>> _iterateStats(dynamic stats) sync* {
+    if (stats is Map) {
+      for (final v in stats.values) {
+        if (v is Map) {
+          yield Map<String, dynamic>.from(v);
+        }
+      }
+    } else if (stats is Iterable) {
+      for (final v in stats) {
+        if (v is Map) {
+          yield Map<String, dynamic>.from(v);
+        }
+      }
+    }
+  }
+
   Future<void> _ensureLocalMedia({required bool wantVideo}) async {
     if (_pc == null) return;
+    if (_localTracksAdded) return;
 
-    // Tạo local stream nếu chưa có
+    // ✅ Tạo local stream NẾU CHƯA có (bản cũ thiếu hẳn getUserMedia)
     if (_localStream == null) {
       final constraints = {
         'audio': true,
@@ -510,11 +776,20 @@ class _CallScreenState extends State<CallScreen> {
       };
       try {
         _localStream = await navigator.mediaDevices.getUserMedia(constraints);
-        _localRenderer.srcObject = _localStream;
+        if (_localRenderer.textureId != null) {
+          _localRenderer.srcObject = _localStream;
+        } else {
+          Future.delayed(const Duration(milliseconds: 50), () {
+            if (_viewAlive && _localRenderer.textureId != null) {
+              _localRenderer.srcObject = _localStream;
+              if (mounted) setState(() {});
+            }
+          });
+        }
         _log(
-            'ensureLocalMedia: created stream id=${_localStream?.id} tracks=${_localStream?.getTracks().length} video=$wantVideo');
-      } catch (e, st) {
-        _log('ensureLocalMedia getUserMedia error: $e', st: st);
+            'local stream id=${_localStream?.id} tracks=${_localStream?.getTracks().length}');
+      } catch (err, st) {
+        _log('ensureLocalMedia getUserMedia error: $err', st: st);
         return;
       }
     }
@@ -534,8 +809,21 @@ class _CallScreenState extends State<CallScreen> {
               await _pc!.addTrack(t, _localStream!);
               _log('ensureLocalMedia: addTrack kind=${t.kind} id=${t.id}');
             } catch (e, st) {
-              ok = false;
-              _log('ensureLocalMedia addTrack error: $e', st: st);
+              _log('ensureLocalMedia addTrack error: $e, try transceiver',
+                  st: st);
+              try {
+                await _pc!.addTransceiver(
+                  track: t,
+                  init: RTCRtpTransceiverInit(
+                      direction: TransceiverDirection.SendRecv),
+                );
+                _log(
+                    'ensureLocalMedia: addTransceiver fallback ok kind=${t.kind} id=${t.id}');
+              } catch (e2, st2) {
+                ok = false;
+                _log('ensureLocalMedia addTransceiver fallback error: $e2',
+                    st: st2);
+              }
             }
           }
         }
@@ -551,9 +839,15 @@ class _CallScreenState extends State<CallScreen> {
     try {
       final trans = await _pc!.getTransceivers();
       for (final t in trans) {
-        // Ép về sendrecv để tránh SDP recvonly (API version này không expose direction getter)
-        await t.setDirection(TransceiverDirection.SendRecv);
-        _log('force transceiver ${t.mid ?? '-'} kind=${t.sender.track?.kind} to sendrecv');
+        try {
+          if (t.sender.track != null) {
+            await t.setDirection(TransceiverDirection.SendRecv);
+            _log(
+                'force transceiver ${t.mid ?? '-'} kind=${t.sender.track?.kind} to sendrecv');
+          }
+        } catch (e, st) {
+          _log('ensureSendRecvTransceivers skip(setDirection): $e', st: st);
+        }
       }
     } catch (e, st) {
       _log('ensureSendRecvTransceivers error: $e', st: st);
@@ -561,15 +855,16 @@ class _CallScreenState extends State<CallScreen> {
   }
 
   String _forceSendRecvSdp(String sdp) {
-    // Thay thế mọi recvonly/sendonly/inactive thành sendrecv để chắc chắn gửi hình/tiếng
-    var patched = sdp.replaceAll(RegExp(r'^a=recvonly$', multiLine: true), 'a=sendrecv');
-    patched = patched.replaceAll(RegExp(r'^a=sendonly$', multiLine: true), 'a=sendrecv');
-    patched = patched.replaceAll(RegExp(r'^a=inactive$', multiLine: true), 'a=sendrecv');
+    var patched =
+        sdp.replaceAll(RegExp(r'^a=recvonly$', multiLine: true), 'a=sendrecv');
+    patched = patched.replaceAll(
+        RegExp(r'^a=sendonly$', multiLine: true), 'a=sendrecv');
+    patched = patched.replaceAll(
+        RegExp(r'^a=inactive$', multiLine: true), 'a=sendrecv');
     return patched;
   }
 
   String _sdpSummary(String sdp) {
-    // Quick summary for debugging: check if m=audio/video and direction lines.
     final audio = sdp.contains('\nm=audio');
     final video = sdp.contains('\nm=video');
     String dir = '';
@@ -577,7 +872,7 @@ class _CallScreenState extends State<CallScreen> {
       'a=sendrecv',
       'a=recvonly',
       'a=sendonly',
-      'a=inactive',
+      'a=inactive'
     ]) {
       if (sdp.contains('\n$line')) {
         dir = line.replaceFirst('a=', '');
@@ -590,6 +885,9 @@ class _CallScreenState extends State<CallScreen> {
   Future<void> _disposeRTC() async {
     _localTracksAdded = false;
     _remoteStream = null;
+    _addedCandidates.clear();
+    _sentCandidates.clear();
+    _pendingCandidates.clear();
 
     try {
       await _pc?.close();
@@ -614,13 +912,16 @@ class _CallScreenState extends State<CallScreen> {
     _ending = true;
 
     _cc.removeListener(_callListener);
-    // TrA�nh notifyListeners trong khi tree �`ang lock khi dispose
+    // Tránh notifyListeners trong khi tree đang lock khi dispose
     scheduleMicrotask(_detachController);
     _disposeRTC();
 
     try {
       _localRenderer.dispose();
       _remoteRenderer.dispose();
+    } catch (_) {}
+    try {
+      _videoWatchdog?.cancel();
     } catch (_) {}
 
     super.dispose();
@@ -799,5 +1100,3 @@ class _CallScreenState extends State<CallScreen> {
     } catch (_) {}
   }
 }
-
-
