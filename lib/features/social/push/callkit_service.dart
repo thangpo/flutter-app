@@ -1,13 +1,13 @@
 // lib/features/social/push/callkit_service.dart
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_callkit_incoming/entities/call_kit_params.dart';
 import 'package:flutter_callkit_incoming/entities/android_params.dart';
 import 'package:flutter_callkit_incoming/entities/ios_params.dart';
 import 'package:flutter_callkit_incoming/entities/notification_params.dart';
 import 'package:flutter_callkit_incoming/entities/call_event.dart';
-import 'package:provider/provider.dart';
 
 import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart'
     show navigatorKey;
@@ -20,25 +20,31 @@ class CallkitService {
 
   bool _inited = false;
 
-  /// set các cuộc gọi đã được xử lý để không lặp
-  final Set<String> _handled = <String>{}; // theo id của CallKit (string)
-  final Set<int> _handledServerIds = <int>{}; // theo call_id server (int)
-  final Set<String> _accepted =
-      <String>{}; // đánh dấu đã accept để setConnected 1 lần
+  /// Đánh dấu các event đã xử lý để tránh lặp
+  final Set<String> _handled = <String>{};
+  final Set<int> _handledServerIds = <int>{};
+
+  /// Đánh dấu các cuộc gọi đã accept (để setCallConnected 1 lần)
+  final Set<String> _accepted = <String>{};
+
+  /// Hàng đợi action khi chưa có BuildContext (ví dụ accept từ nền)
+  final List<Future<void> Function(BuildContext)> _pendingActions = [];
 
   Future<void> init() async {
     if (_inited) return;
     _inited = true;
     try {
-      // Một số version có API xin quyền thông báo, nhưng không bắt buộc => bỏ để tránh lỗi khác version
-      // try { await FlutterCallkitIncoming.requestNotificationPermission(...); } catch (_) {}
+      // Tuỳ phiên bản plugin/OS, có thể cần xin quyền. Tránh crash khác bản nên để try/catch.
+      // try { await FlutterCallkitIncoming.requestNotificationPermission(const NotificationSettingsAndroid()); } catch (_) {}
       // try { await FlutterCallkitIncoming.requestPermissionAndroid(); } catch (_) {}
 
       FlutterCallkitIncoming.onEvent.listen(_onEvent, onError: (_) {});
-    } catch (_) {}
+    } catch (_) {
+      // noop
+    }
   }
 
-  /// Hiển thị màn hình cuộc gọi đến của hệ thống (CallKit/ConnectionService)
+  /// Hiển thị màn hình cuộc gọi đến (CallKit / ConnectionService)
   Future<void> showIncomingCall(Map<String, dynamic> data) async {
     await init();
 
@@ -59,28 +65,23 @@ class CallkitService {
       avatar: avatar,
       handle: callerName, // nếu có số điện thoại thì gán số ở đây
       type: isVideo ? 1 : 0,
-      // duration=0: để CallKit/Android tự quản lý timeout, mình sẽ nhận ACTION_CALL_TIMEOUT
+      // duration=0: để native tự timeout -> sẽ có ACTION_CALL_TIMEOUT
       duration: 0,
       textAccept: 'Nghe',
       textDecline: 'Từ chối',
-      extra: Map<String, dynamic>.from(
-          data), // giữ nguyên payload để lấy call_id server
+      extra: Map<String, dynamic>.from(data), // giữ payload gốc để đọc call_id
       android: const AndroidParams(
         isCustomNotification: true,
         isShowFullLockedScreen: true,
         isShowCallID: true,
-        // Bạn có thể dùng asset raw: 'ring' (assets/android/app/src/main/res/raw/ring.mp3)
-        // hoặc để system mặc định:
+        // 'system_ringtone_default' hoặc path asset raw của bạn
         ringtonePath: 'system_ringtone_default',
-        // Đặt tên kênh để chắc chắn tạo được notification channel
         incomingCallNotificationChannelName: 'incoming_calls',
         missedCallNotificationChannelName: 'missed_calls',
       ),
       ios: IOSParams(
         handleType: 'generic',
         supportsVideo: isVideo,
-        // bạn có thể bật/điều khiển từ tai nghe bluetooth nếu cần:
-        // audioSessionMode: 'default',
       ),
       missedCallNotification: const NotificationParams(
         showNotification: true,
@@ -92,7 +93,9 @@ class CallkitService {
 
     try {
       await FlutterCallkitIncoming.showCallkitIncoming(params);
-    } catch (_) {}
+    } catch (_) {
+      // noop
+    }
   }
 
   // =========================
@@ -100,6 +103,7 @@ class CallkitService {
   // =========================
   Future<void> _onEvent(CallEvent? event) async {
     if (event == null) return;
+
     final evt = '${event.event}'.trim();
 
     // id hệ thống (string) của callkit
@@ -121,20 +125,17 @@ class CallkitService {
 
     switch (evt) {
       case 'ACTION_CALL_INCOMING':
-        // Chỉ log để debug; UI đã hiển thị bởi showIncomingCall()
         debugPrint(
             '[CallKit] incoming shown: systemId=$systemId serverId=$serverCallId');
         break;
 
       case 'ACTION_CALL_CLICK':
-        // User chạm vào banner — bạn có thể mở UI tuỳ ý (ở prod mình để CallKit quản)
         debugPrint('[CallKit] click notification: systemId=$systemId');
         break;
 
       case 'ACTION_CALL_ACCEPT':
         if (systemId.isNotEmpty) _accepted.add(systemId);
         await _answer(serverCallId, media, peerName, peerAvatar);
-        // Đánh dấu "đã kết nối" để dừng giao diện đổ chuông hệ thống
         try {
           await FlutterCallkitIncoming.setCallConnected(systemId);
         } catch (_) {}
@@ -167,14 +168,33 @@ class CallkitService {
         break;
 
       default:
-        // Các event khác: mute/hold/… bạn có thể mapping nếu cần
+        // mute/hold/… nếu cần thì map thêm
         break;
     }
   }
 
   // =========================
-  // Helpers
+  // Helpers & public APIs
   // =========================
+
+  /// Cho listener kiểm tra call_id đã xử lý qua CallKit
+  bool isServerCallHandled(int id) => _handledServerIds.contains(id);
+
+  /// Flush hàng đợi action (vd: accept CallKit khi chưa có context)
+  Future<void> flushPendingActions() async {
+    if (_pendingActions.isEmpty) return;
+    final ctx = navigatorKey.currentContext;
+    if (ctx == null) return;
+    final actions =
+        List<Future<void> Function(BuildContext)>.from(_pendingActions);
+    _pendingActions.clear();
+    for (final act in actions) {
+      try {
+        await act(ctx);
+      } catch (_) {}
+    }
+  }
+
   String _makeSystemIdFromServerId(dynamic callId) {
     // Nếu server gửi call_id là số: tái sử dụng (string). Nếu không: random ổn định
     final s = (callId == null) ? '' : callId.toString().trim();
@@ -185,7 +205,16 @@ class CallkitService {
   void _withController(
       Future<void> Function(CallController cc, BuildContext ctx) fn) {
     final ctx = navigatorKey.currentContext;
-    if (ctx == null) return;
+    if (ctx == null) {
+      // Queue lại khi chưa có context (vd: accept từ CallKit trong background)
+      _pendingActions.add((readyCtx) async {
+        try {
+          final cc = readyCtx.read<CallController>();
+          await fn(cc, readyCtx);
+        } catch (_) {}
+      });
+      return;
+    }
     try {
       final cc = ctx.read<CallController>();
       fn(cc, ctx);
@@ -209,8 +238,13 @@ class CallkitService {
         await cc.action('answer');
       } catch (_) {}
 
-      _openCallScreen(ctx, serverCallId, media,
-          peerName: peerName, peerAvatar: peerAvatar);
+      _openCallScreen(
+        ctx,
+        serverCallId,
+        media,
+        peerName: peerName,
+        peerAvatar: peerAvatar,
+      );
     });
   }
 
@@ -223,11 +257,11 @@ class CallkitService {
 
     _withController((cc, _) async {
       if (!cc.isCallHandled(serverCallId)) {
-        // gắn trạng thái local để UI/logic biết đã kết thúc
         cc.attachCall(
-            callId: serverCallId,
-            mediaType: media,
-            initialStatus: reason == 'decline' ? 'declined' : 'ended');
+          callId: serverCallId,
+          mediaType: media,
+          initialStatus: reason == 'decline' ? 'declined' : 'ended',
+        );
       }
       try {
         if (reason == 'decline') {
@@ -239,9 +273,14 @@ class CallkitService {
     });
   }
 
-  void _openCallScreen(BuildContext ctx, int callId, String mediaType,
-      {String? peerName, String? peerAvatar}) {
-    // Production: nếu bạn đang dùng UI hệ thống để in-call luôn (native), có thể bỏ đoạn này.
+  void _openCallScreen(
+    BuildContext ctx,
+    int callId,
+    String mediaType, {
+    String? peerName,
+    String? peerAvatar,
+  }) {
+    // Nếu dùng UI in-call native hoàn toàn, có thể bỏ navigation này.
     Navigator.of(ctx).push(MaterialPageRoute(
       builder: (_) => CallScreen(
         isCaller: false,
