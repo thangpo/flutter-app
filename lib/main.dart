@@ -244,6 +244,7 @@ class AppLifecycleObserver extends WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       // App v�o foreground
       AnalyticsHelper.logUserActive();
+      CallkitService.I.flushPendingActions();
     } else if (state == AppLifecycleState.paused) {
       // App v�o background
       analytics.logEvent(
