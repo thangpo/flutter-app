@@ -162,9 +162,14 @@ Future<void> myBackgroundMessageHandler(RemoteMessage message) async {
     final type = (data['type'] ?? '').toString();
 
     if (type == 'call_invite') {
-      await SocialCallPushHandler.I.showIncomingCallNotification(data);
-      await CallkitService.I.showIncomingCall(data);
-      print('?? [BG] Show incoming call notification (1-1)');
+      if (Platform.isAndroid) {
+        // Android: full-screen notification; tap body -> IncomingCallScreen
+        await SocialCallPushHandler.I.showIncomingCallNotification(data);
+      } else if (Platform.isIOS) {
+        // iOS: chỉ CallKit
+        await CallkitService.I.showIncomingCall(data);
+      }
+      print('✅ [BG] Show incoming call (platform-specific)');
     }
   } catch (e) {
     print('? [BG] Error handling background call_invite: $e');

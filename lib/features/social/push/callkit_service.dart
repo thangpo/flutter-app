@@ -195,6 +195,14 @@ class CallkitService {
     }
   }
 
+  Future<void> endCallForServerId(int serverCallId) async {
+    if (serverCallId <= 0) return;
+    final systemId = _makeSystemIdFromServerId(serverCallId);
+    try {
+      await FlutterCallkitIncoming.endCall(systemId);
+    } catch (_) {}
+  }
+
   String _makeSystemIdFromServerId(dynamic callId) {
     // Nếu server gửi call_id là số: tái sử dụng (string). Nếu không: random ổn định
     final s = (callId == null) ? '' : callId.toString().trim();
