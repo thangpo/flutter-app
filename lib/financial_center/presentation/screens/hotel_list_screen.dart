@@ -75,6 +75,37 @@ class _HotelListScreenState extends State<HotelListScreen> {
     }
   }
 
+  List<Map<String, dynamic>> _buildMapDataFromHotels() {
+    final List<Map<String, dynamic>> result = [];
+
+    for (final h in _hotels) {
+      final lat = double.tryParse(h['lat']?.toString() ?? '');
+      final lng = double.tryParse(h['lng']?.toString() ?? '');
+
+      if (lat == null || lng == null || (lat == 0 && lng == 0)) {
+        continue;
+      }
+
+      final price = h['price']?.toString();
+
+      result.add({
+        'id'          : h['id'],
+        'type'        : 'hotel',
+        'title'       : h['title'] ?? '',
+        'slug'        : h['slug'] ?? '',
+        'lat'         : lat,
+        'lng'         : lng,
+        'thumbnail'   : h['thumbnail'] ?? h['image_url'] ?? '',
+        'location'    : h['location'] ?? '',
+        'address'     : h['address'] ?? '',
+        'review_score': h['review_score'],
+        'price'       : price,
+      });
+    }
+
+    return result;
+  }
+
   String _tr(BuildContext context, String key, String fallback) {
     return getTranslated(key, context) ?? fallback;
   }
@@ -94,7 +125,7 @@ class _HotelListScreenState extends State<HotelListScreen> {
           height: 40,
           child: GestureDetector(
             onTap: () {
-              // Có thể xử lý khi tap marker ở màn list nếu muốn
+
             },
             child: Container(
               decoration: BoxDecoration(
@@ -118,7 +149,6 @@ class _HotelListScreenState extends State<HotelListScreen> {
         ),
       );
     }
-
     return markers;
   }
 
@@ -172,20 +202,32 @@ class _HotelListScreenState extends State<HotelListScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 12),
-
-              /// MAP HEADER – bọc GestureDetector để chuyển trang
               Padding(
                 padding:
                 const EdgeInsets.symmetric(horizontal: 16),
                 child: GestureDetector(
                   onTap: () {
-                    if (_hotels.isEmpty) return;
+                    final mapData =
+                    _buildMapDataFromHotels();
+
+                    if (mapData.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Không có khách sạn nào có tọa độ để hiển thị bản đồ.',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
+
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => HotelMapScreen(
-                          hotels: _hotels,
-                          initialHotel: _hotels.first,
+                          hotels: mapData,
+                          initialHotel: mapData.first,
+                          autoLocateOnStart: true,
                         ),
                       ),
                     );
@@ -218,8 +260,10 @@ class _HotelListScreenState extends State<HotelListScreen> {
                             left: 12,
                             top: 12,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 6),
+                              padding: const EdgeInsets
+                                  .symmetric(
+                                  horizontal: 10,
+                                  vertical: 6),
                               decoration: BoxDecoration(
                                 color: Colors.black
                                     .withOpacity(0.45),
@@ -227,7 +271,8 @@ class _HotelListScreenState extends State<HotelListScreen> {
                                 BorderRadius.circular(999),
                               ),
                               child: Row(
-                                mainAxisSize: MainAxisSize.min,
+                                mainAxisSize:
+                                MainAxisSize.min,
                                 children: [
                                   const Icon(
                                     Icons.map_rounded,
@@ -244,7 +289,8 @@ class _HotelListScreenState extends State<HotelListScreen> {
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 12,
-                                      fontWeight: FontWeight.w500,
+                                      fontWeight:
+                                      FontWeight.w500,
                                     ),
                                   ),
                                 ],
@@ -264,8 +310,11 @@ class _HotelListScreenState extends State<HotelListScreen> {
                 padding:
                 const EdgeInsets.symmetric(horizontal: 16),
                 child: Text(
-                  _tr(context, 'hotel_best_deals',
-                      'Ưu đãi khách sạn dành cho bạn'),
+                  _tr(
+                    context,
+                    'hotel_best_deals',
+                    'Ưu đãi khách sạn dành cho bạn',
+                  ),
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
@@ -324,8 +373,11 @@ class _HotelListScreenState extends State<HotelListScreen> {
             ),
             const SizedBox(height: 6),
             Text(
-              _tr(context, 'hotel_error_subtitle',
-                  'Vui lòng kiểm tra kết nối và thử lại.'),
+              _tr(
+                context,
+                'hotel_error_subtitle',
+                'Vui lòng kiểm tra kết nối và thử lại.',
+              ),
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,
@@ -360,7 +412,11 @@ class _HotelListScreenState extends State<HotelListScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              _tr(context, 'hotel_empty_title', 'Chưa có khách sạn nào'),
+              _tr(
+                context,
+                'hotel_empty_title',
+                'Chưa có khách sạn nào',
+              ),
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -403,7 +459,6 @@ class _HotelListScreenState extends State<HotelListScreen> {
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: () {
-          // chạm vào card chỉ di chuyển map header
           _moveToHotel(hotel);
         },
         child: Padding(
@@ -507,8 +562,11 @@ class _HotelListScreenState extends State<HotelListScreen> {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            _tr(context, 'hotel_rating_label',
-                                'Điểm đánh giá'),
+                            _tr(
+                              context,
+                              'hotel_rating_label',
+                              'Điểm đánh giá',
+                            ),
                             style: TextStyle(
                               fontSize: 11,
                               color: isDark
@@ -550,13 +608,26 @@ class _HotelListScreenState extends State<HotelListScreen> {
                   ],
                   OutlinedButton.icon(
                     onPressed: () {
-                      // nút "Xem bản đồ" mở HotelMapScreen với KS này
+                      final mapData = _buildMapDataFromHotels();
+                      if (mapData.isEmpty) return;
+
+                      final id = hotel['id'];
+                      Map<String, dynamic>? initial;
+                      try {
+                        initial = mapData.firstWhere(
+                              (h) => h['id'] == id,
+                        );
+                      } catch (_) {
+                        initial = mapData.first;
+                      }
+
                       Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (_) => HotelMapScreen(
-                            hotels: _hotels,
-                            initialHotel: hotel,
+                            hotels: mapData,
+                            initialHotel: initial,
+                            autoLocateOnStart: true,
                           ),
                         ),
                       );
@@ -572,14 +643,19 @@ class _HotelListScreenState extends State<HotelListScreen> {
                         const Color(0xFF0EA5E9).withOpacity(0.8),
                       ),
                       minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      tapTargetSize:
+                      MaterialTapTargetSize.shrinkWrap,
                     ),
                     icon: const Icon(
                       Icons.map_rounded,
                       size: 14,
                     ),
                     label: Text(
-                      _tr(context, 'hotel_view_on_map', 'Xem bản đồ'),
+                      _tr(
+                        context,
+                        'hotel_view_on_map',
+                        'Xem bản đồ',
+                      ),
                       style: const TextStyle(fontSize: 11),
                     ),
                   ),

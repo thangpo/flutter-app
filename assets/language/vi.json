@@ -1781,6 +1781,7 @@
   "hotel_nearby_not_found": "Không tìm thấy khách sạn nào gần vị trí của bạn.",
   "location_service_disabled": "Vui lòng bật dịch vụ vị trí của thiết bị.",
   "location_permission_denied": "Ứng dụng không được cấp quyền vị trí.",
-  "location_error": "Không lấy được vị trí hiện tại."
+  "location_error": "Không lấy được vị trí hiện tại.",
+  "hotel_map_navigate_btn": "Dẫn đường"
 }
 

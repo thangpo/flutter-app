@@ -1,21 +1,27 @@
+import 'package:intl/intl.dart';
+import 'tour_detail_screen.dart';
+import 'hotel_detail_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
+import '../widgets/hotel_map_widgets.dart';
 import 'package:geolocator/geolocator.dart';
-
+import 'package:flutter_map/flutter_map.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
+
 
 class HotelMapScreen extends StatefulWidget {
   final List<Map<String, dynamic>> hotels;
   final Map<String, dynamic>? initialHotel;
+  final bool autoLocateOnStart;
 
   const HotelMapScreen({
     super.key,
     required this.hotels,
     this.initialHotel,
+    this.autoLocateOnStart = true,
   });
 
   @override
@@ -29,11 +35,14 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
   LatLng _center = const LatLng(21.0278, 105.8342);
   double _zoom = 12;
 
+  List<Map<String, dynamic>> _searchSuggestions = [];
+  bool _showSearchSuggestions = false;
+
   Map<String, dynamic>? _selectedHotel;
   LatLng? _userLocation;
 
   bool _showNearbyStrip = false;
-  bool _isPopupVisible = true; // chỉ điều khiển ẩn/hiện popup, không xoá selected
+  bool _isPopupVisible = true;
   List<Map<String, dynamic>> _nearbyHotels = [];
 
   @override
@@ -42,6 +51,17 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
     _mapController = MapController();
     _searchController = TextEditingController();
     _initCenterAndSelected();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.autoLocateOnStart) {
+        _goToMyLocation(showNearbyStrip: true);
+      }
+    });
+  }
+
+  bool _isTour(Map<String, dynamic>? item) {
+    if (item == null) return false;
+    return item['type']?.toString() == 'tour';
   }
 
   void _initCenterAndSelected() {
@@ -56,8 +76,96 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
         _zoom = 14;
         _selectedHotel = hotel;
         _isPopupVisible = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _loadNearbyForSelected();
+        });
       }
     }
+  }
+
+  void _loadNearbyForSelected() {
+    if (_selectedHotel == null) return;
+
+    final baseLat = double.tryParse(_selectedHotel!['lat']?.toString() ?? '');
+    final baseLng = double.tryParse(_selectedHotel!['lng']?.toString() ?? '');
+    if (baseLat == null || baseLng == null) return;
+
+    final base = LatLng(baseLat, baseLng);
+    final distance = const Distance();
+
+    final List<Map<String, dynamic>> nearby = [];
+
+    for (final h in widget.hotels) {
+      final lat = double.tryParse(h['lat']?.toString() ?? '');
+      final lng = double.tryParse(h['lng']?.toString() ?? '');
+      if (lat == null || lng == null) continue;
+
+      final d = distance(base, LatLng(lat, lng));
+
+      if (d <= 5000 && h['id'] != _selectedHotel!['id']) {
+        final copy = Map<String, dynamic>.from(h);
+        copy['_distance'] = d;
+        nearby.add(copy);
+      }
+    }
+
+    nearby.sort((a, b) {
+      final da = (a['_distance'] as double?) ?? double.infinity;
+      final db = (b['_distance'] as double?) ?? double.infinity;
+      return da.compareTo(db);
+    });
+
+    setState(() {
+      _nearbyHotels = nearby;
+      _showNearbyStrip = nearby.isNotEmpty;
+    });
+  }
+
+  void _updateSearchSuggestions(String query) {
+    final q = query.trim().toLowerCase();
+
+    if (q.isEmpty) {
+      setState(() {
+        _searchSuggestions = [];
+        _showSearchSuggestions = false;
+      });
+      return;
+    }
+
+    final distanceCalc = const Distance();
+    final List<Map<String, dynamic>> matched = [];
+
+    for (final h in widget.hotels) {
+      final title = h['title']?.toString().toLowerCase() ?? '';
+
+      if (title.contains(q)) {
+        final copy = Map<String, dynamic>.from(h);
+
+        if (_userLocation != null) {
+          final lat = double.tryParse(h['lat']?.toString() ?? '');
+          final lng = double.tryParse(h['lng']?.toString() ?? '');
+          if (lat != null && lng != null) {
+            final d = distanceCalc(_userLocation!, LatLng(lat, lng));
+            copy['_distance'] = d;
+          }
+        }
+
+        matched.add(copy);
+      }
+    }
+
+    matched.sort((a, b) {
+      final da = (a['_distance'] as double?) ?? double.infinity;
+      final db = (b['_distance'] as double?) ?? double.infinity;
+      return da.compareTo(db);
+    });
+
+    final limited = matched.take(8).toList();
+
+    setState(() {
+      _searchSuggestions = limited;
+      _showSearchSuggestions = limited.isNotEmpty;
+    });
   }
 
   @override
@@ -92,8 +200,8 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
 
     setState(() {
       _selectedHotel = hotel;
-      _isPopupVisible = true;   // mỗi lần chọn thì hiện popup
-      _showNearbyStrip = false; // tắt strip đề xuất
+      _isPopupVisible = true;
+      _showNearbyStrip = false;
     });
 
     if (moveCamera) {
@@ -128,8 +236,11 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            _tr(context, 'hotel_map_not_found',
-                'Không tìm thấy khách sạn phù hợp.'),
+            _tr(
+              context,
+              'hotel_map_not_found',
+              'Không tìm thấy địa điểm phù hợp.',
+            ),
           ),
         ),
       );
@@ -144,8 +255,11 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              _tr(context, 'location_service_disabled',
-                  'Vui lòng bật dịch vụ vị trí của thiết bị.'),
+              _tr(
+                context,
+                'location_service_disabled',
+                'Vui lòng bật dịch vụ vị trí của thiết bị.',
+              ),
             ),
           ),
         );
@@ -162,8 +276,11 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              _tr(context, 'location_permission_denied',
-                  'Ứng dụng không được cấp quyền vị trí.'),
+              _tr(
+                context,
+                'location_permission_denied',
+                'Ứng dụng không được cấp quyền vị trí.',
+              ),
             ),
           ),
         );
@@ -185,7 +302,6 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
       });
       _mapController.move(userLatLng, _zoom);
 
-      // Tính khách sạn gần trong bán kính 5km
       final distance = const Distance();
       final List<Map<String, dynamic>> nearbyHotels = [];
 
@@ -193,8 +309,8 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
         final lat = double.tryParse(h['lat']?.toString() ?? '');
         final lng = double.tryParse(h['lng']?.toString() ?? '');
         if (lat == null || lng == null) continue;
-
         final d = distance(userLatLng, LatLng(lat, lng));
+
         if (d <= 5000) {
           final copy = Map<String, dynamic>.from(h);
           copy['_distance'] = d;
@@ -215,7 +331,6 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
           _nearbyHotels = nearbyHotels;
           _showNearbyStrip = showNearbyStrip;
           if (showNearbyStrip) {
-            // Khi đang xem strip đề xuất thì ẩn popup
             _isPopupVisible = false;
           }
         });
@@ -223,7 +338,7 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Có ${nearbyHotels.length} khách sạn quanh vị trí của bạn.',
+              'Có ${nearbyHotels.length} địa điểm quanh vị trí của bạn.',
             ),
           ),
         );
@@ -231,15 +346,15 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
         setState(() {
           _nearbyHotels = [];
           _showNearbyStrip = false;
-          _isPopupVisible = false;
         });
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
               _tr(
                 context,
                 'hotel_nearby_not_found',
-                'Không tìm thấy khách sạn nào gần vị trí của bạn.',
+                'Không tìm thấy địa điểm nào gần vị trí của bạn.',
               ),
             ),
           ),
@@ -251,9 +366,48 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            _tr(context, 'location_error', 'Không lấy được vị trí hiện tại.'),
+            _tr(
+              context,
+              'location_error',
+              'Không lấy được vị trí hiện tại.',
+            ),
           ),
         ),
+      );
+    }
+  }
+
+  Future<void> _openNavigationToSelected() async {
+    final h = _selectedHotel;
+    if (h == null) return;
+
+    final lat = double.tryParse(h['lat']?.toString() ?? '');
+    final lng = double.tryParse(h['lng']?.toString() ?? '');
+    if (lat == null || lng == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Không xác định được tọa độ địa điểm.'),
+        ),
+      );
+      return;
+    }
+
+    final uri = Uri.parse(
+      'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving',
+    );
+
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
+      }
+    } catch (e) {
+      debugPrint('Lỗi mở Google Maps: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Không mở được ứng dụng bản đồ.')),
       );
     }
   }
@@ -263,18 +417,17 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
       final lat = double.tryParse(h['lat']?.toString() ?? '');
       final lng = double.tryParse(h['lng']?.toString() ?? '');
       if (lat == null || lng == null) return null;
-
       final isSelected =
           _selectedHotel != null && _selectedHotel!['id'] == h['id'];
-
       final title = (h['title']?.toString() ?? '').trim();
-      final shortTitle =
-      title.length > 18 ? '${title.substring(0, 18)}…' : title;
+      final shortTitle = title.length > 18 ? '${title.substring(0, 18)}…' : title;
+      final rating = double.tryParse(h['review_score']?.toString() ?? '');
+      final isTour = _isTour(h);
 
       return Marker(
         point: LatLng(lat, lng),
-        width: 120,
-        height: 70,
+        width: 130,
+        height: 90,
         child: GestureDetector(
           onTap: () => _selectHotel(h),
           child: Column(
@@ -295,15 +448,42 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
                       ),
                     ],
                   ),
-                  child: Text(
-                    shortTitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF111827),
-                    ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        shortTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF111827),
+                        ),
+                      ),
+                      if (rating != null) ...[
+                        const SizedBox(height: 2),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.star_rounded,
+                              size: 12,
+                              color: Colors.amber,
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              rating.toStringAsFixed(1),
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF111827),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               const SizedBox(height: 6),
@@ -321,7 +501,7 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
                   ],
                 ),
                 child: Icon(
-                  Icons.location_on_rounded,
+                  isTour ? Icons.flag_rounded : Icons.location_on_rounded,
                   size: isSelected ? 28 : 24,
                   color: isSelected ? Colors.white : const Color(0xFF10B981),
                 ),
@@ -360,175 +540,6 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
     );
   }
 
-  Widget _buildNearbyStrip(bool isDark) {
-    if (!_showNearbyStrip || _nearbyHotels.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Align(
-      alignment: Alignment.bottomLeft,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      _tr(context, 'hotel_nearby_title', 'Khách sạn gần bạn'),
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: isDark ? Colors.white : const Color(0xFF111827),
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      Icons.close_rounded,
-                      size: 20,
-                      color: isDark ? Colors.white60 : Colors.grey[600],
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _showNearbyStrip = false;
-                      });
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              height: 120,
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                scrollDirection: Axis.horizontal,
-                itemCount: _nearbyHotels.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 12),
-                itemBuilder: (context, index) {
-                  final h = _nearbyHotels[index];
-                  final title = h['title']?.toString() ?? '';
-                  final thumb = h['thumbnail']?.toString() ?? '';
-                  final rating =
-                  double.tryParse(h['review_score']?.toString() ?? '');
-                  final d = (h['_distance'] as double?) ?? 0;
-                  final km = (d / 1000).toStringAsFixed(1);
-
-                  return GestureDetector(
-                    onTap: () {
-                      _selectHotel(h, moveCamera: true);
-                    },
-                    child: SizedBox(
-                      width: 180,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            thumb.isNotEmpty
-                                ? Image.network(
-                              thumb,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                color: Colors.grey[300],
-                                child: const Icon(
-                                  Icons.image_not_supported,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            )
-                                : Container(
-                              color: Colors.grey[400],
-                              child: const Icon(
-                                Icons.image,
-                                color: Colors.white,
-                              ),
-                            ),
-                            Container(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Colors.black.withOpacity(0.65),
-                                    Colors.black.withOpacity(0.15),
-                                  ],
-                                  begin: Alignment.bottomCenter,
-                                  end: Alignment.topCenter,
-                                ),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.all(10),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    title,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Row(
-                                    children: [
-                                      if (rating != null) ...[
-                                        const Icon(
-                                          Icons.star_rounded,
-                                          size: 14,
-                                          color: Colors.amber,
-                                        ),
-                                        const SizedBox(width: 2),
-                                        Text(
-                                          rating.toStringAsFixed(1),
-                                          style: const TextStyle(
-                                            fontSize: 11,
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 6),
-                                      ],
-                                      Icon(
-                                        Icons.place_rounded,
-                                        size: 13,
-                                        color: Colors.white.withOpacity(0.9),
-                                      ),
-                                      const SizedBox(width: 2),
-                                      Text(
-                                        '$km km',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: Colors.white.withOpacity(0.9),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark =
@@ -543,17 +554,16 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
     final thumb = selected?['thumbnail']?.toString() ?? '';
     final location = selected?['location']?.toString() ?? '';
     final address = selected?['address']?.toString() ?? '';
-    final rating =
-    double.tryParse(selected?['review_score']?.toString() ?? '');
+    final rating = double.tryParse(selected?['review_score']?.toString() ?? '');
     final rawPrice = selected?['price']?.toString();
     final priceVnd = _formatPriceVnd(rawPrice);
-
+    final isTour = _isTour(selected);
     final markers = _buildHotelMarkers();
     final userMarker = _buildUserMarker();
     if (userMarker != null) markers.add(userMarker);
 
-    final bool showPopup =
-        selected != null && !_showNearbyStrip && _isPopupVisible;
+    final bool showPopup = selected != null && !_showNearbyStrip && _isPopupVisible;
+    final viewText = isTour ? _tr(context, 'tour_map_view_tour_btn', 'Xem tour') : _tr(context, 'hotel_map_view_hotel_btn', 'Xem khách sạn');
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -568,8 +578,7 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
               ),
               children: [
                 TileLayer(
-                  urlTemplate:
-                  'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                   userAgentPackageName: 'com.vnshop.vietnamtoure',
                 ),
                 MarkerLayer(
@@ -581,7 +590,6 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
           SafeArea(
             child: Stack(
               children: [
-                // nút back
                 Positioned(
                   top: 12,
                   left: 12,
@@ -593,7 +601,6 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
                     ),
                   ),
                 ),
-                // ô tìm kiếm
                 Positioned(
                   top: 12,
                   right: 12,
@@ -629,18 +636,99 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
                         hintText: _tr(
                           context,
                           'hotel_map_search_hint',
-                          'Tìm khách sạn hoặc vị trí',
+                          'Tìm khách sạn / tour hoặc vị trí',
                         ),
                         hintStyle: TextStyle(
                           color: Colors.grey[500],
                           fontSize: 13,
                         ),
                       ),
-                      onSubmitted: _searchHotel,
+                      onChanged: _updateSearchSuggestions,
+                      onSubmitted: (value) {
+                        _updateSearchSuggestions('');
+                        _searchHotel(value);
+                      },
                     ),
                   ),
                 ),
-                // nút định vị
+                if (_showSearchSuggestions && _searchSuggestions.isNotEmpty)
+                  Positioned(
+                    top: 60,
+                    right: 12,
+                    left: 60,
+                    child: Material(
+                      elevation: 6,
+                      borderRadius: BorderRadius.circular(12),
+                      color: isDark ? const Color(0xFF020617) : Colors.white,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxHeight: 260,
+                        ),
+                        child: ListView.separated(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          shrinkWrap: true,
+                          itemCount: _searchSuggestions.length,
+                          separatorBuilder: (_, __) => Divider(
+                            height: 1,
+                            thickness: 0.5,
+                            color: isDark ? Colors.white10 : Colors.grey[300],
+                          ),
+                          itemBuilder: (context, index) {
+                            final h = _searchSuggestions[index];
+                            final name = h['title']?.toString() ?? '';
+                            final d = (h['_distance'] as double?);
+                            String distanceText = '';
+                            if (d != null) {
+                              final km = (d / 1000).toStringAsFixed(1);
+                              distanceText = '$km km từ vị trí của bạn';
+                            }
+
+                            return ListTile(
+                              dense: true,
+                              onTap: () {
+                                _searchController.text = name;
+                                _selectHotel(h, moveCamera: true);
+                                setState(() {
+                                  _showSearchSuggestions = false;
+                                  _searchSuggestions = [];
+                                });
+                              },
+                              leading: Icon(
+                                Icons.apartment_rounded,
+                                size: 20,
+                                color: isDark
+                                    ? const Color(0xFF6EE7B7)
+                                    : const Color(0xFF10B981),
+                              ),
+                              title: Text(
+                                name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark
+                                      ? Colors.white
+                                      : Colors.black87,
+                                ),
+                              ),
+                              subtitle: distanceText.isNotEmpty
+                                  ? Text(
+                                distanceText,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isDark
+                                      ? Colors.white60
+                                      : Colors.grey[600],
+                                ),
+                              )
+                                  : null,
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
                 Positioned(
                   right: 12,
                   top: 80,
@@ -658,7 +746,6 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
                     ),
                   ),
                 ),
-                // nút gợi ý gần tôi
                 Positioned(
                   right: 12,
                   top: 140,
@@ -683,8 +770,11 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              _tr(context, 'hotel_suggest_button',
-                                  'Gợi ý gần tôi'),
+                              _tr(
+                                context,
+                                'hotel_suggest_button',
+                                'Gợi ý gần tôi',
+                              ),
                               style: const TextStyle(
                                 fontSize: 12,
                                 color: Colors.black87,
@@ -698,226 +788,83 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
                   ),
                 ),
 
-                // strip khách sạn gần bạn
-                _buildNearbyStrip(isDark),
+                HotelNearbyStrip(
+                  show: _showNearbyStrip,
+                  isDark: isDark,
+                  nearbyHotels: _nearbyHotels,
+                  onClose: () {
+                    setState(() {
+                      _showNearbyStrip = false;
+                    });
+                  },
+                  onTapHotel: (h) => _selectHotel(h, moveCamera: true),
+                ),
 
-                // popup khách sạn (chỉ hiện khi showPopup = true)
                 if (showPopup)
-                  Align(
-                    alignment: Alignment.bottomCenter,
-                    child: Container(
-                      margin: const EdgeInsets.all(16),
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-                      decoration: BoxDecoration(
-                        color:
-                        isDark ? const Color(0xFF020617) : Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 20,
-                            offset: const Offset(0, -6),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Expanded(
-                                child: Center(
-                                  child: Container(
-                                    width: 42,
-                                    height: 4,
-                                    decoration: BoxDecoration(
-                                      color: isDark
-                                          ? Colors.white24
-                                          : Colors.grey[300],
-                                      borderRadius:
-                                      BorderRadius.circular(999),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              IconButton(
-                                icon: Icon(
-                                  Icons.close_rounded,
-                                  size: 20,
-                                  color: isDark
-                                      ? Colors.white60
-                                      : Colors.grey[600],
-                                ),
-                                onPressed: () {
-                                  setState(() {
-                                    _isPopupVisible = false;
-                                  });
-                                },
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: SizedBox(
-                              height: 150,
-                              width: double.infinity,
-                              child: thumb.isNotEmpty
-                                  ? Image.network(
-                                thumb,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
-                                  color: Colors.grey[300],
-                                  child: const Icon(
-                                    Icons.image_not_supported,
-                                    size: 40,
-                                  ),
-                                ),
-                              )
-                                  : Container(
-                                color: Colors.grey[300],
-                                child: const Icon(
-                                  Icons.image,
-                                  size: 40,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      title,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w700,
-                                        color: isDark
-                                            ? Colors.white
-                                            : const Color(0xFF111827),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Row(
-                                      children: [
-                                        const Icon(
-                                          Icons.location_on_rounded,
-                                          size: 16,
-                                          color: Color(0xFF10B981),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Expanded(
-                                          child: Text(
-                                            location,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              color: isDark
-                                                  ? Colors.white70
-                                                  : Colors.grey[700],
-                                            ),
-                                          ),
-                                        ),
-                                        if (rating != null) ...[
-                                          const SizedBox(width: 6),
-                                          Icon(
-                                            Icons.star_rounded,
-                                            size: 16,
-                                            color: Colors.amber[400],
-                                          ),
-                                          const SizedBox(width: 2),
-                                          Text(
-                                            rating.toStringAsFixed(1),
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w600,
-                                              color: isDark
-                                                  ? Colors.white
-                                                  : const Color(0xFF111827),
-                                            ),
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          if (address.isNotEmpty)
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                address,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: isDark
-                                      ? Colors.white60
-                                      : Colors.grey[600],
-                                ),
-                              ),
-                            ),
-                          const SizedBox(height: 10),
-                          if (priceVnd.isNotEmpty)
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                priceVnd,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF10B981),
-                                ),
-                              ),
-                            ),
-                          const SizedBox(height: 14),
-                          SizedBox(
-                            height: 50,
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: () {
-                                // TODO: mở màn chi tiết khách sạn
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF10B981),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                elevation: 0,
-                              ),
-                              icon: const Icon(
-                                Icons.hotel_rounded,
-                                color: Colors.white,
-                              ),
-                              label: Text(
-                                _tr(
-                                  context,
-                                  'hotel_map_view_hotel_btn',
-                                  'Xem khách sạn',
-                                ),
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                  HotelInfoBottomSheet(
+                    isDark: isDark,
+                    title: title,
+                    thumb: thumb,
+                    location: location,
+                    address: address,
+                    rating: rating,
+                    priceVnd: priceVnd,
+                    viewHotelText: viewText,
+                    navigateText: _tr(
+                      context,
+                      'hotel_map_navigate_btn',
+                      'Dẫn đường',
                     ),
+                    onClose: () {
+                      setState(() {
+                        _isPopupVisible = false;
+                      });
+                      _loadNearbyForSelected();
+                    },
+                    onViewDetail: () {
+                      final item = _selectedHotel;
+                      if (item == null) return;
+
+                      final isTourItem = _isTour(item);
+
+                      if (isTourItem) {
+                        final tourId = item['id'];
+                        if (tourId == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Không tìm thấy thông tin tour.'),
+                            ),
+                          );
+                          return;
+                        }
+
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => TourDetailScreen(
+                              tourId: tourId,
+                            ),
+                          ),
+                        );
+                        return;
+                      }
+
+                      final slug = item['slug']?.toString() ?? '';
+                      if (slug.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Không tìm thấy thông tin khách sạn.'),
+                          ),
+                        );
+                        return;
+                      }
+
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => HotelDetailScreen(slug: slug),
+                        ),
+                      );
+                    },
+                    onNavigate: _openNavigationToSelected,
                   ),
               ],
             ),

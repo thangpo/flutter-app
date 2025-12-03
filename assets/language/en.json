@@ -1821,5 +1821,6 @@
   "hotel_nearby_not_found": "No hotels were found near your location.",
   "location_service_disabled": "Please enable location services on your device.",
   "location_permission_denied": "The app does not have location permission.",
-  "location_error": "Could not get your current location."
+  "location_error": "Could not get your current location.",
+  "hotel_map_navigate_btn": "Hotel map navigate btn"
 }

@@ -8,6 +8,7 @@ import '../services/location_service.dart';
 import '../widgets/tour_card_skeleton.dart';
 import '../widgets/article_list_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/hotel_map_screen.dart';
 
 class TourListScreen extends StatefulWidget {
   const TourListScreen({super.key});
@@ -87,8 +88,10 @@ class _TourListScreenState extends State<TourListScreen> {
     _headerImages.clear();
     for (final t in tours.take(5)) {
       if (t is Map) {
-        final url =
-        (t['image'] ?? t['banner'] ?? t['image_url'] ?? t['thumbnail'])
+        final url = (t['image'] ??
+            t['banner'] ??
+            t['image_url'] ??
+            t['thumbnail'])
         as String?;
         if (url != null && url.isNotEmpty) _headerImages.add(url);
       }
@@ -126,6 +129,61 @@ class _TourListScreenState extends State<TourListScreen> {
     return loc.imageUrl;
   }
 
+  double? _safeDouble(dynamic v) {
+    if (v == null) return null;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString());
+  }
+
+  List<Map<String, dynamic>> _buildMapDataFromTours() {
+    final valid = tours.whereType<Map>().where((t) {
+      final lat = _safeDouble(t['lat']) ?? 0;
+      final lng = _safeDouble(t['lng']) ?? 0;
+      return lat != 0 && lng != 0;
+    }).toList();
+
+    return valid.map<Map<String, dynamic>>((t) {
+      final price = t['price']?.toString();
+
+      return {
+        'id': t['id'],
+        'type': 'tour',
+        'title': t['title'] ?? '',
+        'slug': t['slug'] ?? '',
+        'lat': _safeDouble(t['lat']),
+        'lng': _safeDouble(t['lng']),
+        'thumbnail': t['image_url'] ?? t['thumbnail'] ?? '',
+        'location': t['location'] ?? '',
+        'address': t['location'] ?? '',
+        'review_score': null,
+        'price': price,
+      };
+    }).toList();
+  }
+
+  Future<void> _openTourMap() async {
+    final mapData = _buildMapDataFromTours();
+
+    if (mapData.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Không có tour nào có tọa độ để hiển thị bản đồ.'),
+        ),
+      );
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => HotelMapScreen(
+          hotels: mapData,
+          initialHotel: mapData.first,
+          autoLocateOnStart: true,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -149,6 +207,13 @@ class _TourListScreenState extends State<TourListScreen> {
         elevation: 0,
         systemOverlayStyle: SystemUiOverlayStyle.light,
         iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          IconButton(
+            tooltip: 'Xem bản đồ tour',
+            icon: const Icon(Icons.map_rounded),
+            onPressed: _openTourMap,
+          ),
+        ],
       ),
       body: RefreshIndicator(
         color: oceanBlue,
@@ -243,9 +308,8 @@ class _TourListScreenState extends State<TourListScreen> {
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 4),
                 decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.white.withOpacity(0.06)
-                      : Colors.white,
+                  color:
+                  isDark ? Colors.white.withOpacity(0.06) : Colors.white,
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Row(
@@ -314,8 +378,9 @@ class _TourListScreenState extends State<TourListScreen> {
               final loc = _locations[index - 1];
               return _buildLocationChip(
                 context: context,
-                label:
-                loc.name.isNotEmpty ? loc.name : tr('unknown_location', 'Đang cập nhật'),
+                label: loc.name.isNotEmpty
+                    ? loc.name
+                    : tr('unknown_location', 'Đang cập nhật'),
                 icon: Icons.location_on_rounded,
                 isSelected: _selectedQuickLocationId == loc.id,
                 imageUrl: _getLocationImageUrl(loc),
@@ -391,12 +456,10 @@ class _TourListScreenState extends State<TourListScreen> {
                 else
                   Container(
                     decoration: BoxDecoration(
-                      color: isDark
-                          ? const Color(0xFF020617)
-                          : Colors.white,
+                      color:
+                      isDark ? const Color(0xFF020617) : Colors.white,
                     ),
                   ),
-
                 Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
@@ -409,7 +472,6 @@ class _TourListScreenState extends State<TourListScreen> {
                     ),
                   ),
                 ),
-
                 Row(
                   children: [
                     Container(
