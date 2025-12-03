@@ -551,11 +551,14 @@ Future<void> main() async {
     CallkitService.I.flushPendingActions();
   });
 
-  await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
-    alert: true,
-    badge: true,
-    sound: true,
-  );
+  assert(() {
+    FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+      alert: true, // bật banner khi app đang foreground (dev dễ test)
+      badge: true,
+      sound: true,
+    );
+    return true;
+  }());
 
   NotificationSettings settings =
       await FirebaseMessaging.instance.requestPermission(
