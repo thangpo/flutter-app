@@ -546,6 +546,10 @@ Future<void> main() async {
 
   // =================== APP LIFECYCLE OBSERVER ===================
   WidgetsBinding.instance.addObserver(AppLifecycleObserver());
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    // Khi app vừa dựng frame đầu tiên (kể cả mở từ CallKit) thì flush action pending
+    CallkitService.I.flushPendingActions();
+  });
 
   await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
     alert: false,

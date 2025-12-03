@@ -19,6 +19,8 @@ class CallkitService {
   static final CallkitService I = CallkitService._();
 
   bool _inited = false;
+  // Map server call_id -> system UUID đã dùng để show CallKit
+  final Map<int, String> _systemIds = {};
 
   /// Đánh dấu các event đã xử lý để tránh lặp
   final Set<String> _handled = <String>{};
@@ -49,7 +51,9 @@ class CallkitService {
     await init();
 
     // id hệ thống (string) — KHÔNG phải call_id server
-    final systemId = _makeSystemIdFromServerId(data['call_id']);
+    final systemId = _makeSystemUuidFromServerId(data['call_id']);
+    final serverId = int.tryParse('${data['call_id'] ?? ''}') ?? 0;
+    if (serverId > 0) _systemIds[serverId] = systemId;
 
     // metadata hiển thị
     final callerName =
@@ -143,23 +147,29 @@ class CallkitService {
 
       case 'ACTION_CALL_DECLINE':
         await _endOrDecline(serverCallId, media, reason: 'decline');
-        try {
-          await FlutterCallkitIncoming.endCall(systemId);
-        } catch (_) {}
+        if (systemId.isNotEmpty) {
+          try {
+            await FlutterCallkitIncoming.endCall(systemId);
+          } catch (_) {}
+        }
         break;
 
       case 'ACTION_CALL_ENDED':
         await _endOrDecline(serverCallId, media, reason: 'end');
-        try {
-          await FlutterCallkitIncoming.endCall(systemId);
-        } catch (_) {}
+        if (systemId.isNotEmpty) {
+          try {
+            await FlutterCallkitIncoming.endCall(systemId);
+          } catch (_) {}
+        }
         break;
 
       case 'ACTION_CALL_TIMEOUT':
         await _endOrDecline(serverCallId, media, reason: 'timeout');
-        try {
-          await FlutterCallkitIncoming.endCall(systemId);
-        } catch (_) {}
+        if (systemId.isNotEmpty) {
+          try {
+            await FlutterCallkitIncoming.endCall(systemId);
+          } catch (_) {}
+        }
         break;
 
       case 'ACTION_DID_UPDATE_DEVICE_PUSH_TOKEN_VOIP':
@@ -197,17 +207,36 @@ class CallkitService {
 
   Future<void> endCallForServerId(int serverCallId) async {
     if (serverCallId <= 0) return;
-    final systemId = _makeSystemIdFromServerId(serverCallId);
+    final systemId = _systemIds[serverCallId] ??
+        _makeSystemUuidFromServerId(serverCallId);
     try {
       await FlutterCallkitIncoming.endCall(systemId);
     } catch (_) {}
   }
 
-  String _makeSystemIdFromServerId(dynamic callId) {
-    // Nếu server gửi call_id là số: tái sử dụng (string). Nếu không: random ổn định
-    final s = (callId == null) ? '' : callId.toString().trim();
-    if (s.isNotEmpty && int.tryParse(s) != null) return s;
-    return (callId?.hashCode ?? Random().nextInt(1 << 31)).abs().toString();
+  String _makeSystemUuidFromServerId(dynamic callId) {
+    final raw = (callId == null) ? '' : callId.toString().trim();
+    final uuidRegex =
+        RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+    if (uuidRegex.hasMatch(raw)) return raw.toLowerCase();
+
+    final bytes = List<int>.filled(16, 0);
+    final codes = raw.codeUnits;
+    final codesToUse = codes.isEmpty ? 'callkit-empty'.codeUnits : codes;
+    for (var i = 0; i < codesToUse.length; i++) {
+      bytes[i % 16] = (bytes[i % 16] + codesToUse[i] + i) & 0xff;
+    }
+    return _bytesToUuid(bytes);
+  }
+
+  String _bytesToUuid(List<int> b) {
+    String two(int n) => n.toRadixString(16).padLeft(2, '0');
+    final hex = b.map(two).join();
+    return '${hex.substring(0, 8)}-'
+        '${hex.substring(8, 12)}-'
+        '${hex.substring(12, 16)}-'
+        '${hex.substring(16, 20)}-'
+        '${hex.substring(20, 32)}';
   }
 
   void _withController(

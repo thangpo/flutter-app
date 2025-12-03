@@ -145,7 +145,8 @@ import flutter_callkit_incoming
     print("[PUSHKIT] incoming payload=\(dataDict)")
 
     // Map sang model Data của plugin flutter_callkit_incoming
-    let callId     = (dataDict["call_id"] as? String) ?? UUID().uuidString
+    let rawCallId  = (dataDict["call_id"] as? String) ?? UUID().uuidString
+    let callId     = normalizeUuid(rawCallId)
     let callerName = (dataDict["caller_name"] as? String) ?? "Incoming call"
     let handle     = (dataDict["caller_handle"] as? String) ?? callerName
     let isVideo    = ((dataDict["media"] as? String) == "video")
@@ -167,6 +168,29 @@ import flutter_callkit_incoming
       completion()
     }
   }
+}
+
+// MARK: - Helpers
+/// Tạo UUID hợp lệ từ chuỗi bất kỳ (ổn định, không phụ thuộc hash ngẫu nhiên).
+private func normalizeUuid(_ raw: String) -> String {
+  if let u = UUID(uuidString: raw) {
+    return u.uuidString.lowercased()
+  }
+  var bytes = [UInt8](repeating: 0, count: 16)
+  let scalars = raw.isEmpty ? Array("callkit-empty".utf8) : Array(raw.utf8)
+  for (idx, v) in scalars.enumerated() {
+    let pos = idx % 16
+    bytes[pos] = UInt8((Int(bytes[pos]) + Int(v) + idx) & 0xff)
+  }
+  let hex = bytes.map { String(format: "%02x", $0) }.joined()
+  let parts = [
+    String(hex.prefix(8)),
+    String(hex.dropFirst(8).prefix(4)),
+    String(hex.dropFirst(12).prefix(4)),
+    String(hex.dropFirst(16).prefix(4)),
+    String(hex.dropFirst(20).prefix(12))
+  ]
+  return parts.joined(separator: "-")
 }
 
 // MARK: - FlutterDownloader plugin registrant (yêu cầu bởi flutter_downloader)
