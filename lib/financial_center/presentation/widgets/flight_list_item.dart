@@ -31,16 +31,18 @@ class FlightListItem extends StatelessWidget {
     this.logoUrl,
   });
 
+  // ====== Format helpers ======
+
   String formatPrice(String price) {
     try {
       String numericPrice = price.replaceAll(RegExp(r'[^0-9.,]'), '');
       if (numericPrice.isEmpty) return price;
       numericPrice = numericPrice.replaceAll(',', '.');
-      double priceUSD = double.parse(numericPrice);
-      int priceVND = (priceUSD * 26000).round();
+      final priceUSD = double.parse(numericPrice);
+      final int priceVND = (priceUSD * 26000).round();
       final formatter = NumberFormat('#,###', 'vi_VN');
       return '${formatter.format(priceVND)} ₫';
-    } catch (e) {
+    } catch (_) {
       return price;
     }
   }
@@ -79,13 +81,31 @@ class FlightListItem extends StatelessWidget {
       final timeFormat = DateFormat('HH:mm', 'vi_VN');
       final dateFormat = DateFormat('dd/MM/yyyy', 'vi_VN');
       return '${timeFormat.format(dt)}, ${dateFormat.format(dt)}';
-    } catch (e) {
+    } catch (_) {
       return dateTime;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    const Color primary = Color(0xFF00BCD4);
+    const Color primaryDark = Color(0xFF0097A7);
+
+    final Color outerStart =
+    isDark ? const Color(0xFF022C22) : primary;
+    final Color outerEnd =
+    isDark ? const Color(0xFF014451) : primaryDark;
+
+    final Color cardBg =
+    isDark ? const Color(0xFF020617) : Colors.white;
+    final Color titleColor =
+    isDark ? Colors.white : const Color(0xFF00838F);
+    final Color subtitleColor =
+    isDark ? Colors.white70 : Colors.grey[600]!;
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -98,15 +118,15 @@ class FlightListItem extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF00BCD4), Color(0xFF0097A7)],
+          gradient: LinearGradient(
+            colors: [outerStart, outerEnd],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF00BCD4).withOpacity(0.3),
+              color: primary.withOpacity(isDark ? 0.35 : 0.30),
               blurRadius: 12,
               offset: const Offset(0, 6),
             ),
@@ -115,7 +135,7 @@ class FlightListItem extends StatelessWidget {
         child: Container(
           margin: const EdgeInsets.all(2),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: cardBg,
             borderRadius: BorderRadius.circular(18),
           ),
           child: Padding(
@@ -123,35 +143,35 @@ class FlightListItem extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // ====== Header: logo + hãng + giá ======
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Column(
                       children: [
-                        if (logoUrl != null && logoUrl!.endsWith(".svg"))
+                        if (logoUrl != null && logoUrl!.endsWith('.svg'))
                           SvgPicture.network(
                             logoUrl!,
                             width: 40,
                             height: 40,
                             placeholderBuilder: (context) =>
-                            const Icon(Icons.flight, color: Colors.blue),
+                                Icon(Icons.flight, color: primaryDark),
                           )
-                        else if (logoUrl != null)
+                        else if (logoUrl != null && logoUrl!.isNotEmpty)
                           Image.network(
                             logoUrl!,
                             width: 40,
                             height: 40,
                             fit: BoxFit.contain,
-                            errorBuilder: (context, error, stackTrace) {
-                              return const Icon(Icons.flight, color: Colors.blue);
-                            },
+                            errorBuilder: (context, error, stackTrace) =>
+                                Icon(Icons.flight, color: primaryDark),
                           )
                         else
                           Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFF00BCD4), Color(0xFF0097A7)],
+                              gradient: LinearGradient(
+                                colors: [outerStart, outerEnd],
                               ),
                               borderRadius: BorderRadius.circular(10),
                             ),
@@ -167,10 +187,10 @@ class FlightListItem extends StatelessWidget {
                           child: Text(
                             airline,
                             textAlign: TextAlign.center,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF0097A7),
+                              color: primaryDark,
                             ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
@@ -179,11 +199,10 @@ class FlightListItem extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(width: 12),
-
                     const Spacer(),
-
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: const Color(0xFFFFE0E0),
                         borderRadius: BorderRadius.circular(20),
@@ -199,8 +218,10 @@ class FlightListItem extends StatelessWidget {
                     ),
                   ],
                 ),
+
                 const SizedBox(height: 20),
 
+                // ====== Route & time ======
                 Row(
                   children: [
                     Expanded(
@@ -209,10 +230,10 @@ class FlightListItem extends StatelessWidget {
                         children: [
                           Text(
                             from,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF00838F),
+                              color: titleColor,
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -220,14 +241,13 @@ class FlightListItem extends StatelessWidget {
                             formatDateTime(departure),
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.grey[600],
+                              color: subtitleColor,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
                         ],
                       ),
                     ),
-
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       child: Column(
@@ -235,12 +255,14 @@ class FlightListItem extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFE0F7FA),
+                              color: isDark
+                                  ? const Color(0xFF022C22)
+                                  : const Color(0xFFE0F7FA),
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(
+                            child: Icon(
                               Icons.arrow_forward,
-                              color: Color(0xFF00BCD4),
+                              color: primary,
                               size: 20,
                             ),
                           ),
@@ -249,8 +271,8 @@ class FlightListItem extends StatelessWidget {
                             height: 2,
                             width: 60,
                             decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFF00BCD4), Color(0xFF0097A7)],
+                              gradient: LinearGradient(
+                                colors: [outerStart, outerEnd],
                               ),
                               borderRadius: BorderRadius.circular(1),
                             ),
@@ -258,17 +280,16 @@ class FlightListItem extends StatelessWidget {
                         ],
                       ),
                     ),
-
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(
                             to,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF00838F),
+                              color: titleColor,
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -276,7 +297,7 @@ class FlightListItem extends StatelessWidget {
                             formatDateTime(arrival),
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.grey[600],
+                              color: subtitleColor,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -288,20 +309,39 @@ class FlightListItem extends StatelessWidget {
 
                 const SizedBox(height: 16),
 
+                // ====== Info chips (no overflow) ======
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE0F7FA),
+                    color: isDark
+                        ? const Color(0xFF02131A)
+                        : const Color(0xFFE0F7FA),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      _buildInfoItem(Icons.event_seat, availability, const Color(0xFF00838F)),
-                      Container(width: 1, height: 20, color: const Color(0xFF00BCD4)),
-                      _buildInfoItem(Icons.luggage, baggage, const Color(0xFF00838F)),
-                      Container(width: 1, height: 20, color: const Color(0xFF00BCD4)),
-                      _buildInfoItem(Icons.business_center, cabinClass, const Color(0xFF00838F)),
+                      _buildInfoChip(
+                        icon: Icons.event_seat,
+                        text: availability,
+                        color: titleColor,
+                        bold: true,
+                        isDark: isDark,
+                      ),
+                      _buildInfoChip(
+                        icon: Icons.luggage,
+                        text: baggage,
+                        color: titleColor,
+                        isDark: isDark,
+                      ),
+                      _buildInfoChip(
+                        icon: Icons.business_center,
+                        text: cabinClass,
+                        color: titleColor,
+                        isDark: isDark,
+                      ),
                     ],
                   ),
                 ),
@@ -313,20 +353,39 @@ class FlightListItem extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoItem(IconData icon, String text, Color color) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: color),
-        const SizedBox(width: 6),
-        Text(
-          text,
-          style: TextStyle(
-            fontSize: 12,
-            color: color,
-            fontWeight: FontWeight.w500,
+  Widget _buildInfoChip({
+    required IconData icon,
+    required String text,
+    required Color color,
+    bool bold = false,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.06) : Colors.white,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 130),
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                color: color,
+                fontWeight: bold ? FontWeight.w600 : FontWeight.w500,
+              ),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+
 import '../widgets/flight_promo_banner.dart';
 import '../widgets/flight_tab_button.dart';
 import '../widgets/flight_booking_form.dart';
@@ -17,26 +19,24 @@ class FlightBookingScreen extends StatefulWidget {
 class _FlightBookingScreenState extends State<FlightBookingScreen> {
   int selectedTab = 0;
   bool isRoundTrip = false;
-
   String fromCity = "Hồ Chí Minh";
   String fromCode = "SGN";
   String toCity = "Huế";
   String toCode = "HUI";
-
   DateTime? departureDate;
   DateTime? returnDate;
-
   int adults = 1;
   int children = 0;
   int infants = 0;
-
   int get totalPassengers => adults + children + infants;
-
   List<dynamic> searchResults = [];
   bool isLoading = false;
 
-  // Màu xanh nước biển
   final Color oceanBlue = const Color(0xFF0891B2);
+
+  String tr(String key, String fallback) {
+    return getTranslated(key, context) ?? fallback;
+  }
 
   void _showWarning(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -48,16 +48,22 @@ class _FlightBookingScreenState extends State<FlightBookingScreen> {
   }
 
   void _showLoadingDialog() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final title =
+    tr('flight_loading_title', 'Đang tìm kiếm chuyến bay...');
+    final subtitle =
+    tr('flight_loading_subtitle', 'Vui lòng đợi trong giây lát');
+
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (BuildContext context) {
+      builder: (BuildContext ctx) {
         return Dialog(
           backgroundColor: Colors.transparent,
           child: Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: isDark ? const Color(0xFF020617) : Colors.white,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Column(
@@ -69,19 +75,21 @@ class _FlightBookingScreenState extends State<FlightBookingScreen> {
                 ),
                 const SizedBox(height: 20),
                 Text(
-                  'Đang tìm kiếm chuyến bay...',
+                  title,
+                  textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
-                    color: oceanBlue,
+                    color: isDark ? Colors.white : oceanBlue,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Vui lòng đợi trong giây lát',
+                  subtitle,
+                  textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.grey[600],
+                    color: isDark ? Colors.white70 : Colors.grey[600],
                   ),
                 ),
               ],
@@ -94,27 +102,39 @@ class _FlightBookingScreenState extends State<FlightBookingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final Color scaffoldBg =
+    isDark ? const Color(0xFF020617) : Colors.grey[50]!;
+    final Color appBarBg = isDark ? const Color(0xFF020617) : Colors.white;
+    final Color appBarFg = isDark ? Colors.white : Colors.black;
+
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: scaffoldBg,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: appBarBg,
         elevation: 0,
+        iconTheme: IconThemeData(color: appBarFg),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: Icon(Icons.arrow_back, color: appBarFg),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'Tìm vé',
+        title: Text(
+          tr('flight_search_title', 'Tìm vé'),
           style: TextStyle(
-              color: Colors.black, fontSize: 18, fontWeight: FontWeight.w600),
+            color: appBarFg,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
         ),
-        actions: const [
-          Icon(Icons.star_border, color: Colors.black),
-          SizedBox(width: 8),
-          Icon(Icons.notifications_outlined, color: Colors.black),
-          SizedBox(width: 8),
-          Icon(Icons.home_outlined, color: Colors.black),
-          SizedBox(width: 8),
+        actions: [
+          Icon(Icons.star_border, color: appBarFg),
+          const SizedBox(width: 8),
+          Icon(Icons.notifications_outlined, color: appBarFg),
+          const SizedBox(width: 8),
+          Icon(Icons.home_outlined, color: appBarFg),
+          const SizedBox(width: 8),
         ],
       ),
       body: Stack(
@@ -123,7 +143,6 @@ class _FlightBookingScreenState extends State<FlightBookingScreen> {
             child: Column(
               children: [
                 const FlightPromoBanner(),
-
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
@@ -131,7 +150,7 @@ class _FlightBookingScreenState extends State<FlightBookingScreen> {
                       Expanded(
                         child: FlightTabButton(
                           icon: Icons.flight,
-                          label: 'Máy bay',
+                          label: tr('flight_tab_plane', 'Máy bay'),
                           isSelected: selectedTab == 0,
                           onTap: () => setState(() => selectedTab = 0),
                         ),
@@ -139,7 +158,7 @@ class _FlightBookingScreenState extends State<FlightBookingScreen> {
                       Expanded(
                         child: FlightTabButton(
                           icon: Icons.directions_bus,
-                          label: 'Xe khách',
+                          label: tr('flight_tab_bus', 'Xe khách'),
                           isSelected: selectedTab == 1,
                           onTap: () => setState(() => selectedTab = 1),
                         ),
@@ -147,7 +166,7 @@ class _FlightBookingScreenState extends State<FlightBookingScreen> {
                       Expanded(
                         child: FlightTabButton(
                           icon: Icons.train,
-                          label: 'Tàu hoả',
+                          label: tr('flight_tab_train', 'Tàu hoả'),
                           isSelected: selectedTab == 2,
                           onTap: () => setState(() => selectedTab = 2),
                         ),
@@ -205,21 +224,33 @@ class _FlightBookingScreenState extends State<FlightBookingScreen> {
                     });
 
                     if (fromCode == toCode) {
-                      _showWarning("Điểm đi và điểm đến không được trùng nhau!");
+                      _showWarning(tr(
+                        'flight_warning_same_airport',
+                        'Điểm đi và điểm đến không được trùng nhau!',
+                      ));
                     }
                   },
 
                   onSearch: () async {
                     if (fromCode == toCode) {
-                      _showWarning("Vui lòng chọn điểm đi và điểm đến khác nhau.");
+                      _showWarning(tr(
+                        'flight_warning_diff_airport',
+                        'Vui lòng chọn điểm đi và điểm đến khác nhau.',
+                      ));
                       return;
                     }
                     if (departureDate == null) {
-                      _showWarning("Vui lòng chọn ngày đi.");
+                      _showWarning(tr(
+                        'flight_warning_departure_required',
+                        'Vui lòng chọn ngày đi.',
+                      ));
                       return;
                     }
                     if (isRoundTrip && returnDate == null) {
-                      _showWarning("Vui lòng chọn ngày về.");
+                      _showWarning(tr(
+                        'flight_warning_return_required',
+                        'Vui lòng chọn ngày về.',
+                      ));
                       return;
                     }
 
@@ -227,39 +258,48 @@ class _FlightBookingScreenState extends State<FlightBookingScreen> {
                       isLoading = true;
                     });
 
-                    // Hiển thị dialog loading
                     _showLoadingDialog();
 
                     try {
                       final flights = await DuffelService.searchFlights(
                         fromCode: fromCode,
                         toCode: toCode,
-                        departureDate:
-                        departureDate?.toIso8601String().split("T").first ?? "",
+                        departureDate: departureDate!
+                            .toIso8601String()
+                            .split("T")
+                            .first,
                         returnDate: isRoundTrip
-                            ? returnDate?.toIso8601String().split("T").first
+                            ? returnDate!
+                            .toIso8601String()
+                            .split("T")
+                            .first
                             : null,
                         adults: adults,
                         children: children,
                         infants: infants,
                       );
 
+                      if (!mounted) return;
+
                       setState(() {
                         searchResults = flights;
                         isLoading = false;
                       });
 
-                      // Đóng dialog loading
-                      if (mounted) Navigator.of(context).pop();
+                      Navigator.of(context).pop();
                     } catch (e) {
+                      if (!mounted) return;
+
                       setState(() {
                         isLoading = false;
                       });
 
-                      // Đóng dialog loading
-                      if (mounted) Navigator.of(context).pop();
+                      Navigator.of(context).pop();
 
-                      _showWarning("Lỗi khi tìm chuyến bay: $e");
+                      _showWarning(
+                        tr('flight_error_search', 'Đã xảy ra lỗi khi tìm chuyến bay:') +
+                            ' $e',
+                      );
                     }
                   },
                 ),
@@ -268,17 +308,24 @@ class _FlightBookingScreenState extends State<FlightBookingScreen> {
 
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: const [
+                  children: [
                     FlightSupportItem(
-                        icon: Icons.support_agent, label: 'Hỗ trợ 24/7'),
+                      icon: Icons.support_agent,
+                      label: tr('flight_support_24_7', 'Hỗ trợ 24/7'),
+                    ),
                     FlightSupportItem(
-                        icon: Icons.card_giftcard, label: 'Ưu đãi, bảo lộ deal'),
+                      icon: Icons.card_giftcard,
+                      label: tr('flight_support_deals', 'Ưu đãi giá tốt'),
+                    ),
                     FlightSupportItem(
-                        icon: Icons.eco, label: 'Du lịch bền vững'),
+                      icon: Icons.eco,
+                      label: tr('flight_support_sustainable', 'Du lịch bền vững'),
+                    ),
                   ],
                 ),
 
                 const SizedBox(height: 16),
+
                 FlightListWidget(
                   flights: searchResults,
                   isLoading: isLoading,
@@ -288,18 +335,27 @@ class _FlightBookingScreenState extends State<FlightBookingScreen> {
 
                 Container(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  color: Colors.white,
+                  color: isDark ? const Color(0xFF020617) : Colors.white,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: const [
-                      FlightBottomMenuItem(icon: Icons.hotel, label: 'Khách sạn'),
+                    children: [
                       FlightBottomMenuItem(
-                          icon: Icons.confirmation_number_outlined,
-                          label: 'Trải nghiệm'),
+                        icon: Icons.hotel,
+                        label: tr('flight_bottom_hotel', 'Khách sạn'),
+                      ),
                       FlightBottomMenuItem(
-                          icon: Icons.shield_outlined, label: 'Bảo hiểm'),
+                        icon: Icons.confirmation_number_outlined,
+                        label:
+                        tr('flight_bottom_experience', 'Trải nghiệm'),
+                      ),
                       FlightBottomMenuItem(
-                          icon: Icons.expand_more, label: 'Xem thêm'),
+                        icon: Icons.shield_outlined,
+                        label: tr('flight_bottom_insurance', 'Bảo hiểm'),
+                      ),
+                      FlightBottomMenuItem(
+                        icon: Icons.expand_more,
+                        label: tr('flight_bottom_more', 'Xem thêm'),
+                      ),
                     ],
                   ),
                 ),
@@ -307,7 +363,6 @@ class _FlightBookingScreenState extends State<FlightBookingScreen> {
             ),
           ),
 
-          // Overlay loading (backup nếu cần)
           if (isLoading)
             Container(
               color: Colors.black26,
