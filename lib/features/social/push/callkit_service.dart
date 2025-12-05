@@ -142,6 +142,8 @@ class CallkitService {
       case 'ACTION_CALL_ACCEPT':
         if (systemId.isNotEmpty) _accepted.add(systemId);
         await _answer(serverCallId, media, peerName, peerAvatar);
+        await flushPendingActions();
+        await recoverActiveCalls();
         try {
           await FlutterCallkitIncoming.setCallConnected(systemId);
         } catch (_) {}
@@ -149,6 +151,8 @@ class CallkitService {
       case 'ACTION_CALL_START': // iOS có thể bắn sự kiện này khi user nhấc máy từ CallKit
         if (systemId.isNotEmpty) _accepted.add(systemId);
         await _answer(serverCallId, media, peerName, peerAvatar);
+        await flushPendingActions();
+        await recoverActiveCalls();
         try {
           await FlutterCallkitIncoming.setCallConnected(systemId);
         } catch (_) {}
@@ -285,7 +289,8 @@ class CallkitService {
   }
 
   void _withController(
-      Future<void> Function(CallController cc, BuildContext ctx) fn) {
+    Future<void> Function(CallController cc, BuildContext ctx) fn,
+  ) {
     final ctx = navigatorKey.currentContext;
     if (ctx == null) {
       // Queue lại khi chưa có context (vd: accept từ CallKit trong background)
@@ -300,7 +305,15 @@ class CallkitService {
     try {
       final cc = ctx.read<CallController>();
       fn(cc, ctx);
-    } catch (_) {}
+    } catch (_) {
+      // Nếu provider chưa sẵn (race), queue lại để thử sau frame kế tiếp
+      _pendingActions.add((readyCtx) async {
+        try {
+          final cc = readyCtx.read<CallController>();
+          await fn(cc, readyCtx);
+        } catch (_) {}
+      });
+    }
   }
 
   Future<void> _answer(int serverCallId, String media, String? peerName,
@@ -366,14 +379,27 @@ class CallkitService {
     String? peerAvatar,
   }) {
     // Nếu dùng UI in-call native hoàn toàn, có thể bỏ navigation này.
-    Navigator.of(ctx).push(MaterialPageRoute(
-      builder: (_) => CallScreen(
-        isCaller: false,
-        callId: callId,
-        mediaType: mediaType,
-        peerName: peerName,
-        peerAvatar: peerAvatar,
-      ),
-    ));
+    try {
+      Navigator.of(ctx).push(MaterialPageRoute(
+        builder: (_) => CallScreen(
+          isCaller: false,
+          callId: callId,
+          mediaType: mediaType,
+          peerName: peerName,
+          peerAvatar: peerAvatar,
+        ),
+      ));
+    } catch (_) {
+      // Fallback: dùng navigatorKey nếu context hiện tại không hợp lệ
+      navigatorKey.currentState?.push(MaterialPageRoute(
+        builder: (_) => CallScreen(
+          isCaller: false,
+          callId: callId,
+          mediaType: mediaType,
+          peerName: peerName,
+          peerAvatar: peerAvatar,
+        ),
+      ));
+    }
   }
 }

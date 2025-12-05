@@ -1310,26 +1310,29 @@ class _ChatScreenState extends State<ChatScreen> {
                                 final alreadyHandled = _handledIncoming.contains(callId) ||
                                     cc.isCallHandled(callId);
 
-                                if (!isMe && !alreadyHandled) {
-                                  _handledIncoming.add(callId);
-                                  cc.markCallHandled(callId);
+        if (!isMe && !alreadyHandled) {
+          _handledIncoming.add(callId);
+          cc.markCallHandled(callId);
 
-                                  WidgetsBinding.instance
-                                      .addPostFrameCallback((_) {
-                                    if (!mounted) return;
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => IncomingCallScreen(
-                                          callId: inv.callId,
-                                          mediaType: inv.mediaType,
-                                          peerName: widget.peerName,
-                                          peerAvatar: widget.peerAvatar,
-                                        ),
-                                      ),
-                                    );
-                                  });
-                                }
+          // iOS đang dùng CallKit (UI hệ thống), không auto mở IncomingCallScreen Flutter
+          if (!Platform.isIOS) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+          builder: (_) => CallScreen(
+            isCaller: false,
+            callId: inv.callId,
+            mediaType: inv.mediaType,
+            peerName: widget.peerName,
+            peerAvatar: widget.peerAvatar,
+          ),
+        ),
+      );
+            });
+          }
+        }
 
                                 if (!isMe) {
                                   final msgAvatar =
@@ -1675,6 +1678,7 @@ class _ChatScreenState extends State<ChatScreen> {
     return InkWell(
       borderRadius: BorderRadius.circular(14),
       onTap: () {
+        if (Platform.isIOS) return; // iOS đã dùng CallKit UI
         Navigator.push(
           context,
           MaterialPageRoute(
