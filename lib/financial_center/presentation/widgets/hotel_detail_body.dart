@@ -1,12 +1,14 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_html/flutter_html.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:provider/provider.dart';
-import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-
 import 'hotel_rooms_section.dart';
 import 'hotel_review_section.dart';
+import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter_html/flutter_html.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_map/flutter_map.dart' as fm;
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
+
 
 class HotelDetailBody extends StatefulWidget {
   final Map<String, dynamic> hotel;
@@ -585,6 +587,52 @@ class _HotelDetailBodyState extends State<HotelDetailBody> {
   Widget _buildMapPreview(String lat, String lng, bool isDark) {
     final cardBg = isDark ? const Color(0xFF1E1F23) : Colors.white;
 
+    final double? latVal = double.tryParse(lat);
+    final double? lngVal = double.tryParse(lng);
+
+    // Nếu toạ độ lỗi thì fallback về card cũ
+    if (latVal == null || lngVal == null) {
+      return GestureDetector(
+        onTap: () =>
+            launchUrl(Uri.parse('https://maps.google.com/?q=$lat,$lng')),
+        child: Container(
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.12),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          height: 190,
+          child: Stack(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  color: isDark ? const Color(0xFF25272C) : Colors.grey[200],
+                  child: const Center(
+                    child: Icon(
+                      Icons.map_rounded,
+                      size: 60,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ),
+              ),
+              _buildMapOverlayBar(),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // ✅ Map thật với FlutterMap + marker tại vị trí khách sạn
+    final LatLng center = LatLng(latVal, lngVal);
+
     return GestureDetector(
       onTap: () =>
           launchUrl(Uri.parse('https://maps.google.com/?q=$lat,$lng')),
@@ -601,63 +649,96 @@ class _HotelDetailBodyState extends State<HotelDetailBody> {
           ],
         ),
         height: 190,
-        child: Stack(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Container(
-                color: isDark ? const Color(0xFF25272C) : Colors.grey[200],
-                child: const Center(
-                  child: Icon(
-                    Icons.map_rounded,
-                    size: 60,
-                    color: Colors.grey,
-                  ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Stack(
+            children: [
+              fm.FlutterMap(
+                options: fm.MapOptions(
+                  initialCenter: center,
+                  initialZoom: 15,
                 ),
-              ),
-            ),
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.35),
-                  borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(16),
-                    bottomRight: Radius.circular(16),
+                children: [
+                  fm.TileLayer(
+                    urlTemplate:
+                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.vnshop.vietnamtoure',
                   ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: const [
-                        Icon(Icons.near_me_rounded,
-                            color: Colors.white, size: 18),
-                        SizedBox(width: 6),
-                        Text(
-                          'Google Maps',
-                          style: TextStyle(
+                  fm.MarkerLayer(
+                    markers: [
+                      fm.Marker(
+                        point: center,
+                        width: 40,
+                        height: 40,
+                        child: Container(
+                          decoration: BoxDecoration(
                             color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.25),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.location_on_rounded,
+                            size: 26,
+                            color: Color(0xFF10B981),
                           ),
                         ),
-                      ],
-                    ),
-                    const Text(
-                      'Xem bản đồ',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
+                ],
+              ),
+
+              _buildMapOverlayBar(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMapOverlayBar() {
+    return Positioned(
+      bottom: 0,
+      left: 0,
+      right: 0,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.35),
+          borderRadius: const BorderRadius.only(
+            bottomLeft: Radius.circular(16),
+            bottomRight: Radius.circular(16),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: const [
+            Row(
+              children: [
+                Icon(Icons.near_me_rounded, color: Colors.white, size: 18),
+                SizedBox(width: 6),
+                Text(
+                  'Google Maps',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
+              ],
+            ),
+            Text(
+              'Xem bản đồ',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -665,7 +746,6 @@ class _HotelDetailBodyState extends State<HotelDetailBody> {
       ),
     );
   }
-
 
   Widget _buildAmenitiesSection(
       List<dynamic> attributes, List<dynamic> rawTerms, bool isDark) {

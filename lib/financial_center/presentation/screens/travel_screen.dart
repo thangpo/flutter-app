@@ -3,6 +3,7 @@ import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
 import 'package:flutter_sixvalley_ecommerce/features/home/widgets/menu_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/widgets/tour_list_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/widgets/hotel_list_widget.dart';
+import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/widgets/travel_map_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/widgets/travel_menu_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/widgets/flights_list_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/widgets/travel_banner_widget.dart';
@@ -51,6 +52,8 @@ class TravelScreen extends StatelessWidget {
                 TravelMenuWidget(),
                 SizedBox(height: 30),
                 TravelBannerWidget(),
+                SizedBox(height: 20),
+                TravelMapWidget(),
                 SizedBox(height: 20),
                 HotelListWidget(),
                 SizedBox(height: 30),

@@ -16,7 +16,6 @@ class TourService {
     }
     throw Exception('Không thể tải danh sách tour');
   }
-
   static Future<List<dynamic>> searchTours({
     String? title,
     int? locationId,

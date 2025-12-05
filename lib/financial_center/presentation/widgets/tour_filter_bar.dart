@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:flutter/material.dart';
 import '../services/location_service.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+
 
 class TourFilterBar extends StatefulWidget {
   final Function({
@@ -54,25 +55,42 @@ class _TourFilterBarState extends State<TourFilterBar> {
 
   void _selectDateRange() async {
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final DateTimeRange initialRange = selectedRange ??
+        DateTimeRange(
+          start: today,
+          end: today.add(const Duration(days: 3)),
+        );
     final range = await showDateRangePicker(
       context: context,
-      firstDate: DateTime(now.year - 1),
+      firstDate: today,
       lastDate: DateTime(now.year + 2),
-      initialDateRange: selectedRange,
+      initialDateRange: initialRange,
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
+            colorScheme: isDark
+                ? const ColorScheme.dark(
+              primary: oceanBlue,
+              onPrimary: Colors.white,
+              surface: Color(0xFF020617),
+              onSurface: Colors.white,
+            )
+                : const ColorScheme.light(
               primary: oceanBlue,
               onPrimary: Colors.white,
               surface: Colors.white,
               onSurface: Colors.black87,
             ),
+            dialogBackgroundColor:
+            isDark ? const Color(0xFF020617) : Colors.white,
           ),
           child: child!,
         );
       },
     );
+
     if (range != null) {
       setState(() => selectedRange = range);
     }
@@ -156,10 +174,12 @@ class _TourFilterBarState extends State<TourFilterBar> {
               ),
             ),
             const SizedBox(height: 12),
-
-            // Tên tour
             TextField(
               controller: titleController,
+              style: TextStyle(
+                color: isDark ? Colors.white : Colors.black87,
+              ),
+              cursorColor: oceanBlue,
               decoration: InputDecoration(
                 labelText: tr('tour_name', 'Tên tour'),
                 labelStyle: TextStyle(color: labelColor),
@@ -182,7 +202,6 @@ class _TourFilterBarState extends State<TourFilterBar> {
             ),
             const SizedBox(height: 14),
 
-            // Địa điểm
             isLoadingLocations
                 ? Container(
               height: 60,
@@ -200,6 +219,11 @@ class _TourFilterBarState extends State<TourFilterBar> {
               ),
               child: DropdownButtonFormField<int?>(
                 value: selectedLocationId,
+                style: TextStyle(
+                  color:
+                  isDark ? Colors.white : Colors.black87,
+                  fontSize: 14,
+                ),
                 decoration: InputDecoration(
                   labelText: tr('location', 'Địa điểm'),
                   labelStyle: TextStyle(color: labelColor),
@@ -211,13 +235,14 @@ class _TourFilterBarState extends State<TourFilterBar> {
                     vertical: 16,
                   ),
                 ),
-                dropdownColor:
-                isDark ? const Color(0xFF020617) : Colors.white,
+                dropdownColor: isDark
+                    ? const Color(0xFF020617)
+                    : Colors.white,
                 items: [
                   DropdownMenuItem<int?>(
                     value: null,
-                    child: Text(
-                        tr('all_locations', 'Tất cả địa điểm')),
+                    child:
+                    Text(tr('all_locations', 'Tất cả địa điểm')),
                   ),
                   ..._locations.map((loc) {
                     return DropdownMenuItem<int?>(
@@ -234,7 +259,6 @@ class _TourFilterBarState extends State<TourFilterBar> {
 
             const SizedBox(height: 14),
 
-            // Khoảng thời gian
             Container(
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF020617) : Colors.white,
@@ -264,7 +288,8 @@ class _TourFilterBarState extends State<TourFilterBar> {
                       Expanded(
                         child: Text(
                           selectedRange == null
-                              ? tr('select_date_range', 'Chọn khoảng thời gian')
+                              ? tr('select_date_range',
+                              'Chọn khoảng thời gian')
                               : '${DateFormat('dd/MM/yyyy').format(selectedRange!.start)} - '
                               '${DateFormat('dd/MM/yyyy').format(selectedRange!.end)}',
                           style: TextStyle(
@@ -295,7 +320,6 @@ class _TourFilterBarState extends State<TourFilterBar> {
 
             Row(
               children: [
-                // Nút tìm tour
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
@@ -315,7 +339,8 @@ class _TourFilterBarState extends State<TourFilterBar> {
                     ),
                     child: ElevatedButton.icon(
                       onPressed: _applyFilter,
-                      icon: const Icon(Icons.search_rounded, size: 22),
+                      icon:
+                      const Icon(Icons.search_rounded, size: 22),
                       label: Text(
                         tr('search_tour', 'Tìm tour'),
                         style: const TextStyle(
@@ -336,7 +361,6 @@ class _TourFilterBarState extends State<TourFilterBar> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                // Nút reset
                 Container(
                   decoration: BoxDecoration(
                     color:

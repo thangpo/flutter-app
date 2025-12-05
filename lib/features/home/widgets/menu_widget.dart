@@ -1,364 +1,402 @@
-import 'dart:ui';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
-import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-import 'package:flutter_sixvalley_ecommerce/features/cart/screens/cart_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/chat/screens/inbox_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/order/screens/order_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/coupon/screens/coupon_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/wallet/screens/wallet_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/profile/screens/profile_screen1.dart';
-import 'package:flutter_sixvalley_ecommerce/features/setting/screens/settings_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/cart/controllers/cart_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/wishlist/screens/wishlist_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/splash/domain/models/config_model.dart';
-import 'package:flutter_sixvalley_ecommerce/features/address/screens/address_list_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/splash/controllers/splash_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/profile/controllers/profile_contrroller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/wishlist/controllers/wishlist_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/splash/controllers/splash_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/splash/domain/models/config_model.dart';
+import 'package:flutter_sixvalley_ecommerce/features/profile/screens/profile_screen1.dart';
+import 'package:flutter_sixvalley_ecommerce/features/chat/screens/inbox_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/setting/screens/settings_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/address/screens/address_list_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/order/screens/order_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/cart/screens/cart_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/wallet/screens/wallet_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/wishlist/screens/wishlist_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/coupon/screens/coupon_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/banner/screens/offers_product_list_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/loyaltyPoint/screens/loyalty_point_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/cart/controllers/cart_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/wishlist/controllers/wishlist_controller.dart';
 
+const Color _kPrimaryBlue = Color(0xFF0077BE);
+const Color _kLightBlue = Color(0xFF4DA8DA);
 
-
-
-class MenuWidget extends StatefulWidget {
+class MenuWidget extends StatelessWidget {
   const MenuWidget({super.key});
 
-  @override
-  State<MenuWidget> createState() => _MenuWidgetState();
-}
-
-class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateMixin {
-  OverlayEntry? _overlayEntry;
-  bool _isMenuOpen = false;
-  late AnimationController _animationController;
-  late Animation<double> _slideAnimation;
-  late Animation<double> _fadeAnimation;
-  late Animation<double> _scaleAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 450),
-      vsync: this,
-    );
-
-    _slideAnimation = Tween<double>(
-      begin: 1.0,
-      end: 0.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOutExpo,
-    ));
-
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
-    ));
-
-    _scaleAnimation = Tween<double>(
-      begin: 0.92,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOutBack,
-    ));
-  }
-
-  void _showMenu() {
+  void _openMenu(BuildContext context) {
     HapticFeedback.mediumImpact();
-    _overlayEntry = _createOverlayEntry();
-    Overlay.of(context).insert(_overlayEntry!);
-    setState(() {
-      _isMenuOpen = true;
-    });
-    _animationController.forward();
-  }
 
-  void _hideMenu() {
-    HapticFeedback.lightImpact();
-    _animationController.reverse().then((_) {
-      _overlayEntry?.remove();
-      _overlayEntry = null;
-      setState(() {
-        _isMenuOpen = false;
-      });
-    });
-  }
+    showGeneralDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      barrierDismissible: true,
+      barrierLabel: 'Menu',
+      transitionDuration: const Duration(milliseconds: 280),
+      pageBuilder: (ctx, animation, secondaryAnimation) {
+        final width = MediaQuery.of(ctx).size.width * 0.82;
 
-  OverlayEntry _createOverlayEntry() {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
-    final menuWidth = screenWidth * 0.82;
-
-    return OverlayEntry(
-      builder: (context) => Consumer2<ProfileController, ThemeController>(
-        builder: (context, profileProvider, themeController, _) {
-          final bool isDark = themeController.darkTheme;
-          final bool isGuestMode = !Provider.of<AuthController>(context, listen: false).isLoggedIn();
-          final ConfigModel? configModel = Provider.of<SplashController>(context, listen: false).configModel;
-          final LiquidGlassSettings mainPanelSettings = isDark
-              ? const LiquidGlassSettings(
-            blur: 16,
-            thickness: 20,
-            refractiveIndex: 1.28,
-            lightAngle: 0.5 * pi,
-            lightIntensity: 1.8,
-            ambientStrength: 0.4,
-            saturation: 1.15,
-            glassColor: Color(0x1AFFFFFF),
-          )
-              : const LiquidGlassSettings(
-            blur: 14,
-            thickness: 18,
-            refractiveIndex: 1.25,
-            lightAngle: 0.5 * pi,
-            lightIntensity: 1.5,
-            ambientStrength: 0.35,
-            saturation: 1.08,
-            glassColor: Color(0x38FFFFFF),
-          );
-
-          final LiquidGlassSettings menuItemSettings = isDark
-              ? const LiquidGlassSettings(
-            blur: 10,
-            thickness: 12,
-            refractiveIndex: 1.22,
-            lightAngle: 0.5 * pi,
-            lightIntensity: 1.4,
-            ambientStrength: 0.3,
-            saturation: 1.05,
-            glassColor: Color(0x14FFFFFF),
-          )
-              : const LiquidGlassSettings(
-            blur: 10,
-            thickness: 12,
-            refractiveIndex: 1.25,
-            lightAngle: 0.5 * pi,
-            lightIntensity: 1.2,
-            ambientStrength: 0.35,
-            saturation: 1.05,
-            glassColor: Color(0xD9FFFFFF),
-          );
-
-          final List<Map<String, dynamic>> menuItems = [
-            {
-              'title': getTranslated('notifications', context),
-              'icon': Images.notification,
-              'navigateTo': const InboxScreen(isBackButtonExist: false),
-              'iconData': Icons.notifications_rounded,
-            },
-            {
-              'title': getTranslated('profile', context),
-              'icon': Images.user,
-              'navigateTo': const ProfileScreen1(),
-              'iconData': Icons.person_rounded,
-            },
-            {
-              'title': getTranslated('addresses', context),
-              'icon': Images.address,
-              'navigateTo': const AddressListScreen(),
-              'iconData': Icons.location_on_rounded,
-            },
-            {
-              'title': getTranslated('coupons', context),
-              'icon': Images.coupon,
-              'navigateTo': const CouponList(),
-              'iconData': Icons.local_offer_rounded,
-            },
-            {
-              'title': getTranslated('settings', context),
-              'icon': Images.settings,
-              'navigateTo': const SettingsScreen(),
-              'iconData': Icons.settings_rounded,
-            },
-            {
-              'title': getTranslated('offers', context),
-              'icon': Images.offerIcon,
-              'navigateTo': const OfferProductListScreen(),
-              'count': 0,
-              'hasCount': false,
-              'iconData': Icons.local_fire_department_rounded,
-            },
-            if (!isGuestMode && configModel?.walletStatus == 1)
-              {
-                'title': getTranslated('wallet', context),
-                'icon': Images.wallet,
-                'navigateTo': const WalletScreen(),
-                'count': 1,
-                'hasCount': false,
-                'isWallet': true,
-                'subTitle': 'amount',
-                'balance': profileProvider.balance ?? 0,
-                'iconData': Icons.account_balance_wallet_rounded,
-              },
-            if (!isGuestMode && configModel?.loyaltyPointStatus == 1)
-              {
-                'title': getTranslated('loyalty_point', context),
-                'icon': Images.loyaltyPoint,
-                'navigateTo': const LoyaltyPointScreen(),
-                'count': 1,
-                'hasCount': false,
-                'isWallet': true,
-                'subTitle': 'point',
-                'balance': profileProvider.loyaltyPoint ?? 0,
-                'isLoyalty': true,
-                'iconData': Icons.stars_rounded,
-              },
-            if (!isGuestMode)
-              {
-                'title': getTranslated('orders', context),
-                'icon': Images.shoppingImage,
-                'navigateTo': const OrderScreen(),
-                'count': profileProvider.userInfoModel?.totalOrder ?? 0,
-                'hasCount': (profileProvider.userInfoModel?.totalOrder ?? 0) > 0,
-                'iconData': Icons.shopping_bag_rounded,
-              },
-            {
-              'title': getTranslated('cart', context),
-              'icon': Images.cartImage,
-              'navigateTo': const CartScreen(),
-              'count': Provider.of<CartController>(context, listen: false).cartList.length,
-              'hasCount': true,
-              'iconData': Icons.shopping_cart_rounded,
-            },
-            {
-              'title': getTranslated('wishlist', context),
-              'icon': Images.wishlist,
-              'navigateTo': const WishListScreen(),
-              'count': Provider.of<WishListController>(context, listen: false).wishList?.length ?? 0,
-              'hasCount': !isGuestMode && (Provider.of<WishListController>(context, listen: false).wishList?.length ?? 0) > 0,
-              'iconData': Icons.favorite_rounded,
-            },
-          ];
-
-          return AnimatedBuilder(
-            animation: _animationController,
-            builder: (context, child) {
-              return LiquidGlassLayer(
-                useBackdropGroup: true,
-                settings: mainPanelSettings,
-                child: Stack(
-                  children: [
-                    Positioned(
-                      right: -(menuWidth * _slideAnimation.value),
-                      top: 0,
-                      width: menuWidth,
-                      height: screenHeight,
-                      child: Transform.scale(
-                        scale: _scaleAnimation.value,
-                        alignment: Alignment.centerRight,
-                        child: LiquidStretch(
-                          child: LiquidGlass(
-                            shape: const LiquidRoundedSuperellipse(
-                              borderRadius: 32,
-                            ),
-                            clipBehavior: Clip.antiAlias,
-                            glassContainsChild: false,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: isDark
-                                      ? [
-                                    Colors.black.withOpacity(0.45),
-                                    Colors.grey[900]!.withOpacity(0.60),
-                                  ]
-                                      : [
-                                    Colors.white.withOpacity(0.70),
-                                    Colors.grey[100]!.withOpacity(0.80),
-                                  ],
-                                ),
-                                borderRadius: const BorderRadius.only(
-                                  topLeft: Radius.circular(32),
-                                  bottomLeft: Radius.circular(32),
-                                ),
-                              ),
-                              child: SafeArea(
-                                child: Column(
-                                  children: [
-                                    _buildHeader(isDark),
-                                    Expanded(
-                                      child: ListView.builder(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 8,
-                                        ),
-                                        itemCount: menuItems.length,
-                                        physics: const BouncingScrollPhysics(),
-                                        itemBuilder: (context, index) {
-                                          return _buildAnimatedMenuItem(
-                                            context,
-                                            menuItems[index],
-                                            isDark,
-                                            index,
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+        return SafeArea(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: () => Navigator.of(ctx).pop(),
+                  child: Container(color: Colors.transparent),
                 ),
-              );
-            },
-          );
-        },
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: SizedBox(
+                  width: width,
+                  child: _SideMenu(
+                    onClose: () => Navigator.of(ctx).pop(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+      transitionBuilder: (ctx, animation, secondaryAnimation, child) {
+        final offsetAnimation = Tween<Offset>(
+          begin: const Offset(-1, 0),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+        ));
+
+        return SlideTransition(
+          position: offsetAnimation,
+          child: child,
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark =
+        Provider.of<ThemeController>(context, listen: true).darkTheme;
+
+    return GestureDetector(
+      onTap: () => _openMenu(context),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: (isDark ? Colors.white : Colors.black).withOpacity(0.08),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(
+          Icons.menu_rounded,
+          size: 24,
+          color: isDark ? Colors.white : Colors.black87,
+        ),
       ),
     );
   }
+}
 
-  Widget _buildHeader(bool isDark) {
-    return GlassGlow(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+class _SideMenu extends StatelessWidget {
+  final VoidCallback onClose;
+
+  const _SideMenu({required this.onClose});
+
+  @override
+  Widget build(BuildContext context) {
+    final themeController =
+    Provider.of<ThemeController>(context, listen: true);
+    final profileController =
+    Provider.of<ProfileController>(context, listen: true);
+    final authController = Provider.of<AuthController>(context, listen: false);
+    final splashController =
+    Provider.of<SplashController>(context, listen: false);
+    final cartController =
+    Provider.of<CartController>(context, listen: true);
+    final wishListController =
+    Provider.of<WishListController>(context, listen: true);
+
+    final bool isDark = themeController.darkTheme;
+    final bool isGuest = !authController.isLoggedIn();
+    final ConfigModel? configModel = splashController.configModel;
+    final user = profileController.userInfoModel;
+    final String fullName = isGuest
+        ? (getTranslated('guest', context) ?? 'Guest')
+        : [
+      user?.fName,
+      user?.lName,
+    ].where((e) => (e ?? '').isNotEmpty).join(' ').ifEmpty(
+      user?.phone ?? user?.email ?? 'User',
+    );
+
+    final String subtitle = isGuest
+        ? (getTranslated('tap_to_login', context) ?? '')
+        : (user?.phone ?? user?.email ?? '');
+
+    final int totalOrders = ((user?.totalOrder ?? 0) as num).toInt();
+    final int cartCount = cartController.cartList.length;
+    final int wishCount = wishListController.wishList?.length ?? 0;
+    final List<_MenuItemData> items = [
+      _MenuItemData(
+        icon: Icons.home_rounded,
+        title: getTranslated('home', context) ?? 'Home',
+        onTap: () {
+          onClose();
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        },
+      ),
+      if (!isGuest && configModel?.walletStatus == 1)
+        _MenuItemData(
+          icon: Icons.account_balance_wallet_rounded,
+          title: getTranslated('wallet', context) ?? 'My Wallet',
+          onTap: () {
+            onClose();
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const WalletScreen()),
+            );
+          },
+        ),
+      _MenuItemData(
+        icon: Icons.history_rounded,
+        title: getTranslated('orders', context) ?? 'History',
+        onTap: () {
+          onClose();
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const OrderScreen()),
+          );
+        },
+      ),
+      _MenuItemData(
+        icon: Icons.notifications_rounded,
+        title: getTranslated('notifications', context) ?? 'Notifications',
+        onTap: () {
+          onClose();
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const InboxScreen(isBackButtonExist: false),
+            ),
+          );
+        },
+      ),
+      _MenuItemData(
+        icon: Icons.card_giftcard_rounded,
+        title:
+        getTranslated('offers', context) ?? 'Invite Friends / Offers',
+        onTap: () {
+          onClose();
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const OfferProductListScreen()),
+          );
+        },
+      ),
+      _MenuItemData(
+        icon: Icons.location_on_rounded,
+        title: getTranslated('addresses', context) ?? 'Addresses',
+        onTap: () {
+          onClose();
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const AddressListScreen(),
+            ),
+          );
+        },
+      ),
+      _MenuItemData(
+        icon: Icons.favorite_rounded,
+        title: getTranslated('wishlist', context) ?? 'Wishlist',
+        trailingCount: wishCount,
+        onTap: () {
+          onClose();
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const WishListScreen()),
+          );
+        },
+      ),
+      _MenuItemData(
+        icon: Icons.shopping_cart_rounded,
+        title: getTranslated('cart', context) ?? 'Cart',
+        trailingCount: cartCount,
+        onTap: () {
+          onClose();
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const CartScreen()),
+          );
+        },
+      ),
+      if (!isGuest && configModel?.loyaltyPointStatus == 1)
+        _MenuItemData(
+          icon: Icons.stars_rounded,
+          title: getTranslated('loyalty_point', context) ?? 'Loyalty',
+          onTap: () {
+            onClose();
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const LoyaltyPointScreen()),
+            );
+          },
+        ),
+      _MenuItemData(
+        icon: Icons.settings_rounded,
+        title: getTranslated('settings', context) ?? 'Settings',
+        onTap: () {
+          onClose();
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const SettingsScreen()),
+          );
+        },
+      ),
+      _MenuItemData(
+        icon: Icons.logout_rounded,
+        title: getTranslated('logout', context) ?? 'Logout',
+        isDestructive: true,
+        onTap: () async {
+          onClose();
+          await authController.clearSharedData();
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        },
+      ),
+    ];
+
+    return ClipRRect(
+      borderRadius: const BorderRadius.only(
+        topRight: Radius.circular(24),
+        bottomRight: Radius.circular(24),
+      ),
+      child: Material(
+        color: isDark ? const Color(0xFF101218) : Colors.white,
+        child: Column(
           children: [
-            Text(
-              'Menu',
-              style: TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.w700,
-                color: isDark ? Colors.white : Colors.black87,
-                letterSpacing: -0.5,
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 18),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [_kPrimaryBlue, _kLightBlue],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 28,
+                        backgroundColor: Colors.white.withOpacity(0.2),
+                        child: const Icon(
+                          Icons.person_rounded,
+                          size: 32,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              fullName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: const [
+                                  Icon(
+                                    Icons.star_rounded,
+                                    size: 14,
+                                    color: Colors.amber,
+                                  ),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Gold Member',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded,
+                            color: Colors.white),
+                        onPressed: onClose,
+                      ),
+                    ],
+                  ),
+                  if (subtitle.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _HeaderStatItem(
+                        icon: Icons.access_time_filled_rounded,
+                        label: 'Orders',
+                        value: totalOrders.toString(),
+                      ),
+                      _HeaderStatItem(
+                        icon: Icons.favorite_rounded,
+                        label: 'Wishlist',
+                        value: wishCount.toString(),
+                      ),
+                      _HeaderStatItem(
+                        icon: Icons.shopping_cart_rounded,
+                        label: 'In Cart',
+                        value: cartCount.toString(),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-            GestureDetector(
-              onTap: _hideMenu,
-              child: LiquidStretch(
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: (isDark ? Colors.white : Colors.black)
-                        .withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(
-                    Icons.close_rounded,
-                    size: 22,
-                    color: isDark ? Colors.white : Colors.black87,
-                  ),
+            Expanded(
+              child: Container(
+                color: isDark ? const Color(0xFF101218) : Colors.white,
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 8),
+                  itemCount: items.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 2),
+                  itemBuilder: (context, index) {
+                    final item = items[index];
+                    return _MenuTile(
+                      data: item,
+                      isDark: isDark,
+                    );
+                  },
                 ),
               ),
             ),
@@ -367,185 +405,133 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
       ),
     );
   }
+}
 
-  Widget _buildAnimatedMenuItem(
-      BuildContext context,
-      Map<String, dynamic> item,
-      bool isDark,
-      int index,
-      ) {
-    return TweenAnimationBuilder<double>(
-      duration: Duration(milliseconds: 400 + (index * 40)),
-      tween: Tween(begin: 0.0, end: 1.0),
-      curve: Curves.easeOutCubic,
-      builder: (context, value, child) {
-        return Transform.translate(
-          offset: Offset(30 * (1 - value), 0),
-          child: Opacity(
-            opacity: value,
-            child: child,
-          ),
-        );
-      },
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: LiquidStretch(
-          child: GlassGlow(
-            glowColor: isDark ? Colors.blue[300]! : Colors.blue[500]!,
-            child: LiquidGlassBlendGroup(
-              child: LiquidGlass.grouped(
-                shape: const LiquidRoundedSuperellipse(
-                  borderRadius: 16,
-                ),
-                clipBehavior: Clip.antiAlias,
-                glassContainsChild: false,
-                child: _buildMenuItemRow(
-                  context,
-                  item: item,
-                  isDark: isDark,
-                  index: index,
-                ),
-              ),
+class _HeaderStatItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _HeaderStatItem({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        children: [
+          Icon(icon, color: Colors.white, size: 22),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
             ),
           ),
-        ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.9),
+              fontSize: 11,
+            ),
+          ),
+        ],
       ),
     );
   }
+}
 
-  Widget _buildMenuItemRow(
-      BuildContext context, {
-        required Map<String, dynamic> item,
-        required bool isDark,
-        required int index,
-      }) {
+class _MenuItemData {
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+  final int? trailingCount;
+  final bool isDestructive;
+
+  _MenuItemData({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    this.trailingCount,
+    this.isDestructive = false,
+  });
+}
+
+class _MenuTile extends StatelessWidget {
+  final _MenuItemData data;
+  final bool isDark;
+
+  const _MenuTile({
+    required this.data,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bool showBadge =
+        data.trailingCount != null && data.trailingCount! > 0;
+
+    final Color baseIconColor =
+    isDark ? Colors.white70 : const Color(0xFF6B7280);
+    final Color textColor =
+    isDark ? Colors.white : const Color(0xFF111827);
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () {
           HapticFeedback.selectionClick();
-          _hideMenu();
-          Future.delayed(const Duration(milliseconds: 200), () {
-            Navigator.push(
-              context,
-              PageRouteBuilder(
-                pageBuilder: (context, animation, secondaryAnimation) =>
-                item['navigateTo'],
-                transitionsBuilder:
-                    (context, animation, secondaryAnimation, child) {
-                  return FadeTransition(
-                    opacity: animation,
-                    child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0.05, 0),
-                        end: Offset.zero,
-                      ).animate(
-                        CurvedAnimation(
-                          parent: animation,
-                          curve: Curves.easeOutCubic,
-                        ),
-                      ),
-                      child: child,
-                    ),
-                  );
-                },
-                transitionDuration: const Duration(milliseconds: 300),
-              ),
-            );
-          });
+          data.onTap();
         },
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding:
+          const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(
             children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: isDark
-                        ? [
-                      Colors.blue[400]!.withOpacity(0.25),
-                      Colors.blue[600]!.withOpacity(0.15),
-                    ]
-                        : [
-                      Colors.blue[50]!,
-                      Colors.blue[100]!,
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  item['iconData'],
-                  size: 24,
-                  color: isDark ? Colors.blue[300] : Colors.blue[700],
-                ),
+              Icon(
+                data.icon,
+                size: 22,
+                color: data.isDestructive
+                    ? Colors.redAccent
+                    : baseIconColor,
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item['title'],
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.white : Colors.black87,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                    if (item['subTitle'] != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          '${item['subTitle']}: ${item['balance']}',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: isDark ? Colors.grey[400] : Colors.grey[600],
-                          ),
-                        ),
-                      ),
-                  ],
+                child: Text(
+                  data.title,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: data.isDestructive
+                        ? Colors.redAccent
+                        : textColor,
+                  ),
                 ),
               ),
-
-              if (item['hasCount'] == true && item['count'] > 0)
+              if (showBadge)
                 Container(
-                  constraints: const BoxConstraints(minWidth: 28),
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
+                    horizontal: 8,
+                    vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.blue[600]!,
-                        Colors.blue[400]!,
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.blue.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
+                    color: _kPrimaryBlue,
+                    borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
-                    item['count'].toString(),
-                    textAlign: TextAlign.center,
+                    data.trailingCount.toString(),
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.2,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -555,44 +541,9 @@ class _MenuWidgetState extends State<MenuWidget> with SingleTickerProviderStateM
       ),
     );
   }
+}
 
-  @override
-  void dispose() {
-    if (_isMenuOpen) {
-      _overlayEntry?.remove();
-      _overlayEntry = null;
-    }
-    _animationController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Provider.of<ThemeController>(context);
-    final isDark = theme.darkTheme;
-
-    return GestureDetector(
-      onTap: () {
-        if (_isMenuOpen) {
-          _hideMenu();
-        } else {
-          _showMenu();
-        }
-      },
-      child: LiquidStretch(
-        child: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: (isDark ? Colors.white : Colors.black).withOpacity(0.08),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(
-            _isMenuOpen ? Icons.close_rounded : Icons.menu_rounded,
-            size: 24,
-            color: isDark ? Colors.white : Colors.black87,
-          ),
-        ),
-      ),
-    );
-  }
+extension _StringHelpers on String {
+  String ifEmpty(String fallback) =>
+      trim().isEmpty ? fallback : this;
 }
