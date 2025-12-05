@@ -121,7 +121,9 @@ class CallkitService {
         ? <String, dynamic>{}
         : extraDyn.map((k, v) => MapEntry(k.toString(), v));
 
-    final int serverCallId = int.tryParse('${extra['call_id'] ?? ''}') ?? 0;
+    final rawCallId =
+        '${extra['call_id'] ?? extra['callId'] ?? extra['id'] ?? ''}'.trim();
+    final int serverCallId = int.tryParse(rawCallId) ?? 0;
     final String media =
         (extra['media'] ?? extra['media_type'] ?? 'audio').toString();
     final String? peerName = extra['caller_name']?.toString();
@@ -138,6 +140,13 @@ class CallkitService {
         break;
 
       case 'ACTION_CALL_ACCEPT':
+        if (systemId.isNotEmpty) _accepted.add(systemId);
+        await _answer(serverCallId, media, peerName, peerAvatar);
+        try {
+          await FlutterCallkitIncoming.setCallConnected(systemId);
+        } catch (_) {}
+        break;
+      case 'ACTION_CALL_START': // iOS có thể bắn sự kiện này khi user nhấc máy từ CallKit
         if (systemId.isNotEmpty) _accepted.add(systemId);
         await _answer(serverCallId, media, peerName, peerAvatar);
         try {
@@ -205,6 +214,42 @@ class CallkitService {
     }
   }
 
+  /// Đồng bộ cuộc gọi đang active trên CallKit phòng khi event ANSWER bị hụt (cold start).
+  Future<void> recoverActiveCalls() async {
+    try {
+      final raw = await FlutterCallkitIncoming.activeCalls();
+      if (raw is! List) return;
+      for (final item in raw) {
+        if (item is! Map) continue;
+        final map = Map<String, dynamic>.from(item);
+        final extraDyn = map['extra'] as Map<dynamic, dynamic>?;
+        final extra = extraDyn == null
+            ? <String, dynamic>{}
+            : extraDyn.map((k, v) => MapEntry(k.toString(), v));
+
+        final accepted = map['accepted'] == true ||
+            map['isAccepted'] == true ||
+            map['hasConnected'] == true;
+
+        final serverCallId = int.tryParse(
+              '${extra['call_id'] ?? extra['callId'] ?? extra['id'] ?? ''}',
+            ) ??
+            0;
+        if (!accepted || serverCallId <= 0) continue;
+        if (_handledServerIds.contains(serverCallId)) continue;
+
+        final media =
+            (extra['media'] ?? extra['media_type'] ?? 'audio').toString();
+        final peerName = extra['caller_name']?.toString();
+        final peerAvatar = extra['caller_avatar']?.toString();
+
+        await _answer(serverCallId, media, peerName, peerAvatar);
+      }
+    } catch (_) {
+      // noop
+    }
+  }
+
   Future<void> endCallForServerId(int serverCallId) async {
     if (serverCallId <= 0) return;
     final systemId = _systemIds[serverCallId] ??
@@ -260,7 +305,10 @@ class CallkitService {
 
   Future<void> _answer(int serverCallId, String media, String? peerName,
       String? peerAvatar) async {
-    if (serverCallId <= 0) return;
+    if (serverCallId <= 0) {
+      debugPrint('[CallKit] Skip answer: missing call_id in extra');
+      return;
+    }
     final key = 'ans:$serverCallId';
     if (_handled.contains(key)) return;
     _handled.add(key);

@@ -53,6 +53,8 @@ import flutter_callkit_incoming
   public func pushRegistry(_ registry: PKPushRegistry,
                            didUpdate pushCredentials: PKPushCredentials,
                            for type: PKPushType) {
+    guard type == .voIP else { return }
+
     let deviceToken = pushCredentials.token.map { String(format: "%02x", $0) }.joined()
     guard deviceToken.range(of: "^[0-9a-f]+$", options: .regularExpression) != nil else {
       print("[PUSHKIT] invalid hex token: \(deviceToken)")
@@ -80,6 +82,7 @@ import flutter_callkit_incoming
 
     // Build body x-www-form-urlencoded với percent-encode an toàn
     var comps = URLComponents()
+
     // server_key đọc từ Info.plist (SOCIAL_SERVER_KEY) để tránh hardcode trong mã
     let serverKey = (Bundle.main.object(forInfoDictionaryKey: "SOCIAL_SERVER_KEY") as? String) ?? ""
     if serverKey.isEmpty {
@@ -92,11 +95,16 @@ import flutter_callkit_incoming
       URLQueryItem(name: "access_token", value: accessToken),
       URLQueryItem(name: "pushkit_token", value: deviceToken),
     ]
-#if DEBUG
+    #if DEBUG
     items.append(URLQueryItem(name: "apns_env", value: "sandbox"))
-#else
+    #else
     items.append(URLQueryItem(name: "apns_env", value: "prod"))
-#endif
+    #endif
+
+    // ===== [NEW] gửi kèm bundle id để server dùng làm apns-topic <bundle>.voip =====
+    items.append(URLQueryItem(name: "bundle_id", value: Bundle.main.bundleIdentifier)) // [NEW]
+    // ==============================================================================
+
     comps.queryItems = items
     let bodyData = comps.percentEncodedQuery?.data(using: .utf8)
 
@@ -134,6 +142,7 @@ import flutter_callkit_incoming
                            didReceiveIncomingPushWith payload: PKPushPayload,
                            for type: PKPushType,
                            completion: @escaping () -> Void) {
+    guard type == .voIP else { completion(); return }
 
     // Một số backend gửi data ở key "data", một số gửi thẳng ở root
     let raw = payload.dictionaryPayload["data"] as? [AnyHashable: Any] ?? payload.dictionaryPayload
@@ -145,7 +154,9 @@ import flutter_callkit_incoming
     print("[PUSHKIT] incoming payload=\(dataDict)")
 
     // Map sang model Data của plugin flutter_callkit_incoming
-    let rawCallId  = (dataDict["call_id"] as? String) ?? UUID().uuidString
+    let rawCallIdAny = dataDict["call_id"]
+    let rawCallIdStr = (rawCallIdAny == nil) ? "" : "\(rawCallIdAny!)"
+    let rawCallId  = rawCallIdStr.isEmpty ? UUID().uuidString : rawCallIdStr
     let callId     = normalizeUuid(rawCallId)
     let callerName = (dataDict["caller_name"] as? String) ?? "Incoming call"
     let handle     = (dataDict["caller_handle"] as? String) ?? callerName

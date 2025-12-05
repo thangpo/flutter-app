@@ -245,6 +245,7 @@ class AppLifecycleObserver extends WidgetsBindingObserver {
       // App v�o foreground
       AnalyticsHelper.logUserActive();
       CallkitService.I.flushPendingActions();
+      CallkitService.I.recoverActiveCalls();
     } else if (state == AppLifecycleState.paused) {
       // App v�o background
       analytics.logEvent(
@@ -485,6 +486,9 @@ Future<void> main() async {
   HttpOverrides.global = MyHttpOverrides();
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Đăng ký listener CallKit càng sớm càng tốt để không miss sự kiện ANSWER khi app được mở từ CallKit (cold start).
+  await CallkitService.I.init();
+
   // V? full edge-to-edge, kh�ng d? system bar chi?m n?n den
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemChrome.setSystemUIOverlayStyle(
@@ -530,16 +534,13 @@ Future<void> main() async {
   }
 
   // ==== SOCIAL FCM / CALL WIRING ====
-  // 1) Init UI hệ thống trước (CallKit/ConnectionService)
-  await CallkitService.I.init();
-
-  // 2) Local notifications (cho Android heads-up khi cần)
+  // 1) Local notifications (cho Android heads-up khi cần)
   SocialCallPushHandler.I.initLocalNotifications();
 
-  // 3) Listener foreground cho call_invite qua FCM (nếu bạn dùng)
+  // 2) Listener foreground cho call_invite qua FCM (nếu bạn dùng)
   CallInviteForegroundListener.start();
 
-  // 4) FCM chat
+  // 3) FCM chat
   FcmChatHandler.initialize();
 
   // SocialCallPushHandler.I.bindForegroundListener(); // KH�NG c?n d�ng n?a
@@ -549,6 +550,7 @@ Future<void> main() async {
   WidgetsBinding.instance.addPostFrameCallback((_) {
     // Khi app vừa dựng frame đầu tiên (kể cả mở từ CallKit) thì flush action pending
     CallkitService.I.flushPendingActions();
+    CallkitService.I.recoverActiveCalls();
   });
 
   assert(() {
