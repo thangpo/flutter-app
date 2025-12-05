@@ -1,6 +1,7 @@
 // lib/features/social/push/call_invite_stream_listener.dart
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
@@ -399,6 +400,14 @@ class CallInviteForegroundListener {
     String? callerName,
     String? callerAvatar,
   }) async {
+    // iOS: bỏ hẳn incoming trong-app, chỉ dùng CallKit
+    if (Platform.isIOS) {
+      return;
+    }
+
+    await CallkitService.I.flushPendingActions();
+    if (CallkitService.I.isServerCallHandled(inv.callId)) return;
+    if (_routing) return;
     // 1) Đợi mọi action accept từ CallKit chạy xong (attachCall, open CallScreen, v.v.)
     await CallkitService.I.flushPendingActions();
 
@@ -477,6 +486,7 @@ class CallInviteForegroundListener {
     required String media,
     String? groupName,
   }) {
+    if (Platform.isIOS) return;
     if (_routing) return;
 
     final nav = navigatorKey.currentState;

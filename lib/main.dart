@@ -163,9 +163,14 @@ Future<void> myBackgroundMessageHandler(RemoteMessage message) async {
     final type = (data['type'] ?? '').toString();
 
     if (type == 'call_invite') {
-      await SocialCallPushHandler.I.showIncomingCallNotification(data);
-      await CallkitService.I.showIncomingCall(data);
-      print('?? [BG] Show incoming call notification (1-1)');
+      if (Platform.isAndroid) {
+        // Android: full-screen notification; tap body -> IncomingCallScreen
+        await SocialCallPushHandler.I.showIncomingCallNotification(data);
+      } else if (Platform.isIOS) {
+        // iOS: chỉ CallKit
+        await CallkitService.I.showIncomingCall(data);
+      }
+      print('✅ [BG] Show incoming call (platform-specific)');
     }
   } catch (e) {
     print('? [BG] Error handling background call_invite: $e');
@@ -252,6 +257,8 @@ class AppLifecycleObserver extends WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       // App v�o foreground
       AnalyticsHelper.logUserActive();
+      CallkitService.I.flushPendingActions();
+      CallkitService.I.recoverActiveCalls();
     } else if (state == AppLifecycleState.paused) {
       // App v�o background
       analytics.logEvent(
@@ -492,6 +499,9 @@ Future<void> main() async {
   HttpOverrides.global = MyHttpOverrides();
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Đăng ký listener CallKit càng sớm càng tốt để không miss sự kiện ANSWER khi app được mở từ CallKit (cold start).
+  await CallkitService.I.init();
+
   await _setHighRefreshRate();
 
   // V? full edge-to-edge, kh�ng d? system bar chi?m n?n den
@@ -539,28 +549,33 @@ Future<void> main() async {
   }
 
   // ==== SOCIAL FCM / CALL WIRING ====
-  // 1) Init UI hệ thống trước (CallKit/ConnectionService)
-  await CallkitService.I.init();
-
-  // 2) Local notifications (cho Android heads-up khi cần)
+  // 1) Local notifications (cho Android heads-up khi cần)
   SocialCallPushHandler.I.initLocalNotifications();
 
-  // 3) Listener foreground cho call_invite qua FCM (nếu bạn dùng)
+  // 2) Listener foreground cho call_invite qua FCM (nếu bạn dùng)
   CallInviteForegroundListener.start();
 
-  // 4) FCM chat
+  // 3) FCM chat
   FcmChatHandler.initialize();
 
   // SocialCallPushHandler.I.bindForegroundListener(); // KH�NG c?n d�ng n?a
 
   // =================== APP LIFECYCLE OBSERVER ===================
   WidgetsBinding.instance.addObserver(AppLifecycleObserver());
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    // Khi app vừa dựng frame đầu tiên (kể cả mở từ CallKit) thì flush action pending
+    CallkitService.I.flushPendingActions();
+    CallkitService.I.recoverActiveCalls();
+  });
 
-  await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
-    alert: false,
-    badge: true,
-    sound: true,
-  );
+  assert(() {
+    FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+      alert: true, // bật banner khi app đang foreground (dev dễ test)
+      badge: true,
+      sound: true,
+    );
+    return true;
+  }());
 
   NotificationSettings settings =
       await FirebaseMessaging.instance.requestPermission(
