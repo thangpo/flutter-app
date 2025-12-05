@@ -6,6 +6,7 @@ import 'package:flutter_sixvalley_ecommerce/utill/dimensions.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/tour_list_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/hotel_list_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/flight_booking_screen.dart';
 
 
@@ -158,7 +159,13 @@ class _TravelMenuWidgetState extends State<TravelMenuWidget>
             accentColor: const Color(0xFF7C6EFF),
             isDark: isDark,
             onTap: (position) {
-              // TODO: chuyển sang màn khách sạn
+              Navigator.push(
+                context,
+                IOSAppLaunchPageRoute(
+                  page: const HotelListScreen(),
+                  startPosition: position,
+                ),
+              );
             },
           ),
           _buildAnimatedItem(

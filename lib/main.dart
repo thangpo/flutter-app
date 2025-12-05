@@ -69,6 +69,7 @@ import 'localization/app_localization.dart';
 
 // Notification screen
 import 'package:flutter_sixvalley_ecommerce/features/notification/screens/notification_screen.dart';
+import 'package:flutter_displaymode/flutter_displaymode.dart';
 
 // Social modules
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
@@ -182,6 +183,18 @@ Future<void> _debugPrintFcmToken() async {
     print('?? FCM TOKEN (device) = $token');
   } catch (e) {
     print('? Error getting FCM token: $e');
+  }
+}
+
+Future<void> _setHighRefreshRate() async {
+  if (!Platform.isAndroid) return;
+
+  try {
+    // Ưu tiên mode có refresh rate cao nhất máy hỗ trợ
+    await FlutterDisplayMode.setHighRefreshRate();
+    debugPrint('High refresh rate mode applied');
+  } catch (e) {
+    debugPrint('Không set được high refresh rate: $e');
   }
 }
 
@@ -488,6 +501,8 @@ Future<void> main() async {
 
   // Đăng ký listener CallKit càng sớm càng tốt để không miss sự kiện ANSWER khi app được mở từ CallKit (cold start).
   await CallkitService.I.init();
+
+  await _setHighRefreshRate();
 
   // V? full edge-to-edge, kh�ng d? system bar chi?m n?n den
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
