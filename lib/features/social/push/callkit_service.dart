@@ -168,6 +168,7 @@ class CallkitService {
             await FlutterCallkitIncoming.endCall(systemId);
           } catch (_) {}
         }
+        await flushPendingActions();
         break;
 
       case 'ACTION_CALL_ENDED':
@@ -186,6 +187,7 @@ class CallkitService {
             await FlutterCallkitIncoming.endCall(systemId);
           } catch (_) {}
         }
+        await flushPendingActions();
         break;
 
       case 'ACTION_DID_UPDATE_DEVICE_PUSH_TOKEN_VOIP':
@@ -211,7 +213,11 @@ class CallkitService {
     if (_pendingActions.isEmpty) return;
     final ctx =
         navigatorKey.currentState?.overlay?.context ?? navigatorKey.currentContext;
-    if (ctx == null) return;
+    if (ctx == null) {
+      // Thử lại ở frame kế nếu chưa có context
+      Future.microtask(() => flushPendingActions());
+      return;
+    }
     final actions =
         List<Future<void> Function(BuildContext)>.from(_pendingActions);
     _pendingActions.clear();
@@ -306,6 +312,8 @@ class CallkitService {
           await fn(cc, readyCtx);
         } catch (_) {}
       });
+      // Kích hoạt flush sớm
+      Future.microtask(() => flushPendingActions());
       return;
     }
     try {
@@ -348,6 +356,9 @@ class CallkitService {
 
       cc.addListener(listener);
     });
+
+    // Đảm bảo pending actions được đẩy nếu chưa có context ngay
+    Future.microtask(() => flushPendingActions());
   }
 
   Future<void> _answer(int serverCallId, String media, String? peerName,
@@ -411,6 +422,14 @@ class CallkitService {
         }
       } catch (_) {}
     });
+
+    // Push CallKit đóng ngay nếu có id
+    if (reason == 'decline' || reason == 'end') {
+      unawaited(endCallForServerId(serverCallId));
+    }
+
+    // Đảm bảo hành động queued được xử lý
+    Future.microtask(() => flushPendingActions());
   }
 
   void _openCallScreen(
