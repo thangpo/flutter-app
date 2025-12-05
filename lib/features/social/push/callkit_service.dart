@@ -1,4 +1,5 @@
 // lib/features/social/push/callkit_service.dart
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -28,6 +29,7 @@ class CallkitService {
 
   /// Đánh dấu các cuộc gọi đã accept (để setCallConnected 1 lần)
   final Set<String> _accepted = <String>{};
+  final Set<int> _trackingRinging = <int>{};
 
   /// Hàng đợi action khi chưa có BuildContext (ví dụ accept từ nền)
   final List<Future<void> Function(BuildContext)> _pendingActions = [];
@@ -133,6 +135,7 @@ class CallkitService {
       case 'ACTION_CALL_INCOMING':
         debugPrint(
             '[CallKit] incoming shown: systemId=$systemId serverId=$serverCallId');
+        _trackRinging(serverCallId, media);
         break;
 
       case 'ACTION_CALL_CLICK':
@@ -206,7 +209,8 @@ class CallkitService {
   /// Flush hàng đợi action (vd: accept CallKit khi chưa có context)
   Future<void> flushPendingActions() async {
     if (_pendingActions.isEmpty) return;
-    final ctx = navigatorKey.currentContext;
+    final ctx =
+        navigatorKey.currentState?.overlay?.context ?? navigatorKey.currentContext;
     if (ctx == null) return;
     final actions =
         List<Future<void> Function(BuildContext)>.from(_pendingActions);
@@ -247,6 +251,7 @@ class CallkitService {
         final peerName = extra['caller_name']?.toString();
         final peerAvatar = extra['caller_avatar']?.toString();
 
+        _trackRinging(serverCallId, media); // đảm bảo poll state
         await _answer(serverCallId, media, peerName, peerAvatar);
       }
     } catch (_) {
@@ -291,7 +296,8 @@ class CallkitService {
   void _withController(
     Future<void> Function(CallController cc, BuildContext ctx) fn,
   ) {
-    final ctx = navigatorKey.currentContext;
+    final ctx =
+        navigatorKey.currentState?.overlay?.context ?? navigatorKey.currentContext;
     if (ctx == null) {
       // Queue lại khi chưa có context (vd: accept từ CallKit trong background)
       _pendingActions.add((readyCtx) async {
@@ -316,6 +322,34 @@ class CallkitService {
     }
   }
 
+  void _trackRinging(int serverCallId, String mediaType) {
+    if (serverCallId <= 0) return;
+    if (!_trackingRinging.add(serverCallId)) return;
+
+    _withController((cc, ctx) async {
+      // attach ringing để bật polling và nhận trạng thái end/decline từ server
+      if (cc.activeCallId != serverCallId) {
+        cc.attachCall(
+          callId: serverCallId,
+          mediaType: mediaType,
+          initialStatus: 'ringing',
+        );
+      }
+
+      void listener() {
+        final st = cc.callStatus;
+        if (st == 'ended' || st == 'declined') {
+          // Dừng CallKit khi caller đã kết thúc hoặc callee từ chối qua server
+          unawaited(endCallForServerId(serverCallId));
+          cc.removeListener(listener);
+          _trackingRinging.remove(serverCallId);
+        }
+      }
+
+      cc.addListener(listener);
+    });
+  }
+
   Future<void> _answer(int serverCallId, String media, String? peerName,
       String? peerAvatar) async {
     if (serverCallId <= 0) {
@@ -330,12 +364,13 @@ class CallkitService {
     _withController((cc, ctx) async {
       if (!cc.isCallHandled(serverCallId)) {
         cc.attachCall(
-            callId: serverCallId, mediaType: media, initialStatus: 'answered');
+          callId: serverCallId,
+          mediaType: media,
+          initialStatus: 'answered',
+        );
       }
-      try {
-        await cc.action('answer');
-      } catch (_) {}
 
+      // Mở UI ngay, không chờ network call action('answer')
       _openCallScreen(
         ctx,
         serverCallId,
@@ -343,6 +378,13 @@ class CallkitService {
         peerName: peerName,
         peerAvatar: peerAvatar,
       );
+
+      // Gửi action lên server ở background để tránh delay UI
+      unawaited(() async {
+        try {
+          await cc.action('answer');
+        } catch (_) {}
+      }());
     });
   }
 
@@ -380,7 +422,7 @@ class CallkitService {
   }) {
     // Nếu dùng UI in-call native hoàn toàn, có thể bỏ navigation này.
     try {
-      Navigator.of(ctx).push(MaterialPageRoute(
+      Navigator.of(ctx, rootNavigator: true).push(MaterialPageRoute(
         builder: (_) => CallScreen(
           isCaller: false,
           callId: callId,
