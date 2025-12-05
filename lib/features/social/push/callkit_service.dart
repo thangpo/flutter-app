@@ -34,6 +34,8 @@ class CallkitService {
   /// Hàng đợi action khi chưa có BuildContext (ví dụ accept từ nền)
   final List<Future<void> Function(BuildContext)> _pendingActions = [];
 
+  bool _routingToCall = false;
+
   Future<void> init() async {
     if (_inited) return;
     _inited = true;
@@ -57,6 +59,12 @@ class CallkitService {
     final serverId = int.tryParse('${data['call_id'] ?? ''}') ?? 0;
     if (serverId > 0) _systemIds[serverId] = systemId;
 
+    // Bật theo dõi trạng thái sớm để bắt kịp end/decline dù event native hụt
+    final mediaEarly =
+        (data['media'] ?? data['media_type'] ?? 'audio').toString();
+    if (serverId > 0) {
+      _trackRinging(serverId, mediaEarly);
+    }
     // metadata hiển thị
     final callerName =
         (data['caller_name'] ?? data['name'] ?? 'Cuộc gọi đến').toString();
@@ -113,8 +121,12 @@ class CallkitService {
     final evt = '${event.event}'.trim();
 
     // id hệ thống (string) của callkit
-    final systemId =
-        (event.body['id'] ?? event.body['event']?['id'] ?? '').toString();
+    // id hệ thống (string) của callkit
+    final dynamic nestedEvent = event.body['event'];
+    final systemId = (event.body['id'] ??
+            (nestedEvent is Map ? nestedEvent['id'] : '') ??
+            '')
+        .toString();
 
     // lấy extra (payload gốc) để suy ra call_id server, media, avatar, v.v.
     final Map<dynamic, dynamic>? extraDyn =
@@ -143,24 +155,92 @@ class CallkitService {
         break;
 
       case 'ACTION_CALL_ACCEPT':
-        if (systemId.isNotEmpty) _accepted.add(systemId);
-        await _answer(serverCallId, media, peerName, peerAvatar);
-        await flushPendingActions();
-        await recoverActiveCalls();
-        try {
-          await FlutterCallkitIncoming.setCallConnected(systemId);
-        } catch (_) {}
-        break;
-      case 'ACTION_CALL_START': // iOS có thể bắn sự kiện này khi user nhấc máy từ CallKit
-        if (systemId.isNotEmpty) _accepted.add(systemId);
-        await _answer(serverCallId, media, peerName, peerAvatar);
-        await flushPendingActions();
-        await recoverActiveCalls();
-        try {
-          await FlutterCallkitIncoming.setCallConnected(systemId);
-        } catch (_) {}
-        break;
+        {
+          if (systemId.isNotEmpty) _accepted.add(systemId);
 
+          // Fallback: nếu thiếu call_id trong extra → suy ngược từ _systemIds hoặc activeCalls
+          var sId = serverCallId;
+          if (sId <= 0 && systemId.isNotEmpty) {
+            final found = _systemIds.entries.firstWhere(
+              (e) => e.value.toLowerCase() == systemId.toLowerCase(),
+              orElse: () => const MapEntry(-1, ''),
+            );
+            if (found.key > 0) sId = found.key;
+          }
+          if (sId <= 0) {
+            try {
+              final list = await FlutterCallkitIncoming.activeCalls();
+              for (final item in list) {
+                if (item is Map &&
+                    '${item['id']}'.toLowerCase() == systemId.toLowerCase()) {
+                  final extraDyn2 = item['extra'] as Map<dynamic, dynamic>?;
+                  final extra2 = extraDyn2 == null
+                      ? <String, dynamic>{}
+                      : extraDyn2.map((k, v) => MapEntry(k.toString(), v));
+                  final raw =
+                      '${extra2['call_id'] ?? extra2['callId'] ?? extra2['id'] ?? ''}'
+                          .trim();
+                  final n = int.tryParse(raw) ?? 0;
+                  if (n > 0) {
+                    sId = n;
+                    break;
+                  }
+                }
+              }
+            } catch (_) {}
+          }
+
+          await _answer(sId, media, peerName, peerAvatar);
+          await flushPendingActions();
+          await recoverActiveCalls();
+          try {
+            await FlutterCallkitIncoming.setCallConnected(systemId);
+          } catch (_) {}
+          break;
+        }
+      case 'ACTION_CALL_START':
+        {
+          if (systemId.isNotEmpty) _accepted.add(systemId);
+
+          var sId = serverCallId;
+          if (sId <= 0 && systemId.isNotEmpty) {
+            final found = _systemIds.entries.firstWhere(
+              (e) => e.value.toLowerCase() == systemId.toLowerCase(),
+              orElse: () => const MapEntry(-1, ''),
+            );
+            if (found.key > 0) sId = found.key;
+          }
+          if (sId <= 0) {
+            try {
+              final list = await FlutterCallkitIncoming.activeCalls();
+              for (final item in list) {
+                if (item is Map &&
+                    '${item['id']}'.toLowerCase() == systemId.toLowerCase()) {
+                  final extraDyn2 = item['extra'] as Map<dynamic, dynamic>?;
+                  final extra2 = extraDyn2 == null
+                      ? <String, dynamic>{}
+                      : extraDyn2.map((k, v) => MapEntry(k.toString(), v));
+                  final raw =
+                      '${extra2['call_id'] ?? extra2['callId'] ?? extra2['id'] ?? ''}'
+                          .trim();
+                  final n = int.tryParse(raw) ?? 0;
+                  if (n > 0) {
+                    sId = n;
+                    break;
+                  }
+                }
+              }
+            } catch (_) {}
+          }
+
+          await _answer(sId, media, peerName, peerAvatar);
+          await flushPendingActions();
+          await recoverActiveCalls();
+          try {
+            await FlutterCallkitIncoming.setCallConnected(systemId);
+          } catch (_) {}
+          break;
+        }
       case 'ACTION_CALL_DECLINE':
         await _endOrDecline(serverCallId, media, reason: 'decline');
         if (systemId.isNotEmpty) {
@@ -170,7 +250,6 @@ class CallkitService {
         }
         await flushPendingActions();
         break;
-
       case 'ACTION_CALL_ENDED':
         await _endOrDecline(serverCallId, media, reason: 'end');
         if (systemId.isNotEmpty) {
@@ -178,8 +257,12 @@ class CallkitService {
             await FlutterCallkitIncoming.endCall(systemId);
           } catch (_) {}
         }
+        if (serverCallId > 0) {
+          // Vợt cuối đảm bảo tắt theo serverId
+          unawaited(endCallForServerId(serverCallId));
+        }
+        await flushPendingActions();
         break;
-
       case 'ACTION_CALL_TIMEOUT':
         await _endOrDecline(serverCallId, media, reason: 'timeout');
         if (systemId.isNotEmpty) {
@@ -187,9 +270,11 @@ class CallkitService {
             await FlutterCallkitIncoming.endCall(systemId);
           } catch (_) {}
         }
+        if (serverCallId > 0) {
+          unawaited(endCallForServerId(serverCallId));
+        }
         await flushPendingActions();
         break;
-
       case 'ACTION_DID_UPDATE_DEVICE_PUSH_TOKEN_VOIP':
         debugPrint(
             '[CallKit] VoIP token updated (native handled in AppDelegate).');
@@ -211,8 +296,8 @@ class CallkitService {
   /// Flush hàng đợi action (vd: accept CallKit khi chưa có context)
   Future<void> flushPendingActions() async {
     if (_pendingActions.isEmpty) return;
-    final ctx =
-        navigatorKey.currentState?.overlay?.context ?? navigatorKey.currentContext;
+    final ctx = navigatorKey.currentState?.overlay?.context ??
+        navigatorKey.currentContext;
     if (ctx == null) {
       // Thử lại ở frame kế nếu chưa có context
       Future.microtask(() => flushPendingActions());
@@ -267,8 +352,8 @@ class CallkitService {
 
   Future<void> endCallForServerId(int serverCallId) async {
     if (serverCallId <= 0) return;
-    final systemId = _systemIds[serverCallId] ??
-        _makeSystemUuidFromServerId(serverCallId);
+    final systemId =
+        _systemIds[serverCallId] ?? _makeSystemUuidFromServerId(serverCallId);
     try {
       await FlutterCallkitIncoming.endCall(systemId);
     } catch (_) {}
@@ -276,8 +361,8 @@ class CallkitService {
 
   String _makeSystemUuidFromServerId(dynamic callId) {
     final raw = (callId == null) ? '' : callId.toString().trim();
-    final uuidRegex =
-        RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+    final uuidRegex = RegExp(
+        r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
     if (uuidRegex.hasMatch(raw)) return raw.toLowerCase();
 
     final bytes = List<int>.filled(16, 0);
@@ -302,8 +387,8 @@ class CallkitService {
   void _withController(
     Future<void> Function(CallController cc, BuildContext ctx) fn,
   ) {
-    final ctx =
-        navigatorKey.currentState?.overlay?.context ?? navigatorKey.currentContext;
+    final ctx = navigatorKey.currentState?.overlay?.context ??
+        navigatorKey.currentContext;
     if (ctx == null) {
       // Queue lại khi chưa có context (vd: accept từ CallKit trong background)
       _pendingActions.add((readyCtx) async {
@@ -318,7 +403,7 @@ class CallkitService {
     }
     try {
       final cc = ctx.read<CallController>();
-      fn(cc, ctx);
+      unawaited(fn(cc, ctx));
     } catch (_) {
       // Nếu provider chưa sẵn (race), queue lại để thử sau frame kế tiếp
       _pendingActions.add((readyCtx) async {
@@ -349,6 +434,8 @@ class CallkitService {
         if (st == 'ended' || st == 'declined') {
           // Dừng CallKit khi caller đã kết thúc hoặc callee từ chối qua server
           unawaited(endCallForServerId(serverCallId));
+          // “Vợt” UI: đảm bảo caller/callee thoát màn nếu còn mở
+          _popAnyCallScreenIfMounted(ctx);
           cc.removeListener(listener);
           _trackingRinging.remove(serverCallId);
         }
@@ -439,28 +526,36 @@ class CallkitService {
     String? peerName,
     String? peerAvatar,
   }) {
-    // Nếu dùng UI in-call native hoàn toàn, có thể bỏ navigation này.
+    if (_routingToCall) return;
+    _routingToCall = true;
+
+    final route = MaterialPageRoute(
+      settings: const RouteSettings(name: 'CallScreen'),
+      builder: (_) => CallScreen(
+        isCaller: false,
+        callId: callId,
+        mediaType: mediaType,
+        peerName: peerName,
+        peerAvatar: peerAvatar,
+      ),
+    );
+
     try {
-      Navigator.of(ctx, rootNavigator: true).push(MaterialPageRoute(
-        builder: (_) => CallScreen(
-          isCaller: false,
-          callId: callId,
-          mediaType: mediaType,
-          peerName: peerName,
-          peerAvatar: peerAvatar,
-        ),
-      ));
+      Navigator.of(ctx, rootNavigator: true)
+          .push(route)
+          .whenComplete(() => _routingToCall = false);
     } catch (_) {
-      // Fallback: dùng navigatorKey nếu context hiện tại không hợp lệ
-      navigatorKey.currentState?.push(MaterialPageRoute(
-        builder: (_) => CallScreen(
-          isCaller: false,
-          callId: callId,
-          mediaType: mediaType,
-          peerName: peerName,
-          peerAvatar: peerAvatar,
-        ),
-      ));
+      navigatorKey.currentState
+          ?.push(route)
+          .whenComplete(() => _routingToCall = false);
     }
+  }
+
+  void _popAnyCallScreenIfMounted(BuildContext ctx) {
+    try {
+      Navigator.of(ctx, rootNavigator: true).popUntil(
+        (route) => route.settings.name != 'CallScreen',
+      );
+    } catch (_) {}
   }
 }
