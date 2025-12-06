@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart'
     show navigatorKey;
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
+import 'remote_rtc_log.dart';
 
 import '../controllers/call_controller.dart';
 import '../controllers/group_call_controller.dart';
@@ -108,6 +109,16 @@ class CallInviteForegroundListener {
     final callerAvatar =
         data['sender_avatar']?.toString() ?? data['caller_avatar']?.toString();
 
+    unawaited(RemoteRtcLog.send(
+      event: 'fcm_onMessage',
+      callId: int.tryParse('${data['call_id'] ?? ''}') ?? 0,
+      details: {
+        'type': type,
+        'callerId': callerId,
+        'isGroup': isGroupFlag,
+      },
+    ));
+
     // ----------- GROUP CALL -----------
     if (data.containsKey('group_id') &&
         (type == 'call_invite_group' ||
@@ -151,6 +162,11 @@ class CallInviteForegroundListener {
             _parseLooseCallInvite(normalized);
         if (inv != null && !inv.isExpired()) {
           if (_handledCallIds.add(inv.callId)) {
+            unawaited(RemoteRtcLog.send(
+              event: 'chat_call_invite',
+              callId: inv.callId,
+              details: {'source': 'fcm_direct', 'callerId': callerId},
+            ));
             _openIncoming(
               inv,
               callerName: callerName,
@@ -182,6 +198,12 @@ class CallInviteForegroundListener {
     );
     if (inv.isExpired()) return;
     if (!_handledCallIds.add(inv.callId)) return;
+
+    unawaited(RemoteRtcLog.send(
+      event: 'direct_call_invite',
+      callId: inv.callId,
+      details: {'callerId': callerId},
+    ));
 
     _openIncoming(
       inv,

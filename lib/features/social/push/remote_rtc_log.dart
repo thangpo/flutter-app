@@ -16,15 +16,20 @@ class RemoteRtcLog {
       final token = prefs.getString(AppConstants.socialAccessToken) ?? '';
       if (token.isEmpty) return;
 
+      // API routing chuẩn: /api/webrtc?access_token=... ; type=client_log trong form-data
       final uri = Uri.parse(
-          '${AppConstants.socialBaseUrl}/api/v2/endpoints/webrtc.php?type=client_log');
-      await http.post(uri, body: {
-        'server_key': AppConstants.socialServerKey,
-        'access_token': token,
-        'call_id': callId?.toString() ?? '',
-        'event': event,
-        'details': jsonEncode(details ?? const <String, dynamic>{}),
-      });
+          '${AppConstants.socialBaseUrl}/api/webrtc?access_token=$token');
+
+      // Gửi kiểu multipart/form-data giống pushkit.php
+      final req = http.MultipartRequest('POST', uri)
+        ..fields['server_key'] = AppConstants.socialServerKey
+        ..fields['type'] = 'client_log'
+        ..fields['call_id'] = callId?.toString() ?? ''
+        ..fields['event'] = event
+        ..fields['details'] =
+            jsonEncode(details ?? const <String, dynamic>{});
+
+      await req.send();
     } catch (_) {
       // swallow errors to avoid breaking UX
     }

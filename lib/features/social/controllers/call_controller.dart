@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../domain/models/ice_candidate_lite.dart';
 import '../domain/repositories/webrtc_signaling_repository.dart';
+import '../push/remote_rtc_log.dart';
 
 class CallController extends ChangeNotifier {
   CallController({required this.signaling});
@@ -60,11 +61,20 @@ class CallController extends ChangeNotifier {
     required String mediaType,
   }) async {
     try {
+      unawaited(RemoteRtcLog.send(
+        event: 'caller_start_call',
+        details: {'calleeId': calleeId, 'media': mediaType},
+      ));
       final res = await signaling.create(
         recipientId: calleeId,
         mediaType: mediaType,
       );
 
+      unawaited(RemoteRtcLog.send(
+        event: 'caller_start_call_ok',
+        callId: res.callId,
+        details: {'status': res.status, 'media': res.mediaType},
+      ));
       _attach(
         res.callId,
         res.mediaType,
@@ -166,6 +176,11 @@ class CallController extends ChangeNotifier {
     if (id == null) return;
 
     try {
+      unawaited(RemoteRtcLog.send(
+        event: 'action_send',
+        callId: id,
+        details: {'action': action},
+      ));
       final st = await signaling.action(callId: id, action: action);
       _callStatus = st;
 
@@ -173,8 +188,18 @@ class CallController extends ChangeNotifier {
         _stopPolling();
       }
       notifyListeners();
+      unawaited(RemoteRtcLog.send(
+        event: 'action_ok',
+        callId: id,
+        details: {'action': action, 'status': _callStatus},
+      ));
     } catch (e) {
       lastError = "$e";
+      unawaited(RemoteRtcLog.send(
+        event: 'action_err',
+        callId: id,
+        details: {'action': action, 'error': "$e"},
+      ));
       rethrow;
     }
   }
