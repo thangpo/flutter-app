@@ -61,8 +61,7 @@ class CallkitService {
     if (serverId > 0) _systemIds[serverId] = systemId;
 
     // Bật theo dõi trạng thái sớm để bắt kịp end/decline dù event native hụt
-    final mediaEarly =
-        (data['media'] ?? data['media_type'] ?? 'audio').toString();
+    final mediaEarly = _extractMedia(data);
     if (serverId > 0) {
       _trackRinging(serverId, mediaEarly);
     }
@@ -70,7 +69,7 @@ class CallkitService {
     final callerName =
         (data['caller_name'] ?? data['name'] ?? 'Cuộc gọi đến').toString();
     final avatar = (data['caller_avatar'] ?? data['avatar'] ?? '').toString();
-    final media = (data['media'] ?? data['media_type'] ?? 'audio').toString();
+    final media = mediaEarly;
     final isVideo = media == 'video';
 
     final params = CallKitParams(
@@ -139,8 +138,7 @@ class CallkitService {
     final rawCallId =
         '${extra['call_id'] ?? extra['callId'] ?? extra['id'] ?? ''}'.trim();
     final int serverCallId = int.tryParse(rawCallId) ?? 0;
-    final String media =
-        (extra['media'] ?? extra['media_type'] ?? 'audio').toString();
+    final String media = _extractMedia(extra);
     final String? peerName = extra['caller_name']?.toString();
     final String? peerAvatar = extra['caller_avatar']?.toString();
 
@@ -309,6 +307,19 @@ class CallkitService {
   /// Cho listener kiểm tra call_id đã xử lý qua CallKit
   bool isServerCallHandled(int id) => _handledServerIds.contains(id);
 
+  /// Chuẩn hóa media từ payload CallKit (server có thể dùng nhiều key khác nhau)
+  String _extractMedia(Map<dynamic, dynamic>? data) {
+    if (data == null) return 'audio';
+    final media = (data['media'] ??
+            data['media_type'] ??
+            data['call_type'] ??
+            data['type_two'] ??
+            data['call_media'])
+        ?.toString()
+        .toLowerCase();
+    return media == 'video' ? 'video' : 'audio';
+  }
+
   /// Flush hàng đợi action (vd: accept CallKit khi chưa có context)
   Future<void> flushPendingActions() async {
     if (_pendingActions.isEmpty) return;
@@ -353,8 +364,7 @@ class CallkitService {
         if (!accepted || serverCallId <= 0) continue;
         if (_handledServerIds.contains(serverCallId)) continue;
 
-        final media =
-            (extra['media'] ?? extra['media_type'] ?? 'audio').toString();
+        final media = _extractMedia(extra);
         final peerName = extra['caller_name']?.toString();
         final peerAvatar = extra['caller_avatar']?.toString();
 
