@@ -508,6 +508,19 @@ class CallkitService {
           await cc.action('end');
         }
       } catch (_) {}
+
+      // Đảm bảo UI caller/callee thoát màn hình call nếu vẫn đang mở
+      try {
+        final ctx = navigatorKey.currentState?.overlay?.context ??
+            navigatorKey.currentContext;
+        if (ctx != null) {
+          _popAnyCallScreenIfMounted(ctx);
+        } else {
+          _pendingActions.add((readyCtx) async {
+            _popAnyCallScreenIfMounted(readyCtx);
+          });
+        }
+      } catch (_) {}
     });
 
     // Push CallKit đóng ngay nếu có id
@@ -540,15 +553,35 @@ class CallkitService {
       ),
     );
 
-    try {
-      Navigator.of(ctx, rootNavigator: true)
-          .push(route)
-          .whenComplete(() => _routingToCall = false);
-    } catch (_) {
-      navigatorKey.currentState
-          ?.push(route)
-          .whenComplete(() => _routingToCall = false);
+    Future<void> pushRoute() async {
+      try {
+        final nav = Navigator.of(ctx, rootNavigator: true);
+        await nav.push(route);
+      } catch (_) {
+        final nav = navigatorKey.currentState;
+        if (nav != null) {
+          await nav.push(route);
+        } else {
+          rethrow;
+        }
+      } finally {
+        _routingToCall = false;
+      }
     }
+
+    pushRoute().catchError((_) {
+      // Retry once shortly after (cold start, context vừa ready)
+      Future.delayed(const Duration(milliseconds: 250), () async {
+        try {
+          final nav = navigatorKey.currentState;
+          if (nav != null) {
+            await nav.push(route);
+          }
+        } catch (_) {} finally {
+          _routingToCall = false;
+        }
+      });
+    });
   }
 
   void _popAnyCallScreenIfMounted(BuildContext ctx) {

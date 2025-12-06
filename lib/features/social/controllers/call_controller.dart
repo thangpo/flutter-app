@@ -29,6 +29,7 @@ class CallController extends ChangeNotifier {
   bool _polling = false;
   bool _disposed = false;
   bool _pollPaused = false;
+  DateTime? _lastProgress; // track tiến triển để auto-timeout
 
   String? lastError;
 
@@ -206,6 +207,7 @@ class CallController extends ChangeNotifier {
     _sdpAnswer = null;
     _iceCandidates.clear();
     _seen.clear();
+    _lastProgress = DateTime.now();
 
     _startPolling();
     notifyListeners();
@@ -254,22 +256,27 @@ class CallController extends ChangeNotifier {
 
     try {
       final pkt = await signaling.poll(callId: id);
+      var progressed = false;
 
       // status
       if (pkt.callStatus != null && pkt.callStatus!.isNotEmpty) {
+        if (_callStatus != pkt.callStatus!) progressed = true;
         _callStatus = pkt.callStatus!;
       }
 
       // type
       if (pkt.mediaType != null && pkt.mediaType!.isNotEmpty) {
+        if (_mediaType != pkt.mediaType!) progressed = true;
         _mediaType = pkt.mediaType!;
       }
 
       // SDP
       if (pkt.sdpOffer != null && pkt.sdpOffer!.isNotEmpty) {
+        if (_sdpOffer != pkt.sdpOffer) progressed = true;
         _sdpOffer = pkt.sdpOffer!;
       }
       if (pkt.sdpAnswer != null && pkt.sdpAnswer!.isNotEmpty) {
+        if (_sdpAnswer != pkt.sdpAnswer) progressed = true;
         _sdpAnswer = pkt.sdpAnswer!;
       }
 
@@ -279,8 +286,13 @@ class CallController extends ChangeNotifier {
           final key = '${c.candidate}|${c.sdpMid}|${c.sdpMLineIndex}';
           if (_seen.add(key)) {
             _iceCandidates.add(c);
+            progressed = true;
           }
         }
+      }
+
+      if (progressed) {
+        _lastProgress = DateTime.now();
       }
 
       // if ended -> stop + clear
@@ -289,6 +301,20 @@ class CallController extends ChangeNotifier {
         _stopPolling();
         _resetState(ended: true);
         if (endedId != null) _handledCallIds.add(endedId);
+        notifyListeners();
+        return;
+      }
+
+      // Auto-timeout nếu không có tiến triển trong 60s
+      final last = _lastProgress;
+      if (last != null &&
+          DateTime.now().difference(last) > const Duration(minutes: 1)) {
+        try {
+          await signaling.action(callId: id, action: "end");
+        } catch (_) {}
+        _stopPolling();
+        _resetState(ended: true);
+        _handledCallIds.add(id);
         notifyListeners();
         return;
       }
@@ -307,6 +333,7 @@ class CallController extends ChangeNotifier {
     _seen.clear();
     _pollPaused = false;
     _callStatus = ended ? "ended" : "ringing";
+    _lastProgress = null;
   }
 
   /// Nhận tín hiệu realtime (FCM/WebSocket) để giảm phụ thuộc polling.
@@ -321,9 +348,11 @@ class CallController extends ChangeNotifier {
     if (_callId == null || _callId != callId) return;
 
     if (sdpOffer != null && sdpOffer.isNotEmpty) {
+      _lastProgress = DateTime.now();
       _sdpOffer = sdpOffer;
     }
     if (sdpAnswer != null && sdpAnswer.isNotEmpty) {
+      _lastProgress = DateTime.now();
       _sdpAnswer = sdpAnswer;
     }
     if (candidate != null) {
@@ -331,9 +360,11 @@ class CallController extends ChangeNotifier {
           '${candidate.candidate}|${candidate.sdpMid}|${candidate.sdpMLineIndex}';
       if (_seen.add(key)) {
         _iceCandidates.add(candidate);
+        _lastProgress = DateTime.now();
       }
     }
     if (status != null && status.isNotEmpty) {
+      if (_callStatus != status) _lastProgress = DateTime.now();
       _callStatus = status;
       if (status == "ended" || status == "declined") {
         _stopPolling();
