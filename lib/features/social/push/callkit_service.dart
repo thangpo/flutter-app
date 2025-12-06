@@ -12,6 +12,8 @@ import 'package:flutter_callkit_incoming/entities/call_event.dart';
 
 import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart'
     show navigatorKey;
+import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../controllers/call_controller.dart';
 import '../screens/call_screen.dart';
 import 'remote_rtc_log.dart';
@@ -31,6 +33,7 @@ class CallkitService {
   /// Đánh dấu các cuộc gọi đã accept (để setCallConnected 1 lần)
   final Set<String> _accepted = <String>{};
   final Set<int> _trackingRinging = <int>{};
+  final Map<int, String> _ringingMedia = <int, String>{}; // callId -> media
 
   /// Hàng đợi action khi chưa có BuildContext (ví dụ accept từ nền)
   final List<Future<void> Function(BuildContext)> _pendingActions = [];
@@ -55,7 +58,15 @@ class CallkitService {
   Future<void> showIncomingCall(Map<String, dynamic> data) async {
     await init();
 
-    // id hệ thống (string) — KHÔNG phải call_id server
+    if (await _isSelfCall(data)) {
+      unawaited(RemoteRtcLog.send(
+        event: 'callkit_skip_self_call',
+        callId: int.tryParse('${data['call_id'] ?? ''}') ?? 0,
+      ));
+      return;
+    }
+
+// id hệ thống (string) — KHÔNG phải call_id server
     final systemId = _makeSystemUuidFromServerId(data['call_id']);
     final serverId = int.tryParse('${data['call_id'] ?? ''}') ?? 0;
     if (serverId > 0) _systemIds[serverId] = systemId;
@@ -320,6 +331,26 @@ class CallkitService {
     return media == 'video' ? 'video' : 'audio';
   }
 
+  Future<bool> _isSelfCall(Map<String, dynamic> data) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final myId = prefs.getString(AppConstants.socialUserId);
+      final callerId = (data['caller_id'] ??
+              data['from_id'] ??
+              data['sender_id'] ??
+              data['user_id'])
+          ?.toString();
+      if (myId != null &&
+          myId.isNotEmpty &&
+          callerId != null &&
+          callerId.isNotEmpty &&
+          callerId == myId) {
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
   /// Flush hàng đợi action (vd: accept CallKit khi chưa có context)
   Future<void> flushPendingActions() async {
     if (_pendingActions.isEmpty) return;
@@ -443,6 +474,7 @@ class CallkitService {
 
   void _trackRinging(int serverCallId, String mediaType) {
     if (serverCallId <= 0) return;
+    _ringingMedia[serverCallId] = mediaType;
     if (!_trackingRinging.add(serverCallId)) return;
 
     _withController((cc, ctx) async {
@@ -464,6 +496,7 @@ class CallkitService {
           _popAnyCallScreenIfMounted(ctx);
           cc.removeListener(listener);
           _trackingRinging.remove(serverCallId);
+          _ringingMedia.remove(serverCallId);
         }
       }
 
@@ -480,6 +513,11 @@ class CallkitService {
       debugPrint('[CallKit] Skip answer: missing call_id in extra');
       return;
     }
+
+    final preferredMedia = _ringingMedia[serverCallId];
+    final mediaFixed =
+        (media == 'audio' && preferredMedia == 'video') ? 'video' : media;
+
     final key = 'ans:$serverCallId';
     if (_handled.contains(key)) return;
     _handled.add(key);
@@ -488,28 +526,28 @@ class CallkitService {
     unawaited(RemoteRtcLog.send(
       event: 'answer_start',
       callId: serverCallId,
-      details: {'media': media},
+      details: {'media': mediaFixed},
     ));
 
     _withController((cc, ctx) async {
       if (!cc.isCallHandled(serverCallId)) {
         cc.attachCall(
           callId: serverCallId,
-          mediaType: media,
+          mediaType: mediaFixed,
           initialStatus: 'answered',
         );
       }
 
-      // Mở UI ngay, không chờ network call action('answer')
+      // Show UI immediately; avoid waiting for network action('answer')
       _openCallScreen(
         ctx,
         serverCallId,
-        media,
+        mediaFixed,
         peerName: peerName,
         peerAvatar: peerAvatar,
       );
 
-      // Gửi action lên server ở background để tránh delay UI
+      // Send answer to server in background to reduce UI delay
       unawaited(() async {
         try {
           await cc.action('answer');
@@ -528,6 +566,7 @@ class CallkitService {
     final key = 'end:$reason:$serverCallId';
     if (_handled.contains(key)) return;
     _handled.add(key);
+    _ringingMedia.remove(serverCallId);
 
     unawaited(RemoteRtcLog.send(
       event: 'end_or_decline',
@@ -634,3 +673,5 @@ class CallkitService {
     } catch (_) {}
   }
 }
+
+
