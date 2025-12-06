@@ -14,6 +14,7 @@ import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart'
     show navigatorKey;
 import '../controllers/call_controller.dart';
 import '../screens/call_screen.dart';
+import 'remote_rtc_log.dart';
 
 class CallkitService {
   CallkitService._();
@@ -142,6 +143,16 @@ class CallkitService {
         (extra['media'] ?? extra['media_type'] ?? 'audio').toString();
     final String? peerName = extra['caller_name']?.toString();
     final String? peerAvatar = extra['caller_avatar']?.toString();
+
+    unawaited(RemoteRtcLog.send(
+      event: 'callkit_event',
+      callId: serverCallId,
+      details: {
+        'evt': evt,
+        'systemId': systemId,
+        'media': media,
+      },
+    ));
 
     switch (evt) {
       case 'ACTION_CALL_INCOMING':
@@ -459,6 +470,12 @@ class CallkitService {
     _handled.add(key);
     _handledServerIds.add(serverCallId);
 
+    unawaited(RemoteRtcLog.send(
+      event: 'answer_start',
+      callId: serverCallId,
+      details: {'media': media},
+    ));
+
     _withController((cc, ctx) async {
       if (!cc.isCallHandled(serverCallId)) {
         cc.attachCall(
@@ -481,6 +498,10 @@ class CallkitService {
       unawaited(() async {
         try {
           await cc.action('answer');
+          await RemoteRtcLog.send(
+            event: 'answer_action_sent',
+            callId: serverCallId,
+          );
         } catch (_) {}
       }());
     });
@@ -492,6 +513,12 @@ class CallkitService {
     final key = 'end:$reason:$serverCallId';
     if (_handled.contains(key)) return;
     _handled.add(key);
+
+    unawaited(RemoteRtcLog.send(
+      event: 'end_or_decline',
+      callId: serverCallId,
+      details: {'reason': reason, 'media': media},
+    ));
 
     _withController((cc, _) async {
       if (!cc.isCallHandled(serverCallId)) {

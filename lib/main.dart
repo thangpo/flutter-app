@@ -1,5 +1,6 @@
 ﻿import 'dart:io';
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -85,6 +86,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/push/call_invite_str
 import 'package:flutter_sixvalley_ecommerce/features/social/push/push_call_handler.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/ice_candidate_lite.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/push/callkit_service.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/push/remote_rtc_log.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/incoming_call_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/call_screen.dart';
@@ -163,6 +165,22 @@ Future<void> myBackgroundMessageHandler(RemoteMessage message) async {
     final type = (data['type'] ?? '').toString();
 
     if (type == 'call_invite') {
+      // Bỏ qua call_invite do chính mình tạo
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final myId = prefs.getString(AppConstants.socialUserId);
+        final callerId =
+            (data['caller_id'] ?? data['from_id'] ?? data['sender_id'])
+                ?.toString();
+        if (myId != null &&
+            myId.isNotEmpty &&
+            callerId != null &&
+            callerId.isNotEmpty &&
+            callerId == myId) {
+          return;
+        }
+      } catch (_) {}
+
       if (Platform.isAndroid) {
         // Android: full-screen notification; tap body -> IncomingCallScreen
         await SocialCallPushHandler.I.showIncomingCallNotification(data);
@@ -452,6 +470,27 @@ Future<void> _handleCallSignal(Map<String, dynamic> data) async {
           candidate: cand,
           status: status,
         );
+
+    unawaited(RemoteRtcLog.send(
+      event: 'push_call_signal',
+      callId: callId,
+      details: {
+        'status': status,
+        'hasOffer': offer != null,
+        'hasAnswer': answer != null,
+        'hasCandidate': cand != null,
+      },
+    ));
+
+    // Nếu server báo ended/declined -> đóng CallKit/UI ngay cả khi chưa có poll
+    if (status == 'ended' || status == 'declined') {
+      await CallkitService.I.endCallForServerId(callId);
+      try {
+        Navigator.of(ctx, rootNavigator: true).popUntil(
+          (route) => route.settings.name != 'CallScreen',
+        );
+      } catch (_) {}
+    }
   } catch (_) {}
 }
 
