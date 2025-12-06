@@ -63,8 +63,8 @@ class WebRTCSignalingRepository {
     developer.log(message, name: _logName, error: error, stackTrace: stack);
   }
 
-  /// Nếu server chưa có route `/api/webrtc`, có thể đổi endpoint ở đây.
-  String get _endpoint => '$baseUrl/api-v2.php';
+  /// Endpoint trực tiếp `/api/webrtc` trên social domain
+  String get _endpoint => '${AppConstants.socialBaseUrl}/api/webrtc';
 
   Future<String> _getAccessToken() async {
     final sp = await SharedPreferences.getInstance();
@@ -80,28 +80,21 @@ class WebRTCSignalingRepository {
   Future<Map<String, dynamic>> _multipartPost(
     Map<String, String> fields,
   ) async {
-    final uri = Uri.parse(_endpoint);
+    final token = await _getAccessToken();
+    final uri = Uri.parse('$_endpoint?access_token=$token');
     final req = http.MultipartRequest('POST', uri);
 
     req.fields['server_key'] = serverKey;
-    req.fields['access_token'] = await _getAccessToken();
-
-    // báo cho PHP biết đây là router webrtc
-    req.fields['type'] = 'webrtc';
-
-    // xác định sub_type (create, offer, answer, ...)
-    final subType = fields['type'];
-    fields.remove('type');
-    req.fields['sub_type'] = subType ?? '';
-
+    // type chính là action create/offer/answer/candidate/poll/action/inbox
+    final actionType = fields['type'] ?? '';
     req.fields.addAll(fields);
-    _log('POST $_endpoint subType=$subType fields=${req.fields.keys.toList()}');
+    _log('POST $_endpoint type=$actionType fields=${req.fields.keys.toList()}');
 
     final streamed = await _client.send(req);
     final res = await http.Response.fromStream(streamed);
     if (res.statusCode != 200) {
       final msg =
-          'WebRTC API ${subType ?? '?'} failed (HTTP ${res.statusCode}): ${res.body}';
+          'WebRTC API ${actionType.isEmpty ? '?' : actionType} failed (HTTP ${res.statusCode}): ${res.body}';
       _log(msg);
       throw Exception(msg);
     }
@@ -112,12 +105,13 @@ class WebRTCSignalingRepository {
           json['error'] ??
           json['error_message'] ??
           'Unknown error';
-      final msg = 'WebRTC API ${subType ?? '?'} error: $err';
+      final msg =
+          'WebRTC API ${actionType.isEmpty ? '?' : actionType} error: $err';
       _log(msg);
       throw Exception(msg);
     }
     _log(
-        'WebRTC API ${subType ?? '?'} ok api_status=$apiStatus keys=${json.keys.toList()}');
+        'WebRTC API ${actionType.isEmpty ? '?' : actionType} ok api_status=$apiStatus keys=${json.keys.toList()}');
     return json;
   }
 
