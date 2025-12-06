@@ -463,6 +463,20 @@ class CallInviteForegroundListener {
   }) async {
     // iOS: bỏ hẳn incoming trong-app, chỉ dùng CallKit
     if (Platform.isIOS) {
+      final ctx = navigatorKey.currentState?.overlay?.context ??
+          navigatorKey.currentContext;
+      if (ctx != null) {
+        try {
+          final cc = ctx.read<CallController>();
+          if (!cc.isCallHandled(inv.callId)) {
+            cc.attachCall(
+              callId: inv.callId,
+              mediaType: inv.mediaType,
+              initialStatus: 'ringing',
+            );
+          }
+        } catch (_) {}
+      }
       return;
     }
 
