@@ -116,6 +116,7 @@ dependencies:
   flutter_webrtc: ^1.2.0
   html_unescape: ^2.0.0
   liquid_glass_renderer: ^0.2.0-dev.4
+  device_info_plus: ^10.1.2
 
 #dependency_overrides:
 #  firebase_core_platform_interface: ^5.4.0

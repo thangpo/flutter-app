@@ -120,9 +120,19 @@ class CallController extends ChangeNotifier {
     if (id == null) return;
 
     try {
+      unawaited(RemoteRtcLog.send(
+        event: 'offer_send',
+        callId: id,
+        details: {'len': sdp.length},
+      ));
       await signaling.offer(callId: id, sdp: sdp);
     } catch (e) {
       lastError = "$e";
+      unawaited(RemoteRtcLog.send(
+        event: 'offer_err',
+        callId: id,
+        details: {'error': '$e'},
+      ));
       rethrow;
     }
   }
@@ -133,6 +143,11 @@ class CallController extends ChangeNotifier {
     if (id == null) return;
 
     try {
+      unawaited(RemoteRtcLog.send(
+        event: 'answer_send',
+        callId: id,
+        details: {'len': sdp.length},
+      ));
       await signaling.answer(callId: id, sdp: sdp);
       _callStatus = "answered";
       notifyListeners();
@@ -159,6 +174,15 @@ class CallController extends ChangeNotifier {
     if (id == null) return;
 
     try {
+      unawaited(RemoteRtcLog.send(
+        event: 'candidate_send',
+        callId: id,
+        details: {
+          'mid': sdpMid,
+          'mline': sdpMLineIndex,
+          'len': candidate.length,
+        },
+      ));
       await signaling.candidate(
         callId: id,
         candidate: candidate,
@@ -167,6 +191,11 @@ class CallController extends ChangeNotifier {
       );
     } catch (e) {
       lastError = "$e";
+      unawaited(RemoteRtcLog.send(
+        event: 'candidate_err',
+        callId: id,
+        details: {'error': '$e'},
+      ));
     }
   }
 
@@ -244,6 +273,11 @@ class CallController extends ChangeNotifier {
     _polling = true;
     _pollPaused = false;
     _pollTimer?.cancel();
+
+    unawaited(RemoteRtcLog.send(
+      event: 'poll_start',
+      callId: _callId,
+    ));
 
     _pollOnce(); // chạy ngay 1 nhịp
 

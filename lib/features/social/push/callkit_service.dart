@@ -156,6 +156,7 @@ class CallkitService {
 
     switch (evt) {
       case 'ACTION_CALL_INCOMING':
+      case 'Event.actionCallIncoming':
         debugPrint(
             '[CallKit] incoming shown: systemId=$systemId serverId=$serverCallId');
         _trackRinging(serverCallId, media);
@@ -166,6 +167,7 @@ class CallkitService {
         break;
 
       case 'ACTION_CALL_ACCEPT':
+      case 'Event.actionCallAccept':
         {
           if (systemId.isNotEmpty) _accepted.add(systemId);
 
@@ -210,6 +212,7 @@ class CallkitService {
           break;
         }
       case 'ACTION_CALL_START':
+      case 'Event.actionCallStart':
         {
           if (systemId.isNotEmpty) _accepted.add(systemId);
 
@@ -253,6 +256,7 @@ class CallkitService {
           break;
         }
       case 'ACTION_CALL_DECLINE':
+      case 'Event.actionCallDecline':
         await _endOrDecline(serverCallId, media, reason: 'decline');
         if (systemId.isNotEmpty) {
           try {
@@ -262,6 +266,7 @@ class CallkitService {
         await flushPendingActions();
         break;
       case 'ACTION_CALL_ENDED':
+      case 'Event.actionCallEnded':
         await _endOrDecline(serverCallId, media, reason: 'end');
         if (systemId.isNotEmpty) {
           try {

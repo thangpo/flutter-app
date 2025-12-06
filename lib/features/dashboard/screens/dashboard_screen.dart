@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/foundation.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+
 import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
@@ -27,7 +29,6 @@ import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screen
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_notifications_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/search_product/controllers/search_product_controller.dart';
 
-
 class DashBoardScreen extends StatefulWidget {
   const DashBoardScreen({super.key});
   @override
@@ -39,13 +40,26 @@ class DashBoardScreenState extends State<DashBoardScreen> {
   late List<NavigationModel> _screens;
   final PageStorageBucket bucket = PageStorageBucket();
   final GlobalKey<SocialFeedScreenState> _socialFeedKey =
-  GlobalKey<SocialFeedScreenState>();
+      GlobalKey<SocialFeedScreenState>();
   int? _socialTabIndex;
   bool _showBottomNav = true;
+
+  // iOS major version (26, 17, 16, ...)
+  int? _iosMajor;
 
   @override
   void initState() {
     super.initState();
+
+    // Lấy version iOS để quyết định fallback icon
+    if (!kIsWeb && Platform.isIOS) {
+      DeviceInfoPlugin().iosInfo.then((info) {
+        final ver = info.systemVersion.split('.').first;
+        final major = int.tryParse(ver);
+        if (mounted) setState(() => _iosMajor = major);
+      });
+    }
+
     Provider.of<FlashDealController>(context, listen: false)
         .getFlashDealList(true, true);
     Provider.of<SplashController>(context, listen: false)
@@ -64,7 +78,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     }
 
     final SplashController splashController =
-    Provider.of<SplashController>(context, listen: false);
+        Provider.of<SplashController>(context, listen: false);
     Provider.of<SearchProductController>(context, listen: false)
         .getAuthorList(null);
     Provider.of<SearchProductController>(context, listen: false)
@@ -103,8 +117,8 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         screen: (splashController.configModel!.activeTheme == "default")
             ? const HomePage()
             : (splashController.configModel!.activeTheme == "theme_aster")
-            ? const AsterThemeHomeScreen()
-            : const FashionThemeHomePage(),
+                ? const AsterThemeHomeScreen()
+                : const FashionThemeHomePage(),
       ),
       NavigationModel(
         name: 'notifications',
@@ -135,8 +149,8 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         !_showBottomNav);
 
     final int unreadNotifications =
-    context.select<SocialNotificationsController, int>(
-          (ctrl) => ctrl.notifications.where((n) => n.seen == "0").length,
+        context.select<SocialNotificationsController, int>(
+      (ctrl) => ctrl.notifications.where((n) => n.seen == "0").length,
     );
 
     String t(String key) => getTranslated(key, context) ?? key;
@@ -146,36 +160,49 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       navActiveColor = _boostLightness(navActiveColor, 0.20);
     }
 
+    // Hàm chọn SF Symbol:
+    // - iOS 26 => dùng icon gốc (giữ nguyên theo yêu cầu)
+    // - iOS thấp hơn => dùng icon tương thích (fallback)
+    String _sf(String primary, String fallback) {
+      if (kIsWeb || !Platform.isIOS)
+        return primary; // Android/Web không ảnh hưởng
+      final v = _iosMajor ?? 0;
+      return (v >= 26) ? primary : fallback;
+    }
+
     final List<AdaptiveNavigationDestination> iosDestinations = [
       AdaptiveNavigationDestination(
-        icon: 'house.fill',
-        selectedIcon: 'house',
+        icon: _sf('house.fill', 'house.fill'),
+        selectedIcon: _sf('house', 'house'),
         label: t('home'),
       ),
       AdaptiveNavigationDestination(
-        icon: 'map.fill',
-        selectedIcon: 'airplane',
+        icon: _sf('map.fill', 'map.fill'),
+        selectedIcon: _sf('airplane', 'airplane'),
         label: t('travel'),
       ),
       AdaptiveNavigationDestination(
-        icon: 'globe.fill',
-        selectedIcon: 'person.2.fill',
+        // globe.fill trên iOS cũ đôi lúc không có fill → fallback 'globe'
+        icon: _sf('globe.fill', 'globe'),
+        selectedIcon: _sf('person.2.fill', 'person.2'),
         label: t('social'),
       ),
       AdaptiveNavigationDestination(
-        icon: 'basket.fill',
-        selectedIcon: 'bag.fill',
+        // Giữ 'basket.fill' cho iOS 26; iOS thấp hơn dùng 'bag.fill' (tương thích)
+        icon: _sf('basket.fill', 'bag.fill'),
+        selectedIcon: _sf('bag.fill', 'bag.fill'),
         label: t('shop'),
       ),
       AdaptiveNavigationDestination(
-        icon: 'bell.fill',
-        selectedIcon: 'bell.fill',
+        icon: _sf('bell.fill', 'bell.fill'),
+        selectedIcon: _sf('bell.fill', 'bell.fill'),
         label: t('notifications'),
         badgeCount: unreadNotifications > 0 ? unreadNotifications : null,
       ),
       AdaptiveNavigationDestination(
-        icon: 'ellipsis.circle.fill',
-        selectedIcon: 'ellipsis.circle.fill',
+        // ellipsis.circle.fill có thể không có fill ở iOS thấp → fallback 'ellipsis.circle'
+        icon: _sf('ellipsis.circle.fill', 'ellipsis.circle'),
+        selectedIcon: _sf('ellipsis.circle.fill', 'ellipsis.circle'),
         label: t('more'),
       ),
     ];
@@ -219,9 +246,10 @@ class DashBoardScreenState extends State<DashBoardScreen> {
           if (context.mounted) {
             if (!Navigator.of(context).canPop()) {
               showModalBottomSheet(
-                  backgroundColor: Colors.transparent,
-                  context: Get.context!,
-                  builder: (_) => const AppExitCard());
+                backgroundColor: Colors.transparent,
+                context: Get.context!,
+                builder: (_) => const AppExitCard(),
+              );
             }
           }
         }
@@ -233,42 +261,39 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         bottomNavigationBar: hideNav || !isIOSPlatform
             ? null
             : AdaptiveBottomNavigationBar(
-          items: iosDestinations,
-          selectedIndex: _pageIndex,
-          onTap: (index) => _handleNavigationTap(
-            _screens[index],
-            index,
-          ),
-          useNativeBottomBar: isIOSPlatform,
-          selectedItemColor: navActiveColor,
-        ),
+                items: iosDestinations,
+                selectedIndex: _pageIndex,
+                onTap: (index) => _handleNavigationTap(_screens[index], index),
+                useNativeBottomBar: isIOSPlatform,
+                selectedItemColor: navActiveColor,
+              ),
         body: isIOSPlatform
             ? PageStorage(
-          key: ValueKey<int>(_pageIndex),
-          bucket: bucket,
-          child: _screens[_pageIndex].screen,
-        )
+                key: ValueKey<int>(_pageIndex),
+                bucket: bucket,
+                child: _screens[_pageIndex].screen,
+              )
             : Stack(
-          children: [
-            PageStorage(
-              key: ValueKey<int>(_pageIndex),
-              bucket: bucket,
-              child: _screens[_pageIndex].screen,
-            ),
-            if (!hideNav)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: AndroidMovingCircleBottomBar(
-                  items: androidItems,
-                  currentIndex: _pageIndex,
-                  onTap: (index) =>
-                      _handleNavigationTap(_screens[index], index),
-                ),
+                children: [
+                  PageStorage(
+                    key: ValueKey<int>(_pageIndex),
+                    bucket: bucket,
+                    child: _screens[_pageIndex].screen,
+                  ),
+                  if (!hideNav)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: AndroidMovingCircleBottomBar(
+                        items: androidItems,
+                        currentIndex: _pageIndex,
+                        onTap: (index) =>
+                            _handleNavigationTap(_screens[index], index),
+                      ),
+                    ),
+                ],
               ),
-          ],
-        ),
       ),
     );
   }
@@ -345,7 +370,7 @@ class AndroidMovingCircleBottomBar extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
 
     final Color barColor =
-    isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE8EBF0);
+        isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE8EBF0);
     final Color scaffoldBg = theme.scaffoldBackgroundColor;
 
     return SafeArea(
@@ -388,7 +413,7 @@ class AndroidMovingCircleBottomBar extends StatelessWidget {
                       child: Row(
                         children: List.generate(
                           items.length,
-                              (index) => Expanded(
+                          (index) => Expanded(
                             child: _AndroidNavItemWidget(
                               item: items[index],
                               selected: index == currentIndex,
@@ -399,7 +424,6 @@ class AndroidMovingCircleBottomBar extends StatelessWidget {
                       ),
                     ),
                   ),
-
                   AnimatedPositioned(
                     duration: const Duration(milliseconds: 230),
                     curve: Curves.easeOutCubic,
@@ -422,8 +446,7 @@ class AndroidMovingCircleBottomBar extends StatelessWidget {
                       child: Container(
                         margin: const EdgeInsets.all(7),
                         decoration: BoxDecoration(
-                          color:
-                          theme.colorScheme.primary.withOpacity(0.10),
+                          color: theme.colorScheme.primary.withOpacity(0.10),
                           shape: BoxShape.circle,
                         ),
                         child: Center(
@@ -463,9 +486,8 @@ class _AndroidNavItemWidget extends StatelessWidget {
     final cs = theme.colorScheme;
 
     final Color iconColor =
-    selected ? cs.primary : cs.onSurface.withOpacity(0.7);
-    final FontWeight labelWeight =
-    selected ? FontWeight.w600 : FontWeight.w400;
+        selected ? cs.primary : cs.onSurface.withOpacity(0.7);
+    final FontWeight labelWeight = selected ? FontWeight.w600 : FontWeight.w400;
 
     Widget iconArea;
     if (selected) {
