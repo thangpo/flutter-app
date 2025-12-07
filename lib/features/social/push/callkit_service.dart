@@ -69,7 +69,7 @@ class CallkitService {
       return;
     }
 
-    // B? qua n?u call_id này dã du?c x? lý ho?c dang active trên client
+    // B? qua n?u call_id nï¿½y dï¿½ du?c x? lï¿½ ho?c dang active trï¿½n client
     if (serverId > 0 && _handledServerIds.contains(serverId)) {
       return;
     }
@@ -85,11 +85,11 @@ class CallkitService {
       } catch (_) {}
     }
 
-    // id h? th?ng (string) dùng d? show CallKit
+    // id h? th?ng (string) dï¿½ng d? show CallKit
     final systemId = _makeSystemUuidFromServerId(data['call_id']);
     if (serverId > 0) _systemIds[serverId] = systemId;
 
-    // B?t theo dõi ringing s?m d? b?t k?p end/decline
+    // B?t theo dï¿½i ringing s?m d? b?t k?p end/decline
     final mediaEarly = _extractMedia(data);
     if (serverId > 0) {
       _trackRinging(serverId, mediaEarly);
@@ -690,6 +690,7 @@ class CallkitService {
     } catch (_) {}
   }
 }
+
 
 
 
