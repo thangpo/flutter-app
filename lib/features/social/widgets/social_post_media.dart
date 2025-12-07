@@ -17,6 +17,7 @@ import 'package:flutter_sixvalley_ecommerce/helper/price_converter.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
@@ -1014,7 +1015,8 @@ class _ImagesWithAutoAudio extends StatefulWidget {
   State<_ImagesWithAutoAudio> createState() => _ImagesWithAutoAudioState();
 }
 
-class _ImagesWithAutoAudioState extends State<_ImagesWithAutoAudio> {
+class _ImagesWithAutoAudioState extends State<_ImagesWithAutoAudio>
+    with AutomaticKeepAliveClientMixin {
   final PageController _pc = PageController();
   int _index = 0;
   final AudioPlayer _player = AudioPlayer();
@@ -1056,6 +1058,7 @@ class _ImagesWithAutoAudioState extends State<_ImagesWithAutoAudio> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final width = MediaQuery.of(context).size.width;
     return VisibilityDetector(
       key: ValueKey(widget.audioUrl),
@@ -1102,6 +1105,9 @@ class _ImagesWithAutoAudioState extends State<_ImagesWithAutoAudio> {
       ),
     );
   }
+
+  @override
+  bool get wantKeepAlive => true;
 }
 
 class _LiveReplayTile extends StatelessWidget {
@@ -1176,26 +1182,142 @@ class _VideoPlayerTile extends StatefulWidget {
   State<_VideoPlayerTile> createState() => _VideoPlayerTileState();
 }
 
-class _VideoPlayerTileState extends State<_VideoPlayerTile> {
+/// Điều phối phát video: chỉ cho 1 video trong feed phát tại một thời điểm
+class _InlineVideoCoordinator {
+  _InlineVideoCoordinator._();
+  static final _InlineVideoCoordinator instance = _InlineVideoCoordinator._();
+
+  VideoPlayerController? _current;
+  bool _globalMuted = true;
+
+  bool get globalMuted => _globalMuted;
+
+  void setGlobalMuted(bool muted) {
+    _globalMuted = muted;
+    if (_current != null) {
+      _current!.setVolume(_globalMuted ? 0 : 1);
+    }
+  }
+
+  void requestPlay(VideoPlayerController controller) {
+    if (_current != controller) {
+      _current?.pause();
+      _current = controller;
+    }
+    controller.setVolume(_globalMuted ? 0 : 1);
+    if (!controller.value.isPlaying) {
+      controller.play();
+    }
+  }
+
+  void pauseIfCurrent(VideoPlayerController controller) {
+    if (_current == controller && controller.value.isPlaying) {
+      controller.pause();
+    }
+    if (_current == controller) {
+      _current = null;
+    }
+  }
+}
+
+class _VideoPlayerTileState extends State<_VideoPlayerTile>
+    with AutomaticKeepAliveClientMixin {
   VideoPlayerController? _controller;
+  bool _visible = false;
+  bool _initialized = false;
+  late bool _muted;
+  bool _ended = false;
+  final _InlineVideoCoordinator _coordinator =
+      _InlineVideoCoordinator.instance;
 
   @override
   void initState() {
     super.initState();
+    _muted = _coordinator.globalMuted;
     _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url))
       ..initialize().then((_) {
-        if (mounted) setState(() {});
+        if (!mounted) return;
+        _initialized = true;
+        _controller?.setVolume(_muted ? 0 : 1);
+        setState(() {});
+        if (_visible && _controller != null) {
+          _coordinator.requestPlay(_controller!);
+        }
       });
+    _controller?.addListener(_handleControllerTick);
   }
 
   @override
   void dispose() {
+    if (_controller != null) {
+      _coordinator.pauseIfCurrent(_controller!);
+    }
+    _controller?.removeListener(_handleControllerTick);
     _controller?.dispose();
     super.dispose();
   }
 
+  void _onVisibilityChanged(VisibilityInfo info) {
+    final nowVisible = info.visibleFraction > 0.6;
+    if (nowVisible == _visible) return;
+    _visible = nowVisible;
+    if (!_initialized || _controller == null || _ended) return;
+
+    if (_visible) {
+      _coordinator.requestPlay(_controller!);
+    } else {
+      _coordinator.pauseIfCurrent(_controller!);
+    }
+  }
+
+  void _toggleMute() {
+    final c = _controller;
+    if (c == null || !_initialized) return;
+    _muted = !_muted;
+    c.setVolume(_muted ? 0 : 1);
+    _coordinator.setGlobalMuted(_muted);
+    setState(() {});
+  }
+
+  void _handleControllerTick() {
+    final c = _controller;
+    if (c == null || !c.value.isInitialized) return;
+    final v = c.value;
+    final bool endedNow = v.duration.inMilliseconds > 0 &&
+        v.position.inMilliseconds >= v.duration.inMilliseconds - 250;
+    if (endedNow != _ended) {
+      setState(() {
+        _ended = endedNow;
+      });
+      if (endedNow) {
+        _coordinator.pauseIfCurrent(c);
+      }
+    } else if (_ended && v.position.inMilliseconds < v.duration.inMilliseconds - 500) {
+      // Reset ended flag when user seeks back
+      setState(() {
+        _ended = false;
+      });
+    }
+  }
+
+  Future<void> _replay() async {
+    final c = _controller;
+    if (c == null) return;
+    await c.seekTo(Duration.zero);
+    setState(() {
+      _ended = false;
+    });
+    _coordinator.requestPlay(c);
+  }
+
+  void _share() {
+    if (widget.url.isEmpty) return;
+    Share.share(widget.url);
+  }
+
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     if (!(_controller?.value.isInitialized ?? false)) {
       return const AspectRatio(
         aspectRatio: 16 / 9,
@@ -1204,63 +1326,107 @@ class _VideoPlayerTileState extends State<_VideoPlayerTile> {
     }
     final double rawRatio = _controller!.value.aspectRatio;
     final double ratio = rawRatio == 0 ? (16 / 9) : rawRatio;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final double screenLimit =
-            MediaQuery.of(context).size.height * widget.maxHeightFactor;
-        final double width = constraints.maxWidth.isFinite
-            ? constraints.maxWidth
-            : MediaQuery.of(context).size.width;
-        final double naturalHeight = width / ratio;
-        final double portraitLimit = width * 1.5;
-        final double allowedHeight =
-            min(naturalHeight, min(screenLimit, portraitLimit));
-        final bool shouldClip = allowedHeight < naturalHeight;
-        return SizedBox(
-          width: width,
-          height: allowedHeight,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (shouldClip)
+    return VisibilityDetector(
+      key: ValueKey('video_${widget.url.hashCode}'),
+      onVisibilityChanged: _onVisibilityChanged,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final double screenLimit =
+              MediaQuery.of(context).size.height * widget.maxHeightFactor;
+          final double width = constraints.maxWidth.isFinite
+              ? constraints.maxWidth
+              : MediaQuery.of(context).size.width;
+          final double naturalHeight = width / ratio;
+          final double portraitLimit = width * 1.5;
+          final double allowedHeight =
+              min(naturalHeight, min(screenLimit, portraitLimit));
+
+          return SizedBox(
+            width: width,
+            height: allowedHeight,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
                 ClipRect(
-                  child: Align(
-                    alignment: Alignment.center,
-                    child: SizedBox(
-                      width: width,
-                      height: naturalHeight,
-                      child: VideoPlayer(_controller!),
+                  child: SizedBox.expand(
+                    child: FittedBox(
+                      fit: BoxFit.cover,
+                      alignment: Alignment.center,
+                      child: SizedBox(
+                        width: width,
+                        height: naturalHeight,
+                        child: VideoPlayer(_controller!),
+                      ),
                     ),
                   ),
-                )
-              else
-                SizedBox(
-                  width: width,
-                  height: naturalHeight,
-                  child: VideoPlayer(_controller!),
                 ),
-              Align(
-                alignment: Alignment.center,
-                child: IconButton(
-                  iconSize: 48,
-                  color: Colors.white,
-                  icon: Icon(_controller!.value.isPlaying
-                      ? Icons.pause_circle
-                      : Icons.play_circle),
-                  onPressed: () {
-                    _controller!.value.isPlaying
-                        ? _controller!.pause()
-                        : _controller!.play();
-                    setState(() {});
-                  },
+                if (_ended)
+                  Positioned.fill(
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.55),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            TextButton.icon(
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 10),
+                              ),
+                              onPressed: _replay,
+                              icon: const Icon(Icons.replay),
+                              label: const Text('Xem lại'),
+                            ),
+                            const SizedBox(width: 8),
+                            TextButton.icon(
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 10),
+                              ),
+                              onPressed: _share,
+                              icon: const Icon(Icons.share_outlined),
+                              label: const Text('Chia sẻ'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                Positioned(
+                  right: 12,
+                  bottom: 12,
+                  child: Material(
+                    color: Colors.black.withOpacity(0.36),
+                    shape: const CircleBorder(),
+                    child: IconButton(
+                      iconSize: 16,
+                      padding: const EdgeInsets.all(2),
+                      constraints: BoxConstraints.tightFor(width: 18, height: 18),
+                      color: Colors.white,
+                      icon: Icon(_muted ? Icons.volume_off : Icons.volume_up),
+                      onPressed: _toggleMute,
+                    ),
+                  ),
                 ),
-              ),
-            ],
-          ),
-        );
-      },
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
+
+  @override
+  bool get wantKeepAlive => true;
 }
 
 class _ProductPostTile extends StatefulWidget {

@@ -1,4 +1,5 @@
 ﻿import 'dart:io' show Platform;
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/foundation.dart';
@@ -135,8 +136,8 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       navActiveColor = _boostLightness(navActiveColor, 0.20);
     }
 
-    // iOS 26 giữ nguyên icon gốc; thấp hơn dùng fallback tương thích
-    String _sf(String primary, String fallback) {
+    // iOS 26 giữ nguyên SF Symbol; iOS thấp hơn dùng IconData có sẵn để tránh lỗi thiếu glyph
+    dynamic _sf(String primary, IconData fallback) {
       if (kIsWeb || !Platform.isIOS) return primary;
       final v = _iosMajor ?? 0;
       return (v >= 26) ? primary : fallback;
@@ -144,35 +145,35 @@ class DashBoardScreenState extends State<DashBoardScreen> {
 
     final List<AdaptiveNavigationDestination> iosDestinations = [
       AdaptiveNavigationDestination(
-        icon: _sf('house.fill', 'house.fill'),
-        selectedIcon: _sf('house', 'house'),
+        icon: _sf('house.fill', CupertinoIcons.house_fill),
+        selectedIcon: _sf('house.fill', CupertinoIcons.house_fill),
         label: t('home'),
       ),
       AdaptiveNavigationDestination(
-        icon: _sf('map.fill', 'map.fill'),
-        selectedIcon: _sf('airplane', 'airplane'),
+        icon: _sf('map.fill', CupertinoIcons.map_fill),
+        selectedIcon: _sf('map.fill', CupertinoIcons.map_fill),
         label: t('travel'),
       ),
       AdaptiveNavigationDestination(
-        icon: _sf('globe.fill', 'globe'),
-        selectedIcon: _sf('person.2.fill', 'person.2'),
+        icon: _sf('globe.fill', CupertinoIcons.globe),
+        selectedIcon: _sf('globe.fill', CupertinoIcons.globe),
         label: t('social'),
       ),
       AdaptiveNavigationDestination(
         // iOS 26 dùng 'basket.fill'; iOS thấp hơn fallback 'bag.fill'
-        icon: _sf('basket.fill', 'bag.fill'),
-        selectedIcon: _sf('bag.fill', 'bag.fill'),
+        icon: _sf('basket.fill', CupertinoIcons.bag_fill),
+        selectedIcon: _sf('bag.fill', CupertinoIcons.bag_fill),
         label: t('shop'),
       ),
       AdaptiveNavigationDestination(
-        icon: _sf('bell.fill', 'bell.fill'),
-        selectedIcon: _sf('bell.fill', 'bell.fill'),
+        icon: _sf('bell.fill', CupertinoIcons.bell_fill),
+        selectedIcon: _sf('bell.fill', CupertinoIcons.bell_fill),
         label: t('notifications'),
         badgeCount: unreadNotifications > 0 ? unreadNotifications : null,
       ),
       AdaptiveNavigationDestination(
-        icon: _sf('ellipsis.circle.fill', 'ellipsis.circle'),
-        selectedIcon: _sf('ellipsis.circle.fill', 'ellipsis.circle'),
+        icon: _sf('ellipsis.circle.fill', CupertinoIcons.ellipsis_circle_fill),
+        selectedIcon: _sf('ellipsis.circle.fill', CupertinoIcons.ellipsis_circle_fill),
         label: t('more'),
       ),
     ];
