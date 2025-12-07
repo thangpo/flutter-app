@@ -55,34 +55,51 @@ class CallkitService {
   }
 
   /// Hiển thị màn hình cuộc gọi đến (CallKit / ConnectionService)
+    /// Hi?n CallKit/ConnectionService incoming
   Future<void> showIncomingCall(Map<String, dynamic> data) async {
     await init();
+
+    final serverId = int.tryParse('${data['call_id'] ?? ''}') ?? 0;
 
     if (await _isSelfCall(data)) {
       unawaited(RemoteRtcLog.send(
         event: 'callkit_skip_self_call',
-        callId: int.tryParse('${data['call_id'] ?? ''}') ?? 0,
+        callId: serverId,
       ));
       return;
     }
 
-// id hệ thống (string) — KHÔNG phải call_id server
+    // B? qua n?u call_id n�y d� du?c x? l� ho?c dang active tr�n client
+    if (serverId > 0 && _handledServerIds.contains(serverId)) {
+      return;
+    }
+    final ctx = navigatorKey.currentContext ?? navigatorKey.currentState?.overlay?.context;
+    if (serverId > 0 && ctx != null) {
+      try {
+        final cc = ctx.read<CallController>();
+        if (cc.activeCallId == serverId &&
+            cc.callStatus != 'ended' &&
+            cc.callStatus != 'declined') {
+          return;
+        }
+      } catch (_) {}
+    }
+
+    // id h? th?ng (string) d�ng d? show CallKit
     final systemId = _makeSystemUuidFromServerId(data['call_id']);
-    final serverId = int.tryParse('${data['call_id'] ?? ''}') ?? 0;
     if (serverId > 0) _systemIds[serverId] = systemId;
 
-    // Bật theo dõi trạng thái sớm để bắt kịp end/decline dù event native hụt
+    // B?t theo d�i ringing s?m d? b?t k?p end/decline
     final mediaEarly = _extractMedia(data);
     if (serverId > 0) {
       _trackRinging(serverId, mediaEarly);
     }
-    // metadata hiển thị
+    // metadata hi?n th?
     final callerName =
-        (data['caller_name'] ?? data['name'] ?? 'Cuộc gọi đến').toString();
+        (data['caller_name'] ?? data['name'] ?? 'Cu?c g?i d?n').toString();
     final avatar = (data['caller_avatar'] ?? data['avatar'] ?? '').toString();
     final media = mediaEarly;
     final isVideo = media == 'video';
-
     final params = CallKitParams(
       id: systemId,
       nameCaller: callerName,
@@ -673,5 +690,6 @@ class CallkitService {
     } catch (_) {}
   }
 }
+
 
 
