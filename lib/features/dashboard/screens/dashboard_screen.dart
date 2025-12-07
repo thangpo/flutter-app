@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/foundation.dart';
-import 'package:device_info_plus/device_info_plus.dart';
 
 import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
@@ -39,8 +38,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
   int _pageIndex = 1;
   late List<NavigationModel> _screens;
   final PageStorageBucket bucket = PageStorageBucket();
-  final GlobalKey<SocialFeedScreenState> _socialFeedKey =
-      GlobalKey<SocialFeedScreenState>();
+  final GlobalKey<SocialFeedScreenState> _socialFeedKey = GlobalKey<SocialFeedScreenState>();
   int? _socialTabIndex;
   bool _showBottomNav = true;
 
@@ -51,38 +49,25 @@ class DashBoardScreenState extends State<DashBoardScreen> {
   void initState() {
     super.initState();
 
-    // Lấy version iOS để quyết định fallback icon
+    // Lấy version iOS không cần device_info_plus
     if (!kIsWeb && Platform.isIOS) {
-      DeviceInfoPlugin().iosInfo.then((info) {
-        final ver = info.systemVersion.split('.').first;
-        final major = int.tryParse(ver);
-        if (mounted) setState(() => _iosMajor = major);
-      });
+      _iosMajor = _detectIOSMajor();
     }
 
-    Provider.of<FlashDealController>(context, listen: false)
-        .getFlashDealList(true, true);
-    Provider.of<SplashController>(context, listen: false)
-        .getBusinessPagesList('default');
-    Provider.of<SplashController>(context, listen: false)
-        .getBusinessPagesList('pages');
+    Provider.of<FlashDealController>(context, listen: false).getFlashDealList(true, true);
+    Provider.of<SplashController>(context, listen: false).getBusinessPagesList('default');
+    Provider.of<SplashController>(context, listen: false).getBusinessPagesList('pages');
     if (Provider.of<AuthController>(context, listen: false).isLoggedIn()) {
       Provider.of<CartController>(context, listen: false).mergeGuestCart();
       Provider.of<WishListController>(context, listen: false).getWishList();
-      Provider.of<ChatController>(context, listen: false)
-          .getChatList(1, reload: false, userType: 0);
-      Provider.of<ChatController>(context, listen: false)
-          .getChatList(1, reload: false, userType: 1);
-      Provider.of<RestockController>(context, listen: false)
-          .getRestockProductList(1, getAll: true);
+      Provider.of<ChatController>(context, listen: false).getChatList(1, reload: false, userType: 0);
+      Provider.of<ChatController>(context, listen: false).getChatList(1, reload: false, userType: 1);
+      Provider.of<RestockController>(context, listen: false).getRestockProductList(1, getAll: true);
     }
 
-    final SplashController splashController =
-        Provider.of<SplashController>(context, listen: false);
-    Provider.of<SearchProductController>(context, listen: false)
-        .getAuthorList(null);
-    Provider.of<SearchProductController>(context, listen: false)
-        .getPublishingHouseList(null);
+    final SplashController splashController = Provider.of<SplashController>(context, listen: false);
+    Provider.of<SearchProductController>(context, listen: false).getAuthorList(null);
+    Provider.of<SearchProductController>(context, listen: false).getPublishingHouseList(null);
 
     if (splashController.configModel!.activeTheme == "default") {
       HomePage.loadData(false);
@@ -93,16 +78,8 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     }
 
     _screens = [
-      NavigationModel(
-        name: 'home',
-        icon: Images.homeImage,
-        screen: const MainHomeScreen(),
-      ),
-      NavigationModel(
-        name: 'travel',
-        icon: Images.TravelIcon,
-        screen: const TravelScreen(isBackButtonExist: false),
-      ),
+      NavigationModel(name: 'home', icon: Images.homeImage, screen: const MainHomeScreen()),
+      NavigationModel(name: 'travel', icon: Images.TravelIcon, screen: const TravelScreen(isBackButtonExist: false)),
       NavigationModel(
         name: 'social',
         icon: Images.SocialIcon,
@@ -117,25 +94,26 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         screen: (splashController.configModel!.activeTheme == "default")
             ? const HomePage()
             : (splashController.configModel!.activeTheme == "theme_aster")
-                ? const AsterThemeHomeScreen()
-                : const FashionThemeHomePage(),
+            ? const AsterThemeHomeScreen()
+            : const FashionThemeHomePage(),
       ),
-      NavigationModel(
-        name: 'notifications',
-        icon: Images.notification,
-        screen: const NotificationsScreen(isBackButtonExist: false),
-      ),
-      NavigationModel(
-        name: 'more',
-        icon: Images.moreImage,
-        screen: const MoreScreen(),
-      ),
+      NavigationModel(name: 'notifications', icon: Images.notification, screen: const NotificationsScreen(isBackButtonExist: false)),
+      NavigationModel(name: 'more', icon: Images.moreImage, screen: const MoreScreen()),
     ];
 
-    _socialTabIndex =
-        _screens.indexWhere((element) => element.name == 'social');
-
+    _socialTabIndex = _screens.indexWhere((element) => element.name == 'social');
     NetworkInfo.checkConnectivity(context);
+  }
+
+  // Parse Platform.operatingSystemVersion để lấy major version iOS
+  // Ví dụ chuỗi: "Version 17.5.1 (Build 21F90)" -> bắt số đầu "17"
+  int? _detectIOSMajor() {
+    try {
+      final s = Platform.operatingSystemVersion; // iOS only
+      final m = RegExp(r'(\d+)(?:\.\d+)?').firstMatch(s);
+      if (m != null) return int.tryParse(m.group(1)!);
+    } catch (_) {}
+    return null;
   }
 
   @override
@@ -144,13 +122,10 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     final cs = theme.colorScheme;
     final platformBrightness = MediaQuery.platformBrightnessOf(context);
     final bool isIOSPlatform = !kIsWeb && Platform.isIOS;
-    final bool hideNav = (_socialTabIndex != null &&
-        _pageIndex == _socialTabIndex &&
-        !_showBottomNav);
+    final bool hideNav = (_socialTabIndex != null && _pageIndex == _socialTabIndex && !_showBottomNav);
 
-    final int unreadNotifications =
-        context.select<SocialNotificationsController, int>(
-      (ctrl) => ctrl.notifications.where((n) => n.seen == "0").length,
+    final int unreadNotifications = context.select<SocialNotificationsController, int>(
+          (ctrl) => ctrl.notifications.where((n) => n.seen == "0").length,
     );
 
     String t(String key) => getTranslated(key, context) ?? key;
@@ -160,12 +135,9 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       navActiveColor = _boostLightness(navActiveColor, 0.20);
     }
 
-    // Hàm chọn SF Symbol:
-    // - iOS 26 => dùng icon gốc (giữ nguyên theo yêu cầu)
-    // - iOS thấp hơn => dùng icon tương thích (fallback)
+    // iOS 26 giữ nguyên icon gốc; thấp hơn dùng fallback tương thích
     String _sf(String primary, String fallback) {
-      if (kIsWeb || !Platform.isIOS)
-        return primary; // Android/Web không ảnh hưởng
+      if (kIsWeb || !Platform.isIOS) return primary;
       final v = _iosMajor ?? 0;
       return (v >= 26) ? primary : fallback;
     }
@@ -182,13 +154,12 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         label: t('travel'),
       ),
       AdaptiveNavigationDestination(
-        // globe.fill trên iOS cũ đôi lúc không có fill → fallback 'globe'
         icon: _sf('globe.fill', 'globe'),
         selectedIcon: _sf('person.2.fill', 'person.2'),
         label: t('social'),
       ),
       AdaptiveNavigationDestination(
-        // Giữ 'basket.fill' cho iOS 26; iOS thấp hơn dùng 'bag.fill' (tương thích)
+        // iOS 26 dùng 'basket.fill'; iOS thấp hơn fallback 'bag.fill'
         icon: _sf('basket.fill', 'bag.fill'),
         selectedIcon: _sf('bag.fill', 'bag.fill'),
         label: t('shop'),
@@ -200,7 +171,6 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         badgeCount: unreadNotifications > 0 ? unreadNotifications : null,
       ),
       AdaptiveNavigationDestination(
-        // ellipsis.circle.fill có thể không có fill ở iOS thấp → fallback 'ellipsis.circle'
         icon: _sf('ellipsis.circle.fill', 'ellipsis.circle'),
         selectedIcon: _sf('ellipsis.circle.fill', 'ellipsis.circle'),
         label: t('more'),
@@ -208,31 +178,12 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     ];
 
     final List<_AndroidNavItem> androidItems = [
-      _AndroidNavItem(
-        icon: Icons.home_outlined,
-        label: t('home'),
-      ),
-      _AndroidNavItem(
-        icon: Icons.travel_explore_outlined,
-        label: t('travel'),
-      ),
-      _AndroidNavItem(
-        icon: Icons.public,
-        label: t('social'),
-      ),
-      _AndroidNavItem(
-        icon: Icons.storefront_outlined,
-        label: t('shop'),
-      ),
-      _AndroidNavItem(
-        icon: Icons.notifications_none,
-        label: t('notifications'),
-        badgeCount: unreadNotifications,
-      ),
-      _AndroidNavItem(
-        icon: Icons.more_horiz,
-        label: t('more'),
-      ),
+      _AndroidNavItem(icon: Icons.home_outlined, label: t('home')),
+      _AndroidNavItem(icon: Icons.travel_explore_outlined, label: t('travel')),
+      _AndroidNavItem(icon: Icons.public, label: t('social')),
+      _AndroidNavItem(icon: Icons.storefront_outlined, label: t('shop')),
+      _AndroidNavItem(icon: Icons.notifications_none, label: t('notifications'), badgeCount: unreadNotifications),
+      _AndroidNavItem(icon: Icons.more_horiz, label: t('more')),
     ];
 
     return PopScope(
@@ -261,39 +212,38 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         bottomNavigationBar: hideNav || !isIOSPlatform
             ? null
             : AdaptiveBottomNavigationBar(
-                items: iosDestinations,
-                selectedIndex: _pageIndex,
-                onTap: (index) => _handleNavigationTap(_screens[index], index),
-                useNativeBottomBar: isIOSPlatform,
-                selectedItemColor: navActiveColor,
-              ),
+          items: iosDestinations,
+          selectedIndex: _pageIndex,
+          onTap: (index) => _handleNavigationTap(_screens[index], index),
+          useNativeBottomBar: isIOSPlatform,
+          selectedItemColor: navActiveColor,
+        ),
         body: isIOSPlatform
             ? PageStorage(
-                key: ValueKey<int>(_pageIndex),
-                bucket: bucket,
-                child: _screens[_pageIndex].screen,
-              )
+          key: ValueKey<int>(_pageIndex),
+          bucket: bucket,
+          child: _screens[_pageIndex].screen,
+        )
             : Stack(
-                children: [
-                  PageStorage(
-                    key: ValueKey<int>(_pageIndex),
-                    bucket: bucket,
-                    child: _screens[_pageIndex].screen,
-                  ),
-                  if (!hideNav)
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: AndroidMovingCircleBottomBar(
-                        items: androidItems,
-                        currentIndex: _pageIndex,
-                        onTap: (index) =>
-                            _handleNavigationTap(_screens[index], index),
-                      ),
-                    ),
-                ],
+          children: [
+            PageStorage(
+              key: ValueKey<int>(_pageIndex),
+              bucket: bucket,
+              child: _screens[_pageIndex].screen,
+            ),
+            if (!hideNav)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: AndroidMovingCircleBottomBar(
+                  items: androidItems,
+                  currentIndex: _pageIndex,
+                  onTap: (index) => _handleNavigationTap(_screens[index], index),
+                ),
               ),
+          ],
+        ),
       ),
     );
   }
@@ -317,8 +267,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
   }
 
   void _handleNavigationTap(NavigationModel item, int index) {
-    final bool isSocialTab =
-        _socialTabIndex != null && index == _socialTabIndex;
+    final bool isSocialTab = _socialTabIndex != null && index == _socialTabIndex;
     final bool isCurrent = _pageIndex == index;
     if (isSocialTab && isCurrent) {
       final SocialFeedScreenState? state = _socialFeedKey.currentState;
@@ -369,8 +318,7 @@ class AndroidMovingCircleBottomBar extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final Color barColor =
-        isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE8EBF0);
+    final Color barColor = isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE8EBF0);
     final Color scaffoldBg = theme.scaffoldBackgroundColor;
 
     return SafeArea(
@@ -413,7 +361,7 @@ class AndroidMovingCircleBottomBar extends StatelessWidget {
                       child: Row(
                         children: List.generate(
                           items.length,
-                          (index) => Expanded(
+                              (index) => Expanded(
                             child: _AndroidNavItemWidget(
                               item: items[index],
                               selected: index == currentIndex,
@@ -485,8 +433,7 @@ class _AndroidNavItemWidget extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
-    final Color iconColor =
-        selected ? cs.primary : cs.onSurface.withOpacity(0.7);
+    final Color iconColor = selected ? cs.primary : cs.onSurface.withOpacity(0.7);
     final FontWeight labelWeight = selected ? FontWeight.w600 : FontWeight.w400;
 
     Widget iconArea;
@@ -496,25 +443,15 @@ class _AndroidNavItemWidget extends StatelessWidget {
       iconArea = Stack(
         clipBehavior: Clip.none,
         children: [
-          Icon(
-            item.icon,
-            size: 24,
-            color: iconColor,
-          ),
+          Icon(item.icon, size: 24, color: iconColor),
           if (item.badgeCount > 0)
             Positioned(
               right: -4,
               top: -4,
               child: Container(
                 padding: const EdgeInsets.all(2),
-                decoration: const BoxDecoration(
-                  color: Colors.redAccent,
-                  shape: BoxShape.circle,
-                ),
-                constraints: const BoxConstraints(
-                  minWidth: 16,
-                  minHeight: 16,
-                ),
+                decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
+                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
                 child: Center(
                   child: Text(
                     item.badgeCount > 9 ? '9+' : item.badgeCount.toString(),
