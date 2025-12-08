@@ -185,6 +185,26 @@ class CallkitService {
       case 'Event.actionCallIncoming':
         debugPrint(
             '[CallKit] incoming shown: systemId=$systemId serverId=$serverCallId');
+        // Nếu push không mang call_id và app đang có cuộc gọi đang hoạt động (caller),
+        // coi đây là VoIP "lạc" và tắt ngay để tránh popup CallKit ngược chiều.
+        if (serverCallId <= 0) {
+          try {
+            final ctx =
+                navigatorKey.currentState?.overlay?.context ?? navigatorKey.currentContext;
+            final cc = ctx?.read<CallController>();
+            if (cc != null &&
+                cc.activeCallId != null &&
+                cc.callStatus != 'ended' &&
+                cc.callStatus != 'declined') {
+              debugPrint('[CallKit] ignore stray incoming (no call_id), closing');
+              if (systemId.isNotEmpty) {
+                unawaited(FlutterCallkitIncoming.endCall(systemId));
+              }
+              return;
+            }
+          } catch (_) {}
+        }
+
         _trackRinging(serverCallId, media);
         break;
 
