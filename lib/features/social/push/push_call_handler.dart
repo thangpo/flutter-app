@@ -207,12 +207,15 @@ class SocialCallPushHandler {
       }
 
       // tap body: mở màn incoming để user chọn
-      _openIncomingScreen(
-        callId: callId,
-        media: media,
-        callerName: callerName,
-        peerAvatar: callerAvatar,
-      );
+      // tap body: mở màn incoming để user chọn (Android only)
+      if (Platform.isAndroid) {
+        _openIncomingScreen(
+          callId: callId,
+          media: media,
+          callerName: callerName,
+          peerAvatar: callerAvatar,
+        );
+      }
     }
 
     if (ctx != null && ctx.mounted) {

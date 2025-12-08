@@ -36,6 +36,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 // import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/firebase_token_updater.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/pushkit_token_sync.dart';
 
 class AuthController with ChangeNotifier {
   final AuthServiceInterface authServiceInterface;
@@ -364,11 +365,19 @@ class AuthController with ChangeNotifier {
     if (apiResponse.response != null &&
         apiResponse.response!.statusCode == 200) {
       // ========== EXTERNAL SOCIAL LOGOUT ==========
+      String? socialToken;
       try {
-        final token = await authServiceInterface.getSocialAccessToken();
-        if (token != null && token.isNotEmpty) {
+        socialToken = await authServiceInterface.getSocialAccessToken();
+        if (socialToken != null && socialToken.isNotEmpty) {
+          // Thu hồi pushkit_token trên server (iOS) TRƯỚC khi gọi socialLogout
+          try {
+            await PushkitTokenSync.clear(accessTokenOverride: socialToken);
+          } catch (e) {
+            debugPrint('[PUSHKIT] clear on logout failed: $e');
+          }
+
           final ApiResponseModel sResp =
-              await authServiceInterface.socialLogout(accessToken: token);
+              await authServiceInterface.socialLogout(accessToken: socialToken);
           // Tuỳ chọn: Nếu muốn "fail chung" cả logout khi Social lỗi, bỏ comment block dưới.
 
           if (sResp.response == null || sResp.response!.statusCode != 200) {
@@ -574,6 +583,12 @@ class AuthController with ChangeNotifier {
         await FirebaseTokenUpdater.update();
       } catch (e) {
         debugPrint('[FCM] update after social login failed: $e');
+      }
+      // 🔔 Đồng bộ PushKit token (iOS)
+      try {
+        await PushkitTokenSync.sync();
+      } catch (e) {
+        debugPrint('[PUSHKIT] sync after social login failed: $e');
       }
       // ========== END EXTERNAL SOCIAL AUTH ==========
       if (token != null && token.isNotEmpty) {
@@ -1470,4 +1485,3 @@ class AuthController with ChangeNotifier {
     return authServiceInterface.getGuestCartId();
   }
 }
-
