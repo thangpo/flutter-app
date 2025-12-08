@@ -29,6 +29,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/
 
 // Call
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/call_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/push/callkit_service.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/call_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/incoming_call_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/call_invite.dart';
@@ -615,6 +616,8 @@ class _ChatScreenState extends State<ChatScreen> {
         calleeId: calleeId,
         mediaType: mediaType,
       );
+      // Đánh dấu call_id này đã được xử lý (để chính caller không nhận lại CallKit)
+      CallkitService.I.markServerCallHandled(callId);
 
       final payload = {
         'type': 'call_invite',

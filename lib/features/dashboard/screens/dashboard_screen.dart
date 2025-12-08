@@ -28,6 +28,7 @@ import 'package:flutter_sixvalley_ecommerce/features/wishlist/controllers/wishli
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/travel_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_notifications_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/search_product/controllers/search_product_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_exit_guard.dart';
 
 class DashBoardScreen extends StatefulWidget {
   const DashBoardScreen({super.key});
@@ -196,6 +197,9 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         } else {
           await Future.delayed(const Duration(milliseconds: 150));
           if (context.mounted) {
+            if (AppExitGuard.isSuppressed) {
+              return; // bỏ qua dialog thoát nếu vừa pop từ CallScreen/CallKit
+            }
             if (!Navigator.of(context).canPop()) {
               showModalBottomSheet(
                 backgroundColor: Colors.transparent,

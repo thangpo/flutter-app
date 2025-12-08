@@ -9,6 +9,7 @@ import 'package:flutter_callkit_incoming/entities/android_params.dart';
 import 'package:flutter_callkit_incoming/entities/ios_params.dart';
 import 'package:flutter_callkit_incoming/entities/notification_params.dart';
 import 'package:flutter_callkit_incoming/entities/call_event.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/app_exit_guard.dart';
 
 import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart'
     show navigatorKey;
@@ -75,12 +76,21 @@ class CallkitService {
     }
     final ctx = navigatorKey.currentContext ??
         navigatorKey.currentState?.overlay?.context;
-    if (serverId > 0 && ctx != null) {
+    if (ctx != null) {
       try {
         final cc = ctx.read<CallController>();
-        if (cc.activeCallId == serverId &&
-            cc.callStatus != 'ended' &&
-            cc.callStatus != 'declined') {
+        final activeId = cc.activeCallId;
+        final activeStatus = cc.callStatus;
+        final isActive =
+            activeId != null && activeStatus != 'ended' && activeStatus != 'declined';
+
+        // Nếu đang ở trong một cuộc gọi (caller/callee), đừng show CallKit mới:
+        // - serverId trùng call hiện tại
+        // - hoặc thiếu call_id (serverId <= 0) nhưng vẫn đang có cuộc gọi
+        if (isActive &&
+            (serverId <= 0 || (activeId != null && activeId == serverId))) {
+          debugPrint(
+              '[CallKit] skip incoming (active call=$activeId status=$activeStatus)');
           return;
         }
       } catch (_) {}
@@ -357,6 +367,12 @@ class CallkitService {
 
   /// Cho listener kiểm tra call_id đã xử lý qua CallKit
   bool isServerCallHandled(int id) => _handledServerIds.contains(id);
+
+  /// Đánh dấu call_id đã được xử lý trên thiết bị này (vd: caller tự khởi tạo).
+  void markServerCallHandled(int serverCallId) {
+    if (serverCallId <= 0) return;
+    _handledServerIds.add(serverCallId);
+  }
 
   /// Chuẩn hóa media từ payload CallKit (server có thể dùng nhiều key khác nhau)
   String _extractMedia(Map<dynamic, dynamic>? data) {
@@ -708,6 +724,8 @@ class CallkitService {
 
   void _popAnyCallScreenIfMounted(BuildContext ctx) {
     try {
+      // Tránh hiển thị sheet thoát app ngay sau khi pop CallScreen (callee end).
+      AppExitGuard.suppressFor(const Duration(seconds: 2));
       Navigator.of(ctx, rootNavigator: true).popUntil(
         (route) => route.settings.name != 'CallScreen',
       );

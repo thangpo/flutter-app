@@ -1410,7 +1410,7 @@ class _VideoPlayerTileState extends State<_VideoPlayerTile>
                     child: IconButton(
                       iconSize: 16,
                       padding: const EdgeInsets.all(2),
-                      constraints: BoxConstraints.tightFor(width: 18, height: 18),
+                      constraints: const BoxConstraints.tightFor(width: 18, height: 18),
                       color: Colors.white,
                       icon: Icon(_muted ? Icons.volume_off : Icons.volume_up),
                       onPressed: _toggleMute,
