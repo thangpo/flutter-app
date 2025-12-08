@@ -55,7 +55,7 @@ class CallkitService {
   }
 
   /// Hiển thị màn hình cuộc gọi đến (CallKit / ConnectionService)
-    /// Hi?n CallKit/ConnectionService incoming
+  /// Hi?n CallKit/ConnectionService incoming
   Future<void> showIncomingCall(Map<String, dynamic> data) async {
     await init();
 
@@ -73,7 +73,8 @@ class CallkitService {
     if (serverId > 0 && _handledServerIds.contains(serverId)) {
       return;
     }
-    final ctx = navigatorKey.currentContext ?? navigatorKey.currentState?.overlay?.context;
+    final ctx = navigatorKey.currentContext ??
+        navigatorKey.currentState?.overlay?.context;
     if (serverId > 0 && ctx != null) {
       try {
         final cc = ctx.read<CallController>();
@@ -185,25 +186,27 @@ class CallkitService {
       case 'Event.actionCallIncoming':
         debugPrint(
             '[CallKit] incoming shown: systemId=$systemId serverId=$serverCallId');
-        // Nếu push không mang call_id và app đang có cuộc gọi đang hoạt động (caller),
-        // coi đây là VoIP "lạc" và tắt ngay để tránh popup CallKit ngược chiều.
-        if (serverCallId <= 0) {
-          try {
-            final ctx =
-                navigatorKey.currentState?.overlay?.context ?? navigatorKey.currentContext;
-            final cc = ctx?.read<CallController>();
-            if (cc != null &&
-                cc.activeCallId != null &&
-                cc.callStatus != 'ended' &&
-                cc.callStatus != 'declined') {
-              debugPrint('[CallKit] ignore stray incoming (no call_id), closing');
-              if (systemId.isNotEmpty) {
-                unawaited(FlutterCallkitIncoming.endCall(systemId));
-              }
-              return;
+        // Nếu thiết bị đang ở trong call (caller/callee) thì bỏ qua incoming mới
+        try {
+          final ctx =
+              navigatorKey.currentState?.overlay?.context ?? navigatorKey.currentContext;
+          final cc = ctx?.read<CallController>();
+          final activeId = cc?.activeCallId;
+          final activeStatus = cc?.callStatus;
+          final isActive =
+              activeId != null && activeStatus != 'ended' && activeStatus != 'declined';
+
+          final sameCall = isActive && serverCallId > 0 && activeId == serverCallId;
+          final strayNoId = isActive && serverCallId <= 0;
+
+          if (sameCall || strayNoId) {
+            debugPrint('[CallKit] ignore incoming (already in call) activeId=$activeId');
+            if (systemId.isNotEmpty) {
+              unawaited(FlutterCallkitIncoming.endCall(systemId));
             }
-          } catch (_) {}
-        }
+            return;
+          }
+        } catch (_) {}
 
         _trackRinging(serverCallId, media);
         break;
@@ -695,7 +698,8 @@ class CallkitService {
           if (nav != null) {
             await nav.push(route);
           }
-        } catch (_) {} finally {
+        } catch (_) {
+        } finally {
           _routingToCall = false;
         }
       });
@@ -710,7 +714,3 @@ class CallkitService {
     } catch (_) {}
   }
 }
-
-
-
-
