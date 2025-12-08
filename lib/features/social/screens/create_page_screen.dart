@@ -111,6 +111,46 @@ class _CreatePageScreenState extends State<CreatePageScreen> {
     }
   }
 
+  InputDecoration _inputDecoration(
+      BuildContext context, {
+        required String hintText,
+        IconData? prefixIcon,
+      }) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    final fillColor = theme.brightness == Brightness.dark
+        ? cs.surfaceVariant.withOpacity(0.6)
+        : cs.surfaceVariant;
+
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: BorderSide(
+        color: cs.outline.withOpacity(0.4),
+        width: 1,
+      ),
+    );
+
+    return InputDecoration(
+      hintText: hintText,
+      prefixIcon: prefixIcon != null ? Icon(prefixIcon, size: 20) : null,
+      filled: true,
+      fillColor: fillColor,
+      border: border,
+      enabledBorder: border,
+      focusedBorder: border.copyWith(
+        borderSide: BorderSide(
+          color: cs.primary,
+          width: 1.4,
+        ),
+      ),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 12,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -124,37 +164,49 @@ class _CreatePageScreenState extends State<CreatePageScreen> {
 
     final String previewCategory = _previewCategoryName(context);
 
+    final scaffoldBg = theme.scaffoldBackgroundColor;
+    final cardColor = theme.brightness == Brightness.dark
+        ? cs.surface.withOpacity(0.9)
+        : cs.surface;
+
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
+      backgroundColor: scaffoldBg,
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: theme.scaffoldBackgroundColor,
+        backgroundColor: scaffoldBg,
+        centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           getTranslated('create_page', context) ?? 'Tạo trang',
-          style: const TextStyle(fontWeight: FontWeight.bold),
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
         ),
-        centerTitle: false,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            bottom: Radius.circular(20),
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: creating ? null : _onSubmit,
             child: creating
                 ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
                 : Text(
-                    getTranslated('create_msg', context) ?? 'TẠO',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: cs.primary,
-                      fontSize: 16,
-                    ),
-                  ),
+              getTranslated('create_msg', context) ?? 'TẠO',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: cs.primary,
+                fontSize: 15,
+              ),
+            ),
           ),
         ],
       ),
@@ -162,19 +214,21 @@ class _CreatePageScreenState extends State<CreatePageScreen> {
         child: Form(
           key: _formKey,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
             children: [
               // ───────── PREVIEW CARD GIỐNG TRANG ─────────
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: theme.cardColor,
+                  color: cardColor,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
+                      color: Colors.black.withOpacity(
+                        theme.brightness == Brightness.dark ? 0.25 : 0.06,
+                      ),
+                      blurRadius: 12,
+                      offset: const Offset(0, 6),
                     ),
                   ],
                 ),
@@ -182,7 +236,7 @@ class _CreatePageScreenState extends State<CreatePageScreen> {
                   children: [
                     CircleAvatar(
                       radius: 26,
-                      backgroundColor: cs.primary.withOpacity(0.1),
+                      backgroundColor: cs.primary.withOpacity(0.12),
                       child: Icon(
                         Icons.flag_rounded,
                         color: cs.primary,
@@ -205,7 +259,7 @@ class _CreatePageScreenState extends State<CreatePageScreen> {
                           const SizedBox(height: 4),
                           Text(
                             '@$_previewUsername'
-                            '${previewCategory.isNotEmpty ? ' • $previewCategory' : ''}',
+                                '${previewCategory.isNotEmpty ? ' • $previewCategory' : ''}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.bodySmall?.copyWith(
@@ -232,15 +286,17 @@ class _CreatePageScreenState extends State<CreatePageScreen> {
 
               // ───────── CARD THÔNG TIN CƠ BẢN ─────────
               Container(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
                 decoration: BoxDecoration(
-                  color: theme.cardColor,
+                  color: cardColor,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.02),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
+                      color: Colors.black.withOpacity(
+                        theme.brightness == Brightness.dark ? 0.16 : 0.04,
+                      ),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
                   ],
                 ),
@@ -258,18 +314,10 @@ class _CreatePageScreenState extends State<CreatePageScreen> {
                     TextFormField(
                       controller: _pageNameCtrl,
                       onChanged: (_) => setState(() {}),
-                      decoration: InputDecoration(
+                      decoration: _inputDecoration(
+                        context,
                         hintText: 'Ví dụ: vnshop_official',
-                        prefixIcon: const Icon(Icons.alternate_email),
-                        filled: true,
-                        fillColor: theme.cardColor,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
+                        prefixIcon: Icons.alternate_email,
                       ),
                       validator: (value) {
                         final v = (value ?? '').trim();
@@ -296,18 +344,10 @@ class _CreatePageScreenState extends State<CreatePageScreen> {
                     TextFormField(
                       controller: _pageTitleCtrl,
                       onChanged: (_) => setState(() {}),
-                      decoration: InputDecoration(
+                      decoration: _inputDecoration(
+                        context,
                         hintText: 'Ví dụ: VNSHOP VIETNAM',
-                        prefixIcon: const Icon(Icons.flag_outlined),
-                        filled: true,
-                        fillColor: theme.cardColor,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
+                        prefixIcon: Icons.flag_outlined,
                       ),
                       validator: (value) {
                         final v = (value ?? '').trim();
@@ -352,23 +392,15 @@ class _CreatePageScreenState extends State<CreatePageScreen> {
                         items: categories
                             .map(
                               (c) => DropdownMenuItem<int>(
-                                value: c.id,
-                                child: Text(c.name),
-                              ),
-                            )
+                            value: c.id,
+                            child: Text(c.name),
+                          ),
+                        )
                             .toList(),
-                        decoration: InputDecoration(
+                        decoration: _inputDecoration(
+                          context,
                           hintText: 'Chọn danh mục',
-                          prefixIcon: const Icon(Icons.category_outlined),
-                          filled: true,
-                          fillColor: theme.cardColor,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
+                          prefixIcon: Icons.category_outlined,
                         ),
                         onChanged: (value) {
                           setState(() {
@@ -382,7 +414,6 @@ class _CreatePageScreenState extends State<CreatePageScreen> {
                           return null;
                         },
                       ),
-                    const SizedBox(height: 8),
                   ],
                 ),
               ),
@@ -400,15 +431,17 @@ class _CreatePageScreenState extends State<CreatePageScreen> {
 
               // ───────── CARD MÔ TẢ ─────────
               Container(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
                 decoration: BoxDecoration(
-                  color: theme.cardColor,
+                  color: cardColor,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.02),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
+                      color: Colors.black.withOpacity(
+                        theme.brightness == Brightness.dark ? 0.16 : 0.04,
+                      ),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
                   ],
                 ),
@@ -416,23 +449,18 @@ class _CreatePageScreenState extends State<CreatePageScreen> {
                   controller: _pageDescriptionCtrl,
                   maxLines: 4,
                   minLines: 3,
-                  decoration: InputDecoration(
-                    hintText: 'Giới thiệu ngắn về trang, nội dung, dịch vụ...',
+                  decoration: _inputDecoration(
+                    context,
+                    hintText:
+                    'Giới thiệu ngắn về trang, nội dung, dịch vụ...',
+                  ).copyWith(
+                    prefixIcon: const Icon(Icons.description_outlined, size: 20),
                     alignLabelWithHint: true,
-                    filled: true,
-                    fillColor: theme.cardColor,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
                   ),
                 ),
               ),
 
-              const SizedBox(height: 32),
+              const SizedBox(height: 28),
 
               // ───────── NÚT TẠO TRANG DƯỚI CÙNG ─────────
               SizedBox(
@@ -440,8 +468,8 @@ class _CreatePageScreenState extends State<CreatePageScreen> {
                 child: ElevatedButton(
                   onPressed: creating ? null : _onSubmit,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: cs.primary.withOpacity(0.08),
-                    foregroundColor: cs.primary,
+                    backgroundColor: cs.primary,
+                    foregroundColor: cs.onPrimary,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
@@ -450,21 +478,21 @@ class _CreatePageScreenState extends State<CreatePageScreen> {
                   ),
                   child: creating
                       ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.blue),
-                          ),
-                        )
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor:
+                      AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
                       : Text(
-                          getTranslated('create_msg', context) ?? 'TẠO TRANG',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 15,
-                          ),
-                        ),
+                    getTranslated('create_msg', context) ?? 'TẠO TRANG',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
+                  ),
                 ),
               ),
             ],
