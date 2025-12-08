@@ -16,7 +16,9 @@ import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart'
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../controllers/call_controller.dart';
+import '../controllers/group_call_controller.dart';
 import '../screens/call_screen.dart';
+import '../screens/group_call_screen.dart';
 import 'remote_rtc_log.dart';
 
 class CallkitService {
@@ -26,15 +28,19 @@ class CallkitService {
   bool _inited = false;
   // Map server call_id -> system UUID đã dùng để show CallKit
   final Map<int, String> _systemIds = {};
+  final Map<String, String> _groupSystemIds = {};
 
   /// Đánh dấu các event đã xử lý để tránh lặp
   final Set<String> _handled = <String>{};
   final Set<int> _handledServerIds = <int>{};
+  final Set<String> _handledGroupKeys = <String>{};
 
   /// Đánh dấu các cuộc gọi đã accept (để setCallConnected 1 lần)
   final Set<String> _accepted = <String>{};
   final Set<int> _trackingRinging = <int>{};
   final Map<int, String> _ringingMedia = <int, String>{}; // callId -> media
+  final Map<String, String> _ringingGroupMedia = <String, String>{};
+  final Map<String, String?> _ringingGroupName = <String, String?>{};
 
   /// Hàng đợi action khi chưa có BuildContext (ví dụ accept từ nền)
   final List<Future<void> Function(BuildContext)> _pendingActions = [];
@@ -151,6 +157,89 @@ class CallkitService {
     }
   }
 
+  /// Hiện CallKit cho cuộc gọi nhóm (iOS)
+  Future<void> showIncomingGroupCall(Map<String, dynamic> data) async {
+    await init();
+
+    final serverId = int.tryParse('${data['call_id'] ?? ''}') ?? 0;
+    final groupId = _extractGroupId(data);
+    if (groupId.isEmpty) return;
+    if (await _isSelfCall(data)) return;
+
+    final key = _groupKey(groupId, serverId);
+    if (serverId > 0 && _handledGroupKeys.contains(key)) {
+      return;
+    }
+
+    final ctx = navigatorKey.currentContext ??
+        navigatorKey.currentState?.overlay?.context;
+    if (ctx != null) {
+      try {
+        final gc = ctx.read<GroupCallController>();
+        final activeId = gc.currentCallId;
+        final activeStatus = gc.status;
+        final active = activeId != null &&
+            activeStatus != CallStatus.ended &&
+            activeStatus != CallStatus.idle;
+        if (active && activeId == serverId) return;
+      } catch (_) {}
+    }
+
+    final systemId = _makeSystemUuidFromServerId('$groupId|$serverId');
+    if (key.isNotEmpty) {
+      _groupSystemIds[key] = systemId;
+    }
+
+    final media = _extractMedia(data);
+    _ringingGroupMedia[key] = media;
+    _ringingGroupName[key] = data['group_name']?.toString();
+
+    final groupTitle = (data['group_name']?.toString().isNotEmpty ?? false)
+        ? data['group_name'].toString()
+        : 'Cuộc gọi nhóm';
+    final avatar = (data['caller_avatar'] ?? data['avatar'] ?? '').toString();
+    final isVideo = media == 'video';
+
+    final params = CallKitParams(
+      id: systemId,
+      nameCaller: groupTitle,
+      appName: 'VNShop247',
+      avatar: avatar,
+      handle: groupTitle,
+      type: isVideo ? 1 : 0,
+      duration: 0,
+      textAccept: 'Nghe',
+      textDecline: 'Từ chối',
+      extra: {
+        ...Map<String, dynamic>.from(data),
+        'group_id': groupId,
+        'group_name': groupTitle,
+      },
+      android: const AndroidParams(
+        isCustomNotification: true,
+        isShowFullLockedScreen: true,
+        isShowCallID: true,
+        ringtonePath: 'system_ringtone_default',
+        incomingCallNotificationChannelName: 'incoming_calls',
+        missedCallNotificationChannelName: 'missed_calls',
+      ),
+      ios: IOSParams(
+        handleType: 'generic',
+        supportsVideo: isVideo,
+      ),
+      missedCallNotification: NotificationParams(
+        showNotification: true,
+        isShowCallback: true,
+        subtitle: groupTitle,
+        callbackText: 'Gọi lại',
+      ),
+    );
+
+    try {
+      await FlutterCallkitIncoming.showCallkitIncoming(params);
+    } catch (_) {}
+  }
+
   // =========================
   // Event handler
   // =========================
@@ -180,6 +269,8 @@ class CallkitService {
     final String media = _extractMedia(extra);
     final String? peerName = extra['caller_name']?.toString();
     final String? peerAvatar = extra['caller_avatar']?.toString();
+    final String groupId = _extractGroupId(extra);
+    final String? groupName = extra['group_name']?.toString();
 
     unawaited(RemoteRtcLog.send(
       event: 'callkit_event',
@@ -188,8 +279,22 @@ class CallkitService {
         'evt': evt,
         'systemId': systemId,
         'media': media,
+        'group': groupId,
       },
     ));
+
+    if (groupId.isNotEmpty) {
+      await _handleGroupEvent(
+        evt: evt,
+        systemId: systemId,
+        serverCallId: serverCallId,
+        groupId: groupId,
+        media: media,
+        groupName: groupName,
+        extra: extra,
+      );
+      return;
+    }
 
     switch (evt) {
       case 'ACTION_CALL_INCOMING':
@@ -368,10 +473,18 @@ class CallkitService {
   /// Cho listener kiểm tra call_id đã xử lý qua CallKit
   bool isServerCallHandled(int id) => _handledServerIds.contains(id);
 
+  bool isGroupCallHandled(String groupId, int callId) =>
+      _handledGroupKeys.contains(_groupKey(groupId, callId));
+
   /// Đánh dấu call_id đã được xử lý trên thiết bị này (vd: caller tự khởi tạo).
   void markServerCallHandled(int serverCallId) {
     if (serverCallId <= 0) return;
     _handledServerIds.add(serverCallId);
+  }
+
+  void markGroupCallHandled(String groupId, int callId) {
+    if (groupId.isEmpty || callId <= 0) return;
+    _handledGroupKeys.add(_groupKey(groupId, callId));
   }
 
   /// Chuẩn hóa media từ payload CallKit (server có thể dùng nhiều key khác nhau)
@@ -454,9 +567,26 @@ class CallkitService {
         final media = _extractMedia(extra);
         final peerName = extra['caller_name']?.toString();
         final peerAvatar = extra['caller_avatar']?.toString();
+        final gid = _extractGroupId(extra);
 
-        _trackRinging(serverCallId, media); // đảm bảo poll state
-        await _answer(serverCallId, media, peerName, peerAvatar);
+        if (gid.isNotEmpty) {
+          _trackGroupRinging(
+            gid,
+            serverCallId,
+            media,
+            groupName: extra['group_name']?.toString(),
+            systemId: map['id']?.toString(),
+          );
+          await _answerGroup(
+            serverCallId,
+            gid,
+            media,
+            extra['group_name']?.toString(),
+          );
+        } else {
+          _trackRinging(serverCallId, media); // d?m b?o poll state
+          await _answer(serverCallId, media, peerName, peerAvatar);
+        }
       }
     } catch (_) {
       // noop
@@ -495,6 +625,46 @@ class CallkitService {
         '${hex.substring(12, 16)}-'
         '${hex.substring(16, 20)}-'
         '${hex.substring(20, 32)}';
+  }
+
+  String _extractGroupId(Map<dynamic, dynamic>? data) {
+    if (data == null) return '';
+    final raw = data['group_id'] ??
+        data['groupId'] ??
+        data['groupID'] ??
+        data['gid'] ??
+        '';
+    return raw.toString();
+  }
+
+  String _groupKey(String groupId, int callId) => '$groupId|$callId';
+
+  void _withGroupController(
+    Future<void> Function(GroupCallController gc, BuildContext ctx) fn,
+  ) {
+    final ctx = navigatorKey.currentState?.overlay?.context ??
+        navigatorKey.currentContext;
+    if (ctx == null) {
+      _pendingActions.add((readyCtx) async {
+        try {
+          final gc = readyCtx.read<GroupCallController>();
+          await fn(gc, readyCtx);
+        } catch (_) {}
+      });
+      Future.microtask(() => flushPendingActions());
+      return;
+    }
+    try {
+      final gc = ctx.read<GroupCallController>();
+      unawaited(fn(gc, ctx));
+    } catch (_) {
+      _pendingActions.add((readyCtx) async {
+        try {
+          final gc = readyCtx.read<GroupCallController>();
+          await fn(gc, readyCtx);
+        } catch (_) {}
+      });
+    }
   }
 
   void _withController(
@@ -563,6 +733,130 @@ class CallkitService {
     Future.microtask(() => flushPendingActions());
   }
 
+  void _trackGroupRinging(String groupId, int callId, String mediaType,
+      {String? groupName, String? systemId}) {
+    if (groupId.isEmpty || callId <= 0) return;
+    final key = _groupKey(groupId, callId);
+    _ringingGroupMedia[key] = mediaType;
+    _ringingGroupName[key] = groupName;
+    if (systemId != null && systemId.isNotEmpty) {
+      _groupSystemIds[key] = systemId;
+    }
+
+    _withGroupController((gc, _) async {
+      if (gc.currentCallId != callId) {
+        gc.currentCallId = callId;
+        gc.status = CallStatus.ringing;
+        gc.notifyListeners();
+      }
+    });
+    Future.microtask(() => flushPendingActions());
+  }
+
+  Future<void> _handleGroupEvent({
+    required String evt,
+    required String systemId,
+    required int serverCallId,
+    required String groupId,
+    required String media,
+    String? groupName,
+    Map<String, dynamic>? extra,
+  }) async {
+    final key = _groupKey(groupId, serverCallId);
+
+    switch (evt) {
+      case 'ACTION_CALL_INCOMING':
+      case 'Event.actionCallIncoming':
+        _trackGroupRinging(
+          groupId,
+          serverCallId,
+          media,
+          groupName: groupName,
+          systemId: systemId.isNotEmpty ? systemId : null,
+        );
+        return;
+
+      case 'ACTION_CALL_ACCEPT':
+      case 'Event.actionCallAccept':
+      case 'ACTION_CALL_START':
+      case 'Event.actionCallStart':
+        {
+          int cid = serverCallId;
+          String gid = groupId;
+          if (cid <= 0 && systemId.isNotEmpty) {
+            final found = _groupSystemIds.entries.firstWhere(
+              (e) => e.value.toLowerCase() == systemId.toLowerCase(),
+              orElse: () => const MapEntry('', ''),
+            );
+            if (found.key.isNotEmpty) {
+              final parts = found.key.split('|');
+              if (parts.isNotEmpty) gid = parts.first;
+              if (parts.length > 1) {
+                cid = int.tryParse(parts.last) ?? cid;
+              }
+            }
+          }
+          if (cid <= 0 && extra != null && extra.isNotEmpty) {
+            final raw =
+                '${extra['call_id'] ?? extra['callId'] ?? extra['id'] ?? ''}'.trim();
+            cid = int.tryParse(raw) ?? cid;
+          }
+          final preferred = _ringingGroupMedia[key];
+          final mediaFixed =
+              (media == 'audio' && preferred == 'video') ? 'video' : media;
+          await _answerGroup(
+            cid,
+            gid,
+            mediaFixed,
+            groupName ?? _ringingGroupName[key],
+          );
+          await flushPendingActions();
+          await recoverActiveCalls();
+          if (systemId.isNotEmpty) {
+            try {
+              await FlutterCallkitIncoming.setCallConnected(systemId);
+            } catch (_) {}
+          }
+          return;
+        }
+
+      case 'ACTION_CALL_DECLINE':
+      case 'Event.actionCallDecline':
+        await _endOrDeclineGroup(
+          serverCallId,
+          groupId,
+          media,
+          reason: 'decline',
+        );
+        if (systemId.isNotEmpty) {
+          try {
+            await FlutterCallkitIncoming.endCall(systemId);
+          } catch (_) {}
+        }
+        await flushPendingActions();
+        return;
+
+      case 'ACTION_CALL_ENDED':
+      case 'Event.actionCallEnded':
+      case 'ACTION_CALL_TIMEOUT':
+        await _endOrDeclineGroup(
+          serverCallId,
+          groupId,
+          media,
+          reason: evt.contains('TIMEOUT') ? 'timeout' : 'end',
+        );
+        if (systemId.isNotEmpty) {
+          try {
+            await FlutterCallkitIncoming.endCall(systemId);
+          } catch (_) {}
+        }
+        await flushPendingActions();
+        return;
+
+      default:
+        return;
+    }
+  }
   Future<void> _answer(int serverCallId, String media, String? peerName,
       String? peerAvatar) async {
     if (serverCallId <= 0) {
@@ -616,6 +910,65 @@ class CallkitService {
     });
   }
 
+  Future<void> _answerGroup(
+      int serverCallId, String groupId, String media, String? groupName) async {
+    if (serverCallId <= 0 || groupId.isEmpty) {
+      debugPrint('[CallKit] Skip group answer: missing call_id/group_id');
+      return;
+    }
+
+    final key = 'g-ans:' + _groupKey(groupId, serverCallId);
+    if (_handled.contains(key)) return;
+    _handled.add(key);
+    _handledGroupKeys.add(_groupKey(groupId, serverCallId));
+
+    _withGroupController((gc, ctx) async {
+      if (gc.currentCallId != serverCallId) {
+        gc.currentCallId = serverCallId;
+      }
+      gc.status = CallStatus.ongoing;
+      gc.notifyListeners();
+
+      _openGroupCallScreen(
+        ctx,
+        groupId,
+        media,
+        serverCallId,
+        groupName: groupName,
+      );
+
+      unawaited(() async {
+        try {
+          await gc.attachAndJoin(callId: serverCallId);
+        } catch (_) {}
+      }());
+    });
+  }
+
+  Future<void> _endOrDeclineGroup(
+    int serverCallId,
+    String groupId,
+    String media, {
+    required String reason,
+  }) async {
+    if (serverCallId <= 0 || groupId.isEmpty) return;
+    final key = 'g-' + reason + ':' + _groupKey(groupId, serverCallId);
+    if (_handled.contains(key)) return;
+    _handled.add(key);
+    _ringingGroupMedia.remove(_groupKey(groupId, serverCallId));
+    _ringingGroupName.remove(_groupKey(groupId, serverCallId));
+
+    _withGroupController((gc, _) async {
+      try {
+        await gc.leaveRoom(serverCallId);
+      } catch (_) {}
+      if (gc.currentCallId == serverCallId) {
+        gc.currentCallId = null;
+        gc.status = CallStatus.idle;
+        gc.notifyListeners();
+      }
+    });
+  }
   Future<void> _endOrDecline(int serverCallId, String media,
       {required String reason}) async {
     if (serverCallId <= 0) return;
@@ -669,6 +1022,56 @@ class CallkitService {
     Future.microtask(() => flushPendingActions());
   }
 
+  void _openGroupCallScreen(
+    BuildContext ctx,
+    String groupId,
+    String mediaType,
+    int callId, {
+    String? groupName,
+  }) {
+    if (_routingToCall) return;
+    _routingToCall = true;
+
+    final route = MaterialPageRoute(
+      settings: const RouteSettings(name: 'GroupCallScreen'),
+      builder: (_) => GroupCallScreen(
+        groupId: groupId,
+        mediaType: mediaType,
+        callId: callId,
+        groupName: groupName,
+      ),
+    );
+
+    Future<void> pushRoute() async {
+      try {
+        final nav = Navigator.of(ctx, rootNavigator: true);
+        await nav.push(route);
+      } catch (_) {
+        final nav = navigatorKey.currentState;
+        if (nav != null) {
+          await nav.push(route);
+        } else {
+          rethrow;
+        }
+      } finally {
+        _routingToCall = false;
+      }
+    }
+
+    pushRoute().catchError((_) {
+      Future.delayed(const Duration(milliseconds: 250), () async {
+        try {
+          final nav = navigatorKey.currentState;
+          if (nav != null) {
+            await nav.push(route);
+          }
+        } catch (_) {
+        } finally {
+          _routingToCall = false;
+        }
+      });
+    });
+  }
   void _openCallScreen(
     BuildContext ctx,
     int callId,
@@ -732,3 +1135,7 @@ class CallkitService {
     } catch (_) {}
   }
 }
+
+
+
+

@@ -569,7 +569,16 @@ class CallInviteForegroundListener {
     required String media,
     String? groupName,
   }) {
-    if (Platform.isIOS) return;
+    if (Platform.isIOS) {
+      // iOS dùng CallKit, không mở UI Flutter
+      CallkitService.I.showIncomingGroupCall({
+        'call_id': callId,
+        'group_id': groupId,
+        'media': media,
+        'group_name': groupName,
+      });
+      return;
+    }
     if (_routing) return;
 
     final nav = navigatorKey.currentState;
