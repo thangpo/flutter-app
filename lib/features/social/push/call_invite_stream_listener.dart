@@ -461,6 +461,14 @@ class CallInviteForegroundListener {
     String? callerName,
     String? callerAvatar,
   }) async {
+    if (_isActiveCallOnThisDevice(inv.callId)) {
+      _log('skip_invite_active_call', {
+        'call_id': inv.callId,
+        'media': inv.mediaType,
+      });
+      return;
+    }
+
     // iOS: bỏ hẳn incoming trong-app, chỉ dùng CallKit
     if (Platform.isIOS) {
       final ctx = navigatorKey.currentState?.overlay?.context ??
@@ -602,5 +610,17 @@ class CallInviteForegroundListener {
         .whenComplete(() {
       _routing = false;
     });
+  }
+  static bool _isActiveCallOnThisDevice(int callId) {
+    try {
+      final ctx = navigatorKey.currentState?.overlay?.context ?? navigatorKey.currentContext;
+      if (ctx == null) return false;
+      final cc = ctx.read<CallController>();
+      if (cc.activeCallId != callId) return false;
+      final st = cc.callStatus;
+      return st != 'ended' && st != 'declined';
+    } catch (_) {
+      return false;
+    }
   }
 }

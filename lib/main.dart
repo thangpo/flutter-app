@@ -181,6 +181,13 @@ Future<void> myBackgroundMessageHandler(RemoteMessage message) async {
         }
       } catch (_) {}
 
+      // Bỏ qua nếu call này đã/đang được handle trên máy (tránh caller nhận lại CallKit)
+      final bgCallId = int.tryParse('${data['call_id'] ?? ''}') ?? 0;
+      if (bgCallId > 0 && CallkitService.I.isServerCallHandled(bgCallId)) {
+        print('? [BG] Skip call_invite: already handled call_id=$bgCallId');
+        return;
+      }
+
       if (Platform.isAndroid) {
         // Android: full-screen notification; tap body -> IncomingCallScreen
         await SocialCallPushHandler.I.showIncomingCallNotification(data);
