@@ -307,6 +307,13 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       if (st == RTCIceConnectionState.RTCIceConnectionStateDisconnected ||
           st == RTCIceConnectionState.RTCIceConnectionStateFailed) {
         await _attemptIceRestart(peerId, pc);
+        // Nếu đã thử restart nhiều lần mà vẫn failed/disconnected, đóng peer để tránh hình treo
+        final tries = _iceRestartTriesByUser[peerId] ?? 0;
+        if (tries >= _iceRestartMaxTries) {
+          await _closePeer(peerId);
+        }
+      } else if (st == RTCIceConnectionState.RTCIceConnectionStateClosed) {
+        await _closePeer(peerId);
       }
     };
     pc.onConnectionState = (st) => debugPrint('[PC][$peerId] $st');
@@ -772,4 +779,3 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     return null;
   }
 }
-
