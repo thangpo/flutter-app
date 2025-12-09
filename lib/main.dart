@@ -193,9 +193,8 @@ Future<void> myBackgroundMessageHandler(RemoteMessage message) async {
           print('? [BG] Skip group invite handled call_id=$bgCallId gid=$gid');
           return;
         }
-        if (Platform.isIOS) {
-          await CallkitService.I.showIncomingGroupCall(data);
-        }
+        // Hien thi CallKit/ConnectionService cho cuoc goi nhom ca iOS & Android
+        await CallkitService.I.showIncomingGroupCall(data);
       } else {
         if (bgCallId > 0 && CallkitService.I.isServerCallHandled(bgCallId)) {
           print('? [BG] Skip call_invite: already handled call_id=$bgCallId');
