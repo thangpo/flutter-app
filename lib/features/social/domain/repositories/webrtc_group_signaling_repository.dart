@@ -1,4 +1,4 @@
-// lib/features/social/domain/repositories/webrtc_group_signaling_repository.dart
+﻿// lib/features/social/domain/repositories/webrtc_group_signaling_repository.dart
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
@@ -52,8 +52,8 @@ class WebRTCGroupSignalingRepositoryImpl
   final Duration requestTimeout;
   final http.Client? _client; // optional DI
 
-  // Router mode để né /webrtc_group.php trực tiếp
-  static const String _endpointPath = '/api/';
+  // G?i tr?c ti?p /api/webrtc_group (dúng d?nh d?ng server yêu c?u)
+  static const String _endpointPath = '/api/webrtc_group';
 
   late final Uri _endpointUri;
 
@@ -126,37 +126,36 @@ class WebRTCGroupSignalingRepositoryImpl
     bool allow204 = false,
   }) async {
     final token = await getAccessToken();
-    final body = <String, String>{
-      'type': 'webrtc_group', // bắt buộc cho router
+    final uri = (token != null && token.isNotEmpty)
+        ? _endpointUri.replace(queryParameters: {
+            ..._endpointUri.queryParameters,
+            'access_token': token,
+          })
+        : _endpointUri;
+    final form = <String, String>{
+      'type': 'webrtc_group',
       'server_key': serverKey.trim(),
-      if (token != null && token.isNotEmpty) 'access_token': token,
-      if (token != null && token.isNotEmpty)
-        's': token, // nhiều nhánh server chỉ đọc 's'
       ...fields,
     };
 
-    final act = body['action'];
+    final act = form['action'];
     final keyMasked = _maskKey(serverKey.trim());
     if (kDebugMode) {
       debugPrint(
-          '[SIGNALING] POST $_endpointUri | action=$act | server_key(${serverKey.length})=$keyMasked');
+          '[SIGNALING] POST $uri | action=$act | server_key(${serverKey.length})=$keyMasked');
     }
 
     try {
       final client = _client ?? http.Client();
-      final resp = await client
-          .post(
-            _endpointUri,
-            headers: {
-              'Accept': 'application/json',
-              // Content-Type để http tự set urlencoded
-            },
-            body: body,
-          )
-          .timeout(
+      final req = http.MultipartRequest('POST', uri);
+      req.headers['Accept'] = 'application/json';
+      req.fields.addAll(form);
+
+      final streamed = await req.send().timeout(
             requestTimeout,
             onTimeout: () => throw TimeoutException('Request timeout'),
           );
+      final resp = await http.Response.fromStream(streamed);
 
       final status = resp.statusCode;
       final txt = resp.body;
@@ -181,7 +180,6 @@ class WebRTCGroupSignalingRepositoryImpl
       }
       final json = Map<String, dynamic>.from(decoded);
 
-      // WoWonder thường trả api_status trong body
       _ensureOk(json, allow204: allow204, http: status);
 
       return json;
@@ -210,7 +208,7 @@ class WebRTCGroupSignalingRepositoryImpl
   @override
   Future<List<int>> join({required int callId}) async {
     final json = await _post({'action': 'join', 'call_id': '$callId'});
-    // peers có thể nằm trực tiếp hoặc dưới data.peers
+    // peers cÃ³ thá»ƒ náº±m trá»±c tiáº¿p hoáº·c dÆ°á»›i data.peers
     final peers = _parsePeers(json['peers'] ?? json['data']?['peers']);
     return peers;
   }
@@ -271,7 +269,7 @@ class WebRTCGroupSignalingRepositoryImpl
   @override
   Future<List<Map<String, dynamic>>> poll({required int callId}) async {
     final json = await _post({'action': 'poll', 'call_id': '$callId'});
-    // server có thể trả items, events, hoặc data.items
+    // server cÃ³ thá»ƒ tráº£ items, events, hoáº·c data.items
     final list = json['items'] ??
         json['events'] ??
         json['data']?['items'] ??
@@ -294,9 +292,15 @@ class WebRTCGroupSignalingRepositoryImpl
     final json =
         await _post({'action': 'inbox', 'group_id': groupId}, allow204: true);
     if (json['api_status'] == 204) return null;
-    // call có thể ở call hoặc data.call
+    // call cÃ³ thá»ƒ á»Ÿ call hoáº·c data.call
     final call = (json['call'] ?? json['data']?['call']);
     if (call is Map) return Map<String, dynamic>.from(call);
     return null;
   }
 }
+
+
+
+
+
+

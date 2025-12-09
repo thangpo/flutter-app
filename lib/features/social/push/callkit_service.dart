@@ -1,5 +1,6 @@
 // lib/features/social/push/callkit_service.dart
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -15,6 +16,7 @@ import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart'
     show navigatorKey;
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
 import '../controllers/call_controller.dart';
 import '../controllers/group_call_controller.dart';
 import '../screens/call_screen.dart';
@@ -155,6 +157,17 @@ class CallkitService {
     } catch (_) {
       // noop
     }
+
+    // ghi log server nếu là group (payload có group_id)
+    final gidForLog = _extractGroupId(data);
+    if (gidForLog.isNotEmpty) {
+      _sendGroupDebugLog('show_incoming_group_call', {
+        'call_id': serverId,
+        'group_id': gidForLog,
+        'media': media,
+        'system_id': systemId,
+      });
+    }
   }
 
   /// Hiện CallKit cho cuộc gọi nhóm (iOS)
@@ -293,6 +306,14 @@ class CallkitService {
         groupName: groupName,
         extra: extra,
       );
+      // log CallKit event nhóm
+      _sendGroupDebugLog('callkit_group_event', {
+        'evt': evt,
+        'system_id': systemId,
+        'call_id': serverCallId,
+        'group_id': groupId,
+        'media': media,
+      });
       return;
     }
 
@@ -774,6 +795,13 @@ class CallkitService {
           groupName: groupName,
           systemId: systemId.isNotEmpty ? systemId : null,
         );
+        _sendGroupDebugLog('group_evt_incoming', {
+          'evt': evt,
+          'system_id': systemId,
+          'call_id': serverCallId,
+          'group_id': groupId,
+          'media': media,
+        });
         return;
 
       case 'ACTION_CALL_ACCEPT':
@@ -810,6 +838,13 @@ class CallkitService {
             mediaFixed,
             groupName ?? _ringingGroupName[key],
           );
+          _sendGroupDebugLog('group_evt_answer', {
+            'evt': evt,
+            'system_id': systemId,
+            'call_id': cid,
+            'group_id': gid,
+            'media': mediaFixed,
+          });
           await flushPendingActions();
           await recoverActiveCalls();
           if (systemId.isNotEmpty) {
@@ -960,13 +995,24 @@ class CallkitService {
 
     _withGroupController((gc, _) async {
       try {
-        await gc.leaveRoom(serverCallId);
+        if (gc.isCreator) {
+          await gc.endRoom(serverCallId);
+        } else {
+          await gc.leaveRoom(serverCallId);
+        }
       } catch (_) {}
       if (gc.currentCallId == serverCallId) {
         gc.currentCallId = null;
         gc.status = CallStatus.idle;
         gc.notifyListeners();
       }
+    });
+
+    _sendGroupDebugLog('group_evt_end_decline', {
+      'call_id': serverCallId,
+      'group_id': groupId,
+      'media': media,
+      'reason': reason,
     });
   }
   Future<void> _endOrDecline(int serverCallId, String media,
@@ -1072,6 +1118,39 @@ class CallkitService {
       });
     });
   }
+
+  Future<void> _sendGroupDebugLog(String tag, Map<String, dynamic> data) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString(AppConstants.socialAccessToken);
+      final base = AppConstants.socialBaseUrl.endsWith('/')
+          ? AppConstants.socialBaseUrl.substring(
+              0, AppConstants.socialBaseUrl.length - 1)
+          : AppConstants.socialBaseUrl;
+      final uri = Uri.parse(
+        token != null && token.isNotEmpty
+            ? '$base/api/webrtc_group?access_token=$token'
+            : '$base/api/webrtc_group',
+      );
+      final body = <String, String>{
+        'action': 'client_log',
+        'server_key': AppConstants.socialServerKey,
+        'message': tag,
+        // WoWonder router vẫn nhận type, nhưng endpoint /webrtc_group đã cố định
+        'type': 'webrtc_group',
+        if (token != null && token.isNotEmpty) 'access_token': token,
+        if (token != null && token.isNotEmpty) 's': token,
+      };
+      data.forEach((k, v) {
+        if (v == null) return;
+        body['details[$k]'] = v.toString();
+      });
+      await http.post(uri, body: body).timeout(const Duration(seconds: 5));
+    } catch (_) {
+      // best-effort logging
+    }
+  }
+
   void _openCallScreen(
     BuildContext ctx,
     int callId,
