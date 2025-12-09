@@ -43,6 +43,7 @@ class CallkitService {
   final Map<int, String> _ringingMedia = <int, String>{}; // callId -> media
   final Map<String, String> _ringingGroupMedia = <String, String>{};
   final Map<String, String?> _ringingGroupName = <String, String?>{};
+  final Map<String, DateTime> _groupIncomingAt = <String, DateTime>{};
 
   /// Hàng đợi action khi chưa có BuildContext (ví dụ accept từ nền)
   final List<Future<void> Function(BuildContext)> _pendingActions = [];
@@ -126,8 +127,8 @@ class CallkitService {
       avatar: avatar,
       handle: callerName, // nếu có số điện thoại thì gán số ở đây
       type: isVideo ? 1 : 0,
-      // duration=0: để native tự timeout -> sẽ có ACTION_CALL_TIMEOUT
-      duration: 0,
+      // Đặt timeout hiển thị đủ dài để tránh ACTION_CALL_TIMEOUT tức thì
+      duration: 60000, // ms
       textAccept: 'Nghe',
       textDecline: 'Từ chối',
       extra: Map<String, dynamic>.from(data), // giữ payload gốc để đọc call_id
@@ -220,7 +221,8 @@ class CallkitService {
       avatar: avatar,
       handle: groupTitle,
       type: isVideo ? 1 : 0,
-      duration: 0,
+      // Đặt timeout hiển thị đủ dài để tránh Event.actionCallTimeout tức thì
+      duration: 60000, // ms
       textAccept: 'Nghe',
       textDecline: 'Từ chối',
       extra: {
@@ -763,6 +765,7 @@ class CallkitService {
     if (systemId != null && systemId.isNotEmpty) {
       _groupSystemIds[key] = systemId;
     }
+    _groupIncomingAt[key] = DateTime.now();
 
     _withGroupController((gc, _) async {
       if (gc.currentCallId != callId) {
@@ -874,6 +877,21 @@ class CallkitService {
       case 'ACTION_CALL_ENDED':
       case 'Event.actionCallEnded':
       case 'ACTION_CALL_TIMEOUT':
+        // Bỏ qua timeout quá sớm (CallKit đôi khi tự gửi ngay sau incoming)
+        final incomingAt = _groupIncomingAt[key];
+        if (evt.contains('TIMEOUT') &&
+            incomingAt != null &&
+            DateTime.now().difference(incomingAt) <
+                const Duration(seconds: 2)) {
+          _sendGroupDebugLog('group_evt_timeout_ignored', {
+            'call_id': serverCallId,
+            'group_id': groupId,
+            'media': media,
+            'system_id': systemId,
+            'reason': 'timeout_too_early',
+          });
+          return;
+        }
         await _endOrDeclineGroup(
           serverCallId,
           groupId,
@@ -992,6 +1010,7 @@ class CallkitService {
     _handled.add(key);
     _ringingGroupMedia.remove(_groupKey(groupId, serverCallId));
     _ringingGroupName.remove(_groupKey(groupId, serverCallId));
+    _groupIncomingAt.remove(_groupKey(groupId, serverCallId));
 
     _withGroupController((gc, _) async {
       try {
@@ -1214,7 +1233,3 @@ class CallkitService {
     } catch (_) {}
   }
 }
-
-
-
-
