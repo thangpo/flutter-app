@@ -222,6 +222,11 @@ class GroupCallController extends ChangeNotifier {
         for (final ev in events) {
           final type = (ev['type'] ?? '').toString();
           switch (type) {
+            case 'ended':
+              status = CallStatus.ended;
+              _emitStatus();
+              _cleanup();
+              return;
             case 'offer':
               onOffer?.call(ev);
               break;
