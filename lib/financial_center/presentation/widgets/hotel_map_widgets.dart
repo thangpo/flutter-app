@@ -158,8 +158,7 @@ class HotelNearbyStrip extends StatelessWidget {
                                         '$km km',
                                         style: TextStyle(
                                           fontSize: 11,
-                                          color:
-                                          Colors.white.withOpacity(0.9),
+                                          color: Colors.white.withOpacity(0.9),
                                         ),
                                       ),
                                     ],
@@ -214,6 +213,9 @@ class HotelInfoBottomSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ĐÂY LÀ WIDGET HIỂN THỊ POPUP - Debug log
+    debugPrint('🔵 [HotelInfoBottomSheet] Building popup for: $title');
+
     return Align(
       alignment: Alignment.bottomCenter,
       child: Container(
@@ -233,6 +235,7 @@ class HotelInfoBottomSheet extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Handle bar và nút đóng
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -254,11 +257,16 @@ class HotelInfoBottomSheet extends StatelessWidget {
                     size: 20,
                     color: isDark ? Colors.white60 : Colors.grey[600],
                   ),
-                  onPressed: onClose,
+                  onPressed: () {
+                    debugPrint('❌ [HotelInfoBottomSheet] Close button tapped');
+                    onClose();
+                  },
                 ),
               ],
             ),
             const SizedBox(height: 8),
+
+            // Hình ảnh
             ClipRRect(
               borderRadius: BorderRadius.circular(16),
               child: SizedBox(
@@ -268,11 +276,27 @@ class HotelInfoBottomSheet extends StatelessWidget {
                     ? Image.network(
                   thumb,
                   fit: BoxFit.cover,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Container(
+                      color: Colors.grey[300],
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          value: loadingProgress.expectedTotalBytes != null
+                              ? loadingProgress.cumulativeBytesLoaded /
+                              loadingProgress.expectedTotalBytes!
+                              : null,
+                          color: const Color(0xFF10B981),
+                        ),
+                      ),
+                    );
+                  },
                   errorBuilder: (_, __, ___) => Container(
                     color: Colors.grey[300],
                     child: const Icon(
                       Icons.image_not_supported,
                       size: 40,
+                      color: Colors.white70,
                     ),
                   ),
                 )
@@ -281,11 +305,14 @@ class HotelInfoBottomSheet extends StatelessWidget {
                   child: const Icon(
                     Icons.image,
                     size: 40,
+                    color: Colors.white70,
                   ),
                 ),
               ),
             ),
             const SizedBox(height: 12),
+
+            // Thông tin
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -300,9 +327,7 @@ class HotelInfoBottomSheet extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
-                          color: isDark
-                              ? Colors.white
-                              : const Color(0xFF111827),
+                          color: isDark ? Colors.white : const Color(0xFF111827),
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -321,9 +346,7 @@ class HotelInfoBottomSheet extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 13,
-                                color: isDark
-                                    ? Colors.white70
-                                    : Colors.grey[700],
+                                color: isDark ? Colors.white70 : Colors.grey[700],
                               ),
                             ),
                           ),
@@ -340,9 +363,7 @@ class HotelInfoBottomSheet extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
-                                color: isDark
-                                    ? Colors.white
-                                    : const Color(0xFF111827),
+                                color: isDark ? Colors.white : const Color(0xFF111827),
                               ),
                             ),
                           ],
@@ -354,6 +375,8 @@ class HotelInfoBottomSheet extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 4),
+
+            // Địa chỉ
             if (address.isNotEmpty)
               Align(
                 alignment: Alignment.centerLeft,
@@ -368,6 +391,8 @@ class HotelInfoBottomSheet extends StatelessWidget {
                 ),
               ),
             const SizedBox(height: 10),
+
+            // Giá
             if (priceVnd.isNotEmpty)
               Align(
                 alignment: Alignment.centerLeft,
@@ -381,11 +406,16 @@ class HotelInfoBottomSheet extends StatelessWidget {
                 ),
               ),
             const SizedBox(height: 14),
+
+            // Nút Xem chi tiết
             SizedBox(
               height: 50,
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: onViewDetail,
+                onPressed: () {
+                  debugPrint('🔍 [HotelInfoBottomSheet] View detail tapped');
+                  onViewDetail();
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF10B981),
                   shape: RoundedRectangleBorder(
@@ -408,11 +438,16 @@ class HotelInfoBottomSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
+
+            // Nút Dẫn đường
             SizedBox(
               height: 50,
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: onNavigate,
+                onPressed: () {
+                  debugPrint('🧭 [HotelInfoBottomSheet] Navigate tapped');
+                  onNavigate();
+                },
                 style: OutlinedButton.styleFrom(
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(999),

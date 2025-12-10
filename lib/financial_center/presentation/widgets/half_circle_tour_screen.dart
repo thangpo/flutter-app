@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../services/location_service.dart';
 import '../screens/tours_list_screen.dart';
 import '../screens/tour_detail_screen.dart';
+import '../screens/location_tours_map_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/services/tour_service.dart';
@@ -101,33 +102,6 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
     }
   }
 
-  void _openAllTours() {
-    Navigator.push(
-      context,
-      PageRouteBuilder(
-        pageBuilder: (_, animation, __) =>
-            TourListScreen(location: widget.location),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return FadeTransition(
-            opacity: animation,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 0.1),
-                end: Offset.zero,
-              ).animate(
-                CurvedAnimation(
-                  parent: animation,
-                  curve: Curves.easeOutCubic,
-                ),
-              ),
-              child: child,
-            ),
-          );
-        },
-      ),
-    );
-  }
-
   void _openTourDetail(dynamic tour) {
     final id = tour['id'];
     if (id == null) return;
@@ -154,6 +128,48 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
             ),
           );
         },
+      ),
+    );
+  }
+
+  void _openMap() {
+    print("📍 OPEN MAP for location: ${widget.location.name}");
+
+    final coords = tours
+        .where((t) {
+      final lat = t['lat'];
+      final lng = t['lng'];
+      return lat != null && lng != null && lat != 0 && lng != 0;
+    })
+        .map((t) {
+      final lat = double.tryParse(t['lat'].toString());
+      final lng = double.tryParse(t['lng'].toString());
+
+      return {
+        'id': t['id'],
+        'title': t['title'],
+        'location': t['location'] ?? '',
+        'price': t['price'],
+        'slug': t['slug'],
+        'lat': lat,
+        'lng': lng,
+        'image_url': t['image_url'] ?? '',
+        'banner_image_url': t['banner_image_url'] ?? '',
+      };
+    })
+        .toList();
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LocationToursMapScreen(
+          locationName: widget.location.name,
+          imageUrl: widget.location.imageUrl,
+          centerLat: widget.location.mapLat,
+          centerLng: widget.location.mapLng,
+          mapZoom: widget.location.mapZoom,
+          tours: coords, // TRUYỀN FULL DỮ LIỆU TOUR
+        ),
       ),
     );
   }
@@ -192,8 +208,8 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
         getTranslated('tours_available', context) ?? 'tours available';
     final toursCountText = '${widget.location.toursCount} $toursLabel';
 
-    final allToursText =
-        getTranslated('all_tours', context) ?? 'All tours';
+    final mapText =
+        getTranslated('view_map', context) ?? 'Xem bản đồ';
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -320,7 +336,7 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
               right: 16,
               top: 90,
               child: GestureDetector(
-                onTap: _openAllTours,
+                onTap: _openMap,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
@@ -333,7 +349,7 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
                   child: Row(
                     children: [
                       Text(
-                        allToursText,
+                        mapText,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 12,
@@ -342,8 +358,8 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
                       ),
                       const SizedBox(width: 4),
                       const Icon(
-                        Icons.arrow_forward_ios_rounded,
-                        size: 12,
+                        Icons.map_rounded,
+                        size: 14,
                         color: Colors.white,
                       ),
                     ],

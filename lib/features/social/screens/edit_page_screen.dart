@@ -56,7 +56,8 @@ class _EditPageScreenState extends State<EditPageScreen> {
     super.initState();
 
     _pageNameCtrl = TextEditingController(text: widget.initialPageName ?? '');
-    _pageTitleCtrl = TextEditingController(text: widget.initialPageTitle ?? '');
+    _pageTitleCtrl =
+        TextEditingController(text: widget.initialPageTitle ?? '');
     _pageDescriptionCtrl =
         TextEditingController(text: widget.initialDescription ?? '');
   }
@@ -91,6 +92,49 @@ class _EditPageScreenState extends State<EditPageScreen> {
         _coverFile = File(picked.files.single.path!);
       });
     }
+  }
+
+  /// Decoration chung cho TextField – auto đẹp dark/light
+  InputDecoration _inputDecoration(
+      BuildContext context, {
+        required String hintText,
+        String? prefixText,
+        IconData? prefixIcon,
+      }) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    final fillColor = theme.brightness == Brightness.dark
+        ? cs.surfaceVariant.withOpacity(0.6)
+        : cs.surfaceVariant;
+
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: BorderSide(
+        color: cs.outline.withOpacity(0.4),
+        width: 1,
+      ),
+    );
+
+    return InputDecoration(
+      hintText: hintText,
+      prefixText: prefixText,
+      prefixIcon: prefixIcon != null ? Icon(prefixIcon, size: 20) : null,
+      filled: true,
+      fillColor: fillColor,
+      border: border,
+      enabledBorder: border,
+      focusedBorder: border.copyWith(
+        borderSide: BorderSide(
+          color: cs.primary,
+          width: 1.4,
+        ),
+      ),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 12,
+      ),
+    );
   }
 
   Future<void> _onSubmit() async {
@@ -130,25 +174,45 @@ class _EditPageScreenState extends State<EditPageScreen> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
+    final scaffoldBg = theme.scaffoldBackgroundColor;
+    final cardColor = theme.brightness == Brightness.dark
+        ? cs.surface.withOpacity(0.9)
+        : cs.surface;
+
     return Scaffold(
+      backgroundColor: scaffoldBg,
       appBar: AppBar(
+        backgroundColor: scaffoldBg,
+        elevation: 0,
+        centerTitle: true,
         title: Text(
           getTranslated('edit_page', context) ?? 'Chỉnh sửa trang',
-          style: const TextStyle(fontWeight: FontWeight.bold),
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => Navigator.pop(context),
         ),
         actions: [
           TextButton(
             onPressed: _onSubmit,
             child: Text(
               getTranslated('save', context) ?? 'Lưu',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.blue,
-                fontSize: 16,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: cs.primary,
+                fontSize: 15,
               ),
             ),
           ),
         ],
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            bottom: Radius.circular(20),
+          ),
+        ),
       ),
       body: SafeArea(
         child: Form(
@@ -156,124 +220,152 @@ class _EditPageScreenState extends State<EditPageScreen> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
             children: [
-              // ───────── AVATAR + COVER ─────────
-              Text(
-                getTranslated('page_images', context) ??
-                    'Ảnh đại diện & ảnh bìa',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: cs.onSurface.withValues(alpha: 0.8),
+              // ───────── AVATAR + COVER (card) ─────────
+              Container(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+                decoration: BoxDecoration(
+                  color: cardColor,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(
+                        theme.brightness == Brightness.dark ? 0.2 : 0.05,
+                      ),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Avatar
-                  GestureDetector(
-                    onTap: _pickAvatar,
-                    child: Column(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      getTranslated('page_images', context) ??
+                          'Ảnh đại diện & ảnh bìa',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: cs.onSurface.withOpacity(0.85),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Stack(
-                          children: [
-                            CircleAvatar(
-                              radius: 32,
-                              backgroundColor:
-                              cs.primary.withValues(alpha: 0.1),
-                              backgroundImage: _avatarFile != null
-                                  ? FileImage(_avatarFile!)
-                                  : (widget.initialAvatarUrl != null &&
-                                  widget.initialAvatarUrl!.isNotEmpty)
-                                  ? NetworkImage(
-                                widget.initialAvatarUrl!,
-                              ) as ImageProvider
-                                  : null,
-                              child: (_avatarFile == null &&
-                                  (widget.initialAvatarUrl == null ||
-                                      widget.initialAvatarUrl!.isEmpty))
-                                  ? Icon(Icons.person, color: cs.primary)
-                                  : null,
-                            ),
-                            Positioned(
-                              bottom: 0,
-                              right: 0,
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: cs.primary,
-                                  shape: BoxShape.circle,
-                                ),
-                                padding: const EdgeInsets.all(4),
-                                child: const Icon(
-                                  Icons.camera_alt,
-                                  size: 14,
-                                  color: Colors.white,
-                                ),
+                        // Avatar
+                        GestureDetector(
+                          onTap: _pickAvatar,
+                          child: Column(
+                            children: [
+                              Stack(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 32,
+                                    backgroundColor:
+                                    cs.primary.withOpacity(0.1),
+                                    backgroundImage: _avatarFile != null
+                                        ? FileImage(_avatarFile!)
+                                        : (widget.initialAvatarUrl != null &&
+                                        widget.initialAvatarUrl!
+                                            .isNotEmpty)
+                                        ? NetworkImage(
+                                      widget.initialAvatarUrl!,
+                                    ) as ImageProvider
+                                        : null,
+                                    child: (_avatarFile == null &&
+                                        (widget.initialAvatarUrl == null ||
+                                            widget.initialAvatarUrl!
+                                                .isEmpty))
+                                        ? Icon(Icons.person, color: cs.primary)
+                                        : null,
+                                  ),
+                                  Positioned(
+                                    bottom: 0,
+                                    right: 0,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: cs.primary,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      padding: const EdgeInsets.all(4),
+                                      child: const Icon(
+                                        Icons.camera_alt,
+                                        size: 14,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 4),
+                              Text(
+                                getTranslated('avatar', context) ??
+                                    'Ảnh đại diện',
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          getTranslated('avatar', context) ?? 'Ảnh đại diện',
-                          style: theme.textTheme.bodySmall,
+
+                        const SizedBox(width: 16),
+
+                        // Cover
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: _pickCover,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                AspectRatio(
+                                  aspectRatio: 16 / 9,
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color:
+                                      cs.primary.withOpacity(0.05),
+                                      borderRadius: BorderRadius.circular(8),
+                                      image: _coverFile != null
+                                          ? DecorationImage(
+                                        image: FileImage(_coverFile!),
+                                        fit: BoxFit.cover,
+                                      )
+                                          : (widget.initialCoverUrl != null &&
+                                          widget.initialCoverUrl!
+                                              .isNotEmpty)
+                                          ? DecorationImage(
+                                        image: NetworkImage(
+                                          widget.initialCoverUrl!,
+                                        ),
+                                        fit: BoxFit.cover,
+                                      )
+                                          : null,
+                                    ),
+                                    child: (_coverFile == null &&
+                                        (widget.initialCoverUrl == null ||
+                                            widget.initialCoverUrl!
+                                                .isEmpty))
+                                        ? Center(
+                                      child: Icon(
+                                        Icons.photo,
+                                        color: cs.onSurface
+                                            .withOpacity(0.4),
+                                      ),
+                                    )
+                                        : null,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  getTranslated('cover_photo', context) ??
+                                      'Ảnh bìa',
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ],
                     ),
-                  ),
-
-                  const SizedBox(width: 16),
-
-                  // Cover
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: _pickCover,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          AspectRatio(
-                            aspectRatio: 16 / 9,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: cs.primary.withValues(alpha: 0.05),
-                                borderRadius: BorderRadius.circular(8),
-                                image: _coverFile != null
-                                    ? DecorationImage(
-                                  image: FileImage(_coverFile!),
-                                  fit: BoxFit.cover,
-                                )
-                                    : (widget.initialCoverUrl != null &&
-                                    widget.initialCoverUrl!.isNotEmpty)
-                                    ? DecorationImage(
-                                  image: NetworkImage(
-                                      widget.initialCoverUrl!),
-                                  fit: BoxFit.cover,
-                                )
-                                    : null,
-                              ),
-                              child: (_coverFile == null &&
-                                  (widget.initialCoverUrl == null ||
-                                      widget.initialCoverUrl!.isEmpty))
-                                  ? Center(
-                                child: Icon(
-                                  Icons.photo,
-                                  color:
-                                  cs.onSurface.withValues(alpha: 0.4),
-                                ),
-                              )
-                                  : null,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            getTranslated('cover_photo', context) ??
-                                'Ảnh bìa',
-                            style: theme.textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
 
               const SizedBox(height: 24),
@@ -286,17 +378,25 @@ class _EditPageScreenState extends State<EditPageScreen> {
                       'Danh mục trang',
                   style: theme.textTheme.bodySmall?.copyWith(
                     fontWeight: FontWeight.w600,
-                    color: cs.onSurface.withValues(alpha: 0.8),
+                    color: cs.onSurface.withOpacity(0.8),
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  widget.initialCategoryName!,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: cs.onSurface.withValues(alpha: 0.8),
+                Container(
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: cardColor,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    widget.initialCategoryName!,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: cs.onSurface.withOpacity(0.9),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
               ],
 
               // ───────── PAGE NAME (slug) ─────────
@@ -305,25 +405,18 @@ class _EditPageScreenState extends State<EditPageScreen> {
                     'Tên người dùng của trang (page_name)',
                 style: theme.textTheme.bodySmall?.copyWith(
                   fontWeight: FontWeight.w600,
-                  color: cs.onSurface.withValues(alpha: 0.8),
+                  color: cs.onSurface.withOpacity(0.8),
                 ),
               ),
               const SizedBox(height: 4),
               TextFormField(
                 controller: _pageNameCtrl,
-                decoration: InputDecoration(
-                  hintText: getTranslated('page_name_hint', context) ??
+                decoration: _inputDecoration(
+                  context,
+                  hintText:
+                  getTranslated('page_name_hint', context) ??
                       'Ví dụ: vnshop_official',
                   prefixText: '@',
-                  filled: true,
-                  fillColor: theme.cardColor,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
                 ),
                 // Cho phép để trống (không update)
                 validator: (value) {
@@ -341,27 +434,20 @@ class _EditPageScreenState extends State<EditPageScreen> {
 
               // ───────── PAGE TITLE ─────────
               Text(
-                getTranslated('page_title', context) ?? 'Tên trang (page_title)',
+                getTranslated('page_title', context) ??
+                    'Tên trang (page_title)',
                 style: theme.textTheme.bodySmall?.copyWith(
                   fontWeight: FontWeight.w600,
-                  color: cs.onSurface.withValues(alpha: 0.8),
+                  color: cs.onSurface.withOpacity(0.8),
                 ),
               ),
               const SizedBox(height: 4),
               TextFormField(
                 controller: _pageTitleCtrl,
-                decoration: InputDecoration(
+                decoration: _inputDecoration(
+                  context,
                   hintText: getTranslated('page_title_hint', context) ??
                       'Ví dụ: VNSHOP VIETNAM',
-                  filled: true,
-                  fillColor: theme.cardColor,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
                 ),
                 validator: (value) {
                   final v = (value ?? '').trim();
@@ -377,10 +463,11 @@ class _EditPageScreenState extends State<EditPageScreen> {
 
               // ───────── PAGE DESCRIPTION ─────────
               Text(
-                getTranslated('page_description', context) ?? 'Mô tả trang',
+                getTranslated('page_description', context) ??
+                    'Mô tả trang',
                 style: theme.textTheme.bodySmall?.copyWith(
                   fontWeight: FontWeight.w600,
-                  color: cs.onSurface.withValues(alpha: 0.8),
+                  color: cs.onSurface.withOpacity(0.8),
                 ),
               ),
               const SizedBox(height: 4),
@@ -388,19 +475,15 @@ class _EditPageScreenState extends State<EditPageScreen> {
                 controller: _pageDescriptionCtrl,
                 maxLines: 4,
                 minLines: 3,
-                decoration: InputDecoration(
+                decoration: _inputDecoration(
+                  context,
                   hintText: getTranslated(
-                      'page_description_hint', context) ??
+                    'page_description_hint',
+                    context,
+                  ) ??
                       'Giới thiệu ngắn về trang, nội dung, dịch vụ...',
-                  filled: true,
-                  fillColor: theme.cardColor,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
+                ).copyWith(
+                  alignLabelWithHint: true,
                 ),
               ),
             ],

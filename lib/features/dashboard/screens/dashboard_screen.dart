@@ -87,7 +87,10 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       NavigationModel(
         name: 'travel',
         icon: Images.TravelIcon,
-        screen: const TravelScreen(isBackButtonExist: false),
+        screen: TravelScreen(
+          isBackButtonExist: false,
+          onScrollToggleNav: _handleTravelScroll,
+        ),
       ),
       NavigationModel(
         name: 'social',
@@ -122,6 +125,14 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         _screens.indexWhere((element) => element.name == 'social');
 
     NetworkInfo.checkConnectivity(context);
+  }
+
+  void _handleTravelScroll(bool showNav) {
+    if (_showBottomNav == showNav) return;
+
+    setState(() {
+      _showBottomNav = showNav;
+    });
   }
 
   @override
@@ -255,7 +266,9 @@ class DashBoardScreenState extends State<DashBoardScreen> {
               bucket: bucket,
               child: _screens[_pageIndex].screen,
             ),
-            if (!hideNav)
+
+            // ⬇⬇⬇ SỬA DÒNG NÀY ⬇⬇⬇
+            if (!hideNav && _showBottomNav)
               Positioned(
                 left: 0,
                 right: 0,
