@@ -136,6 +136,8 @@ flutter:
     - assets/images/reactions/
     - assets/language/
     - assets/svg/
+    - assets/images/hoang_sa.png
+    - assets/images/truong_sa.png
 
   fonts:
     - family: SF-Pro-Rounded-Regular

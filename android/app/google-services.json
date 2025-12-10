@@ -12,7 +12,20 @@
           "package_name": "com.vnsshop.ecommerce"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "839301392682-aor7uogvu26c0pu0spp7684dmk09evmc.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.vnsshop.ecommerce",
+            "certificate_hash": "E8E2DF37BEE61C3E164818F4520EB392788C540D"
+          }
+        },
+        {
+          "client_id": "839301392682-ss4cmfti3779n8m2dmiuv7a8uhcoffe5.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyA3d7ByFeD97ZelFqdeIUCDAR68Ih4_hKE"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "839301392682-ss4cmfti3779n8m2dmiuv7a8uhcoffe5.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
