@@ -103,7 +103,7 @@ import 'di_container.dart' as di;
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_page_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_page_service_interface.dart';
 
-// === ADD (n?u chua cÛ bi?n n‡y) ===
+// === ADD (n?u chua c√≥ bi?n n√†y) ===
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
@@ -161,13 +161,24 @@ Future<void> myBackgroundMessageHandler(RemoteMessage message) async {
 
   // ==== X? L? CU?C G?I 1-1 ? BACKGROUND (data-only FCM) ====
   try {
-    final data = message.data;
-    final type = (data['type'] ?? '').toString();
-    final isGroupInvite = data.containsKey('group_id') ||
-        (data['is_group'] ?? '') == '1' ||
-        (data['is_group'] ?? '') == 1;
+  final data = message.data;
+  final type = (data['type'] ?? '').toString();
+  final hasGroupCallIds =
+      data.containsKey('call_id') && data.containsKey('group_id');
+  final isGroupInvite = type == 'call_invite_group' ||
+      ((type.isEmpty || type == 'call_invite') && hasGroupCallIds) ||
+      data.containsKey('group_id') ||
+      (data['is_group'] ?? '') == '1' ||
+      (data['is_group'] ?? '') == 1;
 
-    if (type == 'call_invite' || type == 'call_invite_group') {
+  if (type == 'call_group_end') {
+    final gid = (data['group_id'] ?? '').toString();
+    final cid = int.tryParse('${data['call_id'] ?? ''}') ?? 0;
+    await CallkitService.I.endGroupCall(gid, cid);
+    print('? [BG] End incoming group call via push (call_id=$cid gid=$gid)');
+  } else if (type == 'call_invite' ||
+      type == 'call_invite_group' ||
+      (type.isEmpty && hasGroupCallIds)) {
       try {
         final prefs = await SharedPreferences.getInstance();
         final myId = prefs.getString(AppConstants.socialUserId);
@@ -227,11 +238,11 @@ Future<void> _setHighRefreshRate() async {
   if (!Platform.isAndroid) return;
 
   try {
-    // Uu tiÍn mode cÛ refresh rate cao nh?t m·y h? tr?
+    // Uu ti√™n mode c√≥ refresh rate cao nh?t m√°y h? tr?
     await FlutterDisplayMode.setHighRefreshRate();
     debugPrint('High refresh rate mode applied');
   } catch (e) {
-    debugPrint('KhÙng set du?c high refresh rate: $e');
+    debugPrint('Kh√¥ng set du?c high refresh rate: $e');
   }
 }
 
@@ -336,15 +347,15 @@ Future<void> _showIncomingCallNotification(Map<String, dynamic> data) async {
 }
 
 // === ADD ===
-// Production: d˘ng UI h? th?ng (iOS CallKit / Android ConnectionService)
-// -> KH‘NG d?y m‡n IncomingCallScreen Flutter n?a
+// Production: d√πng UI h? th?ng (iOS CallKit / Android ConnectionService)
+// -> KH√îNG d?y m√†n IncomingCallScreen Flutter n?a
 class CallUiConfig {
   static const bool useSystemIncomingUI = true;
 }
 
 void _handleCallInviteOpen(Map<String, dynamic> data) {
   if (CallUiConfig.useSystemIncomingUI) {
-    // –„ cÛ CallKit/ConnectionService lo UI. KhÙng m? IncomingCallScreen Flutter n?a.
+    // √ê√£ c√≥ CallKit/ConnectionService lo UI. Kh√¥ng m? IncomingCallScreen Flutter n?a.
     debugPrint('?? Skip IncomingCallScreen (system UI in use)');
     return;
   }
@@ -501,7 +512,7 @@ Future<void> _handleCallSignal(Map<String, dynamic> data) async {
       },
     ));
 
-    // N?u server b·o ended/declined -> dÛng CallKit/UI ngay c? khi chua cÛ poll
+    // N?u server b√°o ended/declined -> d√≥ng CallKit/UI ngay c? khi chua c√≥ poll
     if (status == 'ended' || status == 'declined') {
       await CallkitService.I.endCallForServerId(callId);
       try {
@@ -534,21 +545,21 @@ Future<void> _ensureAndroidNotificationPermission() async {
     debugPrint('?? requestNotificationsPermission() => $granted');
   } catch (e1) {
     try {
-      // M?t s? b?n cu d˘ng tÍn cu (n?u cÛ)
+      // M?t s? b?n cu d√πng t√™n cu (n?u c√≥)
       // ignore: deprecated_member_use
-      // granted = await androidImpl.requestPermission(); // cÛ th? v?n khÙng t?n t?i
+      // granted = await androidImpl.requestPermission(); // c√≥ th? v?n kh√¥ng t?n t?i
       debugPrint('?? requestPermission() not available on this version.');
     } catch (e2) {
       // b? qua
     }
   }
 
-  // N?u SDK qu· cu, khÙng cÛ API xin quy?n ? log c?nh b·o
+  // N?u SDK qu√° cu, kh√¥ng c√≥ API xin quy?n ? log c?nh b√°o
   if (granted == null) {
     debugPrint(
-      '?? flutter_local_notifications b?n hi?n t?i khÙng h? tr? xin POST_NOTIFICATIONS. '
-      'TrÍn Android 13+ b?n c?n n‚ng c?p plugin (khuy?n ngh? v17+) '
-      'ho?c d˘ng permission_handler(Permission.notification).',
+      '?? flutter_local_notifications b?n hi?n t?i kh√¥ng h? tr? xin POST_NOTIFICATIONS. '
+      'Tr√™n Android 13+ b?n c?n n√¢ng c?p plugin (khuy?n ngh? v17+) '
+      'ho?c d√πng permission_handler(Permission.notification).',
     );
   }
 }
@@ -557,7 +568,7 @@ Future<void> main() async {
   HttpOverrides.global = MyHttpOverrides();
   WidgetsFlutterBinding.ensureInitialized();
 
-  // –ang k˝ listener CallKit c‡ng s?m c‡ng t?t d? khÙng miss s? ki?n ANSWER khi app du?c m? t? CallKit (cold start).
+  // √êang k√Ω listener CallKit c√†ng s?m c√†ng t?t d? kh√¥ng miss s? ki?n ANSWER khi app du?c m? t? CallKit (cold start).
   await CallkitService.I.init();
 
   await _setHighRefreshRate();
@@ -610,7 +621,7 @@ Future<void> main() async {
   // 1) Local notifications (cho Android heads-up khi c?n)
   SocialCallPushHandler.I.initLocalNotifications();
 
-  // 2) Listener foreground cho call_invite qua FCM (n?u b?n d˘ng)
+  // 2) Listener foreground cho call_invite qua FCM (n?u b?n d√πng)
   CallInviteForegroundListener.start();
 
   // 3) FCM chat
@@ -621,7 +632,7 @@ Future<void> main() async {
   // =================== APP LIFECYCLE OBSERVER ===================
   WidgetsBinding.instance.addObserver(AppLifecycleObserver());
   WidgetsBinding.instance.addPostFrameCallback((_) {
-    // Khi app v?a d?ng frame d?u tiÍn (k? c? m? t? CallKit) thÏ flush action pending
+    // Khi app v?a d?ng frame d?u ti√™n (k? c? m? t? CallKit) th√¨ flush action pending
     CallkitService.I.flushPendingActions();
     CallkitService.I.recoverActiveCalls();
   });
@@ -712,13 +723,19 @@ Future<void> main() async {
         await FirebaseMessaging.instance.getInitialMessage();
     if (initialMessage != null) {
       final t = (initialMessage.data['type'] ?? '').toString();
+      final hasGroupIds = initialMessage.data.containsKey('call_id') &&
+          initialMessage.data.containsKey('group_id');
+      final isGroupInvite = t == 'call_invite_group' ||
+          ((t.isEmpty || t == 'call_invite') && hasGroupIds);
 
-      if (t == 'call_invite') {
-        await _scheduleCallInviteOpen(initialMessage.data);
-      } else if (t == 'call_invite_group' ||
-          (initialMessage.data.containsKey('call_id') &&
-              initialMessage.data.containsKey('group_id'))) {
+      if (t == 'call_group_end') {
+        final gid = (initialMessage.data['group_id'] ?? '').toString();
+        final cid = int.tryParse('${initialMessage.data['call_id'] ?? ''}') ?? 0;
+        await CallkitService.I.endGroupCall(gid, cid);
+      } else if (isGroupInvite) {
         await _scheduleGroupCallInviteOpen(initialMessage.data);
+      } else if (t == 'call_invite') {
+        await _scheduleCallInviteOpen(initialMessage.data);
       } else if (initialMessage.data['api_status'] != null ||
           initialMessage.data['type'] != null) {
         await handlePushNavigation(initialMessage);
@@ -734,15 +751,23 @@ Future<void> main() async {
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
       print('?? onMessageOpenedApp (main): ${message.data}');
       final t = (message.data['type'] ?? '').toString();
+      final hasGroupIds =
+          message.data.containsKey('call_id') && message.data.containsKey('group_id');
+      final isGroupInvite =
+          t == 'call_invite_group' || ((t.isEmpty || t == 'call_invite') && hasGroupIds);
 
-      if (t == 'call_invite') {
-        _handleCallInviteOpen(message.data);
+      if (t == 'call_group_end') {
+        final gid = (message.data['group_id'] ?? '').toString();
+        final cid = int.tryParse('${message.data['call_id'] ?? ''}') ?? 0;
+        await CallkitService.I.endGroupCall(gid, cid);
         return;
       }
-      if (t == 'call_invite_group' ||
-          (message.data.containsKey('call_id') &&
-              message.data.containsKey('group_id'))) {
+      if (isGroupInvite) {
         _handleGroupCallInviteOpen(message.data);
+        return;
+      }
+      if (t == 'call_invite') {
+        _handleCallInviteOpen(message.data);
         return;
       }
 
@@ -755,6 +780,12 @@ Future<void> main() async {
 
       if ((data['type'] ?? '') == 'call_signal') {
         await _handleCallSignal(data);
+        return;
+      }
+      if ((data['type'] ?? '') == 'call_group_end') {
+        final gid = (data['group_id'] ?? '').toString();
+        final cid = int.tryParse('${data['call_id'] ?? ''}') ?? 0;
+        await CallkitService.I.endGroupCall(gid, cid);
         return;
       }
 
@@ -996,5 +1027,3 @@ class MyHttpOverrides extends HttpOverrides {
           (X509Certificate cert, String host, int port) => true;
   }
 }
-
-

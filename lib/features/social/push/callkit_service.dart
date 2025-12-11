@@ -36,6 +36,8 @@ class CallkitService {
   final Set<String> _handled = <String>{};
   final Set<int> _handledServerIds = <int>{};
   final Set<String> _handledGroupKeys = <String>{};
+  final Set<String> _endedGroupKeys = <String>{};
+  final Set<String> _endedGroupIds = <String>{}; // đánh dấu group đã dập (dù callId rỗng)
 
   /// Đánh dấu các cuộc gọi đã accept (để setCallConnected 1 lần)
   final Set<String> _accepted = <String>{};
@@ -181,6 +183,15 @@ class CallkitService {
     if (await _isSelfCall(data)) return;
 
     final key = _groupKey(groupId, serverId);
+    if (_endedGroupKeys.contains(key)) {
+      // Đã kết thúc trước đó (push call_group_end) -> bỏ qua
+      return;
+    }
+    if (_endedGroupIds.contains(groupId)) {
+      // Group đã bị dập toàn bộ -> đảm bảo tắt CallKit nếu SDK vẫn bắn incoming
+      await endGroupCall(groupId, serverId);
+      return;
+    }
     if (serverId > 0 && _handledGroupKeys.contains(key)) {
       return;
     }
@@ -280,12 +291,30 @@ class CallkitService {
 
     final rawCallId =
         '${extra['call_id'] ?? extra['callId'] ?? extra['id'] ?? ''}'.trim();
-    final int serverCallId = int.tryParse(rawCallId) ?? 0;
+    int serverCallId = int.tryParse(rawCallId) ?? 0;
     final String media = _extractMedia(extra);
     final String? peerName = extra['caller_name']?.toString();
     final String? peerAvatar = extra['caller_avatar']?.toString();
-    final String groupId = _extractGroupId(extra);
+    String groupId = _extractGroupId(extra);
     final String? groupName = extra['group_name']?.toString();
+
+    // Một số event CallKit (nhất là khi app bị kill) mất call_id/group_id trong extra.
+    // Thử khôi phục dựa vào systemId đã lưu khi showIncomingGroupCall.
+    if ((groupId.isEmpty || serverCallId <= 0) && systemId.isNotEmpty) {
+      final match = _groupSystemIds.entries.firstWhere(
+        (e) => e.value.toLowerCase() == systemId.toLowerCase(),
+        orElse: () => const MapEntry('', ''),
+      );
+      if (match.key.isNotEmpty) {
+        final parts = match.key.split('|');
+        if (parts.isNotEmpty && groupId.isEmpty) {
+          groupId = parts.first;
+        }
+        if (parts.length > 1 && serverCallId <= 0) {
+          serverCallId = int.tryParse(parts.last) ?? serverCallId;
+        }
+      }
+    }
 
     unawaited(RemoteRtcLog.send(
       event: 'callkit_event',
@@ -625,6 +654,38 @@ class CallkitService {
     } catch (_) {}
   }
 
+  /// Kết thúc CallKit cuộc gọi nhóm (dùng cho push call_group_end)
+  Future<void> endGroupCall(String groupId, int callId) async {
+    if (groupId.isEmpty && callId <= 0) return;
+    final key = _groupKey(groupId, callId <= 0 ? 0 : callId);
+    _endedGroupKeys.add(key);
+    _endedGroupIds.add(groupId);
+    _handledGroupKeys.add(key);
+    _ringingGroupMedia.remove(key);
+    _ringingGroupName.remove(key);
+    _groupIncomingAt.remove(key);
+
+    // Nếu callId không rõ, cố gắng tìm tất cả systemId thuộc groupId để dập
+    final keysToEnd = <String>{key};
+    if (callId <= 0 && groupId.isNotEmpty) {
+      _groupSystemIds.forEach((k, v) {
+        if (k.startsWith('$groupId|')) {
+          keysToEnd.add(k);
+        }
+      });
+    }
+
+    for (final k in keysToEnd) {
+      final sysId = _groupSystemIds[k] ?? _makeSystemUuidFromServerId(k);
+      try {
+        await FlutterCallkitIncoming.endCall(sysId);
+      } catch (_) {}
+    }
+    try {
+      await FlutterCallkitIncoming.endAllCalls();
+    } catch (_) {}
+  }
+
   String _makeSystemUuidFromServerId(dynamic callId) {
     final raw = (callId == null) ? '' : callId.toString().trim();
     final uuidRegex = RegExp(
@@ -807,6 +868,33 @@ class CallkitService {
         });
         return;
 
+      case 'ACTION_CALL_INCOMING':
+      case 'Event.actionCallIncoming':
+      case 'ACTION_CALL_TIMEOUT':
+      case 'Event.actionCallTimeout':
+      case 'ACTION_CALL_ENDED':
+      case 'Event.actionCallEnded':
+      case 'ACTION_CALL_DECLINE':
+      case 'Event.actionCallDecline':
+        {
+          final key = _groupKey(groupId, serverCallId);
+          if (_endedGroupKeys.contains(key) || _endedGroupIds.contains(groupId)) {
+            _sendGroupDebugLog('CALLKIT_IGNORE_ENDED', {
+              'evt': evt,
+              'call_id': serverCallId,
+              'group_id': groupId,
+              'system_id': systemId,
+            });
+            await endGroupCall(groupId, serverCallId);
+            return;
+          }
+          if (evt.contains('TIMEOUT') || evt.contains('DECLINE') || evt.contains('ENDED')) {
+            // không cần xử lý thêm; chỉ để CallKit tự đóng
+            return;
+          }
+          return;
+        }
+
       case 'ACTION_CALL_ACCEPT':
       case 'Event.actionCallAccept':
       case 'ACTION_CALL_START':
@@ -835,6 +923,17 @@ class CallkitService {
           final preferred = _ringingGroupMedia[key];
           final mediaFixed =
               (media == 'audio' && preferred == 'video') ? 'video' : media;
+          if (_endedGroupKeys.contains(_groupKey(gid, cid)) ||
+              _endedGroupIds.contains(gid)) {
+            _sendGroupDebugLog('CALLKIT_IGNORE_ENDED', {
+              'evt': evt,
+              'call_id': cid,
+              'group_id': gid,
+              'system_id': systemId,
+            });
+            await endGroupCall(gid, cid);
+            return;
+          }
           await _answerGroup(
             cid,
             gid,
@@ -971,6 +1070,7 @@ class CallkitService {
     }
 
     final key = 'g-ans:' + _groupKey(groupId, serverCallId);
+    if (_endedGroupKeys.contains(_groupKey(groupId, serverCallId))) return;
     if (_handled.contains(key)) return;
     _handled.add(key);
     _handledGroupKeys.add(_groupKey(groupId, serverCallId));
@@ -979,6 +1079,7 @@ class CallkitService {
       if (gc.currentCallId != serverCallId) {
         gc.currentCallId = serverCallId;
       }
+      gc.currentGroupId = groupId;
       gc.status = CallStatus.ongoing;
       gc.notifyListeners();
 
@@ -992,7 +1093,7 @@ class CallkitService {
 
       unawaited(() async {
         try {
-          await gc.attachAndJoin(callId: serverCallId);
+          await gc.attachAndJoin(callId: serverCallId, groupId: groupId);
         } catch (_) {}
       }());
     });
@@ -1008,11 +1109,12 @@ class CallkitService {
     final key = 'g-' + reason + ':' + _groupKey(groupId, serverCallId);
     if (_handled.contains(key)) return;
     _handled.add(key);
+    _endedGroupKeys.add(_groupKey(groupId, serverCallId));
     _ringingGroupMedia.remove(_groupKey(groupId, serverCallId));
     _ringingGroupName.remove(_groupKey(groupId, serverCallId));
     _groupIncomingAt.remove(_groupKey(groupId, serverCallId));
 
-    _withGroupController((gc, _) async {
+    _withGroupController((gc, ctx) async {
       try {
         if (gc.isCreator) {
           await gc.endRoom(serverCallId);
@@ -1025,6 +1127,7 @@ class CallkitService {
         gc.status = CallStatus.idle;
         gc.notifyListeners();
       }
+      _popAnyCallScreenIfMounted(ctx);
     });
 
     _sendGroupDebugLog('group_evt_end_decline', {
@@ -1228,7 +1331,10 @@ class CallkitService {
       // Tránh hiển thị sheet thoát app ngay sau khi pop CallScreen (callee end).
       AppExitGuard.suppressFor(const Duration(seconds: 2));
       Navigator.of(ctx, rootNavigator: true).popUntil(
-        (route) => route.settings.name != 'CallScreen',
+        (route) {
+          final name = route.settings.name;
+          return name != 'CallScreen' && name != 'GroupCallScreen';
+        },
       );
     } catch (_) {}
   }
