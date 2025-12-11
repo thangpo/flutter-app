@@ -80,8 +80,19 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     }
 
     _screens = [
-      NavigationModel(name: 'home', icon: Images.homeImage, screen: const MainHomeScreen()),
-      NavigationModel(name: 'travel', icon: Images.TravelIcon, screen: const TravelScreen(isBackButtonExist: false)),
+      NavigationModel(
+        name: 'home',
+        icon: Images.homeImage,
+        screen: const MainHomeScreen(),
+      ),
+      NavigationModel(
+        name: 'travel',
+        icon: Images.TravelIcon,
+        screen: TravelScreen(
+          isBackButtonExist: false,
+          onScrollToggleNav: _handleTravelScroll,
+        ),
+      ),
       NavigationModel(
         name: 'social',
         icon: Images.SocialIcon,
@@ -116,6 +127,14 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       if (m != null) return int.tryParse(m.group(1)!);
     } catch (_) {}
     return null;
+  }
+  
+  void _handleTravelScroll(bool showNav) {
+    if (_showBottomNav == showNav) return;
+
+    setState(() {
+      _showBottomNav = showNav;
+    });
   }
 
   @override
@@ -236,7 +255,9 @@ class DashBoardScreenState extends State<DashBoardScreen> {
               bucket: bucket,
               child: _screens[_pageIndex].screen,
             ),
-            if (!hideNav)
+
+            // ⬇⬇⬇ SỬA DÒNG NÀY ⬇⬇⬇
+            if (!hideNav && _showBottomNav)
               Positioned(
                 left: 0,
                 right: 0,

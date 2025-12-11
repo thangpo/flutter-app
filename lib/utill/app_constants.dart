@@ -102,7 +102,7 @@ class AppConstants {
   static const String socialFollowUser = '/api/follow-user';
   static const String socialUpdateDataUser = '/api/update-user-data';
 
-  static const String googleServerClientId = 'client_id here';
+  static const String googleServerClientId = '839301392682-ss4cmfti3779n8m2dmiuv7a8uhcoffe5.apps.googleusercontent.com';
   static const String userId = 'userId';
   static const String name = 'name';
   static const String categoriesUri = '/api/v1/categories';

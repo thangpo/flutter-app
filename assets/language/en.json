@@ -1185,7 +1185,7 @@
   "user": "User",
   "followers": "followers",
   "professional_tools": "Professional tools",
-  "add_to_story": "+ Add to story",
+  "add_to_story": "Add to story",
   "edit_profile": "Edit profile",
   "follow": "Follow",
   "following": "Following",
@@ -1822,5 +1822,14 @@
   "location_service_disabled": "Please enable location services on your device.",
   "location_permission_denied": "The app does not have location permission.",
   "location_error": "Could not get your current location.",
-  "hotel_map_navigate_btn": "Hotel map navigate btn"
+  "hotel_map_navigate_btn": "Hotel map navigate btn",
+  "start_navigation": "Navigate",
+  "view_tour": "View tour",
+  "swipe_down_close": "Swipe down to close",
+  "price_per_person": "đ / person",
+  "choose_tour": "Choose a tour",
+  "tour_no_name": "Unnamed tour",
+  "swipe_down_to_close": "Swipe down to close",
+  "per_person": "person",
+  "navigate": "Navigate"
 }

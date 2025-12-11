@@ -1,4 +1,3 @@
-// lib/features/social/screens/profile_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:ui';
@@ -92,18 +91,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<SocialController>().loadUserProfile(
             targetUserId: widget.targetUserId,
-            force: false, // KHÔNG ép tải lại
-            useCache: true, // ƯU TIÊN cache để render ngay
-            backgroundRefresh: true, // cache cũ thì refresh NGẦM
+            force: false,
+            useCache: true,
+            backgroundRefresh: true,
           );
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: _ProfileBody(targetUserId: widget.targetUserId),
+    final theme = Theme.of(context);
+    final overlay = theme.brightness == Brightness.dark
+        ? SystemUiOverlayStyle.light
+        : SystemUiOverlayStyle.dark;
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: overlay,
+      child: Scaffold(
+        body: _ProfileBody(targetUserId: widget.targetUserId),
       ),
     );
   }
@@ -124,8 +129,8 @@ class _ProfileBodyState extends State<_ProfileBody> {
     final sc = context.read<SocialController>();
     await sc.loadUserProfile(
       targetUserId: widget.targetUserId,
-      force: true, // ÉP tải mới
-      useCache: true, // vẫn render cache trước khi tải
+      force: true,
+      useCache: true,
       backgroundRefresh: false,
     );
   }
@@ -176,41 +181,12 @@ class _ProfileBodyState extends State<_ProfileBody> {
             widget.targetUserId!.isEmpty ||
             widget.targetUserId == myId);
 
-        Widget tabContent;
-        switch (_currentTab) {
-          case _ProfileTab.about:
-            tabContent = _ProfileAboutSection(user: safeHeaderUser);
-            break;
-          case _ProfileTab.photos:
-            tabContent =
-                _ProfilePhotosSection(targetUserId: widget.targetUserId);
-            break;
-          case _ProfileTab.reels:
-            tabContent =
-                _ProfileReelsSection(targetUserId: widget.targetUserId);
-            break;
-          case _ProfileTab.posts:
-          default:
-            tabContent = _ProfilePostsSection(
-              user: safeHeaderUser,
-              posts: posts,
-              isLoadingMore: loadingPosts,
-              onLoadMore: () {
-                sc.loadMoreProfilePosts(
-                    targetUserId: widget.targetUserId, limit: 10);
-              },
-              onShowAbout: _switchToAbout,
-              isSelf: isSelf,
-            );
-        }
-
         return RefreshIndicator(
           onRefresh: _handleRefresh,
           child: CustomScrollView(
             key: const PageStorageKey('profile_scroll'),
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
-              _ProfileAppBar(user: safeHeaderUser),
               SliverToBoxAdapter(
                 child: _ProfileHeaderSection(
                   user: safeHeaderUser,
@@ -218,12 +194,13 @@ class _ProfileBodyState extends State<_ProfileBody> {
                   currentTab: _currentTab,
                   onTabSelected: (_ProfileTab tab) async {
                     setState(() => _currentTab = tab);
+
                     if (tab == _ProfileTab.reels) {
                       final viewedId = widget.targetUserId ??
                           sc.profileHeaderUser?.id ??
                           sc.currentUser?.id;
                       if ((sc.profileReels.isEmpty ||
-                              sc.reelsForUserId != viewedId) &&
+                          sc.reelsForUserId != viewedId) &&
                           !sc.isLoadingProfileReels) {
                         await sc.refreshProfileReels(
                             targetUserId: viewedId, limit: 20);
@@ -233,9 +210,32 @@ class _ProfileBodyState extends State<_ProfileBody> {
                   isSelf: isSelf,
                 ),
               ),
-              SliverToBoxAdapter(child: tabContent),
+
+              SliverToBoxAdapter(
+                child: IndexedStack(
+                  index: _currentTab.index,
+                  children: [
+                    _ProfilePostsSection(
+                      user: safeHeaderUser,
+                      posts: posts,
+                      isLoadingMore: loadingPosts,
+                      onLoadMore: () {
+                        sc.loadMoreProfilePosts(
+                            targetUserId: widget.targetUserId, limit: 10);
+                      },
+                      onShowAbout: _switchToAbout,
+                      isSelf: isSelf,
+                    ),
+                    _ProfileAboutSection(user: safeHeaderUser),
+                    _ProfileReelsSection(targetUserId: widget.targetUserId),
+                    _ProfilePhotosSection(targetUserId: widget.targetUserId),
+                  ],
+                ),
+              ),
+
               const SliverToBoxAdapter(
-                  child: SizedBox(height: Dimensions.paddingSizeExtraLarge)),
+                child: SizedBox(height: Dimensions.paddingSizeExtraLarge),
+              ),
               if (loadingProfile && headerUser == null)
                 const SliverToBoxAdapter(
                   child: Padding(
@@ -318,6 +318,12 @@ class _ProfileHeaderSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final mediaPaddingTop = MediaQuery.of(context).padding.top;
+    final isDark = theme.brightness == Brightness.dark;
+    const Color fbBlue = Color(0xFF2374E1);
+    final Color storyBg = isDark ? const Color(0xFF3A3B3C) : const Color(0xFFE4E6EB);
+    final Color storyFg = isDark ? Colors.white : Colors.black87;
+    final hasCover = user.coverUrl?.isNotEmpty == true;
     final fullName = (() {
       final first = (user.firstName ?? '').trim();
       final last = (user.lastName ?? '').trim();
@@ -334,196 +340,159 @@ class _ProfileHeaderSection extends StatelessWidget {
       children: [
         // === COVER + AVATAR ===
         SizedBox(
-          height: 220,
+          height: 300,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
               Positioned.fill(
-                child: user.coverUrl?.isNotEmpty == true
-                    ? Image.network(
-                        user.coverUrl!,
-                        fit: BoxFit.cover,
-                        loadingBuilder: (_, child, progress) => progress == null
-                            ? child
-                            : Container(
-                                color: Colors.grey.shade200,
-                                child: const Center(
-                                    child: CircularProgressIndicator())),
-                        errorBuilder: (_, __, ___) => _CoverFallback(),
-                      )
+                child: hasCover
+                    ? Hero(
+                  tag: 'cover_${user.id}',
+                  child: GestureDetector(
+                    onTap: () {
+                      final url = user.coverUrl;
+                      if (url == null || url.isEmpty) return;
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => FullscreenGalleryLite(
+                            urls: [url],
+                            heroTags: ['cover_${user.id}'],
+                          ),
+                        ),
+                      );
+                    },
+                    child: Image.network(
+                      user.coverUrl!,
+                      fit: BoxFit.cover,
+                      loadingBuilder: (_, child, progress) =>
+                      progress == null
+                          ? child
+                          : Container(
+                        color: Colors.grey.shade200,
+                        child: const Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                      ),
+                      errorBuilder: (_, __, ___) => _CoverFallback(),
+                    ),
+                  ),
+                )
                     : _CoverFallback(),
               ),
               Positioned(
+                top: mediaPaddingTop + 8,
+                left: 12,
+                child: const _GlassBackButton(),
+              ),
+              Positioned(
                 left: 16,
-                bottom: -40,
+                bottom: -56,
                 child: Container(
-                  width: 110,
-                  height: 110,
+                  width: 160,
+                  height: 160,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white, width: 4),
                     boxShadow: const [
                       BoxShadow(
-                          color: Colors.black26,
-                          blurRadius: 12,
-                          offset: Offset(0, 6))
+                        color: Colors.black26,
+                        blurRadius: 18,
+                        offset: Offset(0, 8),
+                      ),
                     ],
                   ),
                   child: ClipOval(
                     child: user.avatarUrl?.isNotEmpty == true
-                        ? Image.network(
-                            user.avatarUrl!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) =>
-                                const _AvatarFallback(),
-                          )
+                        ? Hero(
+                      tag: 'avatar_${user.id}',
+                      child: GestureDetector(
+                        onTap: () {
+                          final url = user.avatarUrl;
+                          if (url == null || url.isEmpty) return;
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => FullscreenGalleryLite(
+                                urls: [url],
+                                heroTags: ['avatar_${user.id}'],
+                              ),
+                            ),
+                          );
+                        },
+                        child: Image.network(
+                          user.avatarUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const _AvatarFallback(),
+                        ),
+                      ),
+                    )
                         : const _AvatarFallback(),
                   ),
                 ),
               ),
-              // === NÚT VÍ ===
-              if (isSelf)
-                Positioned(
-                  right: 16,
-                  bottom: -15,
-                  child: GestureDetector(
-                    onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const WalletScreen())
-                    ),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Colors.white.withOpacity(0.7),
-                            Colors.white.withOpacity(0.3),
-                          ],
-                        ),
-                        borderRadius: BorderRadius.circular(40),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.5),
-                          width: 1.5,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 20,
-                            offset: const Offset(0, 4),
-                            spreadRadius: -5,
-                          ),
-                          BoxShadow(
-                            color: Colors.white.withOpacity(0.4),
-                            blurRadius: 10,
-                            offset: const Offset(-2, -2),
-                          ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(40),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.account_balance_wallet_rounded,
-                                color: Colors.blue.shade600,
-                                size: 22,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                getTranslated('my_wallet', context) ?? 'Ví của tôi',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.black.withOpacity(0.85),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
             ],
           ),
         ),
-        const SizedBox(height: 70),
-        // ===== NAME + VERIFIED BADGE =====
+        const SizedBox(height: 55),
+        // ===== NAME + VERIFIED BADGE + WALLET (SELF) =====
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              // Tên + badge đỏ
               Expanded(
-                child: Text(
-                  fullName,
-                  style: const TextStyle(
-                      fontSize: 24, fontWeight: FontWeight.w800),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        fullName,
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (user.isVerified) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        width: 20,
+                        height: 20,
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: const Icon(
+                          Icons.check,
+                          size: 14,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-              const SizedBox(width: 6),
-              if (user.isVerified)
-                Container(
-                  width: 20,
-                  height: 20,
-                  decoration: const BoxDecoration(
-                      color: Colors.red, shape: BoxShape.circle),
-                  alignment: Alignment.center,
-                  child: const Icon(Icons.check, size: 14, color: Colors.white),
-                ),
-              const SizedBox(width: 4),
-              const Icon(Icons.keyboard_arrow_down, size: 20),
+
+              // Ví của tôi – chỉ hiện với profile cá nhân
+              if (isSelf) ...[
+                const SizedBox(width: 8),
+                _WalletStoryStyleButton(),
+              ],
             ],
           ),
         ),
-        // ===== USERNAME =====
-        Builder(
-          builder: (_) {
-            final hasFirst = user.firstName?.trim().isNotEmpty == true;
-            final hasLast = user.lastName?.trim().isNotEmpty == true;
-            final hasFullName = hasFirst || hasLast;
-            final handle = (user.userName?.trim().isNotEmpty == true)
-                ? (user.userName!.startsWith('@')
-                    ? user.userName!
-                    : '@${user.userName!}')
-                : null;
-            if (hasFullName && handle != null) {
-              return Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-                child: Text(
-                  handle,
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: theme.hintColor),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              );
-            }
-            return const SizedBox.shrink();
-          },
-        ),
+
         const SizedBox(height: 4),
         // ===== FOLLOWERS/FOLLOWING =====
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Builder(builder: (context) {
             final theme = Theme.of(context);
-            final sc =
-                context.watch<SocialController>(); // lắng nghe để rebuild
+            final sc = context.watch<SocialController>();
             final isViewingSame = sc.profileHeaderUser?.id == user.id;
-
-            // Ưu tiên length của state nếu đang xem đúng user;
-            // fallback về số trong user.*Count khi list chưa có.
             final followersCount = isViewingSame && sc.followers.isNotEmpty
                 ? sc.followers.length
                 : (user.followersCount ?? 0);
@@ -575,166 +544,227 @@ class _ProfileHeaderSection extends StatelessWidget {
           child: Column(
             children: [
               if (isSelf) ...[
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: FilledButton.icon(
-                        onPressed: () {},
-                        icon: const Icon(Icons.work_outline, size: 18),
-                        label: Text(
-                          getTranslated('professional_tools', context) ??
-                              'Công cụ chuyên nghiệp',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w600, fontSize: 13.5),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF3B82F6),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 16, horizontal: 12),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30)),
-                          elevation: 1,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      flex: 2,
-                      child: OutlinedButton(
-                        onPressed: () {
-                          Navigator.of(context).push(MaterialPageRoute(
-                            builder: (_) => const SocialCreateStoryScreen(),
-                            fullscreenDialog: true,
-                          ));
-                        },
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 16, horizontal: 10),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30)),
-                          side:
-                              BorderSide(color: theme.dividerColor, width: 1.2),
-                        ),
-                        child: Text(
-                          getTranslated('add_to_story', context) ??
-                              '+ Thêm vào tin',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w600, fontSize: 13),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                      ),
-                    ),
-                  ],
+        Row(
+        children: [
+        // ===== NÚT CÔNG CỤ CHUYÊN NGHIỆP =====
+        Expanded(
+        flex: 3,
+          child: Builder(
+            builder: (context) {
+              const fbBlue = Color(0xFF1877F2);
+
+              return FilledButton.icon(
+                onPressed: () {
+                  // TODO: xử lý như cũ
+                },
+                icon: const Icon(Icons.work_outline, size: 18),
+                label: Text(
+                  getTranslated('professional_tools', context) ??
+                      'Công cụ chuyên nghiệp',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13.5,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
-                const SizedBox(height: 10),
+                style: FilledButton.styleFrom(
+                  backgroundColor: fbBlue,
+                  foregroundColor: Colors.white,
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                ),
+              );
+            },
+          ),
+        ),
+
+        const SizedBox(width: 10),
+
+        // ===== NÚT THÊM VÀO TIN =====
+          Expanded(
+            flex: 2,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const SocialCreateStoryScreen(),
+                    fullscreenDialog: true,
+                  ),
+                );
+              },
+              icon: const Icon(Icons.add, size: 18),
+              label: Text(
+                getTranslated('add_to_story', context) ?? 'Thêm vào tin',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+              style: OutlinedButton.styleFrom(
+                backgroundColor: storyBg,
+                foregroundColor: storyFg,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                minimumSize: const Size(0, 44),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                side: isDark
+                    ? const BorderSide(
+                  color: fbBlue, // ✅ viền xanh nước biển khi nền tối
+                  width: 1.2,
+                )
+                    : BorderSide.none, // ✅ nền sáng thì không có viền
+              ),
+            ),
+          ),
+        ],
+    ),
+    const SizedBox(height: 10),
                 Row(
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () {
-                          Navigator.of(context).push(MaterialPageRoute(
-                            builder: (_) => EditProfileScreen(
-                                profile: user, onSave: (updatedProfile) {}),
-                          ));
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => EditProfileScreen(
+                                profile: user,
+                                onSave: (updatedProfile) {},
+                              ),
+                            ),
+                          );
                         },
                         icon: const Icon(Icons.edit, size: 18),
                         label: Text(
                           getTranslated('edit_profile', context) ??
                               'Chỉnh sửa trang cá nhân',
                           style: const TextStyle(
-                              fontWeight: FontWeight.w600, fontSize: 13.5),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13.5,
+                          ),
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
                         ),
                         style: OutlinedButton.styleFrom(
+                          backgroundColor: theme.brightness == Brightness.dark
+                              ? const Color(0xFF3A3B3C)
+                              : const Color(0xFFF0F2F5),
+                          foregroundColor: theme.brightness == Brightness.dark
+                              ? Colors.white
+                              : Colors.black87,
                           padding: const EdgeInsets.symmetric(
-                              vertical: 14, horizontal: 12),
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                          minimumSize: const Size(0, 40),
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30)),
-                          side:
-                              BorderSide(color: theme.dividerColor, width: 1.2),
+                              borderRadius: BorderRadius.circular(10),
+                          ),
+                          side: BorderSide.none,
+                          elevation: 0,
                         ),
                       ),
                     ),
                     const SizedBox(width: 10),
-                    _MoreCircleButton(
-                        onPressed: () => _showSelfProfileMenu(context, user)),
+                    _MoreRectButton(
+                      onPressed: () => _showSelfProfileMenu(context, user),
+                    ),
                   ],
                 ),
               ] else ...[
                 Row(
                   children: [
+                    // ===== NÚT THEO DÕI (XANH FB) =====
                     Expanded(
                       flex: 3,
                       child: Consumer<SocialController>(
                         builder: (context, sc, __) {
                           final bool busy = sc.isFollowBusy(user.id);
                           final bool following =
-                              sc.profileHeaderUser?.id == user.id
-                                  ? (sc.profileHeaderUser?.isFollowing ??
-                                      user.isFollowing)
-                                  : user.isFollowing;
+                          sc.profileHeaderUser?.id == user.id
+                              ? (sc.profileHeaderUser?.isFollowing ??
+                              user.isFollowing)
+                              : user.isFollowing;
+
                           return FilledButton.icon(
                             onPressed: busy
                                 ? null
                                 : () async {
-                                    await context
-                                        .read<SocialController>()
-                                        .toggleFollowUser(
-                                            targetUserId: user.id);
-                                  },
+                              await context
+                                  .read<SocialController>()
+                                  .toggleFollowUser(
+                                  targetUserId: user.id);
+                            },
                             icon: busy
                                 ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2))
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                              ),
+                            )
                                 : Icon(
-                                    following
-                                        ? Icons.check
-                                        : Icons.person_add_alt_1,
-                                    size: 18),
+                              following
+                                  ? Icons.check
+                                  : Icons.person_add_alt_1,
+                              size: 18,
+                            ),
                             label: Text(
                               following
                                   ? (getTranslated('following', context) ??
-                                      'Đang theo dõi')
+                                  'Đang theo dõi')
                                   : (getTranslated('follow', context) ??
-                                      'Theo dõi'),
+                                  'Theo dõi'),
                               overflow: TextOverflow.ellipsis,
                               maxLines: 1,
                               style: const TextStyle(
-                                  fontWeight: FontWeight.w600, fontSize: 13.5),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13.5,
+                              ),
                             ),
                             style: FilledButton.styleFrom(
+                              backgroundColor: fbBlue, // xanh facebook
+                              foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(
-                                  vertical: 16, horizontal: 12),
+                                vertical: 14,
+                                horizontal: 12,
+                              ),
                               shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(30)),
-                              elevation: 1,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              elevation: 0,
                             ),
                           );
                         },
                       ),
                     ),
+
                     const SizedBox(width: 10),
+
+                    // ===== NÚT NHẮN TIN (NỀN XÁM NHẸ) =====
                     Expanded(
                       flex: 2,
-                      child: OutlinedButton.icon(
+                      child: FilledButton.icon(
                         onPressed: () async {
                           final sp = await SharedPreferences.getInstance();
                           final token =
-                              sp.getString(AppConstants.socialAccessToken);
+                          sp.getString(AppConstants.socialAccessToken);
                           if (token == null || token.isEmpty) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                  content: Text(getTranslated(
-                                          'not_logged_in_social', context) ??
-                                      'Bạn chưa đăng nhập MXH')),
+                                content: Text(
+                                  getTranslated(
+                                      'not_logged_in_social', context) ??
+                                      'Bạn chưa đăng nhập MXH',
+                                ),
+                              ),
                             );
                             return;
                           }
@@ -753,38 +783,55 @@ class _ProfileHeaderSection extends StatelessWidget {
                             ),
                           );
                         },
-                        icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                        icon: const Icon(
+                          Icons.chat_bubble_outline,
+                          size: 18,
+                          color: Colors.black,
+                        ),
                         label: Text(
                           getTranslated('messages', context) ?? 'Nhắn tin',
                           style: const TextStyle(
-                              fontWeight: FontWeight.w600, fontSize: 13.5),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13.5,
+                            color: Colors.black87,
+                          ),
                         ),
-                        style: OutlinedButton.styleFrom(
+                        style: FilledButton.styleFrom(
+                          backgroundColor:
+                          isDark ? const Color(0xFF3A3B3C) : const Color(0xFFE4E6EB),
+                          foregroundColor:
+                          isDark ? Colors.white : Colors.black87,
                           padding: const EdgeInsets.symmetric(
-                              vertical: 14, horizontal: 12),
+                            vertical: 14,
+                            horizontal: 12,
+                          ),
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30)),
-                          side:
-                              BorderSide(color: theme.dividerColor, width: 1.2),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          elevation: 0,
                         ),
                       ),
                     ),
+
                     const SizedBox(width: 10),
+
+                    // ===== NÚT "..." NHỎ =====
                     _MoreCircleButton(
-                        onPressed: () => _showOtherProfileMenu(context, user)),
+                      onPressed: () => _showOtherProfileMenu(context, user),
+                    ),
                   ],
                 ),
               ],
             ],
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
         // ===== TAB BAR =====
-        SizedBox(
-          height: 44,
-          child: ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            scrollDirection: Axis.horizontal,
+        Container(
+          color: theme.scaffoldBackgroundColor,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               _SimpleTab(
                 label: getTranslated('posts', context) ?? 'Bài viết',
@@ -809,10 +856,7 @@ class _ProfileHeaderSection extends StatelessWidget {
             ],
           ),
         ),
-        Divider(
-            height: 1,
-            thickness: 0.8,
-            color: theme.dividerColor.withOpacity(0.5)),
+        const SizedBox(height: 4),
       ],
     );
   }
@@ -846,7 +890,6 @@ class _ProfileHeaderSection extends StatelessWidget {
                 (start + pageSize < all.length) ? '${start + pageSize}' : null;
             return MemberPage(users: pageUsers, nextCursor: next);
           },
-          // === Điều hướng sang Profile khi chạm 1 user ===
           onUserTap: (u) {
             Navigator.of(context).pop();
             Future.microtask(() {
@@ -882,7 +925,6 @@ class _ProfileHeaderSection extends StatelessWidget {
                 (start + pageSize < all.length) ? '${start + pageSize}' : null;
             return MemberPage(users: pageUsers, nextCursor: next);
           },
-          // === Điều hướng sang Profile khi chạm 1 user ===
           onUserTap: (u) {
             Navigator.of(context).pop();
             Future.microtask(() {
@@ -917,6 +959,45 @@ class _CoverFallback extends StatelessWidget {
   }
 }
 
+class _MoreRectButton extends StatelessWidget {
+  final VoidCallback onPressed;
+  const _MoreRectButton({required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final Color bg = isDark
+        ? const Color(0xFF3A3B3C)
+        : const Color(0xFFF0F2F5);
+    final Color borderColor = isDark
+        ? const Color(0xFF2374E1)
+        : Colors.transparent;
+
+    return SizedBox(
+      height: 46,
+      width: 44,
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          backgroundColor: bg,
+          padding: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          side: BorderSide(color: borderColor, width: isDark ? 1.4 : 0),
+        ),
+        child: Icon(
+          Icons.more_horiz,
+          size: 20,
+          color: isDark ? Colors.white : Colors.black87,
+        ),
+      ),
+    );
+  }
+}
+
 class _AvatarFallback extends StatelessWidget {
   const _AvatarFallback();
   @override
@@ -933,43 +1014,33 @@ class _AvatarFallback extends StatelessWidget {
 // ==============================
 // FOLLOWERS ROW
 // ==============================
+
 class _CompactFollowersRow extends StatelessWidget {
   final List<SocialUser> followers;
   const _CompactFollowersRow({required this.followers});
+
   @override
   Widget build(BuildContext context) {
-    final display = followers.take(6).toList();
-    final remain = followers.length - display.length;
+    final display = followers.take(8).toList();
+    if (display.isEmpty) return const SizedBox.shrink();
+
     return SizedBox(
-      height: 40,
-      child: Stack(
+      height: 44,
+      child: Row(
         children: [
-          for (int i = 0; i < display.length; i++)
-            Positioned(
-              left: i * 26.0,
+          for (final u in display)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
               child: CircleAvatar(
-                radius: 18,
+                radius: 20,
                 backgroundColor: Colors.white,
-                child: CircleAvatar(
-                  radius: 16,
-                  backgroundImage: display[i].avatarUrl?.isNotEmpty == true
-                      ? NetworkImage(display[i].avatarUrl!)
-                      : null,
-                  child: display[i].avatarUrl?.isNotEmpty != true
-                      ? const Icon(Icons.person, size: 16, color: Colors.grey)
-                      : null,
-                ),
-              ),
-            ),
-          if (remain > 0)
-            Positioned(
-              left: display.length * 26.0,
-              child: CircleAvatar(
-                radius: 18,
-                backgroundColor: Colors.grey.shade400,
-                child: Text('+$remain',
-                    style: const TextStyle(
-                        fontSize: 11, fontWeight: FontWeight.bold)),
+                foregroundColor: Colors.grey.shade700,
+                backgroundImage: (u.avatarUrl?.isNotEmpty ?? false)
+                    ? NetworkImage(u.avatarUrl!)
+                    : null,
+                child: (u.avatarUrl?.isEmpty ?? true)
+                    ? const Icon(Icons.person, size: 18)
+                    : null,
               ),
             ),
         ],
@@ -981,39 +1052,49 @@ class _CompactFollowersRow extends StatelessWidget {
 // ==============================
 // TAB ITEM
 // ==============================
+
 class _SimpleTab extends StatelessWidget {
   final String label;
   final bool active;
   final VoidCallback onTap;
-  const _SimpleTab(
-      {required this.label, required this.onTap, this.active = false});
+
+  const _SimpleTab({
+    required this.label,
+    required this.onTap,
+    this.active = false,
+  });
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    const fbBlue = Color(0xFF1877F2);
+
+    final Color activeBg =
+    isDark ? fbBlue.withOpacity(0.25) : const Color(0xFFE7F3FF);
+    final Color activeText = fbBlue;
+    final Color inactiveText =
+    isDark ? Colors.white.withOpacity(0.85) : Colors.black87;
+
     return InkWell(
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(16),
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.only(right: 12),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        margin: const EdgeInsets.only(right: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        constraints: const BoxConstraints(minHeight: 32),
+        alignment: Alignment.center, // 🔥 text luôn giữa theo chiều dọc
         decoration: BoxDecoration(
-          color: active
-              ? theme.colorScheme.primary.withOpacity(0.12)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          border: active
-              ? Border.all(
-                  color: theme.colorScheme.primary.withOpacity(0.6), width: 1.2)
-              : null,
+          color: active ? activeBg : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
         ),
         child: Text(
           label,
           style: TextStyle(
             fontSize: 13.5,
-            fontWeight: active ? FontWeight.w700 : FontWeight.w600,
-            color: active
-                ? theme.colorScheme.primary
-                : theme.textTheme.bodyMedium?.color?.withOpacity(0.9),
+            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+            color: active ? activeText : inactiveText,
           ),
         ),
       ),
@@ -1304,6 +1385,7 @@ class _ProfilePostsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     if (posts.isEmpty) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1334,7 +1416,7 @@ class _ProfilePostsSection extends StatelessWidget {
         for (int i = 0; i < posts.length; i++) ...[
           // 1 bài viết – vẫn full bề ngang
           Container(
-            color: Colors.white, // nền trắng của post
+            color: theme.cardColor, // nền trắng của post
             child: SocialPostCard(post: posts[i]),
           ),
 
@@ -1342,7 +1424,7 @@ class _ProfilePostsSection extends StatelessWidget {
           if (i != posts.length - 1)
             Container(
               height: 8, // độ dày dải xám
-              color: const Color(0xFFF0F2F5), // màu nền xám nhạt kiểu Facebook
+              color: theme.scaffoldBackgroundColor, // màu nền xám nhạt kiểu Facebook
             ),
         ],
         const SizedBox(height: Dimensions.paddingSizeDefault),
@@ -1369,20 +1451,70 @@ class _ProfilePostsSection extends StatelessWidget {
 class _MoreCircleButton extends StatelessWidget {
   final VoidCallback onPressed;
   const _MoreCircleButton({required this.onPressed});
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    return Container(
-      height: 50,
-      width: 50,
-      decoration: BoxDecoration(
-        color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: theme.dividerColor, width: 1.2),
+
+    return SizedBox(
+      height: 48,
+      width: 48,
+      child: TextButton(
+        onPressed: onPressed,
+        style: TextButton.styleFrom(
+          padding: EdgeInsets.zero,
+          backgroundColor:
+          isDark ? const Color(0xFF3A3B3C) : const Color(0xFFE4E6EB),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10), // bo vuông kiểu FB
+          ),
+        ),
+        child: Icon(
+          Icons.more_horiz,
+          size: 20,
+          color: isDark ? Colors.white : Colors.black87,
+        ),
       ),
-      child: IconButton(
-          onPressed: onPressed, icon: const Icon(Icons.more_horiz, size: 22)),
+    );
+  }
+}
+
+class _GlassBackButton extends StatelessWidget {
+  const _GlassBackButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final bg = isDark
+        ? Colors.black.withOpacity(0.35)
+        : Colors.white.withOpacity(0.75);
+    final border = isDark
+        ? Colors.white.withOpacity(0.25)
+        : Colors.black.withOpacity(0.08);
+    final iconColor = isDark ? Colors.white : Colors.black87;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: border, width: 1),
+          ),
+          child: IconButton(
+            padding: EdgeInsets.zero,
+            icon: Icon(Icons.arrow_back, color: iconColor, size: 22),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -2360,6 +2492,48 @@ class _FullscreenGalleryLiteState extends State<FullscreenGalleryLite>
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _WalletStoryStyleButton extends StatelessWidget {
+  const _WalletStoryStyleButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final label = getTranslated('my_wallet', context) ?? 'My wallet';
+    const Color fbBlue = Color(0xFF2374E1);
+
+    return FilledButton.icon(
+      onPressed: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const WalletScreen()),
+        );
+      },
+      icon: const Icon(
+        Icons.account_balance_wallet_outlined,
+        size: 16,
+      ),
+      label: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      style: FilledButton.styleFrom(
+        backgroundColor: fbBlue,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 8,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        elevation: 0,
       ),
     );
   }

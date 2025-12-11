@@ -8,6 +8,9 @@ class LocationModel {
   final String slug;
   final String imageUrl;
   final int toursCount;
+  final double mapLat;
+  final double mapLng;
+  final double mapZoom;
 
   LocationModel({
     required this.id,
@@ -15,15 +18,27 @@ class LocationModel {
     required this.slug,
     required this.imageUrl,
     required this.toursCount,
+    required this.mapLat,
+    required this.mapLng,
+    required this.mapZoom,
   });
 
   factory LocationModel.fromJson(Map<String, dynamic> json) {
+    final lat = double.tryParse(json['map_lat']?.toString() ?? '');
+    final lng = double.tryParse(json['map_lng']?.toString() ?? '');
+    final zoom = double.tryParse(json['map_zoom']?.toString() ?? '');
+
+    print("📌 [LocationModel] Loaded: ${json['name']} → lat=$lat, lng=$lng, zoom=$zoom");
+
     return LocationModel(
       id: json['id'] ?? 0,
       name: json['name'] ?? 'Unknown',
       slug: json['slug'] ?? '',
       imageUrl: json['image_url'] ?? '',
       toursCount: json['tours_count'] ?? 0,
+      mapLat: lat ?? 0.0,
+      mapLng: lng ?? 0.0,
+      mapZoom: zoom ?? 10.0,
     );
   }
 
@@ -34,6 +49,11 @@ class LocationModel {
       'slug': slug,
       'image_url': imageUrl,
       'tours_count': toursCount,
+
+      // ⭐ Lưu lại vào cache
+      'map_lat': mapLat,
+      'map_lng': mapLng,
+      'map_zoom': mapZoom,
     };
   }
 }

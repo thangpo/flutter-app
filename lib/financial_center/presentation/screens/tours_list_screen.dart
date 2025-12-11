@@ -1,4 +1,3 @@
-// tour_list_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/services/tour_service.dart';
 import '../services/location_service.dart';

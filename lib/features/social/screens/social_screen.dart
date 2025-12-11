@@ -269,7 +269,7 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
     final double toolbarHeight =
         isIOSPlatform ? iosToolbarHeight : kToolbarHeight;
     final double listTopPadding =
-        statusBar + (_chromeVisible ? toolbarHeight + 8 : 8);
+    _chromeVisible ? 8.0 : statusBar + 8.0;
     final double listBottomPadding = mediaQuery.padding.bottom + 16;
 
     final Widget feedContent = Stack(
@@ -498,32 +498,28 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
 
     final PreferredSizeWidget? materialAppBar = !isIOSPlatform
         ? AppBar(
-            backgroundColor: pageBg,
-            elevation: 0,
-            titleSpacing: 0,
-            title: Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: Image.asset(
-                logoAsset,
-                height: 32,
-                fit: BoxFit.contain,
-              ),
-            ),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.search),
-                onPressed: openSearch,
-              ),
-              IconButton(
-                icon: const Icon(Icons.people_alt_outlined),
-                onPressed: openFriends,
-              ),
-              IconButton(
-                icon: const Icon(Icons.message_outlined),
-                onPressed: openMessages,
-              ),
-            ],
-          )
+      backgroundColor: pageBg,
+      elevation: 0,
+      titleSpacing: 0,
+      title: Padding(
+        padding: const EdgeInsets.only(left: 8),
+        child: Image.asset(
+          logoAsset,
+          height: 32,
+          fit: BoxFit.contain,
+        ),
+      ),
+      actions: [
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: _HeaderActionsPill(
+            onSearch: openSearch,
+            onFriends: openFriends,
+            onMessages: openMessages,
+          ),
+        ),
+      ],
+    )
         : null;
 
     final AdaptiveAppBar adaptiveAppBar = AdaptiveAppBar(
@@ -620,87 +616,123 @@ class _WhatsOnYourMind extends StatelessWidget {
       return null;
     }();
 
+    final String placeholder =
+        getTranslated('whats_on_your_mind', context) ??
+            "What's on your mind?";
+
+    void openComposer() {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const SocialCreatePostScreen(),
+          fullscreenDialog: true,
+        ),
+      );
+    }
+
+    void openProfile() {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const ProfileScreen(),
+        ),
+      );
+    }
+
     return Material(
       color: cs.surface,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            InkWell(
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                );
-              },
-              borderRadius: BorderRadius.circular(999),
-              child: CircleAvatar(
-                radius: 20,
-                backgroundColor: cs.surfaceVariant,
-                backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
-                    ? CachedNetworkImageProvider(avatarUrl)
-                    : null,
-                child: (avatarUrl == null || avatarUrl.isEmpty)
-                    ? Icon(Icons.person, color: cs.onSurface.withOpacity(.6))
-                    : null,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const SocialCreatePostScreen(),
-                        fullscreenDialog: true,
-                      ),
-                    );
-                  },
-                  borderRadius: BorderRadius.circular(12),
-                  child: Builder(
-                    builder: (context) {
-                      final cs = Theme.of(
-                        context,
-                      ).colorScheme;
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: cs.surfaceVariant.withOpacity(.5),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          getTranslated(
-                                'whats_on_your_mind',
-                                context,
-                              ) ??
-                              "What's on your mind?",
-                          style: TextStyle(
-                            color: cs.onSurface.withOpacity(.7),
-                            fontSize: 16,
-                          ),
-                        ),
-                      );
-                    },
+      elevation: 1, // giống card FB
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                // Avatar
+                InkWell(
+                  onTap: openProfile,
+                  borderRadius: BorderRadius.circular(999),
+                  child: CircleAvatar(
+                    radius: 20,
+                    backgroundColor: cs.surfaceVariant,
+                    backgroundImage: (avatarUrl != null &&
+                        avatarUrl.isNotEmpty)
+                        ? CachedNetworkImageProvider(avatarUrl)
+                        : null,
+                    child: (avatarUrl == null || avatarUrl.isEmpty)
+                        ? Icon(
+                      Icons.person,
+                      color: cs.onSurface.withOpacity(.6),
+                    )
+                        : null,
                   ),
                 ),
-              ),
+                const SizedBox(width: 10),
+
+                // Ô nhập status
+                Expanded(
+                  child: InkWell(
+                    onTap: openComposer,
+                    borderRadius: BorderRadius.circular(999),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: cs.surfaceVariant.withOpacity(
+                          theme.brightness == Brightness.light ? 0.7 : 0.3,
+                        ),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: cs.outline.withOpacity(0.2),
+                        ),
+                      ),
+                      child: Text(
+                        placeholder,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: cs.onSurface.withOpacity(.7),
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(width: 10),
+
+                // Nút +
+                InkWell(
+                  onTap: openComposer,
+                  customBorder: const CircleBorder(),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: cs.primary,
+                    ),
+                    child: const Icon(
+                      Icons.add,
+                      size: 18,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 12),
-            InkWell(
-              onTap: () {},
-              customBorder: const CircleBorder(),
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: const BoxDecoration(shape: BoxShape.circle),
-                child: Icon(Icons.add, color: cs.onSurface, size: 20),
-              ),
+          ),
+
+          // Đường kẻ mảnh phía dưới giống Facebook
+          Divider(
+            height: 1,
+            thickness: 0.6,
+            color: cs.outlineVariant.withOpacity(
+              theme.brightness == Brightness.light ? 0.6 : 0.4,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -728,9 +760,9 @@ class _StoriesSectionFromApiState extends State<_StoriesSectionFromApi> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final SocialUser? currentUser =
-        context.select<SocialController, SocialUser?>((c) => c.currentUser);
+    context.select<SocialController, SocialUser?>((c) => c.currentUser);
     final SocialStory? myStory = context.select<SocialController, SocialStory?>(
-      (c) => c.currentUserStory,
+          (c) => c.currentUserStory,
     );
 
     final List<SocialStory> orderedStories = _orderedStories(
@@ -740,7 +772,7 @@ class _StoriesSectionFromApiState extends State<_StoriesSectionFromApi> {
     );
 
     return Container(
-      height: 200,
+      height: 190, // thấp hơn một chút giống FB
       color: cs.surface,
       child: NotificationListener<ScrollNotification>(
         onNotification: (notification) {
@@ -754,7 +786,7 @@ class _StoriesSectionFromApiState extends State<_StoriesSectionFromApi> {
         },
         child: ListView.builder(
           scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
           itemCount: orderedStories.length + 1,
           itemBuilder: (context, index) {
             if (index == 0) {
@@ -767,17 +799,17 @@ class _StoriesSectionFromApiState extends State<_StoriesSectionFromApi> {
               onTap: story.items.isEmpty
                   ? null
                   : () {
-                      final int initialItem = _firstUnviewedItemIndex(story);
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => SocialStoryViewerScreen(
-                            stories: List<SocialStory>.from(orderedStories),
-                            initialStoryIndex: entryIndex,
-                            initialItemIndex: initialItem,
-                          ),
-                        ),
-                      );
-                    },
+                final int initialItem = _firstUnviewedItemIndex(story);
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => SocialStoryViewerScreen(
+                      stories: List<SocialStory>.from(orderedStories),
+                      initialStoryIndex: entryIndex,
+                      initialItemIndex: initialItem,
+                    ),
+                  ),
+                );
+              },
             );
           },
         ),
@@ -866,99 +898,234 @@ class _StoryCardFromApi extends StatelessWidget {
     final Color activeRingColor = cs.primary;
     final double ringBorderWidth = hasUnviewed ? 3 : 1.5;
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 110,
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          color: cs.surfaceVariant,
-        ),
-        child: Stack(
-          children: [
-            if (thumb != null && thumb.isNotEmpty)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image(
-                  image: CachedNetworkImageProvider(thumb),
-                  width: 110,
-                  height: double.infinity,
-                  fit: BoxFit.cover,
-                ),
-              ),
-            if (story.isAd)
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(.6),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Text(
-                    'Ads',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            Positioned(
-              top: 8,
-              left: 8,
-              child: Container(
-                padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  color: hasUnviewed ? activeRingColor : Colors.transparent,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: hasUnviewed
-                        ? cs.surface
-                        : Colors.white.withOpacity(0.4),
-                    width: ringBorderWidth,
-                  ),
-                ),
-                child: CircleAvatar(
-                  radius: 18,
-                  backgroundColor: cs.surfaceVariant,
-                  backgroundImage:
-                      (story.userAvatar != null && story.userAvatar!.isNotEmpty)
-                          ? CachedNetworkImageProvider(story.userAvatar!)
-                          : null,
-                  child: (story.userAvatar == null || story.userAvatar!.isEmpty)
-                      ? Icon(
-                          Icons.person,
-                          color: onSurface.withOpacity(.6),
-                          size: 20,
+    return Container(
+      width: 110,
+      margin: const EdgeInsets.symmetric(horizontal: 6),
+      child: Column(
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Material(
+                color: cs.surfaceVariant,
+                child: InkWell(
+                  onTap: onTap,
+                  child: Stack(
+                    children: [
+                      // ảnh story
+                      if (thumb != null && thumb.isNotEmpty)
+                        Positioned.fill(
+                          child: Image(
+                            image: CachedNetworkImageProvider(thumb),
+                            fit: BoxFit.cover,
+                          ),
                         )
-                      : null,
+                      else
+                        Positioned.fill(
+                          child: Container(color: cs.surfaceVariant),
+                        ),
+
+                      // gradient dưới
+                      Positioned.fill(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.bottomCenter,
+                              end: Alignment.topCenter,
+                              colors: [
+                                Colors.black.withOpacity(0.6),
+                                Colors.black.withOpacity(0.05),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      // avatar + viền xanh ở góc trên trái
+                      Positioned(
+                        top: 8,
+                        left: 8,
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            color: hasUnviewed
+                                ? activeRingColor
+                                : Colors.transparent,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: hasUnviewed
+                                  ? cs.surface
+                                  : Colors.white.withOpacity(0.5),
+                              width: ringBorderWidth,
+                            ),
+                          ),
+                          child: CircleAvatar(
+                            radius: 18,
+                            backgroundColor: cs.surfaceVariant,
+                            backgroundImage: (story.userAvatar != null &&
+                                story.userAvatar!.isNotEmpty)
+                                ? CachedNetworkImageProvider(
+                              story.userAvatar!,
+                            )
+                                : null,
+                            child: (story.userAvatar == null ||
+                                story.userAvatar!.isEmpty)
+                                ? Icon(
+                              Icons.person,
+                              color: onSurface.withOpacity(.7),
+                              size: 20,
+                            )
+                                : null,
+                          ),
+                        ),
+                      ),
+
+                      // tên user ở đáy
+                      Positioned(
+                        left: 8,
+                        right: 8,
+                        bottom: 8,
+                        child: Text(
+                          story.userName ?? '',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            shadows: [
+                              Shadow(
+                                color: Colors.black87,
+                                blurRadius: 4,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      // label "Ads" nếu là quảng cáo
+                      if (story.isAd)
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(.7),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Text(
+                              'Ads',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
-            Positioned(
-              bottom: 8,
-              left: 8,
-              right: 8,
-              child: Text(
-                story.userName ?? '',
-                style: TextStyle(
-                  color: onSurface,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  shadows: const [Shadow(color: Colors.black54, blurRadius: 4)],
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeaderActionsPill extends StatelessWidget {
+  final VoidCallback onSearch;
+  final VoidCallback onFriends;
+  final VoidCallback onMessages;
+
+  const _HeaderActionsPill({
+    required this.onSearch,
+    required this.onFriends,
+    required this.onMessages,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final bool isDark = theme.brightness == Brightness.dark;
+
+    final Color bgColor = isDark
+        ? Colors.white.withOpacity(0.06)
+        : Colors.white.withOpacity(0.95);
+
+    final Color borderColor = isDark
+        ? Colors.white.withOpacity(0.12)
+        : Colors.black.withOpacity(0.05);
+
+    final Color iconColor = isDark
+        ? Colors.white.withOpacity(0.9)
+        : cs.onSurface.withOpacity(0.85);
+
+    return Container(
+      // tăng padding để pill dài & cao hơn
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: borderColor, width: 1),
+        boxShadow: [
+          if (!isDark)
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 14,
+              offset: const Offset(0, 4),
             ),
-          ],
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _pillIconButton(
+            context: context,
+            icon: Icons.search,
+            color: iconColor,
+            onTap: onSearch,
+          ),
+          const SizedBox(width: 6),
+          _pillIconButton(
+            context: context,
+            icon: Icons.people_alt_outlined,
+            color: iconColor,
+            onTap: onFriends,
+          ),
+          const SizedBox(width: 6),
+          _pillIconButton(
+            context: context,
+            icon: Icons.message_outlined,
+            color: iconColor,
+            onTap: onMessages,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pillIconButton({
+    required BuildContext context,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: Padding(
+        // tăng vùng tap cho từng icon
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        child: Icon(
+          icon,
+          size: 22, // có thể tăng lên 24 nếu muốn
+          color: color,
         ),
       ),
     );
@@ -977,23 +1144,28 @@ class _CreateStoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ColorScheme cs = Theme.of(context).colorScheme;
+
     final social = context.watch<SocialController>();
     final profileCtrl = context.watch<ProfileController>();
     final fallbackProfile = profileCtrl.userInfoModel;
     final SocialUser? user = social.currentUser;
+
     final String? avatar = () {
       final List<String?> candidates = <String?>[
         user?.avatarUrl?.trim(),
-        fallbackProfile?.imageFullUrl?.path?.trim(),
+        fallbackProfile?.imageFullUrl?.toString().trim(),
         fallbackProfile?.image?.trim(),
       ];
       for (final value in candidates) {
-        if (value != null && value.isNotEmpty) {
-          return value;
-        }
+        if (value != null && value.isNotEmpty) return value;
       }
       return null;
     }();
+
+    final String label =
+        getTranslated('add_to_story', context) ??
+            getTranslated('create_story', context) ??
+            'Add to Story';
 
     void openCreateStory() {
       Navigator.of(context).push(
@@ -1007,67 +1179,93 @@ class _CreateStoryCard extends StatelessWidget {
     return Container(
       width: 110,
       margin: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(14)),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         child: Material(
-          color: Colors.transparent,
+          color: cs.surfaceVariant,
           child: InkWell(
             onTap: openCreateStory,
-              child: Stack(
-                children: [
-                  if (avatar != null && avatar.isNotEmpty)
-                    CachedNetworkImage(
-                      imageUrl: avatar,
-                    width: double.infinity,
-                    height: double.infinity,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: avatar != null && avatar.isNotEmpty
+                      ? CachedNetworkImage(
+                    imageUrl: avatar,
                     fit: BoxFit.cover,
                   )
-                else
-                  Container(color: cs.surfaceVariant),
+                      : Container(color: cs.surfaceVariant),
+                ),
                 Positioned.fill(
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
                         colors: [
-                          Colors.black.withOpacity(0.45),
                           Colors.black.withOpacity(0.05),
+                          Colors.black.withOpacity(0.45),
                         ],
-                        begin: Alignment.bottomCenter,
-                        end: Alignment.topCenter,
-                      ),
-                    ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 12,
-                    left: 0,
-                    right: 0,
-                    child: Center(
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: cs.primary,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                          boxShadow: const [
-                            BoxShadow(color: Colors.black26, blurRadius: 6),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.add,
-                          size: 18,
-                          color: Colors.white,
-                        ),
                       ),
                     ),
                   ),
-                ],
-              ),
+                ),
+                Positioned(
+                  top: 10,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.35),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.black38,
+                            blurRadius: 6,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.add,
+                        size: 20,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 10,
+                  right: 10,
+                  bottom: 10,
+                  child: Text(
+                    label,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      height: 1.1,
+                      shadows: [
+                        Shadow(
+                          color: Colors.black54,
+                          offset: Offset(0, 1),
+                          blurRadius: 3,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
+      ),
     );
   }
 }
