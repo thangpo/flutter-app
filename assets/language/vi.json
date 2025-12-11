@@ -1782,6 +1782,15 @@
   "location_service_disabled": "Vui lòng bật dịch vụ vị trí của thiết bị.",
   "location_permission_denied": "Ứng dụng không được cấp quyền vị trí.",
   "location_error": "Không lấy được vị trí hiện tại.",
-  "hotel_map_navigate_btn": "Dẫn đường"
+  "hotel_map_navigate_btn": "Dẫn đường",
+  "start_navigation": "Dẫn đường",
+  "view_tour": "Xem tour",
+  "swipe_down_close": "Vuốt xuống để đóng",
+  "price_per_person": "đ / người",
+  "choose_tour": "Chọn tour",
+  "tour_no_name": "Tour không tên",
+  "swipe_down_to_close": "Vuốt xuống để đóng",
+  "per_person": "người",
+  "navigate": "Dẫn đường"
 }
 

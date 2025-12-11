@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 import '../screens/hotel_map_screen.dart';
 import '../services/hotel_service.dart';
 import '../services/tour_service.dart';
+import 'package:geolocator/geolocator.dart';
 
 class TravelMapWidget extends StatefulWidget {
   const TravelMapWidget({super.key});
@@ -14,11 +15,15 @@ class TravelMapWidget extends StatefulWidget {
 
 class _TravelMapWidgetState extends State<TravelMapWidget> {
   final HotelService _hotelService = HotelService();
-
+  final Distance _distance = const Distance();
   final MapController _mapController = MapController();
 
   bool _isLoading = false;
   bool _isError = false;
+  bool _isWithin15Km(LatLng user, LatLng place) {
+    final meters = _distance(user, place);
+    return meters <= 15000;
+  }
   List<Map<String, dynamic>> _places = [];
 
   LatLng _center = const LatLng(21.0278, 105.8342);
@@ -37,38 +42,69 @@ class _TravelMapWidgetState extends State<TravelMapWidget> {
     });
 
     try {
-      final hotelsRaw = await _hotelService.fetchHotels(limit: 20);
-      final toursRaw = await TourService.fetchTours();
-      final hotels = _buildMapDataFromHotels(hotelsRaw);
-      final tours = _buildMapDataFromTours(toursRaw);
-      final all = <Map<String, dynamic>>[];
-      all.addAll(hotels);
-      all.addAll(tours);
-
-      LatLng? firstValid;
-      for (final p in all) {
-        final lat = p['lat'] as double?;
-        final lng = p['lng'] as double?;
-        if (lat != null && lng != null) {
-          firstValid = LatLng(lat, lng);
-          break;
-        }
+      // Lấy vị trí người dùng
+      final userPos = await _getUserLocation();
+      if (userPos == null) {
+        setState(() {
+          _isLoading = false;
+          _isError = true;
+        });
+        return;
       }
 
+      // Fetch data
+      final hotelsRaw = await _hotelService.fetchHotels(limit: 20);
+      final toursRaw = await TourService.fetchTours();
+
+      final hotels = _buildMapDataFromHotels(hotelsRaw);
+      final tours = _buildMapDataFromTours(toursRaw);
+
+      final List<Map<String, dynamic>> all = [...hotels, ...tours];
+
+      // Lọc theo khoảng cách 15km
+      final nearby = all.where((p) {
+        final lat = p['lat'] as double?;
+        final lng = p['lng'] as double?;
+        if (lat == null || lng == null) return false;
+
+        return _isWithin15Km(userPos, LatLng(lat, lng));
+      }).toList();
+
       setState(() {
-        _places = all;
-        if (firstValid != null) {
-          _center = firstValid!;
-          _zoom = 5.8;
-        }
+        _places = nearby;
+        _center = userPos;
+        _zoom = 12; // zoom cận hơn vì là khu vực gần user
         _isLoading = false;
       });
+
     } catch (e) {
-      debugPrint('Lỗi tải dữ liệu map travel: $e');
+      debugPrint("Lỗi load map: $e");
       setState(() {
         _isLoading = false;
         _isError = true;
       });
+    }
+  }
+
+  Future<LatLng?> _getUserLocation() async {
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        return null;
+      }
+
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      return LatLng(pos.latitude, pos.longitude);
+    } catch (e) {
+      debugPrint("Lỗi lấy vị trí user: $e");
+      return null;
     }
   }
 
@@ -141,37 +177,38 @@ class _TravelMapWidgetState extends State<TravelMapWidget> {
 
       return Marker(
         point: LatLng(lat, lng),
-        width: 120,
-        height: 70,
+        width: 130,
+        height: 90,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (shortTitle.isNotEmpty)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(999),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.16),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Text(
-                  shortTitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF111827),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(50),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.18),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
                   ),
+                ],
+              ),
+              child: Text(
+                shortTitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF111827),
                 ),
               ),
-            const SizedBox(height: 4),
+            ),
+
+            const SizedBox(height: 6),
+
             Container(
               padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(
@@ -185,12 +222,14 @@ class _TravelMapWidgetState extends State<TravelMapWidget> {
                   ),
                 ],
               ),
-              child: Icon(
-                isTour ? Icons.flag_rounded : Icons.hotel_rounded,
-                size: 22,
-                color: isTour
-                    ? const Color(0xFFEC4899)
-                    : const Color(0xFF10B981),
+              child: ClipOval(
+                child: Image.network(
+                  p['thumbnail'] ?? '',
+                  width: 44,
+                  height: 44,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const Icon(Icons.broken_image),
+                ),
               ),
             ),
           ],
@@ -295,6 +334,9 @@ class _TravelMapWidgetState extends State<TravelMapWidget> {
                   options: MapOptions(
                     initialCenter: _center,
                     initialZoom: _zoom,
+                    interactionOptions: const InteractionOptions(
+                      flags: InteractiveFlag.none,  // ⛔ Không cho kéo, zoom, xoay
+                    ),
                   ),
                   children: [
                     TileLayer(

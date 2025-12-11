@@ -27,23 +27,21 @@ class _LocationListWidgetState extends State<LocationListWidget> {
     setState(() => _isLoading = true);
     final prefs = await SharedPreferences.getInstance();
 
+    List<LocationModel>? backupCache;
+
     try {
-      // lấy cache trước cho mượt
       final cachedData = prefs.getString('cached_locations');
       if (cachedData != null) {
-        final List<dynamic> jsonList = jsonDecode(cachedData);
-        final cachedLocations =
-        jsonList.map((e) => LocationModel.fromJson(e)).toList();
+        final List list = jsonDecode(cachedData);
 
-        if (cachedLocations.isNotEmpty && mounted) {
-          setState(() {
-            _locations = cachedLocations;
-            _isLoading = false;
-          });
+        if (list.isNotEmpty && !list.first.containsKey('map_lat')) {
+          print("⚠️ Cache cũ không có map_lat → xoá cache");
+          await prefs.remove('cached_locations');
+        } else {
+          backupCache = list.map((e) => LocationModel.fromJson(e)).toList();
         }
       }
 
-      // gọi API mới
       final data = await LocationService.fetchLocations();
       final jsonList = data.map((e) => e.toJson()).toList();
       await prefs.setString('cached_locations', jsonEncode(jsonList));
@@ -54,9 +52,18 @@ class _LocationListWidgetState extends State<LocationListWidget> {
           _isLoading = false;
         });
       }
+
     } catch (e) {
-      debugPrint('Lỗi khi tải location: $e');
-      if (mounted) setState(() => _isLoading = false);
+      debugPrint("Lỗi load API Location → dùng cache backup: $e");
+
+      if (backupCache != null) {
+        setState(() {
+          _locations = backupCache!;
+          _isLoading = false;
+        });
+      } else {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -289,7 +296,6 @@ class _LocationCardState extends State<_LocationCard>
               borderRadius: BorderRadius.circular(16),
               child: Stack(
                 children: [
-                  // Ảnh nền – đơn giản, không setState khi load
                   Positioned.fill(
                     child: Image.network(
                       imageUrl.isNotEmpty
@@ -320,7 +326,6 @@ class _LocationCardState extends State<_LocationCard>
                     ),
                   ),
 
-                  // Lớp overlay xanh nhẹ
                   Positioned.fill(
                     child: Container(
                       decoration: BoxDecoration(
@@ -336,7 +341,6 @@ class _LocationCardState extends State<_LocationCard>
                     ),
                   ),
 
-                  // Lớp tối dần từ dưới lên
                   Positioned.fill(
                     child: Container(
                       decoration: BoxDecoration(

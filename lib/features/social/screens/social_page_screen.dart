@@ -1,3 +1,4 @@
+import 'dart:ui' show lerpDouble, ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -120,87 +121,143 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        backgroundColor: appBarBackground,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: appBarForeground),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          getTranslated('pages', context) ?? 'Trang',
-          style: theme.textTheme.titleMedium?.copyWith(
-            color: appBarForeground,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ) ??
-              TextStyle(
-                color: appBarForeground,
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-        ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.add, color: appBarForeground),
-            onPressed: _openCreatePage,
-            tooltip: getTranslated('create_page', context) ?? 'Tạo trang',
-          ),
-          IconButton(
-            icon: Icon(Icons.person, color: appBarForeground),
-            onPressed: () {
-              // TODO: mở profile social
-            },
-            tooltip: getTranslated('profile', context) ?? 'Hồ sơ',
-          ),
-          IconButton(
-            icon: Icon(Icons.search, color: appBarForeground),
-            onPressed: () {
-              // TODO: mở màn search page
-            },
-            tooltip: getTranslated('search', context) ?? 'Tìm kiếm',
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Container(
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(136),
+        child: Container(
+          decoration: BoxDecoration(
             color: appBarBackground,
-            child: TabBar(
-              controller: _tabController,
-              isScrollable: true,
-              indicatorColor: colorScheme.primary,
-              labelColor: colorScheme.primary,
-              unselectedLabelColor: unselectedTabColor,
-              labelStyle: theme.textTheme.labelMedium?.copyWith(
-                fontWeight: FontWeight.w600,
+            borderRadius: const BorderRadius.vertical(
+              bottom: Radius.circular(24),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 18,
+                offset: const Offset(0, 10),
               ),
-              tabs: [
-                Tab(
-                  text: getTranslated('for_you', context) ?? 'Dành cho bạn',
-                ),
-                Tab(
-                  text:
-                  getTranslated('your_pages', context) ?? 'Trang của bạn',
-                ),
-                Tab(
-                  text:
-                  getTranslated('liked_pages', context) ?? 'Đã thích',
-                ),
-              ],
-            ),
+            ],
           ),
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                _buildForYouTab(context),
-                _buildMyPagesTab(context),
-                _buildLikedPagesTab(context),
+                // ========== TOP ROW: BACK + TITLE + ACTIONS ==========
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Row(
+                    children: [
+                      _RoundIconButton(
+                        icon: Icons.arrow_back,
+                        onTap: () => Navigator.pop(context),
+                        background:
+                        theme.brightness == Brightness.dark
+                            ? Colors.white.withOpacity(0.06)
+                            : Colors.black.withOpacity(0.04),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        getTranslated('pages', context) ?? 'Pages',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: appBarForeground,
+                        ),
+                      ),
+                      const Spacer(),
+                      _RoundIconButton(
+                        icon: Icons.add,
+                        onTap: _openCreatePage,
+                      ),
+                      const SizedBox(width: 8),
+                      _RoundIconButton(
+                        icon: Icons.person,
+                        onTap: () {
+                          // TODO: mở profile social
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _RoundIconButton(
+                        icon: Icons.search,
+                        onTap: () {
+                          // TODO: mở search
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 6),
+
+                // ========== TAB BAR ==========
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Container(
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: theme.brightness == Brightness.dark
+                          ? Colors.white.withOpacity(0.06)
+                          : Colors.black.withOpacity(0.02),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: AnimatedBuilder(
+                      animation: _tabController.animation!,
+                      builder: (context, _) {
+                        final anim = _tabController.animation!;
+                        final page = anim.value;
+                        final distToNearest = (page - page.round()).abs().clamp(0.0, 0.5);
+                        final progress = (distToNearest / 0.5).clamp(0.0, 1.0);
+                        final radius = lerpDouble(12, 999, progress)!;
+
+                        return TabBar(
+                          controller: _tabController,
+                          isScrollable: false,
+                          dividerColor: Colors.transparent,
+                          indicator: BoxDecoration(
+                            color: colorScheme.primary,
+                            borderRadius: BorderRadius.circular(radius),
+                          ),
+                          indicatorSize: TabBarIndicatorSize.tab,
+
+                          labelColor: Colors.white,
+                          unselectedLabelColor: unselectedTabColor,
+                          labelStyle: theme.textTheme.labelMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                          tabs: [
+                            Tab(
+                              text: getTranslated('for_you', context) ?? 'For You',
+                            ),
+                            Tab(
+                              text:
+                              getTranslated('your_pages', context) ?? 'Your Pages',
+                            ),
+                            Tab(
+                              text:
+                              getTranslated('liked_pages', context) ?? 'Like Pages',
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 8),
               ],
             ),
           ),
+        ),
+      ),
+
+      // Chỉ còn TabBarView ở body thôi
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildForYouTab(context),
+          _buildMyPagesTab(context),
+          _buildLikedPagesTab(context),
         ],
       ),
     );
@@ -482,7 +539,7 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        childAspectRatio: 0.85,
+        childAspectRatio: 0.70,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
       ),
@@ -546,7 +603,7 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
     final String subtitle = _buildPageSubtitle(context, page);
 
     final bool isLiked = page.isLiked;
-    final bool disableLike = false; // sau này có trạng thái loading thì thay
+    final bool disableLike = false; // sau này thêm loading thì sửa
 
     void openPageDetail() {
       Navigator.of(context).push(
@@ -565,22 +622,9 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
         ? (getTranslated('liked_page', context) ?? 'Đã thích')
         : (getTranslated('like_page', context) ?? 'Thích trang');
 
-    final Widget buttonChild = Text(
-      buttonLabel,
-      style: theme.textTheme.labelLarge?.copyWith(
-        color: colorScheme.onPrimary,
-        fontWeight: FontWeight.w600,
-      ) ??
-          TextStyle(
-            color: colorScheme.onPrimary,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-    );
-
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(24),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: openPageDetail,
@@ -590,27 +634,48 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
           ),
           child: Stack(
             children: [
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.black.withValues(alpha: 0.05),
-                        Colors.black.withValues(alpha: 0.75),
-                      ],
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: FractionallySizedBox(
+                  heightFactor: 0.60,
+                  widthFactor: 1,
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(24),
+                      bottomRight: Radius.circular(24),
+                    ),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(
+                        sigmaX: 16,
+                        sigmaY: 16,
+                      ),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.black.withOpacity(0.05),
+                              Colors.black.withOpacity(0.20),
+                              Colors.black.withOpacity(0.45),
+                              Colors.black.withOpacity(0.75),
+                            ],
+                            stops: const [0.0, 0.35, 0.7, 1.0],
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
+              // nút more góc phải trên
               Positioned(
                 top: 8,
                 right: 8,
                 child: Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.55),
+                    color: Colors.black.withOpacity(0.55),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
@@ -620,10 +685,12 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
                   ),
                 ),
               ),
+
+              // 📄 Nội dung: KHÔNG có container nền bo cong nữa
               Positioned(
-                left: 12,
-                right: 12,
-                bottom: 12,
+                left: 16,
+                right: 16,
+                bottom: 16,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
@@ -632,43 +699,56 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
                       title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelLarge?.copyWith(
+                      style: theme.textTheme.titleMedium?.copyWith(
                         color: Colors.white,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w700,
                       ) ??
                           const TextStyle(
                             color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
                           ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.85),
+                        color: Colors.white.withOpacity(0.85),
                       ) ??
                           TextStyle(
-                            color: Colors.white.withValues(alpha: 0.85),
-                            fontSize: 11,
+                            color: Colors.white.withOpacity(0.85),
+                            fontSize: 12,
                           ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12),
                     SizedBox(
                       width: double.infinity,
+                      height: 54,
                       child: ElevatedButton(
                         onPressed: disableLike ? null : handleLike,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: colorScheme.primary,
-                          padding:
-                          const EdgeInsets.symmetric(vertical: 8),
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black87,
+                          padding: EdgeInsets.zero,
+                          elevation: 0,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(22),
                           ),
                         ),
-                        child: buttonChild,
+                        child: Text(
+                          buttonLabel,
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: Colors.black87,
+                            fontWeight: FontWeight.w600,
+                          ) ??
+                              const TextStyle(
+                                color: Colors.black87,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
                       ),
                     ),
                   ],
@@ -680,7 +760,6 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
       ),
     );
   }
-
 
   String _buildPageSubtitle(BuildContext context, SocialGetPage page) {
     final String category = page.category.isNotEmpty
@@ -1023,6 +1102,39 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
         'Chưa có bài viết');
 
     return '$likesLabel • $postsLabel';
+  }
+}
+
+class _RoundIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final Color? background;
+
+  const _RoundIconButton({
+    required this.icon,
+    required this.onTap,
+    this.background,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: background ?? theme.cardColor,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          icon,
+          size: 20,
+        ),
+      ),
+    );
   }
 }
 
