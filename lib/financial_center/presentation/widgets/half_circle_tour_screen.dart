@@ -2,17 +2,20 @@ import 'dart:ui';
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../services/location_service.dart';
-import '../screens/tours_list_screen.dart';
+import '../services/tour_service.dart';
+
 import '../screens/tour_detail_screen.dart';
 import '../screens/location_tours_map_screen.dart';
+
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/services/tour_service.dart';
 
 
 class HalfCircleTourScreen extends StatefulWidget {
   final LocationModel location;
+
   const HalfCircleTourScreen({super.key, required this.location});
 
   @override
@@ -21,6 +24,7 @@ class HalfCircleTourScreen extends StatefulWidget {
 
 class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
     with SingleTickerProviderStateMixin {
+
   List<dynamic> tours = [];
   bool isLoading = false;
 
@@ -30,6 +34,7 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
 
   late PageController _cardPageController;
   double _currentCardPage = 0.0;
+
 
   @override
   void initState() {
@@ -55,9 +60,7 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
       ),
     );
 
-    _cardPageController = PageController(
-      viewportFraction: 0.9,
-    );
+    _cardPageController = PageController(viewportFraction: 0.9);
     _cardPageController.addListener(() {
       setState(() {
         _currentCardPage = _cardPageController.page ?? 0.0;
@@ -68,12 +71,14 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
     _loadTours();
   }
 
+
   @override
   void dispose() {
     _animController.dispose();
     _cardPageController.dispose();
     super.dispose();
   }
+
 
   Future<void> _loadTours() async {
     if (isLoading) return;
@@ -82,9 +87,12 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
     try {
       final data = await TourService.fetchToursByLocation(widget.location.id);
       if (!mounted) return;
+
       setState(() => tours = data);
+
     } catch (e) {
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -92,15 +100,14 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
           ),
           backgroundColor: Colors.red.shade400,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
   }
+
 
   void _openTourDetail(dynamic tour) {
     final id = tour['id'];
@@ -114,15 +121,12 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
       PageRouteBuilder(
         pageBuilder: (_, animation, __) =>
             TourDetailScreen(tourId: tourId),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        transitionsBuilder: (context, animation, sec, child) {
           return FadeTransition(
             opacity: animation,
             child: ScaleTransition(
               scale: Tween<double>(begin: 0.95, end: 1.0).animate(
-                CurvedAnimation(
-                  parent: animation,
-                  curve: Curves.easeOutCubic,
-                ),
+                CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
               ),
               child: child,
             ),
@@ -132,15 +136,10 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
     );
   }
 
-  void _openMap() {
-    print("📍 OPEN MAP for location: ${widget.location.name}");
 
+  void _openMap() {
     final coords = tours
-        .where((t) {
-      final lat = t['lat'];
-      final lng = t['lng'];
-      return lat != null && lng != null && lat != 0 && lng != 0;
-    })
+        .where((t) => t['lat'] != null && t['lng'] != null)
         .map((t) {
       final lat = double.tryParse(t['lat'].toString());
       final lng = double.tryParse(t['lng'].toString());
@@ -148,16 +147,12 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
       return {
         'id': t['id'],
         'title': t['title'],
-        'location': t['location'] ?? '',
         'price': t['price'],
-        'slug': t['slug'],
         'lat': lat,
         'lng': lng,
-        'image_url': t['image_url'] ?? '',
-        'banner_image_url': t['banner_image_url'] ?? '',
+        'image': t['banner_image_url'] ?? t['image_url'] ?? '',
       };
-    })
-        .toList();
+    }).toList();
 
     Navigator.push(
       context,
@@ -168,35 +163,26 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
           centerLat: widget.location.mapLat,
           centerLng: widget.location.mapLng,
           mapZoom: widget.location.mapZoom,
-          tours: coords, // TRUYỀN FULL DỮ LIỆU TOUR
+          tours: coords,
         ),
       ),
     );
   }
 
-  String _formatPrice(dynamic priceRaw) {
-    if (priceRaw == null) {
-      return getTranslated('contact_for_price', context) ??
-          'Contact for price';
+
+  String _formatPrice(dynamic raw) {
+    if (raw == null) {
+      return getTranslated('contact_for_price', context) ?? 'Liên hệ';
     }
 
-    num? value;
-    if (priceRaw is num) {
-      value = priceRaw;
-    } else {
-      value = num.tryParse(priceRaw.toString());
-    }
+    num? number =
+    raw is num ? raw : num.tryParse(raw.toString());
 
-    if (value == null) {
-      return priceRaw.toString();
-    }
+    if (number == null) return raw.toString();
 
-    final formatter = NumberFormat.currency(
-      locale: 'vi_VN',
-      symbol: '₫',
-    );
-    return formatter.format(value);
+    return NumberFormat.currency(locale: 'vi_VN', symbol: '₫').format(number);
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -206,7 +192,6 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
     final bgImage = widget.location.imageUrl;
     final toursLabel =
         getTranslated('tours_available', context) ?? 'tours available';
-    final toursCountText = '${widget.location.toursCount} $toursLabel';
 
     final mapText =
         getTranslated('view_map', context) ?? 'Xem bản đồ';
@@ -215,32 +200,12 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
       backgroundColor: Colors.black,
       body: Stack(
         children: [
+
+          /// BACKGROUND
           Positioned.fill(
             child: bgImage.isNotEmpty
-                ? Image.network(
-              bgImage,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                color: Colors.black,
-                child: const Center(
-                  child: Icon(
-                    Icons.image_not_supported_outlined,
-                    color: Colors.white38,
-                    size: 60,
-                  ),
-                ),
-              ),
-            )
-                : Container(
-              color: Colors.black,
-              child: const Center(
-                child: Icon(
-                  Icons.image_outlined,
-                  color: Colors.white38,
-                  size: 60,
-                ),
-              ),
-            ),
+                ? Image.network(bgImage, fit: BoxFit.cover)
+                : Container(color: Colors.black),
           ),
 
           Positioned.fill(
@@ -254,7 +219,6 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
                     Colors.black.withOpacity(0.5),
                     Colors.black.withOpacity(0.9),
                   ],
-                  stops: const [0.0, 0.4, 1.0],
                 ),
               ),
             ),
@@ -267,14 +231,14 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
                 position: _slideAnim,
                 child: Stack(
                   children: [
+
+                    /// HEADER
                     Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 16,
-                      ),
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+
                           GestureDetector(
                             onTap: () => Navigator.pop(context),
                             child: Container(
@@ -290,39 +254,39 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
                               ),
                             ),
                           ),
+
                           const SizedBox(height: 40),
 
                           Text(
                             widget.location.name,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 32,
                               fontWeight: FontWeight.w700,
-                              letterSpacing: -0.5,
                             ),
                           ),
+
                           const SizedBox(height: 6),
 
                           Text(
-                            toursCountText,
+                            '${widget.location.toursCount} $toursLabel',
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.8),
+                              color: Colors.white.withOpacity(0.85),
                               fontSize: 14,
-                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ],
                       ),
                     ),
+
+                    /// LIST 2-CARD STACK
                     Align(
                       alignment: Alignment.bottomCenter,
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                         child: isLoading
                             ? _buildLoadingCard()
-                            : _buildBottomCard(context, isDark),
+                            : _buildBottomCard(isDark),
                       ),
                     ),
                   ],
@@ -331,6 +295,7 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
             ),
           ),
 
+          /// MAP BUTTON
           if (!isLoading && tours.isNotEmpty)
             Positioned(
               right: 16,
@@ -357,11 +322,8 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
                         ),
                       ),
                       const SizedBox(width: 4),
-                      const Icon(
-                        Icons.map_rounded,
-                        size: 14,
-                        color: Colors.white,
-                      ),
+                      const Icon(Icons.map_rounded,
+                          size: 14, color: Colors.white),
                     ],
                   ),
                 ),
@@ -372,97 +334,108 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
     );
   }
 
+
+  /// LOADING CARD
   Widget _buildLoadingCard() {
     return ClipRRect(
       borderRadius: BorderRadius.circular(22),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
         child: Container(
-          height: 130,
-          width: double.infinity,
+          height: 190, // thêm chiều cao tối thiểu (lớn hơn bản cũ)
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.2),
+            color: Colors.white.withOpacity(0.15),
             borderRadius: BorderRadius.circular(22),
           ),
-          child: const CircularProgressIndicator(
-            color: Colors.white,
-          ),
+          child: const CircularProgressIndicator(color: Colors.white),
         ),
       ),
     );
   }
 
-  Widget _buildBottomCard(BuildContext context, bool isDark) {
-    final noToursText = getTranslated('no_tours_here', context) ??
-        'Hiện tại địa điểm này chưa có tour nào được mở bán.';
 
+  /// ⭐⭐⭐ HIỂN THỊ 2 TOUR 1 LẦN Ở ĐÂY ⭐⭐⭐
+  Widget _buildBottomCard(bool isDark) {
     if (tours.isEmpty) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(24),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(isDark ? 0.95 : 0.98),
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Text(
-              noToursText,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFF4B5563),
-              ),
-            ),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          color: Colors.white.withOpacity(isDark ? 0.95 : 0.98),
+          child: Text(
+            getTranslated('no_tours_here', context)
+                ?? 'Không có tour nào tại đây.',
+            style: const TextStyle(fontSize: 13, color: Colors.black54),
           ),
         ),
       );
     }
 
     return SizedBox(
-      height: 300,
+      height: 560, // tăng chiều cao tổng
       child: PageView.builder(
         controller: _cardPageController,
         scrollDirection: Axis.vertical,
         physics: const BouncingScrollPhysics(),
-        itemCount: tours.length,
-        itemBuilder: (context, index) {
-          return _buildTourStackCard(context, index);
+        itemCount: (tours.length / 2).ceil(),
+        itemBuilder: (_, index) {
+          final int first = index * 2;
+          final int second = first + 1;
+
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8), // giảm khoảng trắng dưới
+            child: Column(
+              children: [
+                Expanded(
+                  flex: 52, // thẻ trên chiếm cao hơn
+                  child: _buildTourStackCard(first),
+                ),
+
+                const SizedBox(height: 12), // khoảng cách đẹp hơn
+
+                if (second < tours.length)
+                  Expanded(
+                    flex: 48, // thẻ dưới nhỏ hơn chút → cân đối
+                    child: _buildTourStackCard(second),
+                  ),
+              ],
+            ),
+          );
         },
       ),
     );
   }
 
-  Widget _buildTourStackCard(BuildContext context, int index) {
+
+
+  /// ⭐ CARD CHI TIẾT TOUR (giữ nguyên animation scale + translate)
+  Widget _buildTourStackCard(int index) {
     final tour = tours[index];
-
-    final String title =
-    (tour['title'] ?? widget.location.name).toString();
-
-    final String durationLabel =
-    (tour['duration'] ??
-        getTranslated('six_days_five_nights', context) ??
-        'Six days five nights')
-        .toString();
-
-    final dynamic priceRaw = tour['price'];
-    final String priceText = _formatPrice(priceRaw);
-
-    final String imageUrl =
-    (tour['banner_image_url'] ?? widget.location.imageUrl ?? '')
-        .toString();
-
-    final subTitle =
-        getTranslated('fire_ice_trip', context) ?? 'Fire & Ice Trip';
-
-    final forOnePerson =
-        getTranslated('for_one_person', context) ?? 'for 1 person';
 
     final double distance = (index - _currentCardPage);
     final double scale = (1 - (distance.abs() * 0.05)).clamp(0.9, 1.0);
     final double translateY = distance * 18;
+
+    final String title = tour['title'] ?? '';
+    final String durationLabel =
+        tour['duration'] ??
+            getTranslated('six_days_five_nights', context) ??
+            "Six days five nights";
+
+    final String priceText = _formatPrice(tour['price']);
+
+    final String imageUrl =
+        tour['banner_image_url'] ??
+            tour['image_url'] ??
+            widget.location.imageUrl ??
+            '';
+
+    final subTitle =
+        getTranslated('fire_ice_trip', context) ?? "Fire & Ice Trip";
+
+    final forOnePerson =
+        getTranslated('for_one_person', context) ?? "for 1 person";
 
     return Transform.translate(
       offset: Offset(0, translateY),
@@ -472,7 +445,6 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
         child: GestureDetector(
           onTap: () => _openTourDetail(tour),
           child: Container(
-            margin: const EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(22),
               boxShadow: [
@@ -487,28 +459,15 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
               borderRadius: BorderRadius.circular(22),
               child: Stack(
                 children: [
+
+                  /// IMAGE
                   Positioned.fill(
                     child: imageUrl.isNotEmpty
-                        ? Image.network(
-                      imageUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: Colors.grey[400],
-                        child: const Icon(
-                          Icons.image_not_supported_outlined,
-                          color: Colors.white,
-                        ),
-                      ),
-                    )
-                        : Container(
-                      color: Colors.grey[400],
-                      child: const Icon(
-                        Icons.image_outlined,
-                        color: Colors.white,
-                      ),
-                    ),
+                        ? Image.network(imageUrl, fit: BoxFit.cover)
+                        : Container(color: Colors.grey[400]),
                   ),
 
+                  /// GRADIENT OVERLAY
                   Positioned.fill(
                     child: Container(
                       decoration: BoxDecoration(
@@ -525,14 +484,13 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
                     ),
                   ),
 
+                  /// small badge
                   Positioned(
                     top: 10,
                     left: 10,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
+                          horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.96),
                         borderRadius: BorderRadius.circular(12),
@@ -548,6 +506,7 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
                     ),
                   ),
 
+                  /// TOP RIGHT BUTTON
                   Positioned(
                     top: 10,
                     right: 10,
@@ -566,17 +525,17 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
                     ),
                   ),
 
+                  /// TEXT CONTENT
                   Positioned(
                     left: 16,
                     right: 16,
                     bottom: 16,
                     child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
+
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
                                 title,
@@ -589,7 +548,9 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
                                   letterSpacing: 0.3,
                                 ),
                               ),
+
                               const SizedBox(height: 2),
+
                               Text(
                                 subTitle,
                                 maxLines: 1,
@@ -607,7 +568,6 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
 
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
-                          mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
                               priceText,
@@ -630,6 +590,7 @@ class _HalfCircleTourScreenState extends State<HalfCircleTourScreen>
                       ],
                     ),
                   ),
+
                 ],
               ),
             ),
