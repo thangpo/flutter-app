@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'dart:io' show Platform;
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_sixvalley_ecommerce/features/ads/domain/models/ads_model.dart';
@@ -261,6 +262,7 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
     final bool isDarkTheme = theme.brightness == Brightness.dark;
     final mediaQuery = MediaQuery.of(context);
     final bool isIOSPlatform = !kIsWeb && Platform.isIOS;
+    final bool isIOS26OrHigher = PlatformInfo.isIOS26OrHigher();
     final double statusBar = mediaQuery.padding.top;
     final Color pageBg = isLightTheme ? cs.surface : cs.background;
     const double iosToolbarHeight = 52;
@@ -355,11 +357,14 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
                             postAds,
                           );
 
-                          return Column(
-                            children: [
-                              SocialPostCard(post: p),
-                              if (inlineAd != null) _PostAdCard(ad: inlineAd),
-                            ],
+                          return KeyedSubtree(
+                            key: ValueKey('feed_post_${p.id ?? postIndex}'),
+                            child: Column(
+                              children: [
+                                SocialPostCard(post: p),
+                                if (inlineAd != null) _PostAdCard(ad: inlineAd),
+                              ],
+                            ),
                           );
                         },
                       ),
@@ -406,6 +411,91 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
       );
     }
 
+    PreferredSizeWidget? iosLegacyNavBar() {
+      if (!isIOSPlatform || isIOS26OrHigher) return null;
+
+      Widget buildAction(IconData icon, VoidCallback onTap) {
+        return CupertinoButton(
+          padding: const EdgeInsets.all(8),
+          minSize: 36,
+          onPressed: onTap,
+          child: Container(
+            height: 36,
+            width: 36,
+            decoration: BoxDecoration(
+              color: cs.surfaceVariant.withOpacity(0.65),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, size: 20, color: cs.onSurface),
+          ),
+        );
+      }
+
+      return CupertinoNavigationBar(
+        backgroundColor: cs.surface.withOpacity(0.92),
+        border: Border(
+          bottom: BorderSide(
+            color: cs.outlineVariant.withOpacity(0.35),
+            width: 0.6,
+          ),
+        ),
+        padding: const EdgeInsetsDirectional.only(start: 12, end: 12),
+        middle: Row(
+          children: [
+            Image.asset(logoAsset, height: 28, fit: BoxFit.contain),
+            const SizedBox(width: 10),
+            Expanded(
+              child: GestureDetector(
+                onTap: openSearch,
+                child: Container(
+                  height: 36,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    gradient: LinearGradient(
+                      colors: [
+                        cs.surfaceVariant.withOpacity(0.9),
+                        cs.surfaceVariant.withOpacity(0.6),
+                      ],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 6,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.search,
+                          size: 18, color: cs.onSurface.withOpacity(0.75)),
+                      const SizedBox(width: 8),
+                      Text(
+                        getTranslated('search', context) ?? 'Search',
+                        style: TextStyle(
+                          color: cs.onSurface.withOpacity(0.7),
+                          fontSize: 15,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            buildAction(Icons.people_alt_outlined, openFriends),
+            buildAction(Icons.message_outlined, openMessages),
+          ],
+        ),
+      );
+    }
+
     final PreferredSizeWidget? materialAppBar = !isIOSPlatform
         ? AppBar(
       backgroundColor: pageBg,
@@ -433,9 +523,9 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
         : null;
 
     final AdaptiveAppBar adaptiveAppBar = AdaptiveAppBar(
-      useNativeToolbar: isIOSPlatform,
+      useNativeToolbar: isIOSPlatform && isIOS26OrHigher,
       title: null,
-      leading: isIOSPlatform
+      leading: isIOSPlatform && isIOS26OrHigher
           ? Padding(
               padding: const EdgeInsets.only(left: 8),
               child: Image.asset(
@@ -445,7 +535,7 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
               ),
             )
           : null,
-      actions: isIOSPlatform
+      actions: isIOSPlatform && isIOS26OrHigher
           ? [
               AdaptiveAppBarAction(
                 iosSymbol: 'magnifyingglass',
@@ -464,6 +554,7 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
               ),
             ]
           : null,
+      cupertinoNavigationBar: iosLegacyNavBar(),
       appBar: materialAppBar,
     );
 

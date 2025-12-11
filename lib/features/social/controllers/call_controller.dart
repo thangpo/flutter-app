@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../domain/models/ice_candidate_lite.dart';
 import '../domain/repositories/webrtc_signaling_repository.dart';
+import '../push/remote_rtc_log.dart';
 
 class CallController extends ChangeNotifier {
   CallController({required this.signaling});
@@ -29,6 +30,7 @@ class CallController extends ChangeNotifier {
   bool _polling = false;
   bool _disposed = false;
   bool _pollPaused = false;
+  DateTime? _lastProgress; // track tiến triển để auto-timeout
 
   String? lastError;
 
@@ -59,11 +61,20 @@ class CallController extends ChangeNotifier {
     required String mediaType,
   }) async {
     try {
+      unawaited(RemoteRtcLog.send(
+        event: 'caller_start_call',
+        details: {'calleeId': calleeId, 'media': mediaType},
+      ));
       final res = await signaling.create(
         recipientId: calleeId,
         mediaType: mediaType,
       );
 
+      unawaited(RemoteRtcLog.send(
+        event: 'caller_start_call_ok',
+        callId: res.callId,
+        details: {'status': res.status, 'media': res.mediaType},
+      ));
       _attach(
         res.callId,
         res.mediaType,
@@ -109,9 +120,19 @@ class CallController extends ChangeNotifier {
     if (id == null) return;
 
     try {
+      unawaited(RemoteRtcLog.send(
+        event: 'offer_send',
+        callId: id,
+        details: {'len': sdp.length},
+      ));
       await signaling.offer(callId: id, sdp: sdp);
     } catch (e) {
       lastError = "$e";
+      unawaited(RemoteRtcLog.send(
+        event: 'offer_err',
+        callId: id,
+        details: {'error': '$e'},
+      ));
       rethrow;
     }
   }
@@ -122,6 +143,11 @@ class CallController extends ChangeNotifier {
     if (id == null) return;
 
     try {
+      unawaited(RemoteRtcLog.send(
+        event: 'answer_send',
+        callId: id,
+        details: {'len': sdp.length},
+      ));
       await signaling.answer(callId: id, sdp: sdp);
       _callStatus = "answered";
       notifyListeners();
@@ -148,6 +174,15 @@ class CallController extends ChangeNotifier {
     if (id == null) return;
 
     try {
+      unawaited(RemoteRtcLog.send(
+        event: 'candidate_send',
+        callId: id,
+        details: {
+          'mid': sdpMid,
+          'mline': sdpMLineIndex,
+          'len': candidate.length,
+        },
+      ));
       await signaling.candidate(
         callId: id,
         candidate: candidate,
@@ -156,6 +191,11 @@ class CallController extends ChangeNotifier {
       );
     } catch (e) {
       lastError = "$e";
+      unawaited(RemoteRtcLog.send(
+        event: 'candidate_err',
+        callId: id,
+        details: {'error': '$e'},
+      ));
     }
   }
 
@@ -165,6 +205,11 @@ class CallController extends ChangeNotifier {
     if (id == null) return;
 
     try {
+      unawaited(RemoteRtcLog.send(
+        event: 'action_send',
+        callId: id,
+        details: {'action': action},
+      ));
       final st = await signaling.action(callId: id, action: action);
       _callStatus = st;
 
@@ -172,8 +217,18 @@ class CallController extends ChangeNotifier {
         _stopPolling();
       }
       notifyListeners();
+      unawaited(RemoteRtcLog.send(
+        event: 'action_ok',
+        callId: id,
+        details: {'action': action, 'status': _callStatus},
+      ));
     } catch (e) {
       lastError = "$e";
+      unawaited(RemoteRtcLog.send(
+        event: 'action_err',
+        callId: id,
+        details: {'action': action, 'error': "$e"},
+      ));
       rethrow;
     }
   }
@@ -206,6 +261,7 @@ class CallController extends ChangeNotifier {
     _sdpAnswer = null;
     _iceCandidates.clear();
     _seen.clear();
+    _lastProgress = DateTime.now();
 
     _startPolling();
     notifyListeners();
@@ -217,6 +273,11 @@ class CallController extends ChangeNotifier {
     _polling = true;
     _pollPaused = false;
     _pollTimer?.cancel();
+
+    unawaited(RemoteRtcLog.send(
+      event: 'poll_start',
+      callId: _callId,
+    ));
 
     _pollOnce(); // chạy ngay 1 nhịp
 
@@ -254,22 +315,27 @@ class CallController extends ChangeNotifier {
 
     try {
       final pkt = await signaling.poll(callId: id);
+      var progressed = false;
 
       // status
       if (pkt.callStatus != null && pkt.callStatus!.isNotEmpty) {
+        if (_callStatus != pkt.callStatus!) progressed = true;
         _callStatus = pkt.callStatus!;
       }
 
       // type
       if (pkt.mediaType != null && pkt.mediaType!.isNotEmpty) {
+        if (_mediaType != pkt.mediaType!) progressed = true;
         _mediaType = pkt.mediaType!;
       }
 
       // SDP
       if (pkt.sdpOffer != null && pkt.sdpOffer!.isNotEmpty) {
+        if (_sdpOffer != pkt.sdpOffer) progressed = true;
         _sdpOffer = pkt.sdpOffer!;
       }
       if (pkt.sdpAnswer != null && pkt.sdpAnswer!.isNotEmpty) {
+        if (_sdpAnswer != pkt.sdpAnswer) progressed = true;
         _sdpAnswer = pkt.sdpAnswer!;
       }
 
@@ -279,8 +345,13 @@ class CallController extends ChangeNotifier {
           final key = '${c.candidate}|${c.sdpMid}|${c.sdpMLineIndex}';
           if (_seen.add(key)) {
             _iceCandidates.add(c);
+            progressed = true;
           }
         }
+      }
+
+      if (progressed) {
+        _lastProgress = DateTime.now();
       }
 
       // if ended -> stop + clear
@@ -289,6 +360,20 @@ class CallController extends ChangeNotifier {
         _stopPolling();
         _resetState(ended: true);
         if (endedId != null) _handledCallIds.add(endedId);
+        notifyListeners();
+        return;
+      }
+
+      // Auto-timeout nếu không có tiến triển trong 60s
+      final last = _lastProgress;
+      if (last != null &&
+          DateTime.now().difference(last) > const Duration(minutes: 1)) {
+        try {
+          await signaling.action(callId: id, action: "end");
+        } catch (_) {}
+        _stopPolling();
+        _resetState(ended: true);
+        _handledCallIds.add(id);
         notifyListeners();
         return;
       }
@@ -307,6 +392,7 @@ class CallController extends ChangeNotifier {
     _seen.clear();
     _pollPaused = false;
     _callStatus = ended ? "ended" : "ringing";
+    _lastProgress = null;
   }
 
   /// Nhận tín hiệu realtime (FCM/WebSocket) để giảm phụ thuộc polling.
@@ -321,9 +407,11 @@ class CallController extends ChangeNotifier {
     if (_callId == null || _callId != callId) return;
 
     if (sdpOffer != null && sdpOffer.isNotEmpty) {
+      _lastProgress = DateTime.now();
       _sdpOffer = sdpOffer;
     }
     if (sdpAnswer != null && sdpAnswer.isNotEmpty) {
+      _lastProgress = DateTime.now();
       _sdpAnswer = sdpAnswer;
     }
     if (candidate != null) {
@@ -331,9 +419,11 @@ class CallController extends ChangeNotifier {
           '${candidate.candidate}|${candidate.sdpMid}|${candidate.sdpMLineIndex}';
       if (_seen.add(key)) {
         _iceCandidates.add(candidate);
+        _lastProgress = DateTime.now();
       }
     }
     if (status != null && status.isNotEmpty) {
+      if (_callStatus != status) _lastProgress = DateTime.now();
       _callStatus = status;
       if (status == "ended" || status == "declined") {
         _stopPolling();

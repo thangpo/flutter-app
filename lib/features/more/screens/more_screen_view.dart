@@ -193,7 +193,8 @@ class _MoreScreenState extends State<MoreScreen> {
                             navigateTo: const NotificationScreen(),
                           ),
                           MenuButtonWidget(
-                            image: Images.event, // hoặc Images.category nếu chưa có icon calendar
+                            image: Images
+                                .event, // hoặc Images.category nếu chưa có icon calendar
                             title: getTranslated('events', context),
                             navigateTo: const EventScreen(),
                           ),
@@ -445,7 +446,7 @@ class _MoreScreenState extends State<MoreScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            '${getTranslated('version', context)} ${AppConstants.appVersion}',
+                            '${getTranslated('version', context)} ${AppConstants.appVersion} 2.2-43',
                             style: textRegular.copyWith(
                                 fontSize: Dimensions.fontSizeLarge,
                                 color: Theme.of(context).hintColor),

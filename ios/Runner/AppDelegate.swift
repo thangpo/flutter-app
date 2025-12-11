@@ -158,8 +158,15 @@ import flutter_callkit_incoming
     let rawCallIdStr = (rawCallIdAny == nil) ? "" : "\(rawCallIdAny!)"
     let rawCallId  = rawCallIdStr.isEmpty ? UUID().uuidString : rawCallIdStr
     let callId     = normalizeUuid(rawCallId)
-    let callerName = (dataDict["caller_name"] as? String) ?? "Incoming call"
-    let handle     = (dataDict["caller_handle"] as? String) ?? callerName
+    // Nếu là group call, ưu tiên hiển thị tên nhóm thay vì tên người gọi
+    let groupName  = (dataDict["group_name"] as? String)
+    let isGroup    = (dataDict["group_id"] as? String)?.isEmpty == false
+    let callerName = isGroup
+      ? (groupName ?? "Cuộc gọi nhóm")
+      : ((dataDict["caller_name"] as? String) ?? "Incoming call")
+    let handle     = isGroup
+      ? (groupName ?? callerName)
+      : ((dataDict["caller_handle"] as? String) ?? callerName)
     let isVideo    = ((dataDict["media"] as? String) == "video")
 
     let callData = flutter_callkit_incoming.Data(

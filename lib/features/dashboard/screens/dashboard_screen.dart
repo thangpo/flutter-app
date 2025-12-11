@@ -1,7 +1,9 @@
 ﻿import 'dart:io' show Platform;
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/foundation.dart';
+
 import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
@@ -26,7 +28,7 @@ import 'package:flutter_sixvalley_ecommerce/features/wishlist/controllers/wishli
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/travel_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_notifications_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/search_product/controllers/search_product_controller.dart';
-
+import 'package:flutter_sixvalley_ecommerce/helper/app_exit_guard.dart';
 
 class DashBoardScreen extends StatefulWidget {
   const DashBoardScreen({super.key});
@@ -38,37 +40,36 @@ class DashBoardScreenState extends State<DashBoardScreen> {
   int _pageIndex = 1;
   late List<NavigationModel> _screens;
   final PageStorageBucket bucket = PageStorageBucket();
-  final GlobalKey<SocialFeedScreenState> _socialFeedKey =
-  GlobalKey<SocialFeedScreenState>();
+  final GlobalKey<SocialFeedScreenState> _socialFeedKey = GlobalKey<SocialFeedScreenState>();
   int? _socialTabIndex;
   bool _showBottomNav = true;
+
+  // iOS major version (26, 17, 16, ...)
+  int? _iosMajor;
 
   @override
   void initState() {
     super.initState();
-    Provider.of<FlashDealController>(context, listen: false)
-        .getFlashDealList(true, true);
-    Provider.of<SplashController>(context, listen: false)
-        .getBusinessPagesList('default');
-    Provider.of<SplashController>(context, listen: false)
-        .getBusinessPagesList('pages');
+
+    // Lấy version iOS không cần device_info_plus
+    if (!kIsWeb && Platform.isIOS) {
+      _iosMajor = _detectIOSMajor();
+    }
+
+    Provider.of<FlashDealController>(context, listen: false).getFlashDealList(true, true);
+    Provider.of<SplashController>(context, listen: false).getBusinessPagesList('default');
+    Provider.of<SplashController>(context, listen: false).getBusinessPagesList('pages');
     if (Provider.of<AuthController>(context, listen: false).isLoggedIn()) {
       Provider.of<CartController>(context, listen: false).mergeGuestCart();
       Provider.of<WishListController>(context, listen: false).getWishList();
-      Provider.of<ChatController>(context, listen: false)
-          .getChatList(1, reload: false, userType: 0);
-      Provider.of<ChatController>(context, listen: false)
-          .getChatList(1, reload: false, userType: 1);
-      Provider.of<RestockController>(context, listen: false)
-          .getRestockProductList(1, getAll: true);
+      Provider.of<ChatController>(context, listen: false).getChatList(1, reload: false, userType: 0);
+      Provider.of<ChatController>(context, listen: false).getChatList(1, reload: false, userType: 1);
+      Provider.of<RestockController>(context, listen: false).getRestockProductList(1, getAll: true);
     }
 
-    final SplashController splashController =
-    Provider.of<SplashController>(context, listen: false);
-    Provider.of<SearchProductController>(context, listen: false)
-        .getAuthorList(null);
-    Provider.of<SearchProductController>(context, listen: false)
-        .getPublishingHouseList(null);
+    final SplashController splashController = Provider.of<SplashController>(context, listen: false);
+    Provider.of<SearchProductController>(context, listen: false).getAuthorList(null);
+    Provider.of<SearchProductController>(context, listen: false).getPublishingHouseList(null);
 
     if (splashController.configModel!.activeTheme == "default") {
       HomePage.loadData(false);
@@ -109,24 +110,23 @@ class DashBoardScreenState extends State<DashBoardScreen> {
             ? const AsterThemeHomeScreen()
             : const FashionThemeHomePage(),
       ),
-      NavigationModel(
-        name: 'notifications',
-        icon: Images.notification,
-        screen: const NotificationsScreen(isBackButtonExist: false),
-      ),
-      NavigationModel(
-        name: 'more',
-        icon: Images.moreImage,
-        screen: const MoreScreen(),
-      ),
+      NavigationModel(name: 'notifications', icon: Images.notification, screen: const NotificationsScreen(isBackButtonExist: false)),
+      NavigationModel(name: 'more', icon: Images.moreImage, screen: const MoreScreen()),
     ];
 
-    _socialTabIndex =
-        _screens.indexWhere((element) => element.name == 'social');
-
+    _socialTabIndex = _screens.indexWhere((element) => element.name == 'social');
     NetworkInfo.checkConnectivity(context);
   }
 
+  // Parse Platform.operatingSystemVersion để lấy major version iOS
+  // Ví dụ chuỗi: "Version 17.5.1 (Build 21F90)" -> bắt số đầu "17"
+  int? _detectIOSMajor() {
+    try {
+      final s = Platform.operatingSystemVersion; // iOS only
+      final m = RegExp(r'(\d+)(?:\.\d+)?').firstMatch(s);
+      if (m != null) return int.tryParse(m.group(1)!);
+    } catch (_) {}
+    return null;
   void _handleTravelScroll(bool showNav) {
     if (_showBottomNav == showNav) return;
 
@@ -141,12 +141,9 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     final cs = theme.colorScheme;
     final platformBrightness = MediaQuery.platformBrightnessOf(context);
     final bool isIOSPlatform = !kIsWeb && Platform.isIOS;
-    final bool hideNav = (_socialTabIndex != null &&
-        _pageIndex == _socialTabIndex &&
-        !_showBottomNav);
+    final bool hideNav = (_socialTabIndex != null && _pageIndex == _socialTabIndex && !_showBottomNav);
 
-    final int unreadNotifications =
-    context.select<SocialNotificationsController, int>(
+    final int unreadNotifications = context.select<SocialNotificationsController, int>(
           (ctrl) => ctrl.notifications.where((n) => n.seen == "0").length,
     );
 
@@ -157,66 +154,55 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       navActiveColor = _boostLightness(navActiveColor, 0.20);
     }
 
+    // iOS 26 giữ nguyên SF Symbol; iOS thấp hơn dùng IconData có sẵn để tránh lỗi thiếu glyph
+    dynamic _sf(String primary, IconData fallback) {
+      if (kIsWeb || !Platform.isIOS) return primary;
+      final v = _iosMajor ?? 0;
+      return (v >= 26) ? primary : fallback;
+    }
+
     final List<AdaptiveNavigationDestination> iosDestinations = [
       AdaptiveNavigationDestination(
-        icon: 'house.fill',
-        selectedIcon: 'house',
+        icon: _sf('house.fill', CupertinoIcons.house_fill),
+        selectedIcon: _sf('house.fill', CupertinoIcons.house_fill),
         label: t('home'),
       ),
       AdaptiveNavigationDestination(
-        icon: 'map.fill',
-        selectedIcon: 'airplane',
+        icon: _sf('map.fill', CupertinoIcons.map_fill),
+        selectedIcon: _sf('map.fill', CupertinoIcons.map_fill),
         label: t('travel'),
       ),
       AdaptiveNavigationDestination(
-        icon: 'globe.fill',
-        selectedIcon: 'person.2.fill',
+        icon: _sf('globe.fill', CupertinoIcons.globe),
+        selectedIcon: _sf('globe.fill', CupertinoIcons.globe),
         label: t('social'),
       ),
       AdaptiveNavigationDestination(
-        icon: 'basket.fill',
-        selectedIcon: 'bag.fill',
+        // iOS 26 dùng 'basket.fill'; iOS thấp hơn fallback 'bag.fill'
+        icon: _sf('basket.fill', CupertinoIcons.bag_fill),
+        selectedIcon: _sf('bag.fill', CupertinoIcons.bag_fill),
         label: t('shop'),
       ),
       AdaptiveNavigationDestination(
-        icon: 'bell.fill',
-        selectedIcon: 'bell.fill',
+        icon: _sf('bell.fill', CupertinoIcons.bell_fill),
+        selectedIcon: _sf('bell.fill', CupertinoIcons.bell_fill),
         label: t('notifications'),
         badgeCount: unreadNotifications > 0 ? unreadNotifications : null,
       ),
       AdaptiveNavigationDestination(
-        icon: 'ellipsis.circle.fill',
-        selectedIcon: 'ellipsis.circle.fill',
+        icon: _sf('ellipsis.circle.fill', CupertinoIcons.ellipsis_circle_fill),
+        selectedIcon: _sf('ellipsis.circle.fill', CupertinoIcons.ellipsis_circle_fill),
         label: t('more'),
       ),
     ];
 
     final List<_AndroidNavItem> androidItems = [
-      _AndroidNavItem(
-        icon: Icons.home_outlined,
-        label: t('home'),
-      ),
-      _AndroidNavItem(
-        icon: Icons.travel_explore_outlined,
-        label: t('travel'),
-      ),
-      _AndroidNavItem(
-        icon: Icons.public,
-        label: t('social'),
-      ),
-      _AndroidNavItem(
-        icon: Icons.storefront_outlined,
-        label: t('shop'),
-      ),
-      _AndroidNavItem(
-        icon: Icons.notifications_none,
-        label: t('notifications'),
-        badgeCount: unreadNotifications,
-      ),
-      _AndroidNavItem(
-        icon: Icons.more_horiz,
-        label: t('more'),
-      ),
+      _AndroidNavItem(icon: Icons.home_outlined, label: t('home')),
+      _AndroidNavItem(icon: Icons.travel_explore_outlined, label: t('travel')),
+      _AndroidNavItem(icon: Icons.public, label: t('social')),
+      _AndroidNavItem(icon: Icons.storefront_outlined, label: t('shop')),
+      _AndroidNavItem(icon: Icons.notifications_none, label: t('notifications'), badgeCount: unreadNotifications),
+      _AndroidNavItem(icon: Icons.more_horiz, label: t('more')),
     ];
 
     return PopScope(
@@ -228,11 +214,15 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         } else {
           await Future.delayed(const Duration(milliseconds: 150));
           if (context.mounted) {
+            if (AppExitGuard.isSuppressed) {
+              return; // bỏ qua dialog thoát nếu vừa pop từ CallScreen/CallKit
+            }
             if (!Navigator.of(context).canPop()) {
               showModalBottomSheet(
-                  backgroundColor: Colors.transparent,
-                  context: Get.context!,
-                  builder: (_) => const AppExitCard());
+                backgroundColor: Colors.transparent,
+                context: Get.context!,
+                builder: (_) => const AppExitCard(),
+              );
             }
           }
         }
@@ -246,10 +236,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
             : AdaptiveBottomNavigationBar(
           items: iosDestinations,
           selectedIndex: _pageIndex,
-          onTap: (index) => _handleNavigationTap(
-            _screens[index],
-            index,
-          ),
+          onTap: (index) => _handleNavigationTap(_screens[index], index),
           useNativeBottomBar: isIOSPlatform,
           selectedItemColor: navActiveColor,
         ),
@@ -276,8 +263,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
                 child: AndroidMovingCircleBottomBar(
                   items: androidItems,
                   currentIndex: _pageIndex,
-                  onTap: (index) =>
-                      _handleNavigationTap(_screens[index], index),
+                  onTap: (index) => _handleNavigationTap(_screens[index], index),
                 ),
               ),
           ],
@@ -305,8 +291,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
   }
 
   void _handleNavigationTap(NavigationModel item, int index) {
-    final bool isSocialTab =
-        _socialTabIndex != null && index == _socialTabIndex;
+    final bool isSocialTab = _socialTabIndex != null && index == _socialTabIndex;
     final bool isCurrent = _pageIndex == index;
     if (isSocialTab && isCurrent) {
       final SocialFeedScreenState? state = _socialFeedKey.currentState;
@@ -357,8 +342,7 @@ class AndroidMovingCircleBottomBar extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final Color barColor =
-    isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE8EBF0);
+    final Color barColor = isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE8EBF0);
     final Color scaffoldBg = theme.scaffoldBackgroundColor;
 
     return SafeArea(
@@ -412,7 +396,6 @@ class AndroidMovingCircleBottomBar extends StatelessWidget {
                       ),
                     ),
                   ),
-
                   AnimatedPositioned(
                     duration: const Duration(milliseconds: 230),
                     curve: Curves.easeOutCubic,
@@ -435,8 +418,7 @@ class AndroidMovingCircleBottomBar extends StatelessWidget {
                       child: Container(
                         margin: const EdgeInsets.all(7),
                         decoration: BoxDecoration(
-                          color:
-                          theme.colorScheme.primary.withOpacity(0.10),
+                          color: theme.colorScheme.primary.withOpacity(0.10),
                           shape: BoxShape.circle,
                         ),
                         child: Center(
@@ -475,10 +457,8 @@ class _AndroidNavItemWidget extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
-    final Color iconColor =
-    selected ? cs.primary : cs.onSurface.withOpacity(0.7);
-    final FontWeight labelWeight =
-    selected ? FontWeight.w600 : FontWeight.w400;
+    final Color iconColor = selected ? cs.primary : cs.onSurface.withOpacity(0.7);
+    final FontWeight labelWeight = selected ? FontWeight.w600 : FontWeight.w400;
 
     Widget iconArea;
     if (selected) {
@@ -487,25 +467,15 @@ class _AndroidNavItemWidget extends StatelessWidget {
       iconArea = Stack(
         clipBehavior: Clip.none,
         children: [
-          Icon(
-            item.icon,
-            size: 24,
-            color: iconColor,
-          ),
+          Icon(item.icon, size: 24, color: iconColor),
           if (item.badgeCount > 0)
             Positioned(
               right: -4,
               top: -4,
               child: Container(
                 padding: const EdgeInsets.all(2),
-                decoration: const BoxDecoration(
-                  color: Colors.redAccent,
-                  shape: BoxShape.circle,
-                ),
-                constraints: const BoxConstraints(
-                  minWidth: 16,
-                  minHeight: 16,
-                ),
+                decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
+                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
                 child: Center(
                   child: Text(
                     item.badgeCount > 9 ? '9+' : item.badgeCount.toString(),

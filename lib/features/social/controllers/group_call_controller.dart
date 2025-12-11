@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/webrtc_group_signaling_repository.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/push/callkit_service.dart';
 
 enum CallStatus { idle, ringing, ongoing, ended }
 
@@ -11,6 +12,7 @@ class GroupCallController extends ChangeNotifier {
   GroupCallController({required this.signaling});
 
   int? currentCallId;
+  String? currentGroupId;
   CallStatus status = CallStatus.idle;
   final Set<int> participants = <int>{};
 
@@ -42,6 +44,7 @@ class GroupCallController extends ChangeNotifier {
   Timer? _inboxTimer;
   String? _watchGroupId;
   int? _lastNotifiedCallId;
+  int _inboxEmptyStreak = 0;
   void Function(Map<String, dynamic> call)? onIncoming;
 
   void watchGroupInbox(
@@ -65,6 +68,7 @@ class GroupCallController extends ChangeNotifier {
     _inboxTimer = null;
     _watchGroupId = null;
     _lastNotifiedCallId = null;
+    _inboxEmptyStreak = 0;
     debugPrint('[GROUP-INBOX] Stopped watching.');
   }
 
@@ -76,7 +80,17 @@ class GroupCallController extends ChangeNotifier {
 
     try {
       final call = await signaling.inbox(groupId: gid);
-      if (call == null) return;
+      if (call == null) {
+        _inboxEmptyStreak++;
+        // Nếu rỗng liên tục (không còn cuộc gọi nào) thì dừng watcher để tránh spam log server
+        if (_inboxEmptyStreak >= 5) {
+          debugPrint(
+              '[GROUP-INBOX] No call for $gid after $_inboxEmptyStreak ticks, auto-stop watching.');
+          stopWatchingInbox();
+        }
+        return;
+      }
+      _inboxEmptyStreak = 0;
 
       final callId = _asInt(call['call_id']) ?? _asInt(call['id']);
       final statusStr = '${call['status'] ?? ''}';
@@ -106,6 +120,7 @@ class GroupCallController extends ChangeNotifier {
     required String mediaType,
     List<int>? invitees,
   }) async {
+    currentGroupId = groupId;
     final resp = await signaling.create(
       groupId: groupId,
       media: (mediaType == 'video') ? 'video' : 'audio',
@@ -130,9 +145,13 @@ class GroupCallController extends ChangeNotifier {
   }
 
   // ====================== CALLEE FLOW ======================
-  Future<void> attachAndJoin({required int callId}) async {
+  Future<void> attachAndJoin({
+    required int callId,
+    required String groupId,
+  }) async {
     _isCreator = false;
     currentCallId = callId;
+    currentGroupId = groupId;
     status = CallStatus.ongoing;
     notifyListeners();
     _emitStatus();
@@ -146,6 +165,7 @@ class GroupCallController extends ChangeNotifier {
     try {
       await signaling.leave(callId: callId);
     } finally {
+      _markEndedForCall(callId);
       _cleanup();
     }
   }
@@ -157,6 +177,7 @@ class GroupCallController extends ChangeNotifier {
       // Phát 1 nhịp 'ended' để UI nắm bắt rồi cleanup → idle
       status = CallStatus.ended;
       _emitStatus();
+      _markEndedForCall(callId);
       _cleanup();
     }
   }
@@ -222,6 +243,12 @@ class GroupCallController extends ChangeNotifier {
         for (final ev in events) {
           final type = (ev['type'] ?? '').toString();
           switch (type) {
+            case 'ended':
+              status = CallStatus.ended;
+              _markEndedForCall(callId);
+              _emitStatus();
+              _cleanup();
+              return;
             case 'offer':
               onOffer?.call(ev);
               break;
@@ -287,12 +314,17 @@ class GroupCallController extends ChangeNotifier {
     participants.clear();
     status = CallStatus.idle;
     final oldId = currentCallId;
+    final oldGroup = currentGroupId;
     currentCallId = null;
+    currentGroupId = null;
     _isCreator = false;
     notifyListeners();
     _emitStatus();
     if (kDebugMode) {
       debugPrint('GroupCallController: cleaned up (old call $oldId)');
+    }
+    if (oldId != null && oldGroup != null && oldGroup.isNotEmpty) {
+      _markEndedForCall(oldId, groupId: oldGroup);
     }
   }
 
@@ -330,6 +362,12 @@ class GroupCallController extends ChangeNotifier {
 
   void _emitStatus() {
     onStatusChanged?.call(status);
+  }
+
+  void _markEndedForCall(int callId, {String? groupId}) {
+    final gid = groupId ?? currentGroupId;
+    if (gid == null || gid.isEmpty) return;
+    CallkitService.I.endGroupCall(gid, callId);
   }
 
   @override

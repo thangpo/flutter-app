@@ -1,17 +1,23 @@
-// lib/features/social/screens/group_call_screen.dart
+﻿// lib/features/social/screens/group_call_screen.dart
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 
-// dùng navigatorKey làm fallback pop
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+// dÃ¹ng navigatorKey lÃ m fallback pop
 import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart' show navigatorKey;
 
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_call_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_chat_controller.dart';
 import '../utils/ice_server_config.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/push/callkit_service.dart';
 
+import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 class GroupCallScreen extends StatefulWidget {
   final String groupId;
   final String mediaType; // 'audio' | 'video'
@@ -54,12 +60,13 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
 
   bool _starting = true;
   bool _leaving = false;
+  bool _connecting = false;
   String? _error;
 
   bool get _isVideo => widget.mediaType == 'video';
   bool get _isCreator => _gc.isCreator;
 
-  // Luôn trả về int an toàn
+  // LuÃ´n tráº£ vá» int an toÃ n
   int get _myId {
     try {
       final ctrl = context.read<GroupChatController>();
@@ -74,10 +81,9 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   }
 
   bool _shouldOfferTo(int peerId) {
-    // Chống glare: id nhỏ tạo offer trước
+    // Chống glare: id nhỏ tạo offer trước. Nếu chưa lấy được myId (0) thì vẫn offer để tránh kẹt.
     if (_myId != 0 && peerId != 0) return _myId < peerId;
-    // Fallback: nếu mình là người tạo cuộc gọi (không có callId truyền vào)
-    return widget.callId == null;
+    return true; // fallback an toàn
   }
 
   @override
@@ -92,7 +98,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       _reconcilePeers(peers);
     };
     _gc.onStatusChanged = (st) async {
-      // Khi server báo ended/idle ở nơi khác -> tự đóng UI
+      // Khi server bÃ¡o ended/idle á»Ÿ nÆ¡i khÃ¡c -> tá»± Ä‘Ã³ng UI
       if ((st == CallStatus.ended || st == CallStatus.idle) && !_leaving) {
         _leaving = true;
         await _disposeMediaAndPCs();
@@ -108,25 +114,49 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   Future<void> _start() async {
     setState(() {
       _starting = true;
+      _connecting = false;
       _error = null;
     });
 
     try {
-      await _prepareLocalMedia();
+      // Limit startup time to avoid getting stuck
+      await _prepareLocalMedia().timeout(
+        const Duration(seconds: 12),
+        onTimeout: () => throw TimeoutException('prepare_media_timeout'),
+      );
 
-      if (widget.callId != null) {
-        await _gc.attachAndJoin(callId: widget.callId!);
-      } else {
-        await _gc.joinRoom(
-          groupId: widget.groupId,
-          mediaType: widget.mediaType,
-          invitees: widget.invitees,
-        );
+      if (!mounted) return;
+      setState(() {
+        _starting = false;
+        _connecting = true;
+      });
+
+      final Future<void> joinFuture = widget.callId != null
+          ? _gc.attachAndJoin(callId: widget.callId!, groupId: widget.groupId)
+          : _gc.joinRoom(
+              groupId: widget.groupId,
+              mediaType: widget.mediaType,
+              invitees: widget.invitees,
+            );
+
+      await joinFuture.timeout(const Duration(seconds: 12), onTimeout: () {
+        throw TimeoutException('join_room_timeout');
+      });
+
+      if (mounted) {
+        setState(() {
+          _connecting = false;
+        });
       }
 
       _reconcilePeers(_gc.participants);
     } catch (e) {
-      _error = 'Không thể bắt đầu cuộc gọi: $e';
+      _error = 'Khong the bat dau cuoc goi nhom: $e';
+      _sendDebugLog('start_failed', {
+        'group_id': widget.groupId,
+        'call_id': '${widget.callId ?? ''}',
+        'error': '$e'
+      });
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(_error!)));
@@ -134,7 +164,12 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       }
       return;
     } finally {
-      if (mounted) setState(() => _starting = false);
+      if (mounted) {
+        setState(() {
+          _starting = false;
+          _connecting = false;
+        });
+      }
     }
   }
 
@@ -146,9 +181,10 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       'video': _isVideo
           ? {
               'facingMode': 'user',
-              'width': {'ideal': 720},
-              'height': {'ideal': 1280},
-              'frameRate': {'ideal': 24},
+              // Giảm độ phân giải để khởi tạo/ICE nhanh hơn, giảm thời gian màn đen
+              'width': {'ideal': 640, 'max': 720},
+              'height': {'ideal': 480, 'max': 720},
+              'frameRate': {'ideal': 20, 'max': 24},
             }
           : false,
     };
@@ -202,7 +238,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
 
     // Ensure PCs for new peers
     for (final id in newPeers) {
-      if (id == _myId) continue; // không tạo PC với chính mình
+      if (id == _myId) continue; // khÃ´ng táº¡o PC vá»›i chÃ­nh mÃ¬nh
       if (!_pcByUser.containsKey(id)) {
         await _ensurePeerConnection(id);
         if (_shouldOfferTo(id)) {
@@ -219,7 +255,8 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     final config = {
       'iceServers': kDefaultIceServers,
       'sdpSemantics': 'unified-plan',
-      // 'iceTransportPolicy': 'relay',
+      // Ưu tiên relay qua TURN để đỡ kẹt NAT, giảm thời gian chờ ICE
+      'iceTransportPolicy': 'relay',
       'bundlePolicy': 'max-bundle',
     };
 
@@ -248,7 +285,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       );
     } catch (_) {}
 
-    // (Tùy chọn) giới hạn bitrate video gửi đi (~800 kbps)
+    // (TÃ¹y chá»n) giá»›i háº¡n bitrate video gá»­i Ä‘i (~800 kbps)
     try {
       final senders = await pc.getSenders();
       for (final sn in senders) {
@@ -282,10 +319,10 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
 
     // ===== Remote media in =====
     pc.onTrack = (RTCTrackEvent e) async {
-      // 1) ưu tiên dùng stream có sẵn
+      // 1) Æ°u tiÃªn dÃ¹ng stream cÃ³ sáºµn
       MediaStream? stream = e.streams.isNotEmpty ? e.streams.first : null;
 
-      // 2) fallback khi streams trống (unified-plan)
+      // 2) fallback khi streams trá»‘ng (unified-plan)
       if (stream == null) {
         stream = await createLocalMediaStream('remote_$peerId');
         await stream.addTrack(e.track);
@@ -301,17 +338,24 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       if (mounted) setState(() {});
     };
 
-    // Debug/khôi phục ICE
+    // Debug/khÃ´i phá»¥c ICE
     pc.onIceConnectionState = (st) async {
       debugPrint('[ICE][$peerId] $st');
       if (st == RTCIceConnectionState.RTCIceConnectionStateDisconnected ||
           st == RTCIceConnectionState.RTCIceConnectionStateFailed) {
         await _attemptIceRestart(peerId, pc);
+        // Náº¿u Ä‘Ã£ thá»­ restart nhiá»u láº§n mÃ  váº«n failed/disconnected, Ä‘Ã³ng peer Ä‘á»ƒ trÃ¡nh hÃ¬nh treo
+        final tries = _iceRestartTriesByUser[peerId] ?? 0;
+        if (tries >= _iceRestartMaxTries) {
+          await _closePeer(peerId);
+        }
+      } else if (st == RTCIceConnectionState.RTCIceConnectionStateClosed) {
+        await _closePeer(peerId);
       }
     };
     pc.onConnectionState = (st) => debugPrint('[PC][$peerId] $st');
 
-    // (Optional) hỗ trợ Plan-B cũ: onAddStream
+    // (Optional) há»— trá»£ Plan-B cÅ©: onAddStream
     pc.onAddStream = (MediaStream stream) async {
       var r = _remoteRendererByUser[peerId];
       if (r == null) {
@@ -325,7 +369,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
 
     _pcByUser[peerId] = pc;
 
-    // apply pending ICE (nếu có)
+    // apply pending ICE (náº¿u cÃ³)
     final pend = _pendingIceByUser.remove(peerId);
     if (pend != null) {
       for (final cand in pend) {
@@ -392,7 +436,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     await pc.setRemoteDescription(RTCSessionDescription(sdp, 'offer'));
 
     final answer = await pc.createAnswer({
-      // đảm bảo nhận media khi trả lời
+      // Ä‘áº£m báº£o nháº­n media khi tráº£ lá»i
       'offerToReceiveAudio': 1,
       'offerToReceiveVideo': 1,
     });
@@ -456,30 +500,112 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   Future<void> _endOrLeave() async {
     if (_leaving) return;
     _leaving = true;
+    final int participantsCount = _gc.participants.length;
+    bool preferEnd = false;
+    int? callId = _gc.currentCallId;
     try {
-      final callId = _gc.currentCallId;
+      final hasPeers = _gc.participants.isNotEmpty;
+      preferEnd = _isCreator || !hasPeers; // nếu chỉ còn mình thì kết thúc phòng
+      _sendDebugLog('leave_pressed', {
+        'call_id': '${callId ?? ''}',
+        'is_creator': '$_isCreator',
+        'has_peers': '$hasPeers',
+        'prefer_end': '$preferEnd',
+        'participants': '$participantsCount',
+      });
       if (callId != null) {
-        if (_isCreator) {
-          await _gc.endRoom(callId); // creator đóng phòng
-        } else {
-          await _gc.leaveRoom(callId);
-        }
+        // Gửi request end/leave ở nền để UI không bị kẹt
+        unawaited(() async {
+          try {
+            final future =
+                preferEnd ? _gc.endRoom(callId) : _gc.leaveRoom(callId);
+            await future.timeout(const Duration(seconds: 8), onTimeout: () {
+              throw TimeoutException('leave_timeout');
+            });
+            await _sendDebugLog('leave_done', {
+              'call_id': '$callId',
+              'action': preferEnd ? 'end' : 'leave',
+              'participants': '$participantsCount',
+            });
+          } catch (e) {
+            // Nếu không phải creator nhưng muốn end, fallback sang leave
+            if (preferEnd && !_isCreator) {
+              try {
+                await _gc
+                    .leaveRoom(callId)
+                    .timeout(const Duration(seconds: 5), onTimeout: () {
+                  throw TimeoutException('leave_timeout_fallback');
+                });
+                await _sendDebugLog('leave_done_fallback_leave', {
+                  'call_id': '$callId',
+                  'participants': '$participantsCount',
+                  'reason': '$e',
+                });
+              } catch (_) {}
+            } else {
+              await _sendDebugLog('leave_error', {
+                'error': '$e',
+                'prefer_end': '$preferEnd',
+                'participants': '$participantsCount',
+              });
+            }
+          }
+        }());
       }
-    } catch (_) {
+    } catch (e) {
+      _sendDebugLog('leave_error', {
+        'error': '$e',
+        'prefer_end': '$preferEnd',
+        'participants': '$participantsCount',
+      });
     } finally {
-      await _disposeMediaAndPCs();
-      await _popScreen();
+      unawaited(_disposeMediaAndPCs().timeout(const Duration(seconds: 3), onTimeout: () => null));
+      // Đóng UI ngay, không chờ network
+      await _forceCloseUi(callId);
     }
+  }
+
+  Future<void> _forceCloseUi(int? callId) async {
+    // Kết thúc CallKit/ConnectionService nếu còn kẹt
+    try {
+      if (callId != null && callId > 0) {
+        await CallkitService.I.endCallForServerId(callId);
+      }
+      await FlutterCallkitIncoming.endAllCalls();
+    } catch (_) {}
+
+    // Pop mạnh tay: thử nhiều lần để chắc chắn
+    await _popScreen();
+    Future.microtask(() => _popScreen());
+    Future.delayed(const Duration(milliseconds: 350), () => _popScreen());
   }
 
   // helper pop cứng: thử nhiều đường + removeRoute fallback
   Future<void> _popScreen() async {
     if (!mounted) return;
+    unawaited(_sendDebugLog('pop_screen_start', {}));
+
+    // Ưu tiên pop tất cả GroupCallScreen khỏi root stack
+    try {
+      final nav = Navigator.of(context, rootNavigator: true);
+      bool poppedAny = false;
+      nav.popUntil((route) {
+        final name = route.settings.name ?? '';
+        final keep = name != 'GroupCallScreen';
+        if (!keep) poppedAny = true;
+        return keep;
+      });
+      if (poppedAny) {
+        unawaited(_sendDebugLog('pop_screen_end', {'popped': 'true', 'step': 'popUntilRoot'}));
+        return;
+      }
+    } catch (_) {}
 
     // 1) Pop bằng context hiện tại
     try {
       if (Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
+        unawaited(_sendDebugLog('pop_screen_end', {'popped': 'true', 'step': 'context'}));
         return;
       }
     } catch (_) {}
@@ -488,6 +614,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     try {
       if (Navigator.of(context, rootNavigator: true).canPop()) {
         Navigator.of(context, rootNavigator: true).pop();
+        unawaited(_sendDebugLog('pop_screen_end', {'popped': 'true', 'step': 'rootNavigator'}));
         return;
       }
     } catch (_) {}
@@ -496,6 +623,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     try {
       if ((navigatorKey.currentState?.canPop() ?? false)) {
         navigatorKey.currentState?.pop();
+        unawaited(_sendDebugLog('pop_screen_end', {'popped': 'true', 'step': 'navigatorKey'}));
         return;
       }
     } catch (_) {}
@@ -505,6 +633,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       final route = ModalRoute.of(context);
       if (route != null) {
         navigatorKey.currentState?.removeRoute(route);
+        unawaited(_sendDebugLog('pop_screen_end', {'popped': 'true', 'step': 'removeRoute'}));
         return;
       }
     } catch (_) {}
@@ -512,7 +641,11 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     // 5) Cùng lắm thì về root
     try {
       navigatorKey.currentState?.popUntil((r) => r.isFirst);
+      unawaited(_sendDebugLog('pop_screen_end', {'popped': 'true', 'step': 'popUntilRootFallback'}));
+      return;
     } catch (_) {}
+
+    unawaited(_sendDebugLog('pop_screen_end', {'popped': 'false', 'step': 'no_route'}));
   }
 
   Future<void> _disposeMediaAndPCs() async {
@@ -568,7 +701,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     final isVideo = _isVideo;
     final title = (widget.groupName?.isNotEmpty == true)
         ? widget.groupName!
-        : (isVideo ? 'Video call nhóm' : 'Thoại nhóm');
+        : (isVideo ? 'Video call nhÃ³m' : 'Thoáº¡i nhÃ³m');
 
     return WillPopScope(
       onWillPop: () async {
@@ -583,7 +716,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
           title: Text(title),
           actions: [
             IconButton(
-              tooltip: _isCreator ? 'Kết thúc phòng' : 'Rời cuộc gọi',
+              tooltip: _isCreator ? 'Káº¿t thÃºc phÃ²ng' : 'Rá»i cuá»™c gá»i',
               icon: Icon(
                 _isCreator ? Icons.call_end : Icons.exit_to_app,
                 color: Colors.red,
@@ -597,10 +730,17 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
             Positioned.fill(
               child: _starting
                   ? _hint(isVideo
-                      ? 'Đang khởi tạo phòng video...'
-                      : 'Đang khởi tạo phòng thoại...')
+                      ? 'Äang khá»Ÿi táº¡o phÃ²ng video...'
+                      : 'Äang khá»Ÿi táº¡o phÃ²ng thoáº¡i...')
                   : (_error != null ? _hint(_error!) : _callContent()),
             ),
+            if (_connecting && !_starting)
+              Positioned(
+                top: 16,
+                left: 0,
+                right: 0,
+                child: _connectingBanner(),
+              ),
             Positioned(left: 0, right: 0, bottom: 24, child: _controls()),
           ],
         ),
@@ -612,6 +752,36 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
         child: Text(text,
             style: const TextStyle(color: Colors.white70, fontSize: 16)),
       );
+
+  Widget _connectingBanner() {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white10,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
+              ),
+            ),
+            SizedBox(width: 8),
+            Text(
+              'Äang káº¿t ná»i...',
+              style: TextStyle(color: Colors.white70),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _callContent() {
     final tiles = <Widget>[];
@@ -629,8 +799,8 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
             const SizedBox(height: 12),
             Text(
               _isVideo
-                  ? 'Đang kết nối những người tham gia...'
-                  : 'Đang kết nối âm thanh nhóm...',
+                  ? 'Äang káº¿t ná»‘i nhá»¯ng ngÆ°á»i tham gia...'
+                  : 'Äang káº¿t ná»‘i Ã¢m thanh nhÃ³m...',
               style: const TextStyle(color: Colors.white70),
             ),
           ],
@@ -771,5 +941,32 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     if (v is String) return int.tryParse(v);
     return null;
   }
-}
 
+  Future<void> _sendDebugLog(String tag, Map<String, String> details) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString(AppConstants.socialAccessToken);
+      final base = AppConstants.socialBaseUrl.endsWith('/')
+          ? AppConstants.socialBaseUrl.substring(0, AppConstants.socialBaseUrl.length - 1)
+          : AppConstants.socialBaseUrl;
+      final uri = Uri.parse(
+        token != null && token.isNotEmpty
+            ? '$base/api/webrtc_group?access_token=$token'
+            : '$base/api/webrtc_group',
+      );
+      final body = <String, String>{
+        'action': 'client_log',
+        'server_key': AppConstants.socialServerKey,
+        'message': tag,
+        'type': 'webrtc_group',
+        'details_json': jsonEncode(details),
+      };
+      details.forEach((k, v) {
+        body['details[$k]'] = v;
+      });
+      await http.post(uri, body: body).timeout(const Duration(seconds: 5));
+    } catch (_) {
+      // best effort
+    }
+  }
+}

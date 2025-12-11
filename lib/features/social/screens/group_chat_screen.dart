@@ -23,6 +23,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/group_call_s
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_chat_repository.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/push/callkit_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -164,6 +165,16 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
       _ringingDialogOpen = true;
       final gName = _finalTitle(context.read<GroupChatController>());
+      if (Platform.isIOS) {
+        await CallkitService.I.showIncomingGroupCall({
+          'call_id': callId,
+          'group_id': widget.groupId,
+          'group_name': gName,
+          'media': media,
+        });
+        _ringingDialogOpen = false;
+        return;
+      }
       await Navigator.of(context).push(
         MaterialPageRoute(
           fullscreenDialog: true,

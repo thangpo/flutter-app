@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/chat_media_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/call_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/push/callkit_service.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/call_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_chat_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
@@ -42,6 +43,8 @@ class ChatInfoScreen extends StatelessWidget {
         calleeId: calleeId,
         mediaType: mediaType,
       );
+      // Caller tự đánh dấu call_id đã xử lý để không nhận lại CallKit
+      CallkitService.I.markServerCallHandled(callId);
 
       final payload = {
         'type': 'call_invite',

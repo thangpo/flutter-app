@@ -6,9 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart'
     show navigatorKey;
+import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
+import 'remote_rtc_log.dart';
 
 import '../controllers/call_controller.dart';
 import '../controllers/group_call_controller.dart';
@@ -28,6 +31,7 @@ class CallInviteForegroundListener {
   static final Set<int> _handledCallIds = <int>{};
   static final Set<String> _handledGroupCalls = <String>{}; // callId|groupId
   static bool _routing = false;
+  static String? _cachedMyId;
 
   static void _log(String tag, dynamic data) {
     debugPrint(
@@ -46,6 +50,11 @@ class CallInviteForegroundListener {
   static Future<void> _handleChatEvent(FcmChatEvent evt) async {
     final raw = evt.text ?? '';
     if (raw.isEmpty) return;
+
+    final myId = await _getMyUserId();
+    if (myId != null && myId.isNotEmpty && evt.peerId == myId) {
+      return; // ignore self-sent events (caller)
+    }
 
     final normalized = _normalizeCallPayload(raw);
     if (!normalized.contains('call_invite')) return;
@@ -78,6 +87,16 @@ class CallInviteForegroundListener {
     final data = msg.data;
     if (data.isEmpty) return;
 
+    final myId = await _getMyUserId();
+    final callerId = _extractCallerId(data);
+    if (myId != null &&
+        myId.isNotEmpty &&
+        callerId != null &&
+        callerId.isNotEmpty &&
+        callerId == myId) {
+      return; // skip call_invite sent by myself
+    }
+
     final type = (data['type'] ?? '').toString();
     final isGroupFlag = _isTrue(data['is_group']);
 
@@ -89,6 +108,16 @@ class CallInviteForegroundListener {
         data['sender_name']?.toString() ?? data['caller_name']?.toString();
     final callerAvatar =
         data['sender_avatar']?.toString() ?? data['caller_avatar']?.toString();
+
+    unawaited(RemoteRtcLog.send(
+      event: 'fcm_onMessage',
+      callId: int.tryParse('${data['call_id'] ?? ''}') ?? 0,
+      details: {
+        'type': type,
+        'callerId': callerId,
+        'isGroup': isGroupFlag,
+      },
+    ));
 
     // ----------- GROUP CALL -----------
     if (data.containsKey('group_id') &&
@@ -133,6 +162,11 @@ class CallInviteForegroundListener {
             _parseLooseCallInvite(normalized);
         if (inv != null && !inv.isExpired()) {
           if (_handledCallIds.add(inv.callId)) {
+            unawaited(RemoteRtcLog.send(
+              event: 'chat_call_invite',
+              callId: inv.callId,
+              details: {'source': 'fcm_direct', 'callerId': callerId},
+            ));
             _openIncoming(
               inv,
               callerName: callerName,
@@ -164,6 +198,12 @@ class CallInviteForegroundListener {
     );
     if (inv.isExpired()) return;
     if (!_handledCallIds.add(inv.callId)) return;
+
+    unawaited(RemoteRtcLog.send(
+      event: 'direct_call_invite',
+      callId: inv.callId,
+      details: {'callerId': callerId},
+    ));
 
     _openIncoming(
       inv,
@@ -204,6 +244,27 @@ class CallInviteForegroundListener {
       media: media,
       issuedAt: issuedAt,
     );
+  }
+
+  static Future<String?> _getMyUserId() async {
+    if (_cachedMyId != null) return _cachedMyId;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final id = prefs.getString(AppConstants.socialUserId);
+      _cachedMyId = (id != null && id.isNotEmpty) ? id : null;
+      return _cachedMyId;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static String? _extractCallerId(Map<String, dynamic> data) {
+    final keys = ['caller_id', 'from_id', 'sender_id', 'user_id'];
+    for (final k in keys) {
+      final v = data[k];
+      if (v != null && v.toString().isNotEmpty) return v.toString();
+    }
+    return null;
   }
 
   /// Cắt value của 1 key trong chuỗi kiểu {'key':'value', "key2":123}
@@ -400,8 +461,30 @@ class CallInviteForegroundListener {
     String? callerName,
     String? callerAvatar,
   }) async {
+    if (_isActiveCallOnThisDevice(inv.callId)) {
+      _log('skip_invite_active_call', {
+        'call_id': inv.callId,
+        'media': inv.mediaType,
+      });
+      return;
+    }
+
     // iOS: bỏ hẳn incoming trong-app, chỉ dùng CallKit
     if (Platform.isIOS) {
+      final ctx = navigatorKey.currentState?.overlay?.context ??
+          navigatorKey.currentContext;
+      if (ctx != null) {
+        try {
+          final cc = ctx.read<CallController>();
+          if (!cc.isCallHandled(inv.callId)) {
+            cc.attachCall(
+              callId: inv.callId,
+              mediaType: inv.mediaType,
+              initialStatus: 'ringing',
+            );
+          }
+        } catch (_) {}
+      }
       return;
     }
 
@@ -486,7 +569,16 @@ class CallInviteForegroundListener {
     required String media,
     String? groupName,
   }) {
-    if (Platform.isIOS) return;
+    if (Platform.isIOS) {
+      // iOS dùng CallKit, không mở UI Flutter
+      CallkitService.I.showIncomingGroupCall({
+        'call_id': callId,
+        'group_id': groupId,
+        'media': media,
+        'group_name': groupName,
+      });
+      return;
+    }
     if (_routing) return;
 
     final nav = navigatorKey.currentState;
@@ -527,5 +619,17 @@ class CallInviteForegroundListener {
         .whenComplete(() {
       _routing = false;
     });
+  }
+  static bool _isActiveCallOnThisDevice(int callId) {
+    try {
+      final ctx = navigatorKey.currentState?.overlay?.context ?? navigatorKey.currentContext;
+      if (ctx == null) return false;
+      final cc = ctx.read<CallController>();
+      if (cc.activeCallId != callId) return false;
+      final st = cc.callStatus;
+      return st != 'ended' && st != 'declined';
+    } catch (_) {
+      return false;
+    }
   }
 }
