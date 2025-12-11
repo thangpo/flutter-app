@@ -39,6 +39,14 @@ class CallkitService {
   final Set<String> _endedGroupKeys = <String>{};
   final Set<String> _endedGroupIds = <String>{}; // đánh dấu group đã dập (dù callId rỗng)
 
+  // Nhóm vừa end trong vài giây gần đây (debounce foreground)
+  final Map<String, DateTime> _recentlyEndedGroup = {};
+  bool _wasGroupRecentlyEndedLocal(String gid, {int seconds = 8}) {
+    final t = _recentlyEndedGroup[gid];
+    if (t == null) return false;
+    return DateTime.now().difference(t).inSeconds < seconds;
+  }
+
   /// Đánh dấu các cuộc gọi đã accept (để setCallConnected 1 lần)
   final Set<String> _accepted = <String>{};
   final Set<int> _trackingRinging = <int>{};
@@ -180,6 +188,13 @@ class CallkitService {
     final serverId = int.tryParse('${data['call_id'] ?? ''}') ?? 0;
     final groupId = _extractGroupId(data);
     if (groupId.isEmpty) return;
+    if (_wasGroupRecentlyEndedLocal(groupId)) {
+      _sendGroupDebugLog('SKIP_SHOW_RECENTLY_ENDED_LOCAL', {'group_id': groupId});
+      // Dập nếu SDK đã lỡ hiện (phòng hộ)
+      await endGroupCall(groupId, serverId);
+      return;
+    }
+
     if (await _isSelfCall(data)) return;
 
     final key = _groupKey(groupId, serverId);
@@ -351,6 +366,16 @@ class CallkitService {
     switch (evt) {
       case 'ACTION_CALL_INCOMING':
       case 'Event.actionCallIncoming':
+        if (groupId.isNotEmpty && _wasGroupRecentlyEndedLocal(groupId)) {
+          _sendGroupDebugLog('SKIP_EVT_INCOMING_RECENTLY_ENDED_LOCAL', {
+            'group_id': groupId,
+            'call_id': serverCallId,
+          });
+          if (systemId.isNotEmpty) {
+            unawaited(FlutterCallkitIncoming.endCall(systemId));
+          }
+          return;
+        }
         debugPrint(
             '[CallKit] incoming shown: systemId=$systemId serverId=$serverCallId');
         // Nếu thiết bị đang ở trong call (caller/callee) thì bỏ qua incoming mới
@@ -660,6 +685,7 @@ class CallkitService {
     final key = _groupKey(groupId, callId <= 0 ? 0 : callId);
     _endedGroupKeys.add(key);
     _endedGroupIds.add(groupId);
+    _recentlyEndedGroup[groupId] = DateTime.now();
     _handledGroupKeys.add(key);
     _ringingGroupMedia.remove(key);
     _ringingGroupName.remove(key);
@@ -684,6 +710,47 @@ class CallkitService {
     try {
       await FlutterCallkitIncoming.endAllCalls();
     } catch (_) {}
+  }
+
+  /// Push 'call_group_end' cần dập CallKit và thoát GroupCallScreen nếu đang mở.
+  Future<void> handleRemoteGroupEnded(String groupId, int callId) async {
+    _sendGroupDebugLog('push_group_end_received', {
+      'group_id': groupId,
+      'call_id': callId,
+    });
+    await endGroupCall(groupId, callId);
+
+    _withGroupController((gc, ctx) async {
+      final matchesCall =
+          (callId > 0 && gc.currentCallId == callId) ||
+              (callId <= 0 && gc.currentCallId != null);
+      final matchesGroup =
+          groupId.isNotEmpty && (gc.currentGroupId == groupId);
+      final hasCurrent =
+          gc.currentCallId != null || (gc.currentGroupId?.isNotEmpty ?? false);
+      if (!hasCurrent || (!matchesCall && !matchesGroup)) {
+        // Fallback: vẫn pop UI nếu đang mở CallScreen/GroupCallScreen bị kẹt
+        _popAnyCallScreenIfMounted(ctx);
+        _sendGroupDebugLog('push_group_end_pop_fallback', {
+          'group_id': groupId,
+          'call_id': callId,
+          'has_current': hasCurrent ? 1 : 0,
+          'matches_call': matchesCall ? 1 : 0,
+          'matches_group': matchesGroup ? 1 : 0,
+        });
+        return;
+      }
+
+      gc.handleRemoteEnded(
+        callId: callId > 0 ? callId : null,
+        groupId: groupId.isNotEmpty ? groupId : null,
+      );
+      _sendGroupDebugLog('push_group_end_handled', {
+        'group_id': groupId,
+        'call_id': callId,
+      });
+      _popAnyCallScreenIfMounted(ctx);
+    });
   }
 
   String _makeSystemUuidFromServerId(dynamic callId) {
@@ -729,6 +796,7 @@ class CallkitService {
     final ctx = navigatorKey.currentState?.overlay?.context ??
         navigatorKey.currentContext;
     if (ctx == null) {
+      _sendGroupDebugLog('group_ctx_null_queue', {});
       _pendingActions.add((readyCtx) async {
         try {
           final gc = readyCtx.read<GroupCallController>();
@@ -748,6 +816,7 @@ class CallkitService {
           await fn(gc, readyCtx);
         } catch (_) {}
       });
+      Future.microtask(() => flushPendingActions());
     }
   }
 
@@ -758,6 +827,10 @@ class CallkitService {
         navigatorKey.currentContext;
     if (ctx == null) {
       // Queue lại khi chưa có context (vd: accept từ CallKit trong background)
+      unawaited(RemoteRtcLog.send(
+        event: 'ctx_null_queue',
+        details: {'src': 'withController'},
+      ));
       _pendingActions.add((readyCtx) async {
         try {
           final cc = readyCtx.read<CallController>();
@@ -773,12 +846,17 @@ class CallkitService {
       unawaited(fn(cc, ctx));
     } catch (_) {
       // Nếu provider chưa sẵn (race), queue lại để thử sau frame kế tiếp
+      unawaited(RemoteRtcLog.send(
+        event: 'provider_missing_queue',
+        details: {'src': 'withController'},
+      ));
       _pendingActions.add((readyCtx) async {
         try {
           final cc = readyCtx.read<CallController>();
           await fn(cc, readyCtx);
         } catch (_) {}
       });
+      Future.microtask(() => flushPendingActions());
     }
   }
 
@@ -1214,7 +1292,7 @@ class CallkitService {
       try {
         final nav = Navigator.of(ctx, rootNavigator: true);
         await nav.push(route);
-      } catch (_) {
+      } catch (e) {
         final nav = navigatorKey.currentState;
         if (nav != null) {
           await nav.push(route);
@@ -1226,14 +1304,24 @@ class CallkitService {
       }
     }
 
-    pushRoute().catchError((_) {
+    pushRoute().catchError((err) {
+      _sendGroupDebugLog('open_group_screen_error', {
+        'call_id': callId,
+        'group_id': groupId,
+        'err': '$err',
+      });
       Future.delayed(const Duration(milliseconds: 250), () async {
         try {
           final nav = navigatorKey.currentState;
           if (nav != null) {
             await nav.push(route);
           }
-        } catch (_) {
+        } catch (e) {
+          _sendGroupDebugLog('open_group_screen_retry_error', {
+            'call_id': callId,
+            'group_id': groupId,
+            'err': '$e',
+          });
         } finally {
           _routingToCall = false;
         }
@@ -1298,7 +1386,7 @@ class CallkitService {
       try {
         final nav = Navigator.of(ctx, rootNavigator: true);
         await nav.push(route);
-      } catch (_) {
+      } catch (e) {
         final nav = navigatorKey.currentState;
         if (nav != null) {
           await nav.push(route);
@@ -1310,7 +1398,12 @@ class CallkitService {
       }
     }
 
-    pushRoute().catchError((_) {
+    pushRoute().catchError((err) {
+      unawaited(RemoteRtcLog.send(
+        event: 'open_call_screen_error',
+        callId: callId,
+        details: {'err': '$err'},
+      ));
       // Retry once shortly after (cold start, context vừa ready)
       Future.delayed(const Duration(milliseconds: 250), () async {
         try {
@@ -1318,7 +1411,12 @@ class CallkitService {
           if (nav != null) {
             await nav.push(route);
           }
-        } catch (_) {
+        } catch (e) {
+          unawaited(RemoteRtcLog.send(
+            event: 'open_call_screen_retry_error',
+            callId: callId,
+            details: {'err': '$e'},
+          ));
         } finally {
           _routingToCall = false;
         }

@@ -181,10 +181,11 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       'video': _isVideo
           ? {
               'facingMode': 'user',
-              // Giảm độ phân giải để khởi tạo/ICE nhanh hơn, giảm thời gian màn đen
-              'width': {'ideal': 640, 'max': 720},
-              'height': {'ideal': 480, 'max': 720},
-              'frameRate': {'ideal': 20, 'max': 24},
+              // Giảm độ phân giải để khởi tạo/ICE nhanh hơn
+              'width': {'ideal': 480, 'max': 640},
+              'height': {'ideal': 640, 'max': 720},
+              'frameRate': {'ideal': 18, 'max': 24},
+              'degradationPreference': 'maintain-framerate',
             }
           : false,
     };
@@ -255,9 +256,10 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     final config = {
       'iceServers': kDefaultIceServers,
       'sdpSemantics': 'unified-plan',
-      // Ưu tiên relay qua TURN để đỡ kẹt NAT, giảm thời gian chờ ICE
-      'iceTransportPolicy': 'relay',
+      // Ưu tiên kết nối trực tiếp trước, fallback TURN khi cần để giảm trễ
+      'iceTransportPolicy': 'all',
       'bundlePolicy': 'max-bundle',
+      'iceCandidatePoolSize': 2,
     };
 
     final pc = await createPeerConnection(config);
@@ -293,7 +295,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
           await sn.setParameters(RTCRtpParameters(
             encodings: <RTCRtpEncoding>[
               RTCRtpEncoding(
-                maxBitrate: 800 * 1000,
+                maxBitrate: 600 * 1000,
                 numTemporalLayers: 2,
                 rid: 'f',
               ),

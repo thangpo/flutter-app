@@ -238,7 +238,9 @@ class GroupCallController extends ChangeNotifier {
 
     _pollInFlight = true;
     try {
-      final events = await signaling.poll(callId: callId);
+      final poll = await signaling.poll(callId: callId, withPeers: true);
+      final events = (poll['items'] as List<Map<String, dynamic>>?) ?? const [];
+      final peersFromPoll = (poll['peers'] as List<int>?) ?? const <int>[];
       if (events.isNotEmpty) {
         for (final ev in events) {
           final type = (ev['type'] ?? '').toString();
@@ -262,13 +264,9 @@ class GroupCallController extends ChangeNotifier {
         }
       }
 
-      // refresh peers mỗi 2s (prod có thể tăng 5s)
-      _tick = (_tick + 1) % _peersRefreshEveryNTicks;
-      if (_tick == 0) {
-        final newPeers = await signaling.peers(callId: callId);
-        final newSet = newPeers.toSet();
-
-        // cập nhật participants
+      // cập nhật participants từ poll nếu server trả về
+      if (peersFromPoll.isNotEmpty) {
+        final newSet = peersFromPoll.toSet();
         if (!_setEquals(participants, newSet)) {
           participants
             ..clear()
@@ -276,17 +274,45 @@ class GroupCallController extends ChangeNotifier {
           onPeersChanged?.call(Set<int>.from(participants));
           notifyListeners();
         }
-
-        // ✅ Auto-close cho member nếu không còn ai trong 3 lần liên tiếp (~3s)
         if (!_isCreator) {
           _emptyPeersCount = participants.isEmpty ? (_emptyPeersCount + 1) : 0;
-          if (_emptyPeersCount >= _emptyPeersCloseThreshold) {
-            _cleanup();
-            return;
-          }
         } else {
           _emptyPeersCount = 0;
         }
+      } else {
+        // fallback refresh peers mỗi 2s (prod có thể tăng 5s)
+        _tick = (_tick + 1) % _peersRefreshEveryNTicks;
+        if (_tick == 0) {
+          final newPeers = await signaling.peers(callId: callId);
+          final newSet = newPeers.toSet();
+
+          if (!_setEquals(participants, newSet)) {
+            participants
+              ..clear()
+              ..addAll(newSet);
+            onPeersChanged?.call(Set<int>.from(participants));
+            notifyListeners();
+          }
+
+          if (!_isCreator) {
+            _emptyPeersCount =
+                participants.isEmpty ? (_emptyPeersCount + 1) : 0;
+            if (_emptyPeersCount >= _emptyPeersCloseThreshold) {
+              _cleanup();
+              return;
+            }
+          } else {
+            _emptyPeersCount = 0;
+          }
+        }
+      }
+
+      // ✅ Auto-close cho member nếu không còn ai trong 3 lần liên tiếp (~3s)
+      if (!_isCreator &&
+          _emptyPeersCount >= _emptyPeersCloseThreshold &&
+          peersFromPoll.isNotEmpty) {
+        _cleanup();
+        return;
       }
     } catch (e) {
       if (kDebugMode) {
@@ -298,6 +324,26 @@ class GroupCallController extends ChangeNotifier {
   }
 
   // ====================== INTERNALS ======================
+  /// Được gọi khi nhận push 'call_group_end' hoặc server báo đã kết thúc.
+  void handleRemoteEnded({int? callId, String? groupId}) {
+    final matchesCall =
+        (callId != null && callId > 0 && currentCallId == callId) ||
+            (callId != null && callId <= 0 && currentCallId != null);
+    final matchesGroup = groupId != null &&
+        groupId.isNotEmpty &&
+        currentGroupId != null &&
+        currentGroupId == groupId;
+    // Nếu không match callId/groupId cụ thể và không có call hiện tại -> bỏ qua
+    final hasCurrent =
+        currentCallId != null || (currentGroupId?.isNotEmpty ?? false);
+    if (!hasCurrent) return;
+    if (!matchesCall && !matchesGroup) return;
+
+    status = CallStatus.ended;
+    _emitStatus();
+    _cleanup();
+  }
+
   Future<void> _joinInternal(int callId) async {
     final peers = await signaling.join(callId: callId);
     participants
