@@ -38,7 +38,10 @@ abstract class GroupWebRTCSignalingRepository {
     String? sdpMid,
     String? sdpMLineIndex,
   });
-  Future<List<Map<String, dynamic>>> poll({required int callId});
+  Future<Map<String, dynamic>> poll({
+    required int callId,
+    bool withPeers = true,
+  });
   Future<void> leave({required int callId});
   Future<void> end({required int callId});
   Future<Map<String, dynamic>?> inbox({required String groupId});
@@ -119,6 +122,18 @@ class WebRTCGroupSignalingRepositoryImpl
           .toList(growable: false);
     }
     return const <Map<String, dynamic>>[];
+  }
+
+  Map<String, dynamic> _parsePoll(Map<String, dynamic> json) {
+    final itemsRaw = json['items'] ??
+        json['events'] ??
+        json['data']?['items'] ??
+        json['data']?['events'];
+    final peersRaw = json['peers'] ?? json['data']?['peers'];
+    return {
+      'items': _parseEvents(itemsRaw),
+      'peers': _parsePeers(peersRaw),
+    };
   }
 
   Future<Map<String, dynamic>> _post(
@@ -267,14 +282,16 @@ class WebRTCGroupSignalingRepositoryImpl
   }
 
   @override
-  Future<List<Map<String, dynamic>>> poll({required int callId}) async {
-    final json = await _post({'action': 'poll', 'call_id': '$callId'});
-    // server cÃ³ thá»ƒ tráº£ items, events, hoáº·c data.items
-    final list = json['items'] ??
-        json['events'] ??
-        json['data']?['items'] ??
-        json['data']?['events'];
-    return _parseEvents(list);
+  Future<Map<String, dynamic>> poll({
+    required int callId,
+    bool withPeers = true,
+  }) async {
+    final json = await _post({
+      'action': 'poll',
+      'call_id': '$callId',
+      if (withPeers) 'with_peers': '1',
+    });
+    return _parsePoll(json);
   }
 
   @override
@@ -298,9 +315,5 @@ class WebRTCGroupSignalingRepositoryImpl
     return null;
   }
 }
-
-
-
-
 
 

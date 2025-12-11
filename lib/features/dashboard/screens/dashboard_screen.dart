@@ -127,6 +127,8 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       if (m != null) return int.tryParse(m.group(1)!);
     } catch (_) {}
     return null;
+  }
+  
   void _handleTravelScroll(bool showNav) {
     if (_showBottomNav == showNav) return;
 

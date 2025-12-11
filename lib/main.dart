@@ -125,6 +125,26 @@ const AndroidNotificationChannel _callInviteChannel =
   enableVibration: true,
 );
 
+// === Group-call end debounce helpers ===
+Future<void> _markGroupEndedNow(String groupId) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('recent_end_'+groupId, DateTime.now().millisecondsSinceEpoch ~/ 1000);
+  } catch (_) {}
+}
+
+Future<bool> _wasGroupRecentlyEnded(String groupId, {int seconds = 8}) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final ts = prefs.getInt('recent_end_'+groupId) ?? 0;
+    if (ts <= 0) return false;
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    return (now - ts) < seconds;
+  } catch (_) {
+    return false;
+  }
+}
+
 // Background FCM
 @pragma('vm:entry-point')
 Future<void> myBackgroundMessageHandler(RemoteMessage message) async {
@@ -174,7 +194,8 @@ Future<void> myBackgroundMessageHandler(RemoteMessage message) async {
   if (type == 'call_group_end') {
     final gid = (data['group_id'] ?? '').toString();
     final cid = int.tryParse('${data['call_id'] ?? ''}') ?? 0;
-    await CallkitService.I.endGroupCall(gid, cid);
+    await CallkitService.I.handleRemoteGroupEnded(gid, cid);
+    await _markGroupEndedNow(gid);
     print('? [BG] End incoming group call via push (call_id=$cid gid=$gid)');
   } else if (type == 'call_invite' ||
       type == 'call_invite_group' ||
@@ -205,7 +226,12 @@ Future<void> myBackgroundMessageHandler(RemoteMessage message) async {
           return;
         }
         // Hien thi CallKit/ConnectionService cho cuoc goi nhom ca iOS & Android
-        await CallkitService.I.showIncomingGroupCall(data);
+        if (await _wasGroupRecentlyEnded(gid)) {
+          print('[BG] Skip group invite (recently ended) gid=' + gid);
+          await CallkitService.I.endGroupCall(gid, bgCallId);
+        } else {
+          await CallkitService.I.showIncomingGroupCall(data);
+        }
       } else {
         if (bgCallId > 0 && CallkitService.I.isServerCallHandled(bgCallId)) {
           print('? [BG] Skip call_invite: already handled call_id=$bgCallId');
@@ -567,6 +593,10 @@ Future<void> _ensureAndroidNotificationPermission() async {
 Future<void> main() async {
   HttpOverrides.global = MyHttpOverrides();
   WidgetsFlutterBinding.ensureInitialized();
+  // Đảm bảo các action CallKit (accept từ background/cold start) được flush ngay frame đầu.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    CallkitService.I.flushPendingActions();
+  });
 
   // Ðang ký listener CallKit càng s?m càng t?t d? không miss s? ki?n ANSWER khi app du?c m? t? CallKit (cold start).
   await CallkitService.I.init();
@@ -731,7 +761,8 @@ Future<void> main() async {
       if (t == 'call_group_end') {
         final gid = (initialMessage.data['group_id'] ?? '').toString();
         final cid = int.tryParse('${initialMessage.data['call_id'] ?? ''}') ?? 0;
-        await CallkitService.I.endGroupCall(gid, cid);
+        await CallkitService.I.handleRemoteGroupEnded(gid, cid);
+        await _markGroupEndedNow(gid);
       } else if (isGroupInvite) {
         await _scheduleGroupCallInviteOpen(initialMessage.data);
       } else if (t == 'call_invite') {
@@ -759,7 +790,8 @@ Future<void> main() async {
       if (t == 'call_group_end') {
         final gid = (message.data['group_id'] ?? '').toString();
         final cid = int.tryParse('${message.data['call_id'] ?? ''}') ?? 0;
-        await CallkitService.I.endGroupCall(gid, cid);
+        await CallkitService.I.handleRemoteGroupEnded(gid, cid);
+        await _markGroupEndedNow(gid);
         return;
       }
       if (isGroupInvite) {
@@ -785,7 +817,8 @@ Future<void> main() async {
       if ((data['type'] ?? '') == 'call_group_end') {
         final gid = (data['group_id'] ?? '').toString();
         final cid = int.tryParse('${data['call_id'] ?? ''}') ?? 0;
-        await CallkitService.I.endGroupCall(gid, cid);
+        await CallkitService.I.handleRemoteGroupEnded(gid, cid);
+        await _markGroupEndedNow(gid);
         return;
       }
 
