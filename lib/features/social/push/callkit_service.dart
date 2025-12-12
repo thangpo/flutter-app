@@ -630,15 +630,55 @@ class CallkitService {
             ? <String, dynamic>{}
             : extraDyn.map((k, v) => MapEntry(k.toString(), v));
 
-        final accepted = map['accepted'] == true ||
-            map['isAccepted'] == true ||
-            map['hasConnected'] == true;
+        final systemId = (map['id'] ?? '').toString();
 
-        final serverCallId = int.tryParse(
+        // iOS 18 fallback: coi như "đã nhận" nếu (a) CallKit gửi event ACCEPT trước đó
+        // và _accepted có chứa systemId, hoặc (b) map có state/answered thủ công.
+        final accepted =
+            map['accepted'] == true ||
+            map['isAccepted'] == true ||
+            map['hasConnected'] == true ||
+            _accepted.contains(systemId) ||
+            (map['answered'] == true) ||
+            ((map['state']?.toString().toLowerCase() ?? '') == 'answered');
+
+        // Lấy serverCallId (có thể mất trên iOS 18). Thử thêm các đường suy ngược.
+        int serverCallId = int.tryParse(
               '${extra['call_id'] ?? extra['callId'] ?? extra['id'] ?? ''}',
-            ) ??
-            0;
-        if (!accepted || serverCallId <= 0) continue;
+            ) ?? 0;
+
+        if (serverCallId <= 0) {
+          // 1) Tra ngược từ bảng _systemIds (1-1)
+          final found = _systemIds.entries.firstWhere(
+            (e) => e.value.toLowerCase() == systemId.toLowerCase(),
+            orElse: () => const MapEntry(-1, ''),
+          );
+          if (found.key > 0) serverCallId = found.key;
+
+          // 2) Thử đọc lại từ activeCalls() theo systemId (đề phòng extra mất)
+          if (serverCallId <= 0 && systemId.isNotEmpty) {
+            try {
+              final list = await FlutterCallkitIncoming.activeCalls();
+              for (final item in list) {
+                if (item is Map && '${item['id']}'.toLowerCase() == systemId.toLowerCase()) {
+                  final extraDyn2 = item['extra'] as Map<dynamic, dynamic>?;
+                  final extra2 = extraDyn2 == null
+                      ? <String, dynamic>{}
+                      : extraDyn2.map((k, v) => MapEntry(k.toString(), v));
+                  final rawId = '${extra2['call_id'] ?? extra2['callId'] ?? extra2['id'] ?? ''}'.trim();
+                  final n = int.tryParse(rawId) ?? 0;
+                  if (n > 0) {
+                    serverCallId = n;
+                    break;
+                  }
+                }
+              }
+            } catch (_) {}
+          }
+        }
+
+        // Nếu accepted bị thiếu trên iOS 18 nhưng ta đã suy ra được serverCallId → vẫn route.
+        if ((!accepted) && serverCallId <= 0) continue;
         if (_handledServerIds.contains(serverCallId)) continue;
 
         final media = _extractMedia(extra);
