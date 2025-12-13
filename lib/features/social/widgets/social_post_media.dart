@@ -13,11 +13,11 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_live_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/live_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_post_full_with_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/share_post_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/price_converter.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
@@ -54,6 +54,7 @@ Widget? buildSocialPostMedia(
       ),
       child: _VideoPlayerTile(
         url: fileUrl!,
+        post: post,
         maxHeightFactor: compact ? 0.5 : 0.6,
       ),
     );
@@ -1124,6 +1125,7 @@ class _LiveReplayTile extends StatelessWidget {
     assert(resolvedUrl != null && resolvedUrl != '');
     final Widget video = _VideoPlayerTile(
       url: resolvedUrl!,
+      post: post,
       maxHeightFactor: compact ? 0.5 : 0.6,
     );
     final String badge = getTranslated('live_replay', context) ??
@@ -1173,8 +1175,10 @@ class _LiveReplayTile extends StatelessWidget {
 class _VideoPlayerTile extends StatefulWidget {
   final String url;
   final double maxHeightFactor;
+  final SocialPost post;
   const _VideoPlayerTile({
     required this.url,
+    required this.post,
     this.maxHeightFactor = 0.6,
   });
 
@@ -1217,6 +1221,47 @@ class _InlineVideoCoordinator {
     if (_current == controller) {
       _current = null;
     }
+  }
+}
+
+class _OverlayPillButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _OverlayPillButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.black.withOpacity(0.6),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: Colors.white, size: 18),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -1310,9 +1355,14 @@ class _VideoPlayerTileState extends State<_VideoPlayerTile>
     _coordinator.requestPlay(c);
   }
 
-  void _share() {
-    if (widget.url.isEmpty) return;
-    Share.share(widget.url);
+  Future<void> _share() async {
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SharePostScreen(post: widget.post),
+        fullscreenDialog: true,
+      ),
+    );
   }
 
   @override
@@ -1362,61 +1412,55 @@ class _VideoPlayerTileState extends State<_VideoPlayerTile>
                 ),
                 if (_ended)
                   Positioned.fill(
-                    child: Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: Container(
+                            color: Colors.black.withOpacity(0.28),
+                          ),
                         ),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.55),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            TextButton.icon(
-                              style: TextButton.styleFrom(
-                                foregroundColor: Colors.white,
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 10),
-                              ),
-                              onPressed: _replay,
-                              icon: const Icon(Icons.replay),
-                              label: const Text('Xem lại'),
+                        Center(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _OverlayPillButton(
+                                  icon: Icons.replay,
+                                  label: 'Xem lại',
+                                  onTap: _replay,
+                                ),
+                                const SizedBox(width: 10),
+                                _OverlayPillButton(
+                                  icon: Icons.share_outlined,
+                                  label: 'Chia sẻ',
+                                  onTap: _share,
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 8),
-                            TextButton.icon(
-                              style: TextButton.styleFrom(
-                                foregroundColor: Colors.white,
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 10),
-                              ),
-                              onPressed: _share,
-                              icon: const Icon(Icons.share_outlined),
-                              label: const Text('Chia sẻ'),
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ),
                 Positioned(
                   right: 12,
                   bottom: 12,
-                  child: Material(
-                    color: Colors.black.withOpacity(0.36),
-                    shape: const CircleBorder(),
-                    child: IconButton(
-                      iconSize: 16,
-                      padding: const EdgeInsets.all(2),
-                      constraints: const BoxConstraints.tightFor(width: 18, height: 18),
-                      color: Colors.white,
-                      icon: Icon(_muted ? Icons.volume_off : Icons.volume_up),
-                      onPressed: _toggleMute,
+                  child: IconButton(
+                    icon: Icon(_muted ? Icons.volume_off : Icons.volume_up),
+                    iconSize: 16,
+                    color: Colors.white,
+                    onPressed: _toggleMute,
+                    style: IconButton.styleFrom(
+                      fixedSize: const Size(28, 28),                 // kích thước nút (và vòng tròn)
+                      padding: EdgeInsets.zero,
+                      shape: const CircleBorder(),
+                      backgroundColor: Colors.black.withOpacity(0.36),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap, // bỏ mở rộng vùng chạm mặc định
+                      minimumSize: Size.zero,                           // tránh min 48x48
                     ),
                   ),
-                ),
+                )
               ],
             ),
           );

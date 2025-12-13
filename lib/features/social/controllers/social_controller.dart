@@ -1361,6 +1361,7 @@ class SocialController with ChangeNotifier {
     String? storyTitle,
     String? storyDescription,
     String? highlightHash,
+    String? overlayMeta,
   }) async {
     if (_creatingStory) return null;
     _creatingStory = true;
@@ -1373,6 +1374,7 @@ class SocialController with ChangeNotifier {
         storyTitle: storyTitle,
         storyDescription: storyDescription,
         highlightHash: highlightHash,
+        overlayMeta: overlayMeta,
       );
       if (story != null) {
         _mergeStories([story]);
@@ -3027,4 +3029,3 @@ bool _isProfileStale(String id) {
   if (dt == null) return true;
   return DateTime.now().difference(dt) > _profileTTL;
 }
-

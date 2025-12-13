@@ -923,6 +923,7 @@ class SocialRepository {
     String? storyTitle,
     String? storyDescription,
     String? highlightHash,
+    String? overlayMeta,
   }) async {
     try {
       final token = _getSocialAccessToken();
@@ -952,6 +953,8 @@ class SocialRepository {
           'story_description': storyDescription.trim(),
         if (highlightHash != null && highlightHash.trim().isNotEmpty)
           'highlight_hash': highlightHash.trim(),
+        if (overlayMeta != null && overlayMeta.isNotEmpty)
+          'overlay_meta': overlayMeta,
       };
 
       final Response res = await dioClient.post(
