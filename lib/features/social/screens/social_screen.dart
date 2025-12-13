@@ -37,6 +37,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_page_
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/social_post_text_block.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/social_feeling_helper.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_post_full_with_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/widgets/story_overlays.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
@@ -894,7 +895,14 @@ class _StoryCardFromApi extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final onSurface = cs.onSurface;
-    final thumb = story.thumbUrl ?? story.mediaUrl;
+    final previewItem = story.previewItem ?? story.firstItem;
+    final thumb =
+        previewItem?.thumbUrl ?? previewItem?.mediaUrl ?? story.thumbUrl ?? story.mediaUrl;
+    final overlays = previewItem?.overlays ?? const <SocialStoryOverlay>[];
+    // if (overlays.isNotEmpty) {
+    //   debugPrint(
+    //       'Story card overlays: storyId=${story.id} previewItem=${previewItem?.id} count=${overlays.length}');
+    // }
     final bool hasUnviewed = story.items.any((item) => item.isViewed == false);
     final Color activeRingColor = cs.primary;
     final double ringBorderWidth = hasUnviewed ? 3 : 1.5;
@@ -908,22 +916,24 @@ class _StoryCardFromApi extends StatelessWidget {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: Material(
-                color: cs.surfaceVariant,
-                child: InkWell(
-                  onTap: onTap,
-                  child: Stack(
-                    children: [
-                      // ảnh story
-                      if (thumb != null && thumb.isNotEmpty)
+                  color: cs.surfaceVariant,
+                  child: InkWell(
+                    onTap: onTap,
+                    child: Stack(
+                      children: [
+                        // ảnh story
                         Positioned.fill(
-                          child: Image(
-                            image: CachedNetworkImageProvider(thumb),
-                            fit: BoxFit.cover,
+                          child: StoryOverlayStack(
+                            media: thumb != null && thumb.isNotEmpty
+                                ? Image(
+                                    image: CachedNetworkImageProvider(thumb),
+                                    fit: BoxFit.cover,
+                                  )
+                                : Container(color: cs.surfaceVariant),
+                            overlays: overlays,
+                            maxLines: 3,
+                            maxFontSize: 40,
                           ),
-                        )
-                      else
-                        Positioned.fill(
-                          child: Container(color: cs.surfaceVariant),
                         ),
 
                       // gradient dưới

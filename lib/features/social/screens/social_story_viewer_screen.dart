@@ -17,6 +17,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/story_ads_helper.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/widgets/story_overlays.dart';
 
 class SocialStoryViewerScreen extends StatefulWidget {
   final List<SocialStory> stories;
@@ -1384,64 +1385,14 @@ class _StoryMediaState extends State<_StoryMedia> {
   }
 
   Widget _wrapWithOverlays(Widget media, SocialStoryItem item) {
-    final overlays = item.overlays;
-    if (overlays.isEmpty) return media;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final Size size = constraints.biggest;
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            media,
-            ...overlays.map((o) => _buildOverlay(o, size)),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildOverlay(SocialStoryOverlay overlay, Size size) {
-    final double w = overlay.width * size.width;
-    final double h = overlay.height * size.height;
-    final double left = overlay.x * size.width - w / 2;
-    final double top = overlay.y * size.height - h / 2;
-    final Alignment align = _alignmentFromString(overlay.align);
-    final TextAlign textAlign = _textAlignFromString(overlay.align);
-    final double fontSize =
-        (overlay.fontScale * size.width).clamp(10.0, 64.0);
-
-    return Positioned(
-      left: left,
-      top: top,
-      width: w,
-      height: h,
-      child: Transform.rotate(
-        angle: overlay.rotation,
-        child: Container(
-          alignment: align,
-          padding: overlay.hasBackground
-              ? const EdgeInsets.symmetric(horizontal: 8, vertical: 6)
-              : EdgeInsets.zero,
-          decoration: overlay.hasBackground
-              ? BoxDecoration(
-                  color: overlay.color.withOpacity(0.22),
-                  borderRadius: BorderRadius.circular(8),
-                )
-              : null,
-          child: Text(
-            overlay.text,
-            textAlign: textAlign,
-            maxLines: 5,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: fontSize,
-              color: overlay.color,
-              fontWeight: FontWeight.w600,
-              height: 1.15,
-            ),
-          ),
-        ),
-      ),
+    // if (item.overlays.isNotEmpty) {
+    //   debugPrint(
+    //       'Story viewer overlays: item=${item.id} count=${item.overlays.length}');
+    // }
+    return StoryOverlayStack(
+      media: media,
+      overlays: item.overlays,
+      maxLines: 5,
     );
   }
 }
