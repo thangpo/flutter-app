@@ -1,10 +1,13 @@
 import 'dart:convert';
+import 'dart:ui' show lerpDouble;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+
 
 class FriendsScreen extends StatefulWidget {
   const FriendsScreen({super.key});
@@ -16,6 +19,7 @@ class FriendsScreen extends StatefulWidget {
 class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProviderStateMixin {
   bool isLoading = false;
   List<dynamic> friendRequests = [];
+  List<dynamic> myFriends = [];
   List<dynamic> recommendedFriends = [];
   List<dynamic> searchResults = [];
   String? errorMessage;
@@ -26,11 +30,24 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    fetchRecommendedFriends();
-    fetchFriendRequests();
+    _tabController = TabController(length: 3, vsync: this);
+    fetchFriendRequests();       // tab 0
+    fetchMyFriends();            // tab 1 (bạn bè của tôi)
+    fetchRecommendedFriends();   // tab 2
+
     _searchController.addListener(_filterFriendsByUsername);
+
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) {
+        if (_searchController.text.trim().isNotEmpty) {
+          _filterFriendsByUsername();
+        } else {
+          setState(() {}); // update UI segment highlight
+        }
+      }
+    });
   }
+
 
   @override
   void dispose() {
@@ -50,8 +67,110 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
   Future<void> _refreshData() async {
     if (_tabController.index == 0) {
       await fetchFriendRequests();
+    } else if (_tabController.index == 1) {
+      await fetchMyFriends();
     } else {
       await fetchRecommendedFriends();
+    }
+  }
+
+  Future<void> fetchMyFriends() async {
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
+
+    try {
+      final authController = Provider.of<AuthController>(context, listen: false);
+      final userId = await authController.authServiceInterface.getSocialUserId();
+      final accessToken = await authController.authServiceInterface.getSocialAccessToken();
+
+      if (accessToken == null || accessToken.isEmpty) {
+        setState(() {
+          isLoading = false;
+          errorMessage = getTranslated('social_token_invalid', context) ??
+              'Invalid social token, please login again.';
+        });
+        return;
+      }
+
+      final url = '${AppConstants.socialBaseUrl}/api/get-friends?access_token=$accessToken';
+
+      // 1) followers
+      final followersRes = await http.post(
+        Uri.parse(url),
+        body: {
+          'server_key': AppConstants.socialServerKey,
+          'type': 'followers',
+          'user_id': userId,
+          'limit': '200',
+        },
+      );
+
+      // 2) following
+      final followingRes = await http.post(
+        Uri.parse(url),
+        body: {
+          'server_key': AppConstants.socialServerKey,
+          'type': 'following',
+          'user_id': userId,
+          'limit': '200',
+        },
+      );
+
+      if (followersRes.statusCode != 200 || followingRes.statusCode != 200) {
+        setState(() {
+          errorMessage = (getTranslated('server_error', context) ?? 'Server error') +
+              ' (${followersRes.statusCode}/${followingRes.statusCode})';
+        });
+        return;
+      }
+
+      final followersData = jsonDecode(followersRes.body);
+      final followingData = jsonDecode(followingRes.body);
+
+      if (followersData['api_status'] != 200 || followingData['api_status'] != 200) {
+        setState(() {
+          errorMessage = getTranslated('cannot_get_friends', context) ??
+              'Cannot load friends list.';
+        });
+        return;
+      }
+
+      final followers = List<Map<String, dynamic>>.from(
+        (followersData['data']?['followers'] ?? []) as List,
+      );
+
+      final following = List<Map<String, dynamic>>.from(
+        (followingData['data']?['following'] ?? []) as List,
+      );
+
+      final followerIds = followers
+          .map((e) => (e['user_id'] ?? '').toString())
+          .where((id) => id.isNotEmpty)
+          .toSet();
+
+      final friends = following.where((u) {
+        final id = (u['user_id'] ?? '').toString();
+        return id.isNotEmpty && followerIds.contains(id);
+      }).toList();
+
+      setState(() {
+        myFriends = friends.map((u) {
+          u['is_following'] = true; // mutual => đang theo dõi
+          return u;
+        }).toList();
+
+        if (!isSearchMode && _tabController.index == 1) {
+          searchResults = List.from(myFriends);
+        }
+      });
+    } catch (e) {
+      setState(() {
+        errorMessage = (getTranslated('error', context) ?? 'Error') + ': $e';
+      });
+    } finally {
+      setState(() => isLoading = false);
     }
   }
 
@@ -98,13 +217,13 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
             }
           });
         } else {
-          errorMessage = data['errors']?['error_text'] ?? 'Không lấy được danh sách bạn bè.';
+          errorMessage = getTranslated('social_token_invalid', context) ?? 'Invalid social token, please login again.';
         }
       } else {
-        errorMessage = 'Lỗi máy chủ (${response.statusCode})';
+        errorMessage = (getTranslated('server_error', context) ?? 'Server error') + ' (${response.statusCode})';
       }
     } catch (e) {
-      errorMessage = 'Lỗi: $e';
+      errorMessage = (getTranslated('error', context) ?? 'Error') + ': $e';
     } finally {
       setState(() => isLoading = false);
     }
@@ -124,7 +243,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
       if (accessToken == null || accessToken.isEmpty) {
         setState(() {
           isLoading = false;
-          errorMessage = 'Token mạng xã hội không hợp lệ, vui lòng đăng nhập lại.';
+          errorMessage = getTranslated('social_token_invalid', context) ?? 'Invalid social token, please login again.';
         });
         return;
       }
@@ -180,9 +299,14 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
 
   void _filterFriendsByUsername() {
     final input = _searchController.text.trim().toLowerCase();
+
+    final sourceList = _tabController.index == 0
+        ? friendRequests
+        : (_tabController.index == 1 ? myFriends : recommendedFriends);
+
     if (input.isEmpty) {
       setState(() {
-        searchResults = _tabController.index == 0 ? List.from(friendRequests) : List.from(recommendedFriends);
+        searchResults = List.from(sourceList);
         isSearchMode = false;
         errorMessage = null;
       });
@@ -191,12 +315,21 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
 
     setState(() {
       isSearchMode = true;
-      final sourceList = _tabController.index == 0 ? friendRequests : recommendedFriends;
       searchResults = sourceList.where((f) {
-        final username = (f['username'] ?? '').toLowerCase();
+        final username = (f['username'] ?? '').toString().toLowerCase();
         return username.startsWith(input);
       }).toList();
-      errorMessage = searchResults.isEmpty ? 'Không tìm thấy người dùng.' : null;
+
+      errorMessage = searchResults.isEmpty
+          ? (getTranslated('user_not_found', context) ?? 'User not found.')
+          : null;
+    });
+  }
+
+  void _removeFromMyFriends(String userId) {
+    setState(() {
+      myFriends.removeWhere((u) => (u['user_id']?.toString() ?? '') == userId);
+      searchResults.removeWhere((u) => (u['user_id']?.toString() ?? '') == userId);
     });
   }
 
@@ -206,7 +339,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
       final isDark = Provider.of<ThemeController>(context, listen: false).darkTheme;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Vui lòng nhập username.'),
+          content: Text(getTranslated('please_enter_username', context) ?? 'Please enter username.'),
           backgroundColor: isDark ? const Color(0xFF3A3B3C) : null,
         ),
       );
@@ -249,21 +382,21 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
         } else {
           setState(() {
             searchResults = [];
-            errorMessage = data['errors']?['error_text'] ?? 'Không tìm thấy người dùng.';
+            errorMessage = data['errors']?['error_text'] ?? (getTranslated('cannot_get_friends', context) ?? 'Cannot load friends list.');
             isLoading = false;
           });
         }
       } else {
         setState(() {
           searchResults = [];
-          errorMessage = 'Lỗi máy chủ (${response.statusCode})';
+          errorMessage = (getTranslated('server_error', context) ?? 'Server error') + ' (${response.statusCode})';
           isLoading = false;
         });
       }
     } catch (e) {
       setState(() {
         searchResults = [];
-        errorMessage = 'Lỗi: $e';
+        errorMessage = (getTranslated('error', context) ?? 'Error') + ': $e';
         isLoading = false;
       });
     }
@@ -300,7 +433,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
               backgroundColor: primaryColor(isDark),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               title: Text(
-                user['name'] ?? user['username'] ?? 'Người dùng',
+                user['name'] ?? user['username'] ?? (getTranslated('user', context) ?? 'User'),
                 style: TextStyle(color: textColor(isDark), fontWeight: FontWeight.bold),
               ),
               content: SingleChildScrollView(
@@ -347,12 +480,14 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                     ),
                     const SizedBox(height: 16),
                     _buildInfoCard([
-                      _buildDetailRow('Giới tính', user['gender_text'] ?? user['gender'] ?? 'Không xác định', isDark),
-                      _buildDetailRow('Email', user['email'] ?? 'Không có', isDark),
+                      _buildDetailRow(getTranslated('gender', context) ?? 'Gender',
+                          user['gender_text'] ?? user['gender'] ?? (getTranslated('unknown', context) ?? 'Unknown'), isDark),
+                      _buildDetailRow(getTranslated('email', context) ?? 'Email',
+                          user['email'] ?? (getTranslated('none', context) ?? 'None'), isDark),
                     ], isDark),
                     const SizedBox(height: 12),
                     Text(
-                      'Thống kê hoạt động',
+                      getTranslated('activity_statistics', context) ?? 'Activity statistics',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: textColor(isDark),
@@ -361,13 +496,13 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                     ),
                     const SizedBox(height: 8),
                     _buildInfoCard([
-                      _buildDetailRow('Bài viết', details['post_count'], isDark),
-                      _buildDetailRow('Album', details['album_count'], isDark),
-                      _buildDetailRow('Người theo dõi', details['followers_count'], isDark),
-                      _buildDetailRow('Đang theo dõi', details['following_count'], isDark),
-                      _buildDetailRow('Nhóm đã tham gia', details['groups_count'], isDark),
-                      _buildDetailRow('Lượt thích', details['likes_count'], isDark),
-                      _buildDetailRow('Bạn chung', details['mutual_friends_count'], isDark),
+                      _buildDetailRow(getTranslated('posts', context) ?? 'Posts', details['post_count'], isDark),
+                      _buildDetailRow(getTranslated('albums', context) ?? 'Albums', details['album_count'], isDark),
+                      _buildDetailRow(getTranslated('followers', context) ?? 'Followers', details['followers_count'], isDark),
+                      _buildDetailRow(getTranslated('following', context) ?? 'Following', details['following_count'], isDark),
+                      _buildDetailRow(getTranslated('joined_groups', context) ?? 'Joined groups', details['groups_count'], isDark),
+                      _buildDetailRow(getTranslated('likes', context) ?? 'Likes', details['likes_count'], isDark),
+                      _buildDetailRow(getTranslated('mutual_friends', context) ?? 'Mutual friends', details['mutual_friends_count'], isDark),
                     ], isDark),
                   ],
                 ),
@@ -378,7 +513,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                   style: TextButton.styleFrom(
                     foregroundColor: accentColor,
                   ),
-                  child: const Text('Đóng', style: TextStyle(fontWeight: FontWeight.w600)),
+                  child: Text(getTranslated('close', context) ?? 'Close', style: TextStyle(fontWeight: FontWeight.w600)),
                 ),
               ],
             ),
@@ -387,7 +522,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text('Không lấy được thông tin người dùng.'),
+              content: Text(getTranslated('cannot_get_user_info', context) ?? 'Cannot load user info.'),
               backgroundColor: isDark ? const Color(0xFF3A3B3C) : null,
             ),
           );
@@ -396,7 +531,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Lỗi máy chủ (${response.statusCode})'),
+            content: Text((getTranslated('server_error', context) ?? 'Server error') + ' (${response.statusCode})'),
             backgroundColor: isDark ? const Color(0xFF3A3B3C) : null,
           ),
         );
@@ -405,25 +540,36 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Lỗi: $e'),
+          content: Text((getTranslated('error', context) ?? 'Error') + ': $e'),
           backgroundColor: isDark ? const Color(0xFF3A3B3C) : null,
         ),
       );
     }
   }
 
-  Future<void> followUser(String userId, int index, bool isDark) async {
+  Future<void> followUser(String userId, int index, bool isDark, {bool isUnfollow = false}) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: primaryColor(isDark),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Text('Xác nhận theo dõi', style: TextStyle(color: textColor(isDark))),
-        content: Text('Bạn có chắc muốn theo dõi người này không?', style: TextStyle(color: subtextColor(isDark))),
+        title: Text(
+          isUnfollow
+              ? (getTranslated('confirm_unfollow', context) ?? 'Confirm unfollow')
+              : (getTranslated('confirm_follow', context) ?? 'Confirm follow'),
+          style: TextStyle(color: textColor(isDark)),
+        ),
+        content: Text(
+          isUnfollow
+              ? (getTranslated('confirm_unfollow_desc', context) ?? 'Are you sure you want to unfollow this user?')
+              : (getTranslated('confirm_follow_desc', context) ?? 'Are you sure you want to follow this user?'),
+          style: TextStyle(color: subtextColor(isDark)),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('Hủy', style: TextStyle(color: subtextColor(isDark))),
+            child: Text(getTranslated('cancel', context) ?? 'Cancel',
+                style: TextStyle(color: subtextColor(isDark))),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
@@ -431,7 +577,12 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
               backgroundColor: accentColor,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            child: const Text('Theo dõi', style: TextStyle(color: Colors.white)),
+            child: Text(
+              isUnfollow
+                  ? (getTranslated('unfollow', context) ?? 'Unfollow')
+                  : (getTranslated('follow', context) ?? 'Follow'),
+              style: const TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -441,7 +592,6 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
 
     final authController = Provider.of<AuthController>(context, listen: false);
     final accessToken = await authController.authServiceInterface.getSocialAccessToken();
-
     final url = '${AppConstants.socialBaseUrl}/api/follow-user?access_token=$accessToken';
 
     try {
@@ -450,27 +600,36 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
         body: {
           'server_key': AppConstants.socialServerKey,
           'user_id': userId,
-          'type': 'follow_user',
+          'type': 'follow_user', // ✅ WoWonder thường toggle follow/unfollow cùng endpoint
         },
       );
 
       final data = jsonDecode(response.body);
+
       if (data['api_status'] == 200) {
-        setState(() {
-          if (isSearchMode) {
-            searchResults[index]['is_following'] = true;
-          } else {
-            if (_tabController.index == 0) {
-              friendRequests[index]['is_following'] = true;
+        if (isUnfollow) {
+          // ✅ bỏ khỏi “Bạn bè của tôi”
+          _removeFromMyFriends(userId);
+        } else {
+          setState(() {
+            // update item đang hiển thị
+            if (isSearchMode) {
+              searchResults[index]['is_following'] = true;
             } else {
-              recommendedFriends[index]['is_following'] = true;
+              if (_tabController.index == 0) friendRequests[index]['is_following'] = true;
+              if (_tabController.index == 2) recommendedFriends[index]['is_following'] = true;
             }
-          }
-        });
+          });
+        }
+
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Đã theo dõi thành công!'),
+            content: Text(
+              isUnfollow
+                  ? (getTranslated('unfollow_success', context) ?? 'Unfollowed successfully!')
+                  : (getTranslated('follow_success', context) ?? 'Followed successfully!'),
+            ),
             backgroundColor: isDark ? const Color(0xFF3A3B3C) : null,
           ),
         );
@@ -478,7 +637,12 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Theo dõi thất bại: ${data['error_text'] ?? 'Lỗi không xác định'}'),
+            content: Text(
+              (isUnfollow
+                  ? (getTranslated('unfollow_failed', context) ?? 'Unfollow failed')
+                  : (getTranslated('follow_failed', context) ?? 'Follow failed')) +
+                  ': ${data['error_text'] ?? (getTranslated('unknown_error', context) ?? 'Unknown error')}',
+            ),
             backgroundColor: isDark ? const Color(0xFF3A3B3C) : null,
           ),
         );
@@ -487,7 +651,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Lỗi: $e'),
+          content: Text((getTranslated('error', context) ?? 'Error') + ': $e'),
           backgroundColor: isDark ? const Color(0xFF3A3B3C) : null,
         ),
       );
@@ -500,154 +664,188 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
       builder: (context, themeController, child) {
         final isDark = themeController.darkTheme;
 
+        final theme = Theme.of(context);
+        final appBarBackground = primaryColor(isDark);
+        final appBarForeground = textColor(isDark);
+        final unselectedTabColor = subtextColor(isDark);
+
         return Scaffold(
           backgroundColor: secondaryColor(isDark),
-          appBar: AppBar(
-            elevation: 0,
-            title: Text(
-              isSearchMode ? 'Kết quả tìm kiếm' : 'Bạn bè',
-              style: TextStyle(
-                color: textColor(isDark),
-                fontWeight: FontWeight.bold,
-                fontSize: 22,
-              ),
-            ),
-            backgroundColor: primaryColor(isDark),
-            leading: isSearchMode
-                ? IconButton(
-              icon: Icon(Icons.arrow_back, color: textColor(isDark)),
-              onPressed: () {
-                _searchController.clear();
-                setState(() {
-                  searchResults = _tabController.index == 0
-                      ? List.from(friendRequests)
-                      : List.from(recommendedFriends);
-                  isSearchMode = false;
-                  errorMessage = null;
-                });
-              },
-            )
-                : null,
-            actions: const [],
-            bottom: isSearchMode
-                ? null
-                : PreferredSize(
-              preferredSize: const Size.fromHeight(48),
-              child: Container(
-                color: primaryColor(isDark),
-                child: TabBar(
-                  controller: _tabController,
-                  indicatorColor: accentColor,
-                  indicatorWeight: 3,
-                  labelColor: accentColor,
-                  unselectedLabelColor: subtextColor(isDark),
-                  labelStyle: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15,
+
+          appBar: PreferredSize(
+            preferredSize: const Size.fromHeight(188),
+            child: Container(
+              decoration: BoxDecoration(
+                color: appBarBackground,
+                borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(24),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 18,
+                    offset: const Offset(0, 10),
                   ),
-                  tabs: const [
-                    Tab(text: 'Lời mời kết bạn'),
-                    Tab(text: 'Gợi ý'),
+                ],
+              ),
+              child: SafeArea(
+                bottom: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // ===== TOP ROW =====
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      child: Row(
+                        children: [
+                          _RoundIconButton(
+                            icon: Icons.arrow_back,
+                            onTap: () => Navigator.pop(context),
+                            background: isDark
+                                ? Colors.white.withOpacity(0.06)
+                                : Colors.black.withOpacity(0.04),
+                            iconColor: appBarForeground,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            getTranslated('friends', context) ?? 'Friends',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: appBarForeground,
+                            ),
+                          ),
+                          const Spacer(),
+                          _RoundIconButton(
+                            icon: Icons.refresh,
+                            onTap: _refreshData,
+                            background: isDark
+                                ? Colors.white.withOpacity(0.06)
+                                : Colors.black.withOpacity(0.04),
+                            iconColor: appBarForeground,
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 6),
+
+                    // ===== TAB BAR (PILL) =====
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Container(
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: secondaryColor(isDark),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: AnimatedBuilder(
+                          animation: _tabController.animation!,
+                          builder: (context, _) {
+                            final anim = _tabController.animation!;
+                            final page = anim.value;
+                            final distToNearest =
+                            (page - page.round()).abs().clamp(0.0, 0.5);
+                            final progress = (distToNearest / 0.5).clamp(0.0, 1.0);
+                            final radius = lerpDouble(12, 999, progress)!;
+
+                            return TabBar(
+                              controller: _tabController,
+                              isScrollable: false,
+                              dividerColor: Colors.transparent,
+                              indicator: BoxDecoration(
+                                color: accentColor,
+                                borderRadius: BorderRadius.circular(radius),
+                              ),
+                              indicatorSize: TabBarIndicatorSize.tab,
+                              labelColor: Colors.white,
+                              unselectedLabelColor: unselectedTabColor,
+                              labelStyle: theme.textTheme.labelMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                              tabs: [
+                                Tab(text: getTranslated('friend_requests', context) ?? 'Friend requests'),
+                                Tab(text: getTranslated('my_friends', context) ?? 'My friends'),
+                                Tab(text: getTranslated('suggestions', context) ?? 'Suggestions'),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    // ===== SEARCH BAR (IN APPBAR) =====
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: secondaryColor(isDark),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: TextField(
+                          controller: _searchController,
+                          style: TextStyle(color: textColor(isDark)),
+                          decoration: InputDecoration(
+                            hintText: getTranslated('search_friends', context) ?? 'Search friends...',
+                            hintStyle: TextStyle(color: subtextColor(isDark)),
+                            prefixIcon: Icon(Icons.search, color: subtextColor(isDark)),
+                            suffixIcon: _searchController.text.isNotEmpty
+                                ? Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: Icon(Icons.clear, color: subtextColor(isDark)),
+                                  onPressed: () => _searchController.clear(),
+                                ),
+                                IconButton(
+                                  icon: Icon(Icons.search, color: accentColor),
+                                  onPressed: searchFriendByApi,
+                                  tooltip: getTranslated('search_api', context) ?? 'Search API',
+                                ),
+                              ],
+                            )
+                                : null,
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
                   ],
                 ),
               ),
             ),
           ),
-          body: Column(
+
+          // Body chỉ còn TabBarView giống Pages/Groups
+          body: TabBarView(
+            controller: _tabController,
             children: [
-              Container(
-                color: primaryColor(isDark),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: secondaryColor(isDark),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: TextField(
-                    controller: _searchController,
-                    style: TextStyle(color: textColor(isDark)),
-                    decoration: InputDecoration(
-                      hintText: 'Tìm kiếm bạn bè...',
-                      hintStyle: TextStyle(color: subtextColor(isDark)),
-                      prefixIcon: Icon(Icons.search, color: subtextColor(isDark)),
-                      suffixIcon: _searchController.text.isNotEmpty
-                          ? Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: Icon(Icons.clear, color: subtextColor(isDark)),
-                            onPressed: () {
-                              _searchController.clear();
-                            },
-                          ),
-                          IconButton(
-                            icon: Icon(Icons.search, color: accentColor),
-                            onPressed: searchFriendByApi,
-                            tooltip: 'Tìm kiếm API',
-                          ),
-                        ],
-                      )
-                          : null,
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    ),
-                  ),
-                ),
+              _buildFriendList(
+                (isSearchMode && _tabController.index == 0) ? searchResults : friendRequests,
+                isDark,
+                allowUnfollow: false,
+                emptyKey: 'no_friend_requests',
+                tabIndex: 0,
               ),
-              Expanded(
-                child: isLoading
-                    ? Center(
-                  child: CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(accentColor),
-                  ),
-                )
-                    : errorMessage != null
-                    ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.error_outline, size: 64, color: subtextColor(isDark)),
-                        const SizedBox(height: 16),
-                        Text(
-                          errorMessage!,
-                          style: TextStyle(color: subtextColor(isDark), fontSize: 16),
-                          textAlign: TextAlign.center,
-                        ),
-                        if (isSearchMode) ...[
-                          const SizedBox(height: 16),
-                          ElevatedButton(
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() {
-                                searchResults = _tabController.index == 0
-                                    ? List.from(friendRequests)
-                                    : List.from(recommendedFriends);
-                                isSearchMode = false;
-                                errorMessage = null;
-                              });
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: accentColor,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                            child: const Text('Quay lại'),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                )
-                    : TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _buildFriendList(isSearchMode ? searchResults : friendRequests, isDark),
-                    _buildFriendList(isSearchMode ? searchResults : recommendedFriends, isDark),
-                  ],
-                ),
+              _buildFriendList(
+                (isSearchMode && _tabController.index == 1) ? searchResults : myFriends,
+                isDark,
+                allowUnfollow: true,
+                emptyKey: 'no_my_friends',
+                tabIndex: 1,
+              ),
+              _buildFriendList(
+                (isSearchMode && _tabController.index == 2) ? searchResults : recommendedFriends,
+                isDark,
+                allowUnfollow: false,
+                emptyKey: 'no_suggestions',
+                tabIndex: 2,
               ),
             ],
           ),
@@ -656,7 +854,36 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildFriendList(List<dynamic> list, bool isDark) {
+  Widget _buildSegment({
+    required String label,
+    required int tabIndex,
+    required bool isSelected,
+    required bool isDark,
+  }) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => _tabController.animateTo(tabIndex),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          decoration: BoxDecoration(
+            color: isSelected ? accentColor : Colors.transparent,
+            borderRadius: BorderRadius.circular(isSelected ? 20 : 12),
+          ),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: isSelected ? Colors.white : subtextColor(isDark),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFriendList(List<dynamic> list, bool isDark, {required bool allowUnfollow, required String emptyKey, required int tabIndex}) {
     if (list.isEmpty) {
       return Center(
         child: Padding(
@@ -672,10 +899,10 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
               const SizedBox(height: 16),
               Text(
                 isSearchMode
-                    ? 'Không tìm thấy người dùng.'
+                    ? (getTranslated('user_not_found', context) ?? 'User not found.')
                     : _tabController.index == 0
-                    ? 'Không có lời mời kết bạn.'
-                    : 'Không có gợi ý bạn bè.',
+                    ? (getTranslated('no_friend_requests', context) ?? 'No friend requests.')
+                    : (getTranslated('no_suggestions', context) ?? 'No suggestions.'),
                 style: TextStyle(color: subtextColor(isDark), fontSize: 16),
                 textAlign: TextAlign.center,
               ),
@@ -698,7 +925,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: const Text('Quay lại'),
+                  child: Text(getTranslated('back', context) ?? 'Back'),
                 ),
               ],
             ],
@@ -720,11 +947,19 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
         ),
         itemBuilder: (context, index) {
           final user = list[index];
-          final name = user['name'] ?? user['username'] ?? 'Người dùng';
+          final name = user['name'] ?? user['username'] ?? (getTranslated('user', context) ?? 'User');
           final avatar = user['avatar'] ?? '';
           final username = user['username'] ?? '';
           final userId = user['user_id']?.toString() ?? '';
-          final isFollowing = user['is_following'] ?? false;
+          final bool isFollowing = user['is_following'] == true || user['is_following'] == 1;
+
+          final String btnText = allowUnfollow
+              ? (getTranslated('unfollow', context) ?? 'Unfollow')
+              : (isFollowing
+              ? (getTranslated('following', context) ?? 'Following')
+              : (tabIndex == 2
+              ? (getTranslated('follow', context) ?? 'Follow')
+              : (getTranslated('add', context) ?? 'Add')));
 
           return Container(
             color: primaryColor(isDark),
@@ -788,20 +1023,21 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                     ),
                     const SizedBox(width: 8),
                     ElevatedButton(
-                      onPressed: isFollowing ? null : () => followUser(userId, index, isDark),
+                      onPressed: allowUnfollow
+                          ? () => followUser(userId, index, isDark, isUnfollow: true)
+                          : (isFollowing ? null : () => followUser(userId, index, isDark)),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: isFollowing ? secondaryColor(isDark) : accentColor,
-                        foregroundColor: isFollowing ? subtextColor(isDark) : Colors.white,
+                        backgroundColor: allowUnfollow
+                            ? secondaryColor(isDark)
+                            : (isFollowing ? secondaryColor(isDark) : accentColor),
+                        foregroundColor: allowUnfollow
+                            ? (isDark ? Colors.white : Colors.black87)
+                            : (isFollowing ? subtextColor(isDark) : Colors.white),
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(6),
-                        ),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                       ),
-                      child: Text(
-                        isFollowing ? 'Bạn bè' : 'Thêm',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
+                      child: Text(btnText, style: const TextStyle(fontWeight: FontWeight.w600)),
                     ),
                   ],
                 ),
@@ -843,6 +1079,37 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _RoundIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final Color? background;
+  final Color? iconColor;
+
+  const _RoundIconButton({
+    required this.icon,
+    required this.onTap,
+    this.background,
+    this.iconColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: background ?? Theme.of(context).cardColor,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, size: 20, color: iconColor),
       ),
     );
   }

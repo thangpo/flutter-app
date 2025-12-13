@@ -36,6 +36,7 @@ class AppConstants {
   static const String socialCreateEventUri = '/api/create-event';
   static const String socialEditOrDeleteEventUri = '/api/events';
   static const String socialInterestEventUri = '/api/interest-event';
+  static const String socialGetPageDetailUri = '/api/get-page-data';
   static const String socialGoToEventUri = '/api/go-to-event';
   static const String socialReactStoryUri = '/api/react_story';
   static const String socialGetStoryViewsUri = '/api/get_story_views';

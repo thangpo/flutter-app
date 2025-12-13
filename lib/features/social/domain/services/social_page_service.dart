@@ -53,6 +53,75 @@ class SocialPageService implements SocialPageServiceInterface {
     return <SocialGetPage>[]; // trong trường hợp checkApi không throw
   }
 
+  // ───────────────── GET PAGE DETAIL ─────────────────
+  @override
+  Future<SocialGetPage> getPageDetail({
+    String? pageId,
+    String? pageName,
+  }) async {
+    final ApiResponseModel<Response> resp =
+    await socialPageRepository.fetchPageDetail(
+      pageId: pageId,
+      pageName: pageName,
+    );
+
+    if (resp.isSuccess && resp.response != null) {
+      dynamic data = resp.response!.data;
+
+      // backend đôi khi trả string json
+      if (data is String) {
+        try {
+          data = jsonDecode(data);
+        } catch (_) {
+          throw Exception('Invalid page detail response');
+        }
+      }
+
+      if (data is! Map) {
+        throw Exception('Invalid page detail response');
+      }
+
+      final Map<String, dynamic> map = Map<String, dynamic>.from(data as Map);
+
+      final int status =
+          int.tryParse('${map['api_status'] ?? map['status'] ?? 200}') ?? 200;
+
+      if (status == 200) {
+        Map<String, dynamic>? pageMap;
+
+        if (map['page_data'] is Map) {
+          pageMap = Map<String, dynamic>.from(map['page_data'] as Map);
+        } else if (map['data'] is Map) {
+          pageMap = Map<String, dynamic>.from(map['data'] as Map);
+        } else if (map['page'] is Map) {
+          pageMap = Map<String, dynamic>.from(map['page'] as Map);
+        }
+
+        if (pageMap == null) {
+          throw Exception('Page detail: missing page data');
+        }
+
+        final SocialGetPage? page =
+        socialPageRepository.parseSinglePageFromMap(pageMap);
+
+        if (page == null) {
+          throw Exception('Page detail: parse failed');
+        }
+
+        return page;
+      }
+
+      final String message = (map['errors']?['error_text'] ??
+          map['message'] ??
+          'Failed to load page detail')
+          .toString();
+      throw Exception(message);
+    }
+
+    ApiChecker.checkApi(resp);
+    throw Exception('Failed to load page detail');
+  }
+
   // ───────────────── GET MY PAGES ─────────────────
   @override
   Future<List<SocialGetPage>> getMyPages({int limit = 20}) async {

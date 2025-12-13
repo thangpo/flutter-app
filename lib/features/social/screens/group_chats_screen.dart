@@ -1,9 +1,12 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import '../controllers/group_chat_controller.dart';
 import 'group_chat_screen.dart';
 import 'create_group_screen.dart';
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_list_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_page_mess.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
@@ -354,51 +357,41 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
       bottomNavigationBar: Consumer<GroupChatController>(
         builder: (context, ctrl, _) {
           final totalGroupUnread =
-              ctrl.groups.fold<int>(0, (sum, g) => sum + _unread(g));
+          ctrl.groups.fold<int>(0, (sum, g) => sum + _unread(g));
 
-          return Padding(
-            padding: EdgeInsets.only(
-              left: 16,
-              right: 16,
-              bottom: 8 + bottomInset,
-            ),
-            child: _GroupFooterNav(
-              currentIndex: 2, // Màn hình Nhóm Chat
-              chatBadgeCount: 0, // có thể map từ màn Đoạn chat nếu cần
-              showNotifDot: totalGroupUnread > 0,
-              onTap: (i) {
-                if (i == 2) return; // đang ở Nhóm Chat rồi
+          return SocialTabsBottomNav(
+            currentIndex: 2, // đang ở Group
+            accessToken: widget.accessToken,
+            chatBadgeCount: 0, // nếu bạn có unread chat thì nhét vào đây
+            groupBadgeCount: totalGroupUnread, // unread nhóm
+            onTap: (i) {
+              if (i == 2) return;
 
-                if (i == 0) {
-                  // Điều hướng về màn “Đoạn chat”
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          FriendsListScreen(accessToken: widget.accessToken),
-                    ),
-                  );
-                  return;
-                }
-
-                if (i == 1) {
-                  // Điều hướng sang “Tin nhắn với pages”
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          PageMessagesScreen(accessToken: widget.accessToken),
-                    ),
-                  );
-                  return;
-                }
-
-                // TODO: gắn màn “Menu” (i == 3)
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Chưa gắn điều hướng cho tab $i')),
+              if (i == 0) {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => FriendsListScreen(accessToken: widget.accessToken),
+                  ),
                 );
-              },
-            ),
+                return;
+              }
+
+              if (i == 1) {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PageMessagesScreen(accessToken: widget.accessToken),
+                  ),
+                );
+                return;
+              }
+
+              // i == 3 : Menu (tuỳ bạn gắn màn nào)
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Chưa gắn điều hướng cho Menu')),
+              );
+            },
           );
         },
       ),
@@ -674,6 +667,330 @@ class _Dot extends StatelessWidget {
       width: 8,
       height: 8,
       decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
+  }
+}
+
+class SocialTabsBottomNav extends StatelessWidget {
+  final int currentIndex;
+  final String accessToken;
+  final int chatBadgeCount;
+  final int groupBadgeCount;
+  final ValueChanged<int> onTap;
+
+  const SocialTabsBottomNav({
+    super.key,
+    required this.currentIndex,
+    required this.accessToken,
+    required this.chatBadgeCount,
+    required this.groupBadgeCount,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+
+    final bool isIOSPlatform = !kIsWeb && Platform.isIOS;
+
+    if (isIOSPlatform) {
+      Widget iconWithBadge(IconData icon, int badge) {
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Icon(icon, size: 24),
+            if (badge > 0)
+              Positioned(
+                right: -10,
+                top: -6,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    badge > 99 ? '99+' : badge.toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      }
+
+      return CupertinoTabBar(
+        currentIndex: currentIndex,
+        onTap: onTap,
+        activeColor: cs.primary,
+        items: [
+          BottomNavigationBarItem(
+            icon: iconWithBadge(CupertinoIcons.chat_bubble_2, chatBadgeCount),
+            activeIcon:
+            iconWithBadge(CupertinoIcons.chat_bubble_2_fill, chatBadgeCount),
+            label: getTranslated('chat_section', context) ?? 'Chat',
+          ),
+          const BottomNavigationBarItem(
+            icon: Icon(CupertinoIcons.flag),
+            activeIcon: Icon(CupertinoIcons.flag_fill),
+            label: 'Pages',
+          ),
+          BottomNavigationBarItem(
+            icon: iconWithBadge(CupertinoIcons.person_3, groupBadgeCount),
+            activeIcon:
+            iconWithBadge(CupertinoIcons.person_3_fill, groupBadgeCount),
+            label: getTranslated('group_chat', context) ?? 'Group',
+          ),
+          BottomNavigationBarItem(
+            icon: const Icon(CupertinoIcons.line_horizontal_3),
+            activeIcon: const Icon(CupertinoIcons.line_horizontal_3),
+            label: getTranslated('menu', context) ?? 'Menu',
+          ),
+        ],
+      );
+    }
+
+    // Android/Web: moving circle như DashBoardScreen
+    final androidItems = <_AndroidNavItem>[
+      _AndroidNavItem(
+        icon: Icons.chat_bubble_outline,
+        label: getTranslated('chat_section', context) ?? 'Chat',
+        badgeCount: chatBadgeCount,
+      ),
+      const _AndroidNavItem(icon: Icons.flag_outlined, label: 'Pages'),
+      _AndroidNavItem(
+        icon: Icons.groups_outlined,
+        label: getTranslated('group_chat', context) ?? 'Group',
+        badgeCount: groupBadgeCount,
+      ),
+      _AndroidNavItem(
+        icon: Icons.menu,
+        label: getTranslated('menu', context) ?? 'Menu',
+      ),
+    ];
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: 8 + bottomInset),
+      child: AndroidMovingCircleBottomBar(
+        items: androidItems,
+        currentIndex: currentIndex,
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
+class _AndroidNavItem {
+  final IconData icon;
+  final String label;
+  final int badgeCount;
+
+  const _AndroidNavItem({
+    required this.icon,
+    required this.label,
+    this.badgeCount = 0,
+  });
+}
+
+class AndroidMovingCircleBottomBar extends StatelessWidget {
+  final List<_AndroidNavItem> items;
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+
+  const AndroidMovingCircleBottomBar({
+    super.key,
+    required this.items,
+    required this.currentIndex,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final Color barColor =
+    isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE8EBF0);
+    final Color scaffoldBg = theme.scaffoldBackgroundColor;
+
+    return SafeArea(
+      minimum: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final double barWidth = constraints.maxWidth;
+            final double itemWidth = barWidth / items.length;
+
+            const double circleSize = 70;
+            const double circleBottom = 40;
+
+            final double circleCenterX = itemWidth * (currentIndex + 0.5);
+            final double circleLeft = circleCenterX - circleSize / 2;
+
+            return SizedBox(
+              height: 110,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      height: 76,
+                      decoration: BoxDecoration(
+                        color: barColor,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.08),
+                            blurRadius: 12,
+                            offset: const Offset(0, -1),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: List.generate(
+                          items.length,
+                              (index) => Expanded(
+                            child: _AndroidNavItemWidget(
+                              item: items[index],
+                              selected: index == currentIndex,
+                              onTap: () => onTap(index),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  AnimatedPositioned(
+                    duration: const Duration(milliseconds: 230),
+                    curve: Curves.easeOutCubic,
+                    left: circleLeft,
+                    bottom: circleBottom,
+                    child: Container(
+                      height: circleSize,
+                      width: circleSize,
+                      decoration: BoxDecoration(
+                        color: scaffoldBg,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.08),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Container(
+                        margin: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary.withOpacity(0.10),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Icon(
+                            items[currentIndex].icon,
+                            size: 32,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _AndroidNavItemWidget extends StatelessWidget {
+  final _AndroidNavItem item;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _AndroidNavItemWidget({
+    required this.item,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    final Color iconColor = selected ? cs.primary : cs.onSurface.withOpacity(0.7);
+    final FontWeight labelWeight = selected ? FontWeight.w600 : FontWeight.w400;
+
+    Widget iconArea;
+    if (selected) {
+      iconArea = const SizedBox(height: 16);
+    } else {
+      iconArea = Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Icon(item.icon, size: 24, color: iconColor),
+          if (item.badgeCount > 0)
+            Positioned(
+              right: -4,
+              top: -4,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: const BoxDecoration(
+                  color: Colors.redAccent,
+                  shape: BoxShape.circle,
+                ),
+                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                child: Center(
+                  child: Text(
+                    item.badgeCount > 9 ? '9+' : item.badgeCount.toString(),
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      fontSize: 9,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 8, bottom: 10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            iconArea,
+            const SizedBox(height: 2),
+            Text(
+              item.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                fontSize: 11.5,
+                fontWeight: labelWeight,
+                color: cs.onSurface.withOpacity(selected ? 0.95 : 0.75),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
