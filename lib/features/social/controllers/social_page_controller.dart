@@ -50,6 +50,15 @@ class SocialPageController with ChangeNotifier {
   bool _pagePostsInitialized = false;
   String? _pagePostsError;
 
+  // ================== PAGE DETAIL ==================
+  bool _loadingPageDetail = false;
+  String? _pageDetailError;
+  SocialGetPage? _pageDetail;
+
+  bool get loadingPageDetail => _loadingPageDetail;
+  String? get pageDetailError => _pageDetailError;
+  SocialGetPage? get pageDetail => _pageDetail;
+
   // ================== DELETE PAGE ==================
   bool _deletingPage = false;
   String? _deletePageError;
@@ -233,6 +242,72 @@ class SocialPageController with ChangeNotifier {
       rethrow;
     } finally {
       state.refreshing = false;
+      notifyListeners();
+    }
+  }
+
+  Future<SocialGetPage> fetchPageDetail({
+    String? pageId,
+    String? pageName,
+    bool force = false,
+
+    /// fallback để đảm bảo không-null (vd: widget.page truyền vào)
+    SocialGetPage? fallback,
+  }) async {
+    final String id = (pageId ?? '').trim();
+    final String name = (pageName ?? '').trim();
+
+    // 1) Không có id/name -> trả fallback nếu có, không thì throw
+    if (id.isEmpty && name.isEmpty) {
+      _pageDetailError = 'Missing pageId/pageName';
+      notifyListeners();
+      if (fallback != null) return fallback;
+      throw Exception(_pageDetailError);
+    }
+
+    // 2) Cache hiện tại
+    if (!force && _pageDetail != null) {
+      if (id.isNotEmpty && _pageDetail!.pageId.toString() == id) return _pageDetail!;
+      if (name.isNotEmpty &&
+          (_pageDetail!.pageName == name || _pageDetail!.username == name)) {
+        return _pageDetail!;
+      }
+    }
+
+    // 3) Tìm trong các list đã tải trước
+    if (!force && id.isNotEmpty) {
+      final cached = findPageByIdString(id);
+      if (cached != null) {
+        _pageDetail = cached;
+        notifyListeners();
+        return cached;
+      }
+    }
+
+    _loadingPageDetail = true;
+    _pageDetailError = null;
+    notifyListeners();
+
+    try {
+      // service.getPageDetail PHẢI trả về SocialGetPage (non-null)
+      final SocialGetPage result = await service.getPageDetail(
+        pageId: id.isNotEmpty ? id : null,
+        pageName: name.isNotEmpty ? name : null,
+      );
+
+      _pageDetail = result;
+      return result;
+    } catch (e, st) {
+      debugPrint('fetchPageDetail ERROR: $e\n$st');
+      _pageDetailError = e.toString();
+
+      // ✅ Không return null nữa: ưu tiên cache -> fallback -> throw
+      if (_pageDetail != null) return _pageDetail!;
+      if (fallback != null) return fallback;
+
+      throw Exception(_pageDetailError);
+    } finally {
+      _loadingPageDetail = false;
       notifyListeners();
     }
   }

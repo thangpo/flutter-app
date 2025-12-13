@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:ui' show lerpDouble;
 
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_group_controller.dart';
@@ -103,73 +104,135 @@ class _SocialGroupsScreenState extends State<SocialGroupsScreen>
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        backgroundColor: appBarBackground,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: appBarForeground),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          getTranslated('groups', context) ?? 'Nhóm',
-          style: theme.textTheme.titleMedium?.copyWith(
-                color: appBarForeground,
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ) ??
-              TextStyle(
-                color: appBarForeground,
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-        ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.add, color: appBarForeground),
-            onPressed: _openCreateGroup,
-            tooltip: getTranslated('create_group', context) ?? 'Tạo nhóm',
-          ),
-          IconButton(
-            icon: Icon(Icons.person, color: appBarForeground),
-            onPressed: () {},
-            tooltip: getTranslated('profile', context) ?? 'Hồ sơ',
-          ),
-          IconButton(
-            icon: Icon(Icons.search, color: appBarForeground),
-            onPressed: () {},
-            tooltip: getTranslated('search', context) ?? 'Tìm kiếm',
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Container(
+
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(136),
+        child: Container(
+          decoration: BoxDecoration(
             color: appBarBackground,
-            child: TabBar(
-              controller: _tabController,
-              indicatorColor: colorScheme.primary,
-              labelColor: colorScheme.primary,
-              unselectedLabelColor: unselectedTabColor,
-              tabs: [
-                Tab(text: getTranslated('for_you', context) ?? 'Dành cho bạn'),
-                Tab(
-                    text: getTranslated('your_groups', context) ??
-                        'Nhóm của bạn'),
-                Tab(text: getTranslated('posts', context) ?? 'Bài viết'),
-              ],
+            borderRadius: const BorderRadius.vertical(
+              bottom: Radius.circular(24),
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 18,
+                offset: const Offset(0, 10),
+              ),
+            ],
           ),
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                _buildForYouTab(context),
-                _buildYourGroupsTab(context),
-                _buildPostsTab(context),
+                // ========== TOP ROW: BACK + TITLE + ACTIONS ==========
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Row(
+                    children: [
+                      _RoundIconButton(
+                        icon: Icons.arrow_back,
+                        onTap: () => Navigator.pop(context),
+                        background: theme.brightness == Brightness.dark
+                            ? Colors.white.withOpacity(0.06)
+                            : Colors.black.withOpacity(0.04),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        getTranslated('groups', context) ?? 'Nhóm',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: appBarForeground,
+                        ),
+                      ),
+                      const Spacer(),
+                      _RoundIconButton(
+                        icon: Icons.add,
+                        onTap: _openCreateGroup,
+                      ),
+                      const SizedBox(width: 8),
+                      _RoundIconButton(
+                        icon: Icons.person,
+                        onTap: () {
+                          // TODO: mở profile social
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _RoundIconButton(
+                        icon: Icons.search,
+                        onTap: () {
+                          // TODO: mở search
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 6),
+
+                // ========== TAB BAR (PILL) ==========
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Container(
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: theme.brightness == Brightness.dark
+                          ? Colors.white.withOpacity(0.06)
+                          : Colors.black.withOpacity(0.02),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: AnimatedBuilder(
+                      animation: _tabController.animation!,
+                      builder: (context, _) {
+                        final anim = _tabController.animation!;
+                        final page = anim.value;
+                        final distToNearest =
+                        (page - page.round()).abs().clamp(0.0, 0.5);
+                        final progress = (distToNearest / 0.5).clamp(0.0, 1.0);
+                        final radius = lerpDouble(12, 999, progress)!;
+
+                        return TabBar(
+                          controller: _tabController,
+                          isScrollable: false,
+                          dividerColor: Colors.transparent,
+                          indicator: BoxDecoration(
+                            color: colorScheme.primary,
+                            borderRadius: BorderRadius.circular(radius),
+                          ),
+                          indicatorSize: TabBarIndicatorSize.tab,
+                          labelColor: Colors.white,
+                          unselectedLabelColor: unselectedTabColor,
+                          labelStyle: theme.textTheme.labelMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                          tabs: [
+                            Tab(text: getTranslated('for_you', context) ?? 'Dành cho bạn'),
+                            Tab(text: getTranslated('your_groups', context) ?? 'Nhóm của bạn'),
+                            Tab(text: getTranslated('posts', context) ?? 'Bài viết'),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 8),
               ],
             ),
           ),
+        ),
+      ),
+
+      // Body chỉ còn TabBarView như bên Page
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildForYouTab(context),
+          _buildYourGroupsTab(context),
+          _buildPostsTab(context),
         ],
       ),
     );
@@ -825,6 +888,36 @@ class _QuickAction extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _RoundIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final Color? background;
+
+  const _RoundIconButton({
+    required this.icon,
+    required this.onTap,
+    this.background,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: background ?? theme.cardColor,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, size: 20),
       ),
     );
   }

@@ -1,9 +1,7 @@
-// G:\flutter-app\lib\features\social\screens\social_page_detail.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_get_page.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_post.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_screen.dart'
@@ -15,11 +13,18 @@ import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_p
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/edit_page_screen.dart';
 
 class SocialPageDetailScreen extends StatefulWidget {
-  final SocialGetPage page;
+  /// ✅ Nếu vào từ các màn PagesScreen (có sẵn SocialGetPage)
+  final SocialGetPage? page;
+
+  /// ✅ Nếu vào từ Search (thường chỉ có id/username)
+  final String? pageId;
+  final String? pageName; // username/slug
 
   const SocialPageDetailScreen({
     Key? key,
-    required this.page,
+    this.page,
+    this.pageId,
+    this.pageName,
   }) : super(key: key);
 
   @override
@@ -29,7 +34,10 @@ class SocialPageDetailScreen extends StatefulWidget {
 class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
   final ScrollController _scrollController = ScrollController();
   bool _showTitle = false;
-  late SocialGetPage _page;
+
+  SocialGetPage? _page;
+  bool _loadingPage = false;
+  String? _pageError;
 
   // Tab đang chọn (Trang chủ/Bài viết, Giới thiệu)
   String _selectedTab = 'home';
@@ -39,13 +47,32 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
     super.initState();
     _page = widget.page;
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
+
+      // ✅ Nếu chưa có page đầy đủ -> fetch
+      if (_page == null) {
+        await _loadPageDetailIfNeeded();
+      }
+
+      if (!mounted) return;
+      if (_page == null) return;
+
       final pageCtrl = context.read<SocialPageController>();
-      pageCtrl.loadInitialPagePosts(_page.pageId);
+      pageCtrl.loadInitialPagePosts(_page!.pageId);
     });
 
     _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void didUpdateWidget(covariant SocialPageDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // Nếu widget mới truyền page khác
+    if (widget.page != null && widget.page != oldWidget.page) {
+      _page = widget.page;
+    }
   }
 
   void _onScroll() {
@@ -55,11 +82,14 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
       setState(() => _showTitle = false);
     }
 
+    final current = _page;
+    if (current == null) return;
+
     final position = _scrollController.position;
     if (position.pixels >= position.maxScrollExtent - 200) {
       final pageCtrl = context.read<SocialPageController>();
       if (pageCtrl.hasMorePagePosts && !pageCtrl.loadingMorePagePosts) {
-        pageCtrl.loadMorePagePosts(_page.pageId);
+        pageCtrl.loadMorePagePosts(current.pageId);
       }
     }
   }
@@ -71,17 +101,56 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
     super.dispose();
   }
 
-  // ---------------- ACTIONS -----------------
+  // ================== LOAD PAGE DETAIL (KHI VÀO TỪ SEARCH) ==================
+
+  Future<void> _loadPageDetailIfNeeded() async {
+    final String? pid = widget.pageId?.trim();
+    final String? pname = widget.pageName?.trim();
+
+    if ((pid == null || pid.isEmpty) && (pname == null || pname.isEmpty)) {
+      setState(() => _pageError = "Thiếu pageId/pageName để mở chi tiết trang");
+      return;
+    }
+
+    setState(() {
+      _loadingPage = true;
+      _pageError = null;
+    });
+
+    try {
+      final SocialPageController pageCtrl = context.read<SocialPageController>();
+
+      // ✅ BẠN CẦN IMPLEMENT HÀM NÀY TRONG SocialPageController
+      // Future<SocialGetPage> fetchPageDetail({String? pageId, String? pageName})
+      final SocialGetPage detail = await pageCtrl.fetchPageDetail(
+        pageId: pid,
+        pageName: pname,
+      );
+
+      if (!mounted) return;
+      setState(() => _page = detail);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _pageError = e.toString());
+    } finally {
+      if (mounted) setState(() => _loadingPage = false);
+    }
+  }
+
+  // ================== ACTIONS ==================
 
   void _onFollowOrUnfollow() async {
+    final page = _page;
+    if (page == null) return;
+
     final pageCtrl = context.read<SocialPageController>();
 
-    final bool wasLiked = _page.isLiked;
-    final bool isLikedNow = await pageCtrl.toggleLikePage(_page);
+    final bool wasLiked = page.isLiked;
+    final bool isLikedNow = await pageCtrl.toggleLikePage(page);
     if (!mounted) return;
 
     setState(() {
-      int newLikes = _page.likesCount;
+      int newLikes = page.likesCount;
 
       if (isLikedNow && !wasLiked) {
         newLikes++;
@@ -89,7 +158,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
         newLikes--;
       }
 
-      _page = _page.copyWith(
+      _page = page.copyWith(
         isLiked: isLikedNow,
         likesCount: newLikes,
       );
@@ -103,16 +172,19 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
   }
 
   Future<void> _onEditPage() async {
+    final page = _page;
+    if (page == null) return;
+
     final payload = await Navigator.of(context).push<Map<String, dynamic>>(
       MaterialPageRoute(
         builder: (_) => EditPageScreen(
-          pageId: _page.pageId,
-          initialPageName: _page.pageName,
-          initialPageTitle: _page.name,
-          initialDescription: _page.description,
-          initialCategoryName: _page.category,
-          initialAvatarUrl: _page.avatarUrl,
-          initialCoverUrl: _page.coverUrl,
+          pageId: page.pageId,
+          initialPageName: page.pageName,
+          initialPageTitle: page.name,
+          initialDescription: page.description,
+          initialCategoryName: page.category,
+          initialAvatarUrl: page.avatarUrl,
+          initialCoverUrl: page.coverUrl,
         ),
       ),
     );
@@ -128,17 +200,11 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
       setState(() {
         _page = ctrl.lastUpdatedPage!;
       });
-      _showToast(
-        getTranslated('page_updated', context) ?? 'Đã cập nhật trang',
-      );
+      _showToast(getTranslated('page_updated', context) ?? 'Đã cập nhật trang');
     } else if (ok) {
-      _showToast(
-        getTranslated('page_updated', context) ?? 'Đã cập nhật trang',
-      );
+      _showToast(getTranslated('page_updated', context) ?? 'Đã cập nhật trang');
     } else {
-      _showToast(
-        getTranslated('update_failed', context) ?? 'Cập nhật thất bại',
-      );
+      _showToast(getTranslated('update_failed', context) ?? 'Cập nhật thất bại');
     }
   }
 
@@ -150,7 +216,10 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
   }
 
   Future<void> _onCreatePost() async {
-    if (!_page.isPageOwner) {
+    final page = _page;
+    if (page == null) return;
+
+    if (!page.isPageOwner) {
       _showToast(
         getTranslated('only_page_owner_can_post', context) ??
             'Chỉ chủ trang mới có thể đăng bài.',
@@ -161,8 +230,8 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
     final SocialPost? created = await Navigator.of(context).push<SocialPost>(
       MaterialPageRoute(
         builder: (_) => SocialCreatePostScreen(
-          pageId: _page.pageId.toString(),
-          pageName: _page.name,
+          pageId: page.pageId.toString(),
+          pageName: page.name,
         ),
         fullscreenDialog: true,
       ),
@@ -171,7 +240,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
     if (!mounted || created == null) return;
 
     final SocialPost resolved =
-    created.copyWith(pageId: created.pageId ?? _page.pageId.toString());
+    created.copyWith(pageId: created.pageId ?? page.pageId.toString());
 
     context.read<SocialPageController>().prependPagePost(resolved);
   }
@@ -188,17 +257,85 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
 
   void _onSelectTab(String id) {
     if (_selectedTab == id) return;
-    setState(() {
-      _selectedTab = id;
-    });
+    setState(() => _selectedTab = id);
   }
 
-  // ---------------- UI -----------------
+  // ================== UI HELPERS ==================
+
+  String _safe(String? v) => (v ?? '').trim();
+
+  Widget _coverWidget(String url, double height) {
+    final u = _safe(url);
+    if (u.isEmpty) {
+      return Container(height: height, color: Colors.grey.shade400);
+    }
+    return Image.network(
+      u,
+      height: height,
+      width: double.infinity,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => Container(height: height, color: Colors.grey.shade400),
+    );
+  }
+
+  ImageProvider? _avatarProvider(String url) {
+    final u = _safe(url);
+    if (u.isEmpty) return null;
+    return NetworkImage(u);
+  }
+
+  // ================== BUILD ==================
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final page = _page;
+
+    // ✅ Nếu vào từ Search: chưa có page detail
+    if (_page == null) {
+      final title = widget.pageName?.isNotEmpty == true
+          ? widget.pageName!
+          : (getTranslated('page', context) ?? 'Page');
+
+      return Scaffold(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        appBar: AppBar(
+          title: Text(title),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _loadingPage
+                ? const CircularProgressIndicator()
+                : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.error_outline, color: theme.colorScheme.error, size: 40),
+                const SizedBox(height: 10),
+                Text(
+                  _pageError ??
+                      (getTranslated('something_wrong', context) ??
+                          'Đã có lỗi xảy ra'),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: theme.hintColor),
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: _loadPageDetailIfNeeded,
+                  child: Text(getTranslated('retry', context) ?? 'Thử lại'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // ✅ Có page đầy đủ -> giữ nguyên UI của bạn
+    final page = _page!;
     final bool isPageOwner = page.isPageOwner;
 
     const double avatarRadius = 55;
@@ -249,7 +386,6 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                 SliverToBoxAdapter(
                   child: Column(
                     children: [
-                      // Cover + avatar chồng lên (giống Facebook)
                       Stack(
                         clipBehavior: Clip.none,
                         alignment: Alignment.bottomCenter,
@@ -257,12 +393,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                           SizedBox(
                             height: coverHeight,
                             width: double.infinity,
-                            child: Image.network(
-                              page.coverUrl,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) =>
-                                  Container(color: Colors.grey.shade400),
-                            ),
+                            child: _coverWidget(page.coverUrl, coverHeight),
                           ),
                           Positioned(
                             bottom: -avatarRadius,
@@ -281,8 +412,11 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                               ),
                               child: CircleAvatar(
                                 radius: avatarRadius,
-                                backgroundImage: NetworkImage(page.avatarUrl),
+                                backgroundImage: _avatarProvider(page.avatarUrl),
                                 backgroundColor: Colors.grey.shade200,
+                                child: _safe(page.avatarUrl).isEmpty
+                                    ? Icon(Icons.flag, size: 40, color: theme.hintColor)
+                                    : null,
                               ),
                             ),
                           ),
@@ -290,17 +424,12 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                       ),
                       const SizedBox(height: avatarRadius + 12),
 
-                      // Tên, username, category, stats nhỏ, buttons
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         color: theme.cardColor,
                         child: Column(
                           children: [
-                            // Tên trang
                             Text(
                               page.name,
                               textAlign: TextAlign.center,
@@ -313,34 +442,26 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                             ),
                             const SizedBox(height: 4),
 
-                            // Username + category
                             Text(
                               '@${page.username} • ${page.category}',
                               textAlign: TextAlign.center,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodyMedium
-                                  ?.copyWith(color: theme.hintColor),
+                              style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
                             ),
                             const SizedBox(height: 12),
 
-                            // Rating + lượt theo dõi (nhỏ)
                             Column(
                               children: [
                                 if (page.rating > 0)
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Icon(
-                                        Icons.star,
-                                        size: 18,
-                                        color: Colors.orange.shade400,
-                                      ),
+                                      Icon(Icons.star, size: 18, color: Colors.orange.shade400),
                                       const SizedBox(width: 4),
                                       Text(
                                         page.rating.toStringAsFixed(1),
-                                        style: theme.textTheme.bodyMedium
-                                            ?.copyWith(
+                                        style: theme.textTheme.bodyMedium?.copyWith(
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
@@ -349,26 +470,19 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                                 const SizedBox(height: 6),
                                 Text(
                                   '${page.likesCount} ${getTranslated('followers', context) ?? 'người theo dõi'}',
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.hintColor,
-                                  ),
+                                  style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
                                 ),
                               ],
                             ),
                             const SizedBox(height: 16),
 
-                            // ❌ ĐÃ BỎ KHỐI STATS LỚN (followers/posts) Ở ĐÂY
-
-                            // Buttons (Đang theo dõi / Nhắn tin) hoặc Chỉnh sửa / Quảng cáo
                             Row(
                               children: isPageOwner
                                   ? [
                                 Expanded(
                                   child: _buildActionButton(
                                     context,
-                                    getTranslated(
-                                        'edit_page', context) ??
-                                        'Chỉnh sửa',
+                                    getTranslated('edit_page', context) ?? 'Chỉnh sửa',
                                     Icons.edit_outlined,
                                     theme.canvasColor,
                                     Colors.black87,
@@ -379,9 +493,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                                 Expanded(
                                   child: _buildActionButton(
                                     context,
-                                    getTranslated(
-                                        'promote_page', context) ??
-                                        'Quảng cáo',
+                                    getTranslated('promote_page', context) ?? 'Quảng cáo',
                                     Icons.campaign_outlined,
                                     Colors.blue.shade50,
                                     Colors.blue,
@@ -394,21 +506,11 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                                   child: _buildActionButton(
                                     context,
                                     page.isLiked
-                                        ? (getTranslated('following',
-                                        context) ??
-                                        'Đang theo dõi')
-                                        : (getTranslated(
-                                        'follow', context) ??
-                                        'Theo dõi'),
-                                    page.isLiked
-                                        ? Icons.check
-                                        : Icons.add,
-                                    page.isLiked
-                                        ? theme.canvasColor
-                                        : theme.primaryColor,
-                                    page.isLiked
-                                        ? Colors.black87
-                                        : Colors.white,
+                                        ? (getTranslated('following', context) ?? 'Đang theo dõi')
+                                        : (getTranslated('follow', context) ?? 'Theo dõi'),
+                                    page.isLiked ? Icons.check : Icons.add,
+                                    page.isLiked ? theme.canvasColor : theme.primaryColor,
+                                    page.isLiked ? Colors.black87 : Colors.white,
                                     _onFollowOrUnfollow,
                                   ),
                                 ),
@@ -416,9 +518,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                                 Expanded(
                                   child: _buildActionButton(
                                     context,
-                                    getTranslated(
-                                        'message', context) ??
-                                        'Nhắn tin',
+                                    getTranslated('message', context) ?? 'Nhắn tin',
                                     Icons.chat_bubble_outline,
                                     theme.canvasColor,
                                     Colors.black87,
@@ -437,8 +537,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                 // -------- TAB NAVIGATION --------
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(
@@ -446,14 +545,12 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                           _buildTabItem(
                             context,
                             id: 'home',
-                            label: getTranslated('posts', context) ??
-                                'Bài viết',
+                            label: getTranslated('posts', context) ?? 'Bài viết',
                           ),
                           _buildTabItem(
                             context,
                             id: 'about',
-                            label: getTranslated('about', context) ??
-                                'Giới thiệu',
+                            label: getTranslated('about', context) ?? 'Giới thiệu',
                           ),
                         ],
                       ),
@@ -490,7 +587,6 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
     required List<SocialPost> posts,
     required bool isNotInitialized,
   }) {
-    // HOME TAB: Giới thiệu + ô tạo bài + Bài viết
     if (_selectedTab == 'home') {
       return [
         SliverToBoxAdapter(
@@ -499,8 +595,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (page.description != null &&
-                    page.description!.isNotEmpty) ...[
+                if (page.description != null && page.description!.isNotEmpty) ...[
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -526,9 +621,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                         const SizedBox(height: 8),
                         Text(
                           page.description!,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            height: 1.4,
-                          ),
+                          style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
                         ),
                       ],
                     ),
@@ -540,10 +633,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                     onTap: _onCreatePost,
                     borderRadius: BorderRadius.circular(30),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
                         color: theme.cardColor,
                         borderRadius: BorderRadius.circular(30),
@@ -553,21 +643,16 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                         children: [
                           CircleAvatar(
                             radius: 16,
-                            backgroundImage: NetworkImage(page.avatarUrl),
+                            backgroundImage: _avatarProvider(page.avatarUrl),
+                            backgroundColor: Colors.grey.shade200,
                           ),
                           const SizedBox(width: 12),
                           Text(
-                            getTranslated('what_are_you_thinking', context) ??
-                                "Bạn đang nghĩ gì?",
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.hintColor,
-                            ),
+                            getTranslated('what_are_you_thinking', context) ?? "Bạn đang nghĩ gì?",
+                            style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
                           ),
                           const Spacer(),
-                          Icon(
-                            Icons.image_outlined,
-                            color: Colors.green.shade400,
-                          ),
+                          Icon(Icons.image_outlined, color: Colors.green.shade400),
                         ],
                       ),
                     ),
@@ -576,19 +661,15 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
             ),
           ),
         ),
-        // TITLE "Bài viết"
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Text(
               getTranslated('posts', context) ?? "Bài viết",
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
           ),
         ),
-        // POSTS / SKELETON / EMPTY
         if (isNotInitialized)
           SliverList(
             delegate: SliverChildBuilderDelegate(
@@ -603,15 +684,10 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
               child: Center(
                 child: Column(
                   children: [
-                    Icon(
-                      Icons.post_add,
-                      size: 50,
-                      color: theme.disabledColor,
-                    ),
+                    Icon(Icons.post_add, size: 50, color: theme.disabledColor),
                     const SizedBox(height: 10),
                     Text(
-                      getTranslated('no_posts_yet', context) ??
-                          'Chưa có bài viết nào',
+                      getTranslated('no_posts_yet', context) ?? 'Chưa có bài viết nào',
                       style: TextStyle(color: theme.hintColor),
                     ),
                   ],
@@ -627,9 +703,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                   if (pageCtrl.hasMorePagePosts) {
                     return const Padding(
                       padding: EdgeInsets.all(16),
-                      child: Center(
-                        child: CircularProgressIndicator(),
-                      ),
+                      child: Center(child: CircularProgressIndicator()),
                     );
                   }
                   return const SizedBox(height: 40);
@@ -643,9 +717,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
                   child: SocialPostCard(
                     post: post,
                     onPostUpdated: (updatedPost) {
-                      context
-                          .read<SocialPageController>()
-                          .updatePagePost(updatedPost);
+                      context.read<SocialPageController>().updatePagePost(updatedPost);
                     },
                   ),
                 );
@@ -679,20 +751,14 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
               children: [
                 Text(
                   getTranslated('about', context) ?? "Giới thiệu",
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  (page.description != null &&
-                      page.description!.isNotEmpty)
+                  (page.description != null && page.description!.isNotEmpty)
                       ? page.description!
-                      : (getTranslated('page_no_description', context) ??
-                      'Trang này chưa có mô tả.'),
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    height: 1.4,
-                  ),
+                      : (getTranslated('page_no_description', context) ?? 'Trang này chưa có mô tả.'),
+                  style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
                 ),
               ],
             ),
@@ -700,27 +766,6 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
         ),
       ),
     ];
-  }
-
-  Widget _buildStatItem(BuildContext context, String value, String label) {
-    final theme = Theme.of(context);
-    return Column(
-      children: [
-        Text(
-          value,
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.hintColor,
-          ),
-        ),
-      ],
-    );
   }
 
   Widget _buildActionButton(
@@ -782,10 +827,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
               Container(
                 width: 40,
                 height: 40,
-                decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                ),
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
               ),
               const SizedBox(width: 10),
               Column(
@@ -799,11 +841,7 @@ class _SocialPageDetailScreenState extends State<SocialPageDetailScreen> {
             ],
           ),
           const SizedBox(height: 15),
-          Container(
-            width: double.infinity,
-            height: 200,
-            color: color,
-          ),
+          Container(width: double.infinity, height: 200, color: color),
         ],
       ),
     );

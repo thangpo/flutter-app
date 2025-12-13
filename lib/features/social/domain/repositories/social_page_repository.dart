@@ -239,6 +239,47 @@
       return _parseGetPageMap(raw);
     }
 
+    Future<ApiResponseModel<Response>> fetchPageDetail({
+      String? pageId,
+      String? pageName,
+    }) async {
+      try {
+        final token = _getSocialAccessToken();
+        if (token == null || token.isEmpty) {
+          return ApiResponseModel.withError('Please log in to your social network account');
+        }
+
+        final String id = (pageId ?? '').trim();
+        final String name = (pageName ?? '').trim();
+
+        if (id.isEmpty && name.isEmpty) {
+          return ApiResponseModel.withError('Missing pageId/pageName');
+        }
+
+        // ✅ tạo constant AppConstants.socialGetPageDetailUri cho đúng backend của bạn
+        // ví dụ (WoWonder hay dùng): "/api/get-page-data"
+        final String url =
+            '${AppConstants.socialBaseUrl}${AppConstants.socialGetPageDetailUri}?access_token=$token';
+
+        final Map<String, dynamic> formMap = {
+          'server_key': AppConstants.socialServerKey,
+          // tùy backend: nhiều bản yêu cầu fetch = 'page_data'
+          'fetch': 'page_data',
+          if (id.isNotEmpty) 'page_id': id,
+          if (name.isNotEmpty) 'page_name': name,
+        };
+
+        final Response res = await dioClient.post(
+          url,
+          data: FormData.fromMap(formMap),
+          options: Options(contentType: 'multipart/form-data'),
+        );
+
+        return ApiResponseModel.withSuccess(res);
+      } catch (e) {
+        return ApiResponseModel.withError(ApiErrorHandler.getMessage(e));
+      }
+    }
 
     //lấy page của tôi
     Future<ApiResponseModel<Response>> getMyPage({

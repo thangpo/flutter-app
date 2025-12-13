@@ -717,17 +717,20 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
     return Column(
       children: [
         DropdownButtonFormField<String>(
+          isExpanded: true,
           value: selectedProvince,
           decoration: InputDecoration(
-            labelText:
-            getTranslated('province_city', context) ?? 'Province/City',
+            labelText: getTranslated('province_city', context) ?? 'Province/City',
             prefixIcon: const Icon(Icons.location_city),
             border: const OutlineInputBorder(),
           ),
           items: provinces.map((item) {
             return DropdownMenuItem<String>(
               value: item['ProvinceID'].toString(),
-              child: Text(item['ProvinceName']),
+              child: Text(
+                item['ProvinceName'],
+                overflow: TextOverflow.ellipsis,
+              ),
             );
           }).toList(),
           onChanged: (value) {
@@ -737,17 +740,20 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
+          isExpanded: true,
           value: selectedDistrict,
           decoration: InputDecoration(
-            labelText:
-            getTranslated('district', context) ?? 'District',
+            labelText: getTranslated('district', context) ?? 'District',
             prefixIcon: const Icon(Icons.map_outlined),
             border: const OutlineInputBorder(),
           ),
           items: districts.map((item) {
             return DropdownMenuItem<String>(
               value: item['DistrictID'].toString(),
-              child: Text(item['DistrictName']),
+              child: Text(
+                item['DistrictName'],
+                overflow: TextOverflow.ellipsis,
+              ),
             );
           }).toList(),
           onChanged: (value) {
@@ -909,8 +915,6 @@ class _BookingConfirmScreenState extends State<BookingConfirmScreen> {
             ...raw,
             'tour_image': booking.tourImage,   // ảnh nền
             'tour_name' : booking.tourName,    // tên tour
-            // nếu BookingData có location thì thêm luôn:
-            // 'location'  : booking.location,
           };
 
           Navigator.push(

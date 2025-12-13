@@ -8,6 +8,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_g
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_channel.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_page.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_page_detail.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_user.dart';
 import 'package:flutter_sixvalley_ecommerce/common/basewidget/show_custom_snakbar_widget.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
@@ -25,10 +26,16 @@ class SocialSearchScreen extends StatefulWidget {
 class _SocialSearchScreenState extends State<SocialSearchScreen> {
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
+
   final Set<String> _locallyFollowed = <String>{};
   final Set<String> _followBusy = <String>{};
   final Set<String> _groupJoinBusy = <String>{};
   final Map<String, SocialGroup> _localGroupOverrides = <String, SocialGroup>{};
+
+  void _dismissKeyboard() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (mounted) FocusScope.of(context).unfocus();
+  }
 
   @override
   void initState() {
@@ -38,12 +45,11 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
     _focusNode = FocusNode();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _focusNode.requestFocus();
-        sc.fetchRecentSearches();
-        if (sc.hasSearchQuery && sc.searchResult.isEmpty && !sc.searchLoading) {
-          sc.refreshSearchResults();
-        }
+      if (!mounted) return;
+      _focusNode.requestFocus();
+      sc.fetchRecentSearches();
+      if (sc.hasSearchQuery && sc.searchResult.isEmpty && !sc.searchLoading) {
+        sc.refreshSearchResults();
       }
     });
   }
@@ -58,7 +64,8 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
     setState(() => _followBusy.add(user.id));
     try {
       final bool followed =
-          await socialController.toggleFollowUser(targetUserId: user.id);
+      await socialController.toggleFollowUser(targetUserId: user.id);
+      if (!mounted) return;
       setState(() {
         if (followed) {
           _locallyFollowed.add(user.id);
@@ -69,11 +76,13 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
     } catch (e) {
       showCustomSnackBar(e.toString(), context, isError: true);
     } finally {
-      setState(() => _followBusy.remove(user.id));
+      if (mounted) setState(() => _followBusy.remove(user.id));
     }
   }
 
   Future<void> _handleMessageTap(SocialUser user) async {
+    _dismissKeyboard();
+
     final socialController = context.read<SocialController>();
     final token = socialController.accessToken;
     if (token == null || token.isEmpty) {
@@ -101,27 +110,24 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
     if (_groupJoinBusy.contains(group.id)) return;
     final SocialGroup resolved = _resolveGroup(group);
     final SocialGroupController groupController =
-        context.read<SocialGroupController>();
+    context.read<SocialGroupController>();
     setState(() => _groupJoinBusy.add(group.id));
     try {
       final SocialGroup? response =
-          await groupController.joinGroup(group.id, fallback: resolved);
+      await groupController.joinGroup(group.id, fallback: resolved);
       SocialGroup updated = response ?? resolved;
       final bool joinPending = _isGroupJoinPending(updated);
       if (!mounted) return;
-      setState(() {
-        _localGroupOverrides[group.id] = updated;
-      });
+
+      setState(() => _localGroupOverrides[group.id] = updated);
 
       final String message = joinPending
           ? getTranslated('join_group_pending', context) ??
-              "Đã gửi yêu cầu tham gia"
+          "Đã gửi yêu cầu tham gia"
           : getTranslated('join_group_success', context) ?? "Đã tham gia nhóm";
       showCustomSnackBar(message, context, isError: false);
     } catch (e) {
-      if (mounted) {
-        showCustomSnackBar(e.toString(), context, isError: true);
-      }
+      if (mounted) showCustomSnackBar(e.toString(), context, isError: true);
     } finally {
       if (mounted) {
         setState(() => _groupJoinBusy.remove(group.id));
@@ -187,9 +193,8 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
 
   String _groupPrivacyLabel(SocialGroup group) {
     final String privacy = (group.privacy ?? "").trim().toLowerCase();
-    final bool isPrivate = privacy == "2" ||
-        privacy.contains("private") ||
-        privacy.contains("closed");
+    final bool isPrivate =
+        privacy == "2" || privacy.contains("private") || privacy.contains("closed");
 
     return isPrivate
         ? (getTranslated("private_group", context) ?? "Nhóm kín")
@@ -201,22 +206,28 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
     final theme = Theme.of(context);
     final appBarBackground =
         theme.appBarTheme.backgroundColor ?? theme.scaffoldBackgroundColor;
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        backgroundColor: appBarBackground,
-        titleSpacing: 0,
-        title: _buildSearchField(theme),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.clear),
-            tooltip: getTranslated("clear", context) ?? "Xoá",
-            onPressed: _handleClear,
-          ),
-        ],
-      ),
-      body: Consumer<SocialController>(
-        builder: (context, sc, _) => _buildBody(context, sc),
+
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTapDown: (_) => _dismissKeyboard(),
+      onPanDown: (_) => _dismissKeyboard(),
+      child: Scaffold(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        appBar: AppBar(
+          backgroundColor: appBarBackground,
+          titleSpacing: 0,
+          title: _buildSearchField(theme),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.clear),
+              tooltip: getTranslated("clear", context) ?? "Xoá",
+              onPressed: _handleClear,
+            ),
+          ],
+        ),
+        body: Consumer<SocialController>(
+          builder: (context, sc, _) => _buildBody(context, sc),
+        ),
       ),
     );
   }
@@ -242,14 +253,11 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
   }
 
   Widget _buildBody(BuildContext context, SocialController sc) {
-    // ================== CHƯA NHẬP KEYWORD -> HIỂN THỊ RECENT SEARCH ==================
     if (!sc.hasSearchQuery) {
-      // Đang load recent
       if (sc.loadingRecentSearch) {
         return const Center(child: CircularProgressIndicator());
       }
 
-      // Lỗi khi load recent
       if (sc.recentSearchError != null) {
         return _CenteredMessage(
           icon: Icons.error_outline,
@@ -259,14 +267,12 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
               getTranslated("something_wrong", context) ??
               "Đã có lỗi xảy ra, hãy thử lại.",
           trailing: TextButton(
-            onPressed: () =>
-                context.read<SocialController>().fetchRecentSearches(),
+            onPressed: () => context.read<SocialController>().fetchRecentSearches(),
             child: Text(getTranslated("retry", context) ?? "Thử lại"),
           ),
         );
       }
 
-      // Không có lịch sử nào -> vẫn hiện “Bắt đầu tìm kiếm”
       if (sc.recentSearches.isEmpty) {
         return _CenteredMessage(
           icon: Icons.search,
@@ -276,20 +282,18 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
         );
       }
 
-      // Có lịch sử tìm kiếm -> HIỆN LIST
       return ListView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.fromLTRB(4, 12, 4, 24),
         children: [
           _SearchSection(
-            title: getTranslated("recent_search", context) ??
-                "Tìm kiếm gần đây",
+            title: getTranslated("recent_search", context) ?? "Tìm kiếm gần đây",
             children: sc.recentSearches.map(_buildUserTile).toList(),
           ),
         ],
       );
     }
 
-    // ================== ĐÃ NHẬP KEYWORD -> GIỮ NGUYÊN CODE CŨ ==================
     if (sc.searchLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -319,6 +323,7 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
     }
 
     return ListView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.fromLTRB(4, 12, 4, 24),
       children: [
         if (result.users.isNotEmpty)
@@ -345,24 +350,18 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
     );
   }
 
-
   Widget _buildUserTile(SocialUser user) {
     final context = this.context;
     final theme = Theme.of(context);
 
-    final String followersLabel =
-        getTranslated("followers", context) ?? "người theo dõi";
+    final String followersLabel = getTranslated("followers", context) ?? "người theo dõi";
 
-    String? subtitle = user.userName != null && user.userName!.isNotEmpty
-        ? "@${user.userName}"
-        : null;
+    String? subtitle = user.userName != null && user.userName!.isNotEmpty ? "@${user.userName}" : null;
 
     if (user.followersCount != null) {
       final int safeCount = user.followersCount! < 0 ? 0 : user.followersCount!;
       final String followerText = "${_formatCount(safeCount)} $followersLabel";
-      subtitle = (subtitle != null && subtitle.isNotEmpty)
-          ? "$subtitle · $followerText"
-          : followerText;
+      subtitle = (subtitle != null && subtitle.isNotEmpty) ? "$subtitle · $followerText" : followerText;
     }
 
     final IconData? genderIcon = _genderIconOf(user.genderText);
@@ -377,25 +376,19 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
 
     if (canMessage) {
       statusLabel = getTranslated("message", context) ?? "Nhắn tin";
-      statusAction = () {
-        _handleMessageTap(user);
-      };
+      statusAction = () => _handleMessageTap(user);
     } else if (canFollow) {
       statusLabel = getTranslated("follow", context) ?? "Theo dõi";
-      statusAction = () {
-        _handleFollowTap(user);
-      };
+      statusAction = () => _handleFollowTap(user);
       isBusy = _followBusy.contains(user.id);
     }
 
     final TextStyle statusStyle = theme.textTheme.bodyMedium?.copyWith(
-          color: theme.colorScheme.primary,
-          fontWeight: FontWeight.w600,
-        ) ??
-        TextStyle(
-          color: theme.colorScheme.primary,
-          fontWeight: FontWeight.w600,
-        );
+      color: theme.colorScheme.primary,
+      fontWeight: FontWeight.w600,
+    ) ??
+        TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.w600);
+
     final ButtonStyle statusButtonStyle = TextButton.styleFrom(
       padding: EdgeInsets.zero,
       minimumSize: Size.zero,
@@ -404,53 +397,38 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
 
     final Widget? statusButton = (statusLabel != null && statusAction != null)
         ? TextButton(
-            onPressed: isBusy ? null : statusAction,
-            style: statusButtonStyle,
-            child: isBusy
-                ? SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        theme.colorScheme.primary,
-                      ),
-                    ),
-                  )
-                : Text(statusLabel!, style: statusStyle),
-          )
+      onPressed: isBusy ? null : statusAction,
+      style: statusButtonStyle,
+      child: isBusy
+          ? SizedBox(
+        width: 14,
+        height: 14,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
+        ),
+      )
+          : Text(statusLabel!, style: statusStyle),
+    )
         : null;
 
     final List<Widget> subtitleWidgets = [];
     if (subtitle != null) {
-      subtitleWidgets.add(
-        Text(
-          subtitle,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.bodySmall,
-        ),
-      );
+      subtitleWidgets.add(Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: theme.textTheme.bodySmall));
     }
 
     if ((genderIcon != null) || (birthdayText != null)) {
-      if (subtitleWidgets.isNotEmpty) {
-        subtitleWidgets.add(const SizedBox(height: 2));
-      }
+      if (subtitleWidgets.isNotEmpty) subtitleWidgets.add(const SizedBox(height: 2));
       subtitleWidgets.add(
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (genderIcon != null)
-              Icon(genderIcon, size: 16, color: theme.hintColor),
-            if (genderIcon != null && birthdayText != null)
-              const SizedBox(width: 6),
+            if (genderIcon != null) Icon(genderIcon, size: 16, color: theme.hintColor),
+            if (genderIcon != null && birthdayText != null) const SizedBox(width: 6),
             if (birthdayText != null)
               Text(
                 "· $birthdayText",
-                style: theme.textTheme.bodySmall
-                        ?.copyWith(color: theme.hintColor) ??
-                    TextStyle(color: theme.hintColor),
+                style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor) ?? TextStyle(color: theme.hintColor),
               ),
           ],
         ),
@@ -458,26 +436,20 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
     }
 
     if (aboutText != null) {
-      if (subtitleWidgets.isNotEmpty) {
-        subtitleWidgets.add(const SizedBox(height: 2));
-      }
+      if (subtitleWidgets.isNotEmpty) subtitleWidgets.add(const SizedBox(height: 2));
       subtitleWidgets.add(
         Text(
           aboutText,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor) ??
-              TextStyle(color: theme.hintColor),
+          style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor) ?? TextStyle(color: theme.hintColor),
         ),
       );
     }
 
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      leading: _Avatar(
-        imageUrl: user.avatarUrl,
-        fallbackIcon: Icons.person_outline,
-      ),
+      leading: _Avatar(imageUrl: user.avatarUrl, fallbackIcon: Icons.person_outline),
       title: Wrap(
         spacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,
@@ -485,26 +457,23 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
           Text(
             user.displayName ?? user.userName ?? user.id,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-            ),
+            style: const TextStyle(fontWeight: FontWeight.w600),
           ),
           if (statusButton != null) statusButton,
         ],
       ),
       subtitle: subtitleWidgets.isNotEmpty
           ? Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: subtitleWidgets,
-            )
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: subtitleWidgets,
+      )
           : null,
       onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => ProfileScreen(targetUserId: user.id),
-          ),
-        );
+        _dismissKeyboard();
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => ProfileScreen(targetUserId: user.id),
+        ));
       },
     );
   }
@@ -521,54 +490,65 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
       ),
       title: Text(page.title ?? page.name),
       subtitle: subtitle.isNotEmpty ? Text(subtitle) : null,
-      onTap: () => _openExternal(page.url),
+
+      // ✅ Ưu tiên mở detail trong app
+      onTap: () {
+        _dismissKeyboard();
+
+        final String? pageId = (page.id?.toString().trim().isNotEmpty == true)
+            ? page.id!.toString().trim()
+            : null;
+
+        final String? pageName = (page.username?.trim().isNotEmpty == true)
+            ? page.username!.trim()
+            : null;
+
+        // Nếu không có id/username thì fallback mở web (đỡ bị crash)
+        if (pageId == null && pageName == null) {
+          _openExternal(page.url);
+          return;
+        }
+
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => SocialPageDetailScreen(
+              pageId: pageId,
+              pageName: pageName,
+            ),
+          ),
+        );
+      },
     );
   }
 
   Widget _buildGroupTile(SocialGroup group) {
-    final context = this.context;
     final theme = Theme.of(context);
     final SocialGroup resolved = _resolveGroup(group);
     final String privacyLabel = _groupPrivacyLabel(resolved);
-
-    final String membersLabel =
-        getTranslated("members", context) ?? "thành viên";
+    final String membersLabel = getTranslated("members", context) ?? "thành viên";
 
     final String? aboutText =
-        (resolved.about != null && resolved.about!.trim().isNotEmpty)
-            ? resolved.about!.trim()
-            : null;
+    (resolved.about != null && resolved.about!.trim().isNotEmpty) ? resolved.about!.trim() : null;
 
-    final String? membersText = resolved.memberCount > 0
-        ? "${_formatCount(resolved.memberCount)} $membersLabel"
-        : null;
+    final String? membersText = resolved.memberCount > 0 ? "${_formatCount(resolved.memberCount)} $membersLabel" : null;
 
     final List<Widget> subtitleWidgets = [];
     final List<String> firstLine = [];
-
     if (privacyLabel.isNotEmpty) firstLine.add(privacyLabel);
     if (membersText != null) firstLine.add(membersText);
 
     if (firstLine.isNotEmpty) {
-      subtitleWidgets.add(
-        Text(
-          firstLine.join(" · "),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      );
+      subtitleWidgets.add(Text(firstLine.join(" · "), maxLines: 1, overflow: TextOverflow.ellipsis));
     }
 
     if (aboutText != null) {
-      if (subtitleWidgets.isNotEmpty)
-        subtitleWidgets.add(const SizedBox(height: 2));
+      if (subtitleWidgets.isNotEmpty) subtitleWidgets.add(const SizedBox(height: 2));
       subtitleWidgets.add(
         Text(
           aboutText,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor) ??
-              TextStyle(color: theme.hintColor),
+          style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor) ?? TextStyle(color: theme.hintColor),
         ),
       );
     }
@@ -578,13 +558,10 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
     final bool isBusy = _groupJoinBusy.contains(resolved.id);
 
     final TextStyle statusStyle = theme.textTheme.bodyMedium?.copyWith(
-          color: theme.colorScheme.primary,
-          fontWeight: FontWeight.w600,
-        ) ??
-        TextStyle(
-          color: theme.colorScheme.primary,
-          fontWeight: FontWeight.w600,
-        );
+      color: theme.colorScheme.primary,
+      fontWeight: FontWeight.w600,
+    ) ??
+        TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.w600);
 
     final ButtonStyle actionStyle = TextButton.styleFrom(
       padding: EdgeInsets.zero,
@@ -594,46 +571,36 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
 
     final Widget? joinButton = showJoinButton
         ? TextButton(
-            onPressed: (joinPending || isBusy)
-                ? null
-                : () => _handleGroupJoinTap(resolved),
-            style: actionStyle,
-            child: isBusy
-                ? SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        theme.colorScheme.primary,
-                      ),
-                    ),
-                  )
-                : Text(
-                    joinPending
-                        ? (getTranslated("join_group_pending_short", context) ??
-                            "Chờ phê duyệt")
-                        : (getTranslated("join_group", context) ?? "Tham gia"),
-                    style: statusStyle,
-                  ),
-          )
+      onPressed: (joinPending || isBusy) ? null : () => _handleGroupJoinTap(resolved),
+      style: actionStyle,
+      child: isBusy
+          ? SizedBox(
+        width: 14,
+        height: 14,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
+        ),
+      )
+          : Text(
+        joinPending
+            ? (getTranslated("join_group_pending_short", context) ?? "Chờ phê duyệt")
+            : (getTranslated("join_group", context) ?? "Tham gia"),
+        style: statusStyle,
+      ),
+    )
         : null;
 
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      leading: _Avatar(
-        imageUrl: resolved.avatarUrl,
-        fallbackIcon: Icons.group_outlined,
-      ),
+      leading: _Avatar(imageUrl: resolved.avatarUrl, fallbackIcon: Icons.group_outlined),
       title: Wrap(
         spacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           Text(
             resolved.title ?? resolved.name,
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-            ),
+            style: const TextStyle(fontWeight: FontWeight.w600),
             overflow: TextOverflow.ellipsis,
           ),
           if (joinButton != null) joinButton,
@@ -641,12 +608,13 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
       ),
       subtitle: subtitleWidgets.isNotEmpty
           ? Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: subtitleWidgets,
-            )
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: subtitleWidgets,
+      )
           : null,
       onTap: () {
+        _dismissKeyboard();
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => SocialGroupDetailScreen(
@@ -667,31 +635,28 @@ class _SocialSearchScreenState extends State<SocialSearchScreen> {
 
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      leading: _Avatar(
-        imageUrl: channel.avatarUrl,
-        fallbackIcon: Icons.live_tv_outlined,
-      ),
+      leading: _Avatar(imageUrl: channel.avatarUrl, fallbackIcon: Icons.live_tv_outlined),
       title: Text(channel.title ?? channel.name),
       subtitle: subtitle.isNotEmpty ? Text(subtitle) : null,
-      onTap: () => _openExternal(channel.url),
+      onTap: () {
+        _dismissKeyboard();
+        _openExternal(channel.url);
+      },
     );
   }
 
   Future<void> _openExternal(String? url) async {
     if (url == null || url.isEmpty) {
-      _showSnackBar(
-          getTranslated("invalid_link", context) ?? "Liên kết không khả dụng");
+      _showSnackBar(getTranslated("invalid_link", context) ?? "Liên kết không khả dụng");
       return;
     }
     final uri = Uri.tryParse(url);
     if (uri == null) {
-      _showSnackBar(
-          getTranslated("invalid_link", context) ?? "Liên kết không hợp lệ");
+      _showSnackBar(getTranslated("invalid_link", context) ?? "Liên kết không hợp lệ");
       return;
     }
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      _showSnackBar(getTranslated("open_link_failed", context) ??
-          "Không mở được liên kết");
+      _showSnackBar(getTranslated("open_link_failed", context) ?? "Không mở được liên kết");
     }
   }
 
@@ -772,18 +737,18 @@ class _Avatar extends StatelessWidget {
         height: size,
         child: imageUrl != null && imageUrl!.isNotEmpty
             ? CachedNetworkImage(
-                imageUrl: imageUrl!,
-                fit: BoxFit.cover,
-                errorWidget: (_, __, ___) =>
-                    Icon(fallbackIcon, color: theme.hintColor),
-                placeholder: (_, __) => Container(
-                  color: theme.colorScheme.surfaceVariant,
-                ),
-              )
+          imageUrl: imageUrl!,
+          fit: BoxFit.cover,
+          errorWidget: (_, __, ___) =>
+              Icon(fallbackIcon, color: theme.hintColor),
+          placeholder: (_, __) => Container(
+            color: theme.colorScheme.surfaceVariant,
+          ),
+        )
             : Container(
-                color: theme.colorScheme.surfaceVariant,
-                child: Icon(fallbackIcon, color: theme.hintColor),
-              ),
+          color: theme.colorScheme.surfaceVariant,
+          child: Icon(fallbackIcon, color: theme.hintColor),
+        ),
       ),
     );
   }
@@ -817,16 +782,14 @@ class _CenteredMessage extends StatelessWidget {
               padding: const EdgeInsets.only(left: 8),
               child: Text(
                 title,
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.bold),
+                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               message,
-              style:
-                  theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
+              style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
               textAlign: TextAlign.center,
             ),
             if (trailing != null) ...[
