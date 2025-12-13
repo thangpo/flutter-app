@@ -473,8 +473,8 @@ class TopSocialPostsSection extends StatelessWidget {
             const SizedBox(height: Dimensions.paddingSizeSmall),
             for (int i = 0; i < topPosts.length; i++) ...[
               SocialPostCard(post: topPosts[i]),
-              if (i != topPosts.length - 1)
-                const SizedBox(height: Dimensions.paddingSizeSmall),
+              // if (i != topPosts.length - 1)
+              //   const SizedBox(height: 2),
             ],
           ],
         );

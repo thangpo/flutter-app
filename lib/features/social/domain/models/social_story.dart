@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+
 class SocialStory {
   final String id;
   final String? userId;
@@ -138,6 +142,7 @@ class SocialStoryItem {
   final bool isViewed;
   final int? viewCount;
   final SocialStoryReaction? reaction;
+  final List<SocialStoryOverlay> overlays;
   static const Object _undefined = Object();
 
   const SocialStoryItem({
@@ -153,6 +158,7 @@ class SocialStoryItem {
     this.isViewed = false,
     this.viewCount,
     this.reaction,
+    this.overlays = const <SocialStoryOverlay>[],
   });
 
   SocialStoryItem copyWith({
@@ -168,6 +174,7 @@ class SocialStoryItem {
     bool? isViewed,
     int? viewCount,
     Object? reaction = _undefined,
+    List<SocialStoryOverlay>? overlays,
   }) {
     return SocialStoryItem(
       id: id ?? this.id,
@@ -184,6 +191,7 @@ class SocialStoryItem {
       reaction: identical(reaction, _undefined)
           ? this.reaction
           : reaction as SocialStoryReaction?,
+      overlays: overlays ?? this.overlays,
     );
   }
 
@@ -202,6 +210,8 @@ class SocialStoryItem {
             ? SocialStoryReaction.fromJson(
                 Map<String, dynamic>.from(json['reaction']))
             : null;
+    final List<SocialStoryOverlay> overlays =
+        _parseOverlays(json['overlay_meta']);
 
     return SocialStoryItem(
       id: (json['story_id'] ?? json['id'] ?? '').toString(),
@@ -221,8 +231,88 @@ class SocialStoryItem {
       isViewed: _parseBool(json['is_viewed']),
       viewCount: _parseInt(json['view_count']),
       reaction: reaction,
+      overlays: overlays,
     );
   }
+}
+
+class SocialStoryOverlay {
+  final String type;
+  final String text;
+  final double x;
+  final double y;
+  final double width;
+  final double height;
+  final double fontScale;
+  final double rotation;
+  final String align;
+  final bool hasBackground;
+  final Color color;
+
+  const SocialStoryOverlay({
+    required this.type,
+    required this.text,
+    required this.x,
+    required this.y,
+    required this.width,
+    required this.height,
+    required this.fontScale,
+    required this.rotation,
+    required this.align,
+    required this.hasBackground,
+    required this.color,
+  });
+
+  factory SocialStoryOverlay.fromJson(Map<String, dynamic> json) {
+    final String rawColor = (json['color'] ?? '').toString();
+    return SocialStoryOverlay(
+      type: (json['type'] ?? 'text').toString(),
+      text: (json['text'] ?? '').toString(),
+      x: _parseDouble(json['x']) ?? 0.5,
+      y: _parseDouble(json['y']) ?? 0.5,
+      width: _parseDouble(json['w']) ?? 0.6,
+      height: _parseDouble(json['h']) ?? 0.2,
+      fontScale: _parseDouble(json['font_scale']) ?? 0.05,
+      rotation: _parseDouble(json['rotation']) ?? 0,
+      align: (json['align'] ?? 'center').toString(),
+      hasBackground: _parseBool(json['has_bg']),
+      color: _parseColor(rawColor) ?? Colors.white,
+    );
+  }
+}
+
+List<SocialStoryOverlay> _parseOverlays(dynamic raw) {
+  if (raw == null) return const <SocialStoryOverlay>[];
+  List<dynamic>? list;
+  if (raw is String && raw.trim().isNotEmpty) {
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) list = decoded;
+    } catch (_) {}
+  } else if (raw is List) {
+    list = raw;
+  }
+  if (list == null) return const <SocialStoryOverlay>[];
+  final List<SocialStoryOverlay> overlays = <SocialStoryOverlay>[];
+  for (final dynamic entry in list) {
+    if (entry is Map<String, dynamic>) {
+      overlays.add(SocialStoryOverlay.fromJson(entry));
+    } else if (entry is Map) {
+      overlays.add(SocialStoryOverlay.fromJson(
+          Map<String, dynamic>.from(entry as Map<Object?, Object?>)));
+    }
+  }
+  return overlays;
+}
+
+Color? _parseColor(String? value) {
+  if (value == null || value.isEmpty) return null;
+  String v = value;
+  if (v.startsWith('#')) v = v.substring(1);
+  if (v.length == 6) v = 'FF$v';
+  final int? intValue = int.tryParse(v, radix: 16);
+  if (intValue == null) return null;
+  return Color(intValue);
 }
 
 class SocialStoryReaction {
@@ -551,4 +641,12 @@ int? _parseInt(dynamic value) {
 int? _parseTimestamp(dynamic value) {
   final int? ts = _parseInt(value);
   return ts;
+}
+
+double? _parseDouble(dynamic value) {
+  if (value == null) return null;
+  if (value is double) return value;
+  if (value is int) return value.toDouble();
+  if (value is String) return double.tryParse(value);
+  return null;
 }

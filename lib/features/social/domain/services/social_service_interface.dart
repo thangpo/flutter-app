@@ -24,6 +24,7 @@ abstract class SocialServiceInterface {
     String? storyTitle,
     String? storyDescription,
     String? highlightHash,
+    String? overlayMeta,
   });
   Future<List<SocialUser>> getRecentSearches();
   Future<bool> createPoke(int userId);

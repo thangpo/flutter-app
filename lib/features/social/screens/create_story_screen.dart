@@ -1,6 +1,8 @@
-﻿import 'dart:io';
+﻿import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'dart:ui' as ui;
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -177,6 +179,16 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
     }
   }
 
+  _StoryCanvasMediaElement? get _canvasImageElement {
+    try {
+      return _canvasElements
+          .whereType<_StoryCanvasMediaElement>()
+          .firstWhere((element) => !element.isVideo);
+    } catch (_) {
+      return null;
+    }
+  }
+
   bool get _isEditingText => _editingElementId != null;
 
   bool get _supportsVideo => !kIsWeb;
@@ -256,25 +268,31 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
       if (_mode == _StoryComposeMode.text) {
         _stopEditingTextElement();
         if (_canvasHasVideo) {
-          final _CanvasVideoExportResult? result =
-              await _renderCanvasVideoStory();
-          if (!mounted) return;
-          if (result == null) {
-            showCustomSnackBar(
-              getTranslated('story_video_render_failed', context) ??
-                  'Unable to render the video story',
-              context,
-              isError: true,
-            );
-            return;
-          }
+          final _StoryCanvasMediaElement? videoElement = _canvasVideoElement;
+          if (videoElement == null) return;
+          final String? coverPath =
+              await _generateVideoThumbnail(videoElement.file.path);
+          final String? overlayMeta = _buildOverlayMeta();
           await controller.createStory(
             fileType: 'video',
-            filePath: result.videoPath,
-            coverPath: result.coverPath,
+            filePath: videoElement.file.path,
+            coverPath: coverPath,
             storyDescription: _canvasStoryDescription(),
             storyTitle: null,
             highlightHash: null,
+            overlayMeta: overlayMeta,
+          );
+        } else if (_canvasImageElement != null) {
+          final _StoryCanvasMediaElement imageElement = _canvasImageElement!;
+          final String? overlayMeta = _buildOverlayMeta();
+          await controller.createStory(
+            fileType: 'image',
+            filePath: imageElement.file.path,
+            coverPath: null,
+            storyDescription: _canvasStoryDescription(),
+            storyTitle: null,
+            highlightHash: null,
+            overlayMeta: overlayMeta,
           );
         } else {
           final File? image = await _renderTextStoryToImageFile();
@@ -683,6 +701,33 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
       );
     }
   }
+
+  String? _buildOverlayMeta() {
+    if (_canvasSize.width <= 0 || _canvasSize.height <= 0) return null;
+    final List<Map<String, dynamic>> overlays = <Map<String, dynamic>>[];
+    for (final _StoryCanvasElement element in _canvasElements) {
+      if (element is! _StoryCanvasTextElement) continue;
+      final String text = element.controller.text.trim();
+      if (text.isEmpty) continue;
+      overlays.add({
+        'type': 'text',
+        'text': text,
+        'x': element.position.dx / _canvasSize.width,
+        'y': element.position.dy / _canvasSize.height,
+        'w': element.size.width / _canvasSize.width,
+        'h': element.size.height / _canvasSize.height,
+        'font_scale': element.fontSize / _canvasSize.width,
+        'align': element.textAlign.name,
+        'rotation': element.rotation,
+        'color': _colorToHex(element.color),
+        'has_bg': element.hasBackground,
+        'preset': element.preset.name,
+      });
+    }
+    if (overlays.isEmpty) return null;
+    return jsonEncode(overlays);
+  }
+
 
   void _ensureTextElementExists() {
     if (_canvasElements.isNotEmpty) return;
@@ -2239,6 +2284,11 @@ class _StoryCanvasMediaElement extends _StoryCanvasElement {
 
   @override
   _StoryCanvasElementType get type => _StoryCanvasElementType.media;
+}
+
+String _colorToHex(Color color) {
+  final int value = color.value;
+  return '#${value.toRadixString(16).padLeft(8, '0')}';
 }
 
 class _VideoTrimScreen extends StatefulWidget {

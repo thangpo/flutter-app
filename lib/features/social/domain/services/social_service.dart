@@ -573,6 +573,7 @@ class SocialService implements SocialServiceInterface {
     String? storyTitle,
     String? storyDescription,
     String? highlightHash,
+    String? overlayMeta,
   }) async {
     final resp = await socialRepository.createStory(
       filePath: filePath,
@@ -581,6 +582,7 @@ class SocialService implements SocialServiceInterface {
       storyTitle: storyTitle,
       storyDescription: storyDescription,
       highlightHash: highlightHash,
+      overlayMeta: overlayMeta,
     );
 
     if (resp.isSuccess && resp.response != null) {
@@ -1851,6 +1853,7 @@ class SocialService implements SocialServiceInterface {
       audioPath: audioPath,
       imageUrl: imageUrl,
     );
+    debugPrint('createComment response: ${resp.response?.data ?? resp.error}');
     if (resp.isSuccess && resp.response != null) {
       final data = resp.response!.data;
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;
@@ -1878,6 +1881,7 @@ class SocialService implements SocialServiceInterface {
       audioPath: audioPath,
       imageUrl: imageUrl,
     );
+    debugPrint('createReply response: ${resp.response?.data ?? resp.error}');
     if (resp.isSuccess && resp.response != null) {
       final data = resp.response!.data;
       final status = int.tryParse('${data?['api_status'] ?? 200}') ?? 200;

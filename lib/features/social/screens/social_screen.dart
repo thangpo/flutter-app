@@ -268,8 +268,9 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
     const double iosToolbarHeight = 52;
     final double toolbarHeight =
         isIOSPlatform ? iosToolbarHeight : kToolbarHeight;
-    final double listTopPadding =
-    _chromeVisible ? 8.0 : statusBar + 8.0;
+    final double baseTopPadding = _chromeVisible ? 8.0 : statusBar + 8.0;
+    final double listTopPadding = baseTopPadding +
+        ((isIOSPlatform && _chromeVisible) ? toolbarHeight + statusBar : 0);
     final double listBottomPadding = mediaQuery.padding.bottom + 16;
 
     final Widget feedContent = Stack(
@@ -1982,26 +1983,54 @@ class SocialPostCard extends StatelessWidget {
                     ),
                   ),
 
-                  IconButton(
-                    icon: postActionBusy
-                        ? SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color?>(
-                                onSurface.withOpacity(.7),
+                  if (postActionBusy)
+                    SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color?>(
+                          onSurface.withOpacity(.7),
+                        ),
+                      ),
+                    )
+                  else
+                    Builder(
+                      builder: (ctx) {
+                        final controller = ctx.read<SocialController>();
+                        final String? currentUserId =
+                            controller.currentUser?.id;
+                        final bool isOwner = currentUserId != null &&
+                            currentUserId.isNotEmpty &&
+                            currentUserId == post.publisherId;
+                        final options = _postOptionEntries(isOwner);
+                        final items = options
+                            .map(
+                              (o) => AdaptivePopupMenuItem<_PostOptionsAction>(
+                                label: getTranslated(o.labelKey, ctx) ??
+                                    o.fallback,
+                                icon: o.icon,
+                                value: o.action,
                               ),
-                            ),
-                          )
-                        : Icon(
-                            Icons.more_horiz,
-                            color: onSurface.withOpacity(.7),
-                          ),
-                    onPressed: postActionBusy
-                        ? null
-                        : () => _showPostOptions(context, post),
-                  ),
+                            )
+                            .toList();
+
+                        return AdaptivePopupMenuButton.icon<_PostOptionsAction>(
+                          icon: PlatformInfo.isIOS26OrHigher()
+                              ? 'ellipsis.circle'
+                              : Icons.more_horiz,
+                          buttonStyle: PopupButtonStyle.glass,
+                          tint: onSurface.withOpacity(.7),
+                          size: 40,
+                          items: items,
+                          onSelected: (index, entry) async {
+                            final _PostOptionsAction action =
+                                entry.value ?? options[index].action;
+                            await _handlePostOptionsAction(ctx, post, action);
+                          },
+                        );
+                      },
+                    ),
                 ],
               ),
             ),
@@ -2237,23 +2266,12 @@ class SocialPostCard extends StatelessWidget {
     );
   }
 
-  Future<void> _showPostOptions(BuildContext context, SocialPost post) async {
+  Future<void> _handlePostOptionsAction(
+    BuildContext context,
+    SocialPost post,
+    _PostOptionsAction action,
+  ) async {
     final controller = context.read<SocialController>();
-    final String? currentUserId = controller.currentUser?.id;
-    final bool isOwner = currentUserId != null &&
-        currentUserId.isNotEmpty &&
-        currentUserId == post.publisherId;
-    final action = await showModalBottomSheet<_PostOptionsAction>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (sheetCtx) => _PostOptionsSheet(
-        isOwner: isOwner,
-        onSelected: (action) => Navigator.of(sheetCtx).pop(action),
-      ),
-    );
-
-    if (action == null) return;
-
     switch (action) {
       case _PostOptionsAction.save:
         await controller.toggleSavePost(post);
@@ -2270,11 +2288,50 @@ class SocialPostCard extends StatelessWidget {
       case _PostOptionsAction.report:
         await _handleReportPost(context, controller, post);
         break;
-
       case _PostOptionsAction.hide:
         await controller.hidePost(post);
         break;
     }
+  }
+
+  List<_PostOptionEntry> _postOptionEntries(bool isOwner) {
+    return <_PostOptionEntry>[
+      const _PostOptionEntry(
+        action: _PostOptionsAction.save,
+        icon: Icons.bookmark_border,
+        labelKey: 'save_post',
+        fallback: 'Save post',
+        highlighted: true,
+      ),
+      if (isOwner) ...[
+        const _PostOptionEntry(
+          action: _PostOptionsAction.edit,
+          icon: Icons.edit_outlined,
+          labelKey: 'edit_post',
+          fallback: 'Edit post',
+          highlighted: true,
+        ),
+        const _PostOptionEntry(
+          action: _PostOptionsAction.delete,
+          icon: Icons.delete_outline,
+          labelKey: 'delete_post',
+          fallback: 'Delete',
+          highlighted: true,
+        ),
+      ] else
+        const _PostOptionEntry(
+          action: _PostOptionsAction.report,
+          icon: Icons.flag_outlined,
+          labelKey: 'report_post',
+          fallback: 'Report',
+        ),
+      const _PostOptionEntry(
+        action: _PostOptionsAction.hide,
+        icon: Icons.visibility_off_outlined,
+        labelKey: 'hide_post',
+        fallback: 'Hide',
+      ),
+    ];
   }
 
   Future<void> _handleReportPost(
@@ -2663,183 +2720,8 @@ class _PostOptionEntry {
     required this.icon,
     required this.labelKey,
     required this.fallback,
-    this.highlighted = false,
-  });
-}
-
-class _PostOptionsSheet extends StatelessWidget {
-  final ValueChanged<_PostOptionsAction> onSelected;
-  final bool isOwner;
-  const _PostOptionsSheet({required this.onSelected, required this.isOwner});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final Color sheetColor = theme.dialogTheme.backgroundColor ?? cs.surface;
-    final options = <_PostOptionEntry>[
-      const _PostOptionEntry(
-        action: _PostOptionsAction.save,
-        icon: Icons.bookmark_border,
-        labelKey: 'save_post',
-        fallback: 'Save post',
-        highlighted: true,
-      ),
-      if (isOwner) ...[
-        const _PostOptionEntry(
-          action: _PostOptionsAction.edit,
-          icon: Icons.edit_outlined,
-          labelKey: 'edit_post',
-          fallback: 'Edit post',
-          highlighted: true,
-        ),
-        const _PostOptionEntry(
-          action: _PostOptionsAction.delete,
-          icon: Icons.delete_outline,
-          labelKey: 'delete_post',
-          fallback: 'Delete',
-          highlighted: true,
-        ),
-      ] else
-        const _PostOptionEntry(
-          action: _PostOptionsAction.report,
-          icon: Icons.flag_outlined,
-          labelKey: 'report_post',
-          fallback: 'Report',
-        ),
-      const _PostOptionEntry(
-        action: _PostOptionsAction.hide,
-        icon: Icons.visibility_off_outlined,
-        labelKey: 'hide_post',
-        fallback: 'Hide',
-      ),
-    ];
-
-    String label(String key, String fallback) =>
-        getTranslated(key, context) ?? fallback;
-
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      child: Material(
-        color: sheetColor,
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 8),
-              Container(
-                width: 42,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: cs.onSurface.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 16,
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        label('post_options', 'Post options'),
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: cs.onSurface,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      splashRadius: 20,
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (int i = 0; i < options.length; i++) ...[
-                      _PostOptionsTile(
-                        entry: options[i],
-                        labelBuilder: label,
-                        theme: theme,
-                        colorScheme: cs,
-                        onTap: () => onSelected(options[i].action),
-                      ),
-                      if (i != options.length - 1) const SizedBox(height: 12),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PostOptionsTile extends StatelessWidget {
-  final _PostOptionEntry entry;
-  final String Function(String key, String fallback) labelBuilder;
-  final ThemeData theme;
-  final ColorScheme colorScheme;
-  final VoidCallback onTap;
-  const _PostOptionsTile({
-    required this.entry,
-    required this.labelBuilder,
-    required this.theme,
-    required this.colorScheme,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final bool isDestructive = entry.action == _PostOptionsAction.delete;
-    final bool isAccent = entry.highlighted && !isDestructive;
-    final Color accentColor = isDestructive
-        ? colorScheme.error
-        : (isAccent ? colorScheme.primary : colorScheme.onSurface);
-    final Color tileColor = colorScheme.surfaceVariant.withOpacity(
-      theme.brightness == Brightness.dark ? 0.35 : 0.65,
-    );
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: tileColor,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          children: [
-            Icon(entry.icon, color: accentColor),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                labelBuilder(entry.labelKey, entry.fallback),
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color:
-                      isDestructive ? colorScheme.error : colorScheme.onSurface,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+      this.highlighted = false,
+    });
 }
 
 String _editableTextFromPost(SocialPost post) {

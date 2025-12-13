@@ -1324,7 +1324,7 @@ class _StoryMediaState extends State<_StoryMedia> {
     if (widget.isCurrent && item.isVideo) {
       final VideoPlayerController? controller = widget.videoController;
       if (controller != null && controller.value.isInitialized) {
-        return Center(
+        final Widget media = Center(
           child: AspectRatio(
             aspectRatio: controller.value.aspectRatio == 0
                 ? 9 / 16
@@ -1332,6 +1332,7 @@ class _StoryMediaState extends State<_StoryMedia> {
             child: VideoPlayer(controller),
           ),
         );
+        return _wrapWithOverlays(media, item);
       }
       return const Center(
         child: CircularProgressIndicator(color: Colors.white),
@@ -1344,7 +1345,7 @@ class _StoryMediaState extends State<_StoryMedia> {
       return const SizedBox();
     }
 
-    return Stack(
+    final Widget media = Stack(
       fit: StackFit.expand,
       children: [
         CachedNetworkImage(
@@ -1378,6 +1379,69 @@ class _StoryMediaState extends State<_StoryMedia> {
             child: CircularProgressIndicator(color: Colors.white),
           ),
       ],
+    );
+    return _wrapWithOverlays(media, item);
+  }
+
+  Widget _wrapWithOverlays(Widget media, SocialStoryItem item) {
+    final overlays = item.overlays;
+    if (overlays.isEmpty) return media;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final Size size = constraints.biggest;
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            media,
+            ...overlays.map((o) => _buildOverlay(o, size)),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildOverlay(SocialStoryOverlay overlay, Size size) {
+    final double w = overlay.width * size.width;
+    final double h = overlay.height * size.height;
+    final double left = overlay.x * size.width - w / 2;
+    final double top = overlay.y * size.height - h / 2;
+    final Alignment align = _alignmentFromString(overlay.align);
+    final TextAlign textAlign = _textAlignFromString(overlay.align);
+    final double fontSize =
+        (overlay.fontScale * size.width).clamp(10.0, 64.0);
+
+    return Positioned(
+      left: left,
+      top: top,
+      width: w,
+      height: h,
+      child: Transform.rotate(
+        angle: overlay.rotation,
+        child: Container(
+          alignment: align,
+          padding: overlay.hasBackground
+              ? const EdgeInsets.symmetric(horizontal: 8, vertical: 6)
+              : EdgeInsets.zero,
+          decoration: overlay.hasBackground
+              ? BoxDecoration(
+                  color: overlay.color.withOpacity(0.22),
+                  borderRadius: BorderRadius.circular(8),
+                )
+              : null,
+          child: Text(
+            overlay.text,
+            textAlign: textAlign,
+            maxLines: 5,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: fontSize,
+              color: overlay.color,
+              fontWeight: FontWeight.w600,
+              height: 1.15,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -2323,4 +2387,26 @@ String? _resolveStoryMediaUrl(String? url) {
   final String base = AppConstants.socialBaseUrl.replaceAll(RegExp(r'/$'), '');
   final String path = trimmed.startsWith('/') ? trimmed : '/$trimmed';
   return '$base$path';
+}
+
+Alignment _alignmentFromString(String align) {
+  switch (align.toLowerCase()) {
+    case 'left':
+      return Alignment.centerLeft;
+    case 'right':
+      return Alignment.centerRight;
+    default:
+      return Alignment.center;
+  }
+}
+
+TextAlign _textAlignFromString(String align) {
+  switch (align.toLowerCase()) {
+    case 'left':
+      return TextAlign.left;
+    case 'right':
+      return TextAlign.right;
+    default:
+      return TextAlign.center;
+  }
 }

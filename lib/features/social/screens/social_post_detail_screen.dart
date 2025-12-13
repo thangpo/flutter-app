@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter_sixvalley_ecommerce/features/product_details/controllers/product_details_controller.dart';
+import 'dart:math';
+import 'dart:io' as io show File;
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
@@ -62,6 +64,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
   bool _loadingComments = false;
   bool _hasMore = true;
   final int _pageSize = 10;
+  int? _commentOffsetId;
   final Set<String> _commentReactionLoading = <String>{};
   bool _showEmojiKeyboard = false;
   bool _showGifKeyboard = false;
@@ -75,6 +78,8 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
   final AudioPlayer _commentPreviewPlayer = AudioPlayer();
   StreamSubscription<void>? _previewCompleteSub;
   bool _previewPlaying = false;
+  Duration _previewPos = Duration.zero;
+  Duration _previewDur = Duration.zero;
 
   bool get _hasCommentPayload =>
       _commentController.text.trim().isNotEmpty ||
@@ -102,7 +107,28 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
       } else {
         _previewPlaying = false;
       }
+      _previewPos = Duration.zero;
     });
+    _commentPreviewPlayer.onPositionChanged
+        .listen((d) => setState(() => _previewPos = d));
+    _commentPreviewPlayer.onDurationChanged
+        .listen((d) => setState(() => _previewDur = d));
+    _commentPreviewPlayer.setAudioContext(
+      AudioContext(
+        android: AudioContextAndroid(
+          isSpeakerphoneOn: true,
+          contentType: AndroidContentType.music,
+          usageType: AndroidUsageType.media,
+        ),
+        iOS: AudioContextIOS(
+          category: AVAudioSessionCategory.playAndRecord,
+          options: {
+            AVAudioSessionOptions.defaultToSpeaker,
+            AVAudioSessionOptions.allowBluetooth,
+          },
+        ),
+      ),
+    );
   }
 
   Future<void> _refreshAll() async {
@@ -111,6 +137,7 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
       _postFuture = svc.getPostById(postId: widget.post.id);
       _comments.clear();
       _hasMore = true;
+      _commentOffsetId = null;
     });
     await _loadMoreComments();
   }
@@ -123,13 +150,29 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
       final list = await svc.getPostComments(
         postId: widget.post.id,
         limit: _pageSize,
-        offset: _comments.length,
+        offset: _commentOffsetId,
       );
-      if (list.isEmpty || list.length < _pageSize) _hasMore = false;
+      if (list.isEmpty) {
+        _hasMore = false;
+      }
       final existing = _comments.map((e) => e.id).toSet();
       setState(() {
         _comments.addAll(list.where((e) => !existing.contains(e.id)));
         _sortComments();
+        // Lưu lại id nhỏ nhất để phân trang (backend trả DESC, offset là id cũ hơn)
+        final ids = list
+            .map((e) => int.tryParse(e.id))
+            .whereType<int>()
+            .toList(growable: false);
+        if (ids.isNotEmpty) {
+          final int minIdInBatch = ids.reduce(min);
+          if (_commentOffsetId == null || minIdInBatch < _commentOffsetId!) {
+            _commentOffsetId = minIdInBatch;
+          }
+        } else {
+          _hasMore = false; // không thể phân trang nếu không lấy được id
+        }
+        if (list.length < _pageSize) _hasMore = false;
       });
     } finally {
       _loadingComments = false;
@@ -252,15 +295,18 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => FractionallySizedBox(
-        heightFactor: 0.9,
-        child: _PostReactionsSheet(
-          targetId: post.id,
-          targetType: 'post',
-          totalCount: post.reactionCount,
-          breakdown: post.reactionBreakdown,
-          initialReaction: focusReaction,
-          sheetTitle: getTranslated('reactions', context),
+      builder: (ctx) => Align(
+        alignment: Alignment.bottomCenter,
+        child: FractionallySizedBox(
+          heightFactor: 0.9,
+          child: _PostReactionsSheet(
+            targetId: post.id,
+            targetType: 'post',
+            totalCount: post.reactionCount,
+            breakdown: post.reactionBreakdown,
+            initialReaction: focusReaction,
+            sheetTitle: getTranslated('reactions', context),
+          ),
         ),
       ),
     );
@@ -281,14 +327,17 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => FractionallySizedBox(
-        heightFactor: 0.9,
-        child: _PostReactionsSheet(
-          targetId: comment.id,
-          targetType: isReply ? 'reply' : 'comment',
-          totalCount: comment.reactionCount,
-          breakdown: const <String, int>{},
-          sheetTitle: title,
+      builder: (ctx) => Align(
+        alignment: Alignment.bottomCenter,
+        child: FractionallySizedBox(
+          heightFactor: 0.9,
+          child: _PostReactionsSheet(
+            targetId: comment.id,
+            targetType: isReply ? 'reply' : 'comment',
+            totalCount: comment.reactionCount,
+            breakdown: const <String, int>{},
+            sheetTitle: title,
+          ),
         ),
       ),
     );
@@ -566,10 +615,15 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
         setState(() => _previewPlaying = false);
       else
         _previewPlaying = false;
+      _previewPos = Duration.zero;
       return;
     }
     try {
       await _commentPreviewPlayer.stop();
+      _previewPos = Duration.zero;
+      if (_lastRecordingDuration > Duration.zero) {
+        _previewDur = _lastRecordingDuration;
+      }
       await _commentPreviewPlayer.play(DeviceFileSource(_commentAudioPath!));
       if (mounted) {
         setState(() => _previewPlaying = true);
@@ -591,6 +645,8 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
     _commentAudioPath = null;
     _lastRecordingDuration = Duration.zero;
     _previewPlaying = false;
+    _previewPos = Duration.zero;
+    _previewDur = Duration.zero;
   }
 
   Future<String?> _askGifUrl() async {
@@ -1303,9 +1359,12 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                                   .textTheme
                                                                   .bodyMedium
                                                                   ?.copyWith(
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .w600),
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w600,
+                                                                    color:
+                                                                        onSurface,
+                                                                  ),
                                                             ),
                                                           ),
                                                         ),
@@ -1360,12 +1419,13 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                                                                   .textTheme
                                                                   .bodyMedium
                                                                   ?.copyWith(
-                                                                    color: Colors
-                                                                        .black,
+                                                                    color:
+                                                                        onSurface,
                                                                   ) ??
-                                                              const TextStyle(
-                                                                  color: Colors
-                                                                      .black),
+                                                              TextStyle(
+                                                                color:
+                                                                    onSurface,
+                                                              ),
                                                         ),
                                                       ),
                                                     if ((c.imageUrl ?? '')
@@ -1844,25 +1904,25 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
                             padding: const EdgeInsets.only(top: 6),
                             child: Wrap(
                               crossAxisAlignment: WrapCrossAlignment.center,
-                              spacing: 8,
-                              runSpacing: 6,
+                              spacing: 10,
+                              runSpacing: 10,
                               children: [
                                 if (_commentImagePath != null)
-                                  InputChip(
-                                    label: Text(
-                                      '${getTranslated('file', context) ?? 'File'}: ${_basename(_commentImagePath!)}',
-                                      overflow: TextOverflow.ellipsis,
+                                  _ImageThumbPreview(
+                                    image: Image.file(
+                                      io.File(_commentImagePath!),
+                                      fit: BoxFit.cover,
                                     ),
-                                    onDeleted: () => setState(
+                                    onRemove: () => setState(
                                         () => _commentImagePath = null),
                                   ),
                                 if (_commentImageUrl != null)
-                                  InputChip(
-                                    label: Text(
-                                      '${getTranslated('gif_url', context) ?? 'GIF URL'}: ${_commentImageUrl!}',
-                                      overflow: TextOverflow.ellipsis,
+                                  _ImageThumbPreview(
+                                    image: Image.network(
+                                      _commentImageUrl!,
+                                      fit: BoxFit.cover,
                                     ),
-                                    onDeleted: () =>
+                                    onRemove: () =>
                                         setState(() => _commentImageUrl = null),
                                   ),
                               ],
@@ -1917,6 +1977,13 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
     if (_sendingComment) return;
     setState(() => _sendingComment = true);
     try {
+      // String payloadText = txt;
+      // if (payloadText.isEmpty &&
+      //     (_commentImagePath != null ||
+      //         _commentImageUrl != null ||
+      //         _commentAudioPath != null)) {
+      //   payloadText = '.';
+      // }
       final svc = sl<SocialServiceInterface>();
       if (_replyingTo == null) {
         await svc.createComment(
@@ -1999,9 +2066,17 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
   Widget _buildRecordedAudioPreview(BuildContext context) {
     final theme = Theme.of(context);
     final Color border = theme.colorScheme.onSurface.withOpacity(.08);
-    final String subtitle = _lastRecordingDuration > Duration.zero
-        ? _formatDuration(_lastRecordingDuration)
+    final Duration effectiveDur =
+        _previewDur > Duration.zero ? _previewDur : _lastRecordingDuration;
+    final String subtitle = effectiveDur > Duration.zero
+        ? _formatDuration(effectiveDur)
         : (_commentAudioPath != null ? _basename(_commentAudioPath!) : '');
+    final Color onSurface = theme.colorScheme.onSurface;
+    final double progress = (effectiveDur.inMilliseconds > 0)
+        ? (_previewPos.inMilliseconds.clamp(
+                0, effectiveDur.inMilliseconds) /
+            effectiveDur.inMilliseconds)
+        : 0;
     return Container(
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceVariant.withOpacity(.6),
@@ -2027,12 +2102,22 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  getTranslated('audio_preview', context) ?? 'Audio preview',
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(fontWeight: FontWeight.w600),
+                _WaveformSeekBar(
+                  progress: progress,
+                  activeColor: onSurface,
+                  inactiveColor: onSurface.withOpacity(0.25),
+                  maxHeight: 30,
+                  samples: _generateWaveform(_commentAudioPath ?? 'preview'),
+                  onSeekPercent: (p) async {
+                    if (effectiveDur.inMilliseconds > 0) {
+                      final int targetMs =
+                          (p * effectiveDur.inMilliseconds).toInt();
+                      await _commentPreviewPlayer
+                          .seek(Duration(milliseconds: targetMs));
+                    }
+                  },
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 6),
                 Text(
                   subtitle,
                   style: theme.textTheme.bodySmall?.copyWith(
@@ -2053,9 +2138,9 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
         ],
       ),
     );
-  }
+}
 
-  Widget _buildGifKeyboard(BuildContext context) {
+Widget _buildGifKeyboard(BuildContext context) {
     final theme = Theme.of(context);
     final Color divider = theme.colorScheme.onSurface.withOpacity(.08);
     return Container(
@@ -2191,6 +2276,93 @@ class _SocialPostDetailScreenState extends State<SocialPostDetailScreen> {
     _commentController.dispose();
     _commentFocus.dispose();
     super.dispose();
+  }
+}
+
+class _ImageThumbPreview extends StatelessWidget {
+  final Image image;
+  final VoidCallback onRemove;
+
+  const _ImageThumbPreview({
+    required this.image,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final Color border = cs.outlineVariant.withOpacity(0.3);
+    return Stack(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            width: 86,
+            height: 86,
+            decoration: BoxDecoration(
+              color: cs.surfaceVariant.withOpacity(0.35),
+              border: Border.all(color: border),
+            ),
+            child: _ProgressiveImage(child: image),
+          ),
+        ),
+        Positioned(
+          top: 4,
+          right: 4,
+          child: Material(
+            color: cs.surface.withOpacity(0.8),
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: onRemove,
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Icon(Icons.close, size: 16, color: cs.onSurface),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProgressiveImage extends StatelessWidget {
+  final Image child;
+  const _ProgressiveImage({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final Color shimmer =
+        Theme.of(context).colorScheme.onSurface.withOpacity(0.08);
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      child: Image(
+        key: ValueKey(child.image),
+        image: child.image,
+        fit: child.fit ?? BoxFit.cover,
+        frameBuilder: (ctx, widget, frame, _) {
+          if (frame == null) {
+            return Container(
+              color: shimmer,
+              child: const Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            );
+          }
+          return widget;
+        },
+        errorBuilder: (ctx, err, stack) => Container(
+          color: shimmer,
+          child: Icon(Icons.image_not_supported_outlined,
+              color: Theme.of(ctx).colorScheme.onSurface.withOpacity(0.5)),
+        ),
+      ),
+    );
   }
 }
 
@@ -2809,6 +2981,7 @@ class _PostReactionsSheetState extends State<_PostReactionsSheet> {
     return Material(
       color: Colors.transparent,
       child: SafeArea(
+        bottom: false,
         child: ClipRRect(
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           child: DecoratedBox(
@@ -2891,7 +3064,6 @@ class _PostReactionsSheetState extends State<_PostReactionsSheet> {
       child: ListView.builder(
         controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.only(bottom: 24),
         itemCount: entries.length + (showTailLoader ? 1 : 0),
         itemBuilder: (context, index) {
           if (index >= entries.length) {
@@ -3517,7 +3689,10 @@ class _RepliesLazyState extends State<_RepliesLazy> {
                                 style: Theme.of(context)
                                     .textTheme
                                     .bodySmall
-                                    ?.copyWith(fontWeight: FontWeight.w600),
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      color: onSurface,
+                                    ),
                               ),
                             ),
                           ),
@@ -3553,18 +3728,18 @@ class _RepliesLazyState extends State<_RepliesLazy> {
                             ),
                         ],
                       ),
-                      if ((r.text ?? '').isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text(
-                            r.text!,
-                            style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(color: Colors.black) ??
-                                const TextStyle(color: Colors.black),
+                        if ((r.text ?? '').isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              r.text!,
+                              style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(color: onSurface) ??
+                                  TextStyle(color: onSurface),
+                            ),
                           ),
-                        ),
                       if ((r.imageUrl ?? '').isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 6),
@@ -4030,6 +4205,17 @@ class _AudioPlayerBoxState extends State<_AudioPlayerBox> {
     super.initState();
     _player.onPositionChanged.listen((d) => setState(() => _pos = d));
     _player.onDurationChanged.listen((d) => setState(() => _dur = d));
+    _player.onPlayerComplete.listen((_) {
+      if (mounted) {
+        setState(() {
+          _playing = false;
+          _pos = Duration.zero;
+        });
+      } else {
+        _playing = false;
+        _pos = Duration.zero;
+      }
+    });
     if (widget.autoplay) {
       _player.play(UrlSource(widget.url));
       _playing = true;
@@ -4065,17 +4251,23 @@ class _AudioPlayerBoxState extends State<_AudioPlayerBox> {
             Expanded(
               child: Builder(
                 builder: (context) {
+                  final Color onSurface = Theme.of(context).colorScheme.onSurface;
                   final totalMs = _dur.inMilliseconds;
                   final posMs = _pos.inMilliseconds;
-                  final maxVal = totalMs <= 0 ? 1.0 : totalMs.toDouble();
-                  final curVal =
-                      (posMs.clamp(0, totalMs <= 0 ? 1 : totalMs)).toDouble();
-                  return Slider(
-                    min: 0,
-                    max: maxVal,
-                    value: curVal,
-                    onChanged: (v) async {
-                      await _player.seek(Duration(milliseconds: v.toInt()));
+                  final double progress = totalMs <= 0
+                      ? 0
+                      : (posMs.clamp(0, totalMs)) / totalMs;
+                  return _WaveformSeekBar(
+                    progress: progress,
+                    activeColor: onSurface,
+                    inactiveColor: onSurface.withOpacity(0.25),
+                    maxHeight: 36,
+                    samples: _generateWaveform(widget.url),
+                    onSeekPercent: (p) async {
+                      if (totalMs > 0) {
+                        await _player
+                            .seek(Duration(milliseconds: (p * totalMs).toInt()));
+                      }
                     },
                   );
                 },
@@ -4089,6 +4281,98 @@ class _AudioPlayerBoxState extends State<_AudioPlayerBox> {
             child: Text(widget.title!),
           ),
       ],
+    );
+  }
+}
+
+List<double> _generateWaveform(String key, {int count = 32}) {
+  final rnd = Random(key.hashCode);
+  final List<double> values = [];
+  for (int i = 0; i < count; i++) {
+    final double base = 0.25 + rnd.nextDouble() * 0.75; // 0.25..1.0
+    values.add(base);
+  }
+  // mirror to keep symmetrical feel similar to reference image
+  final List<double> mirrored = [
+    ...values.take(count ~/ 2),
+    ...(values.take(count - count ~/ 2).toList().reversed),
+  ];
+  return mirrored;
+}
+
+class _WaveformSeekBar extends StatelessWidget {
+  final double progress; // 0..1
+  final Color activeColor;
+  final Color inactiveColor;
+  final ValueChanged<double>? onSeekPercent;
+  final double maxHeight;
+  final List<double>? samples;
+
+  const _WaveformSeekBar({
+    required this.progress,
+    required this.activeColor,
+    required this.inactiveColor,
+    this.onSeekPercent,
+    this.maxHeight = 36,
+    this.samples,
+  });
+
+  static const List<double> _basePattern = [
+    0.25, 0.35, 0.45, 0.6, 0.75, 0.9, 1.0, 0.9, 0.8, 1.0, 0.9, 0.75, 0.6, 0.45,
+    0.35, 0.25
+  ];
+  static const double _barWidth = 5;
+  static const double _barSpacing = 6;
+
+  @override
+  Widget build(BuildContext context) {
+    final clamped = progress.clamp(0.0, 1.0);
+    return LayoutBuilder(
+      builder: (ctx, constraints) {
+        final List<double> pattern = samples ?? _basePattern;
+        final double totalWidth = (_barWidth * pattern.length) +
+            _barSpacing * (pattern.length - 1);
+        final double available = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : totalWidth;
+        final double scale = available / totalWidth;
+        final int activeBars =
+            (clamped * pattern.length).floor().clamp(0, pattern.length);
+
+        Widget bars = Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (int i = 0; i < pattern.length; i++) ...[
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                width: _barWidth * scale,
+                height: (pattern[i].clamp(0.18, 1.0) * maxHeight) * scale,
+                decoration: BoxDecoration(
+                  color: i <= activeBars ? activeColor : inactiveColor,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              if (i != pattern.length - 1)
+                SizedBox(width: _barSpacing * scale),
+            ],
+          ],
+        );
+
+        if (onSeekPercent == null) return bars;
+
+        return GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTapDown: (details) {
+            final double dx = details.localPosition.dx.clamp(0.0, available);
+            onSeekPercent!(dx / available);
+          },
+          child: SizedBox(
+            width: available,
+            child: bars,
+          ),
+        );
+      },
     );
   }
 }
