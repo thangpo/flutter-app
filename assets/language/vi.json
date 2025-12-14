@@ -395,7 +395,6 @@
   "offline_payment": "Thanh toán ngoại tuyến",
   "cancel": "Hủy",
   "payment_by_is_required": "Vui lòng chọn phương thức thanh toán",
-
   "transaction_id_is_required": "Vui lòng nhập mã giao dịch",
   "wallet_payment": "Thanh toán bằng ví",
   "insufficient_balance": "Số dư không đủ",
@@ -1146,7 +1145,6 @@
   "delete_post": "Xóa bài viết",
   "hide_post": "Ẩn bài viết",
   "report_post": "Báo cáo bài viết",
-
   "for_you": "Dành cho bạn",
   "your_groups": "Nhóm của bạn",
   "posts": "Bài viết",
@@ -1169,7 +1167,6 @@
   "video": "Video",
   "no_group_posts": "Không có bài viết",
   "live_replay": "Đã phát trực tiếp",
-
   "feeling_picker_title": "Bạn đang cảm thấy thế nào",
   "feeling_picker_input_hint": "Mô tả...",
   "feeling_category_feelings": "Cảm xúc",
@@ -1333,7 +1330,7 @@
   "group_name_optional": "Tên nhóm (không bắt buộc)",
   "suggestions": "Gợi ý",
   "no_friends_to_select": "Không có bạn bè nào để chọn",
-  "search_group":"Tìm kiếm nhóm",
+  "search_group": "Tìm kiếm nhóm",
   "no_groups_joined": "Chưa tham gia nhóm nào",
   "chat_info": "Thông tin đoạn chat",
   "open_chat_bubble": "Mở bong bóng chat",
@@ -1483,7 +1480,6 @@
   "current_image": "Ảnh hiện tại:",
   "update_ad": "CẬP NHẬT QUẢNG CÁO",
   "select_country": "Chọn quốc gia",
-
   "fill_all_fields": "Vui lòng điền đầy đủ thông tin!",
   "select_image": "Vui lòng chọn hình ảnh!",
   "select_dates": "Vui lòng chọn ngày bắt đầu và kết thúc!",
@@ -1497,11 +1493,9 @@
   "select_date": "Chọn ngày",
   "select_countries": "Chọn quốc gia",
   "enter_city_or_province": "KHU VỰC HIỂN THỊ",
-
   "reactions": "Cảm xúc",
   "comment_reactions": "Cảm xúc trong bình luận",
   "mutual_friends": "Bạn chung",
-
   "ad_default_title": "Quảng cáo",
   "ad_sponsored": "Được tài trợ",
   "ad_learn_more": "Tìm hiểu thêm",
@@ -1510,21 +1504,20 @@
   "wow": "Wow",
   "sad": "Buồn",
   "angry": "Phẫn nộ",
-
-"your_pages": "Trang của bạn",
-"liked_pages": "Thích Trang",
-"like_page": "Thích Trang",
-"create_page": "Tạo Trang",
-"no_likes_yet": "Chưa có lượt thích nào",
-"no_liked_pages_yet": "Chưa có lượt thích nào",
-"page_name": "Tên trang",
-"page_name_hint": "Gợi ý tên trang",
-"page_title_hint": "Gợi ý tiêu đề trang",
-"page_title": "Tiêu đề trang",
-"page_category": "Danh mục trang",
-"select_category": "Chọn danh mục",
-"page_description": "Mô tả trang",
-"page_description_hint": "Gợi ý mô tả trang",
+  "your_pages": "Trang của bạn",
+  "liked_pages": "Thích Trang",
+  "like_page": "Thích Trang",
+  "create_page": "Tạo Trang",
+  "no_likes_yet": "Chưa có lượt thích nào",
+  "no_liked_pages_yet": "Chưa có lượt thích nào",
+  "page_name": "Tên trang",
+  "page_name_hint": "Gợi ý tên trang",
+  "page_title_hint": "Gợi ý tiêu đề trang",
+  "page_title": "Tiêu đề trang",
+  "page_category": "Danh mục trang",
+  "select_category": "Chọn danh mục",
+  "page_description": "Mô tả trang",
+  "page_description_hint": "Gợi ý mô tả trang",
   "no_events_found": "Chưa có sự kiện nào",
   "event_ended": "Đã kết thúc",
   "going_state": "Đã tham gia",
@@ -1557,7 +1550,6 @@
   "event_name_empty": "Chưa có tên sự kiện",
   "event_name": "Tên sự kiện",
   "event_description": "Mô tả sự kiện",
-
   "featured_hotels": "Khách sạn nổi bật",
   "tour_loading_error": "Lỗi tải tour",
   "contact_for_price": "Liên hệ để biết giá",
@@ -1567,7 +1559,6 @@
   "six_days_five_nights": "Sáu ngày năm đêm",
   "fire_ice_trip": "Chuyến đi Lửa và Băng",
   "for_one_person": "Cho một người",
-
   "edit_page": "Chỉnh sửa trang",
   "delete_page": "Xóa trang",
   "delete_page_confirm": "Xác nhận xóa trang",
@@ -1577,7 +1568,6 @@
   "search_page_conversation": "Tìm kiếm hội thoại hoặc tên Page",
   "my_pages": "Page của tôi",
   "navigation_not_implemented": "Chưa gắn điều hướng cho tab",
-
   "please_select_room_before_booking": "Vui lòng chọn phòng trước khi đặt.",
   "please_select_room": "Bạn chưa chọn phòng nào. Vui lòng chọn phòng.",
   "please_select_checkin_checkout": "Vui lòng chọn ngày nhận và trả phòng.",
@@ -1599,39 +1589,31 @@
   "time_and_guests": "Thời gian & khách:",
   "extra_fee_and_surcharge": "Giá thêm & phụ phí",
   "booking_current_subtotal": "Tổng tạm tính hiện tại:",
-
   "step": "Bước",
   "step1_selected_rooms": "1. Phòng đã chọn",
   "step2_stay_and_guests": "2. Thời gian & số khách",
   "step3_extra_fees": "3. Giá thêm & phụ phí",
   "step4_confirm_and_book": "4. Xác nhận & đặt phòng",
-
   "final_total_amount": "Tổng tạm tính cuối cùng",
-
   "selected_rooms": "Phòng đã chọn",
   "no_room_selected": "Không có phòng nào, vui lòng quay lại chọn phòng.",
   "room_subtotal": "Tạm tính tiền phòng",
-
   "extra_prices_selected": "Giá thêm (bạn đã chọn)",
   "no_extra_selected": "Không có mục giá thêm nào.",
   "extra_total": "Tổng giá thêm",
-
   "service_fees_auto": "Phí dịch vụ (tự động)",
   "no_service_fees": "Không có phí dịch vụ nào.",
   "service_fee_auto_suffix": "(tự động áp dụng)",
   "service_fees_total": "Tổng phí dịch vụ",
-
   "cost_summary": "Tổng kết chi phí",
   "room_cost": "Tiền phòng",
   "extra_cost": "Giá thêm (bạn chọn)",
   "service_fees_cost": "Phí dịch vụ (tự động)",
   "grand_total": "Tổng thanh toán",
   "cost_formula_note": "Công thức: tiền phòng (giá/đêm × số đêm × số phòng) + giá thêm (bạn chọn) + phí dịch vụ (tự động).",
-
   "next": "Tiếp theo",
   "back": "Quay lại",
   "book_now": "Đặt phòng",
-
   "guest_info": "Thông tin người đặt",
   "city_province": "Thành phố / Tỉnh",
   "address_detail": "Địa chỉ chi tiết",
@@ -1683,10 +1665,8 @@
   "i_paid_check_status": "Tôi đã chuyển khoản, kiểm tra trạng thái",
   "current_status": "Trạng thái hiện tại",
   "booking_code": "Mã đơn đặt phòng",
-
   "hotel_booking_info": "Thông tin đặt phòng",
   "guest_and_payment_info": "Thông tin người đặt & thanh toán",
-
   "booking_overview": "Tổng quan",
   "rooms_booked": "Phòng đã đặt",
   "extra_prices": "Giá thêm",
@@ -1697,7 +1677,6 @@
   "room_total": "Tổng phòng",
   "explore_tours": "Khám phá Tour",
   "no_tour_found": "Không tìm thấy tour nào",
-
   "tour_filter_title": "Đặt tour của bạn",
   "tour_name_label": "Tên tour",
   "location_label": "Địa điểm",
@@ -1820,6 +1799,16 @@
   "confirm_unfollow": "Xác nhận hủy theo dõi",
   "confirm_unfollow_desc": "Bạn có chắc muốn hủy theo dõi người này không?",
   "unfollow_success": "Đã hủy theo dõi!",
-  "unfollow_failed": "Hủy theo dõi thất bại"
+  "unfollow_failed": "Hủy theo dõi thất bại",
+  "call_failed": "Không thể bắt đầu cuộc gọi",
+  "copied_message": "Đã sao chép tin nhắn",
+  "delete_message_failed": "Không xóa được tin nhắn",
+  "audio_call": "Gọi thoại",
+  "recording": "Đang thu âm",
+  "sending": "Đang gửi...",
+  "stop_and_send": "Dừng & gửi",
+  "record_audio": "Ghi âm",
+  "forward": "Chuyển tiếp",
+  "choose_file": "Chọn tệp",
+  "media_library": "Thư viện (ảnh/video)"
 }
-

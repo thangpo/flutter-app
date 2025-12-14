@@ -52,16 +52,18 @@
 	<string>Cho phép ứng dụng dùng camera để chụp và gửi ảnh.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Ứng dụng cần dùng Face ID để xác thực.</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Ung dung can quyen truy cap vi tri khi su dung de quan ly dia chi giao nhan va hien thi dich vu gan ban.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Ung dung can quyen truy cap vi tri lien tuc de duy tri cac tinh nang giao nhan va thong bao vi tri ngay ca khi ban dang su dung thiet bi.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Ung dung can quyen truy cap vi tri khi su dung de quan ly dia chi giao nhan va hien thi dich vu gan ban.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Cho phép ứng dụng dùng micro để ghi âm và gửi tin nhắn thoại.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Cho phép ứng dụng lưu ảnh/video vào thư viện.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Cho phép ứng dụng truy cập thư viện ảnh để chọn và gửi ảnh.</string>
+	<key>SOCIAL_SERVER_KEY</key>
+	<string>f6e69c898ddd643154c9bd4b152555842e26a868-d195c100005dddb9f1a30a67a5ae42d4-19845955</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>
@@ -69,7 +71,6 @@
 		<string>fetch</string>
 		<string>remote-notification</string>
 		<string>voip</string>
-		<string>audio</string>
 	</array>
 	<key>UIFileSharingEnabled</key>
 	<true/>
@@ -92,7 +93,5 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
-	<key>SOCIAL_SERVER_KEY</key>
-	<string>f6e69c898ddd643154c9bd4b152555842e26a868-d195c100005dddb9f1a30a67a5ae42d4-19845955</string>
 </dict>
 </plist>

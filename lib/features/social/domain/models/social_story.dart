@@ -243,10 +243,10 @@ class SocialStoryItem {
         }
       }
     }
-    if (overlays.isNotEmpty) {
-      debugPrint(
-          'Parsed story overlays: item=${json['id'] ?? json['story_id']} root=$overlayFoundAtRoot imagesOrVideos=${!overlayFoundAtRoot}');
-    }
+    // if (overlays.isNotEmpty) {
+    //   debugPrint(
+    //       'Parsed story overlays: item=${json['id'] ?? json['story_id']} root=$overlayFoundAtRoot imagesOrVideos=${!overlayFoundAtRoot}');
+    // }
 
     return SocialStoryItem(
       id: (json['story_id'] ?? json['id'] ?? '').toString(),
@@ -339,10 +339,16 @@ List<SocialStoryOverlay> _parseOverlays(dynamic raw) {
   if (raw is String && raw.trim().isNotEmpty) {
     try {
       final decoded = jsonDecode(raw);
-      if (decoded is List) list = decoded;
+      if (decoded is List) {
+        list = decoded;
+      } else if (decoded is Map<String, dynamic>) {
+        list = _extractOverlayList(decoded);
+      }
     } catch (_) {}
   } else if (raw is List) {
     list = raw;
+  } else if (raw is Map<String, dynamic>) {
+    list = _extractOverlayList(raw);
   }
   if (list == null) return const <SocialStoryOverlay>[];
   final List<SocialStoryOverlay> overlays = <SocialStoryOverlay>[];
@@ -355,6 +361,16 @@ List<SocialStoryOverlay> _parseOverlays(dynamic raw) {
     }
   }
   return overlays;
+}
+
+List<dynamic>? _extractOverlayList(Map<String, dynamic> map) {
+  if (map['overlays'] is List) return map['overlays'] as List<dynamic>;
+  if (map['layout'] is Map<String, dynamic>) {
+    final Map<String, dynamic> layout =
+        map['layout'] as Map<String, dynamic>;
+    if (layout['overlays'] is List) return layout['overlays'] as List<dynamic>;
+  }
+  return null;
 }
 
 Color? _parseColor(String? value) {

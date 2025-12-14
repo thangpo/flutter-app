@@ -1325,12 +1325,21 @@ class _StoryMediaState extends State<_StoryMedia> {
     if (widget.isCurrent && item.isVideo) {
       final VideoPlayerController? controller = widget.videoController;
       if (controller != null && controller.value.isInitialized) {
-        final Widget media = Center(
-          child: AspectRatio(
-            aspectRatio: controller.value.aspectRatio == 0
-                ? 9 / 16
-                : controller.value.aspectRatio,
-            child: VideoPlayer(controller),
+        Size videoSize = controller.value.size;
+        if (videoSize.width <= 0 || videoSize.height <= 0) {
+          videoSize = const Size(9, 16);
+        }
+        final Widget media = SizedBox.expand(
+          child: FittedBox(
+            fit: BoxFit.cover,
+            child: SizedBox(
+              width: videoSize.width,
+              height: videoSize.height,
+              child: AspectRatio(
+                aspectRatio: videoSize.width / videoSize.height,
+                child: VideoPlayer(controller),
+              ),
+            ),
           ),
         );
         return _wrapWithOverlays(media, item);
@@ -1722,7 +1731,7 @@ class _StoryFooterState extends State<_StoryFooter>
         widget.actionLabel != null && widget.onAction != null;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1815,7 +1824,7 @@ class _StoryFooterState extends State<_StoryFooter>
             ),
           if (showReactionRow)
             SizedBox(
-              height: 104,
+              height: 60,
               child: Stack(
                 key: _effectsStackKey,
                 clipBehavior: Clip.none,

@@ -320,6 +320,13 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
     });
   }
 
+  void _dismissKeyboard() {
+    final currentFocus = FocusScope.of(context);
+    if (!currentFocus.hasPrimaryFocus && currentFocus.focusedChild != null) {
+      currentFocus.unfocus();
+    }
+  }
+
   Future<void> _openLocationInput() async {
     if (_submitting) return;
     FocusScope.of(context).unfocus();
@@ -658,64 +665,68 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildComposerHeader(
-                      socialUser,
-                      profile,
-                      privacyChoices,
-                      selectedPrivacy,
-                      theme,
-                    ),
-                    const SizedBox(height: 16),
-                    _buildTextField(theme),
-                    if (widget.attachedEvent != null) ...[
-                      const SizedBox(height: 12),
-                      SocialEventAttachmentCard(
-                        event: widget.attachedEvent!,
-                        onTap: () {
-                        },
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: _dismissKeyboard,
+        child: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildComposerHeader(
+                        socialUser,
+                        profile,
+                        privacyChoices,
+                        selectedPrivacy,
+                        theme,
                       ),
-                    ],
+                      const SizedBox(height: 16),
+                      _buildTextField(theme),
+                      if (widget.attachedEvent != null) ...[
+                        const SizedBox(height: 12),
+                        SocialEventAttachmentCard(
+                          event: widget.attachedEvent!,
+                          onTap: () {
+                          },
+                        ),
+                      ],
 
-                    if (SocialFeelingHelper.hasSelection(
-                      _selectedFeelingType,
-                      _selectedFeelingValue,
-                    )) ...[
-                      const SizedBox(height: 12),
-                      _buildSelectedFeeling(theme),
+                      if (SocialFeelingHelper.hasSelection(
+                        _selectedFeelingType,
+                        _selectedFeelingValue,
+                      )) ...[
+                        const SizedBox(height: 12),
+                        _buildSelectedFeeling(theme),
+                      ],
+                      if (_hasLocation) ...[
+                        const SizedBox(height: 12),
+                        _buildSelectedLocation(theme),
+                      ],
+                      if (_images.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        _buildImagesPreview(theme),
+                      ],
+                      if (_video != null) ...[
+                        const SizedBox(height: 16),
+                        _buildVideoPreview(theme),
+                      ],
                     ],
-                    if (_hasLocation) ...[
-                      const SizedBox(height: 12),
-                      _buildSelectedLocation(theme),
-                    ],
-                    if (_images.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      _buildImagesPreview(theme),
-                    ],
-                    if (_video != null) ...[
-                      const SizedBox(height: 16),
-                      _buildVideoPreview(theme),
-                    ],
-                  ],
+                  ),
                 ),
               ),
-            ),
-            _buildActionsList(
-              context,
-              actions,
-              theme,
-              isKeyboardVisible,
-            ),
-          ],
+              _buildActionsList(
+                context,
+                actions,
+                theme,
+                isKeyboardVisible,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -929,6 +940,7 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
           focusNode: _textFocusNode,
           maxLines: null,
           minLines: 5,
+          textCapitalization: TextCapitalization.sentences,
           decoration: InputDecoration(
             hintText: getTranslated('whats_on_your_mind', context) ??
                 "What's on your mind?",
@@ -1194,7 +1206,21 @@ class _SocialCreatePostScreenState extends State<SocialCreatePostScreen> {
         ],
       ),
       child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 200),
+        duration: const Duration(milliseconds: 260),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (Widget child, Animation<double> animation) {
+          final Animation<double> curve =
+              animation.drive(CurveTween(curve: Curves.easeInOutCubic));
+          return FadeTransition(
+            opacity: curve,
+            child: SizeTransition(
+              sizeFactor: curve,
+              axisAlignment: -1,
+              child: child,
+            ),
+          );
+        },
         child: compact ? compactList : fullList,
       ),
     );

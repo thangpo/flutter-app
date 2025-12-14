@@ -2,16 +2,20 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:encrypt/encrypt.dart' as enc;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Clipboard
 import 'package:flutter_sound/flutter_sound.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -22,6 +26,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/chat_info_screen.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_chat_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 
 // Bubble + repo
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/chat_message_bubble.dart';
@@ -77,6 +82,16 @@ class _ChatScreenState extends State<ChatScreen> {
   final _recorder = FlutterSoundRecorder();
   bool _recReady = false;
   bool _recOn = false;
+  Timer? _recTimer;
+  Duration _recElapsed = Duration.zero;
+  String? _voiceDraftPath;
+  Duration _voiceDraftDuration = Duration.zero;
+  final AudioPlayer _voicePreviewPlayer = AudioPlayer();
+  bool _voicePreviewPlaying = false;
+  Duration _voicePreviewPos = Duration.zero;
+  Duration _voicePreviewDur = Duration.zero;
+  final ImagePicker _picker = ImagePicker();
+  List<_PendingAttachment> _pendingAttachments = [];
 
   // UI scroll logic
   bool _showScrollToBottom = false;
@@ -124,6 +139,37 @@ class _ChatScreenState extends State<ChatScreen> {
     _startPolling();
 
     _scroll.addListener(_onScroll);
+
+    _voicePreviewPlayer.onPlayerComplete.listen((event) {
+      if (mounted) {
+        setState(() {
+          _voicePreviewPlaying = false;
+          _voicePreviewPos = Duration.zero;
+        });
+      } else {
+        _voicePreviewPlaying = false;
+        _voicePreviewPos = Duration.zero;
+      }
+    });
+    _voicePreviewPlayer.onPositionChanged
+        .listen((d) => setState(() => _voicePreviewPos = d));
+    _voicePreviewPlayer.onDurationChanged
+        .listen((d) => setState(() => _voicePreviewDur = d));
+
+    _voicePreviewPlayer.setAudioContext(AudioContext(
+      android: AudioContextAndroid(
+        isSpeakerphoneOn: true,
+        contentType: AndroidContentType.music,
+        usageType: AndroidUsageType.voiceCommunication,
+      ),
+      iOS: AudioContextIOS(
+        category: AVAudioSessionCategory.playAndRecord,
+        options: {
+          AVAudioSessionOptions.defaultToSpeaker,
+          AVAudioSessionOptions.allowBluetooth,
+        },
+      ),
+    ));
   }
 
   @override
@@ -136,6 +182,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
     if (_recOn) _recorder.stopRecorder();
     _recorder.closeRecorder();
+    _recTimer?.cancel();
+    _voicePreviewPlayer.dispose();
 
     super.dispose();
   }
@@ -433,7 +481,10 @@ class _ChatScreenState extends State<ChatScreen> {
   // =================================================
   Future<void> _sendText() async {
     final text = _inputCtrl.text.trim();
-    if (text.isEmpty || _sending) return;
+    final bool hasAttachments = _pendingAttachments.isNotEmpty;
+    final bool hasAudio = _voiceDraftPath != null;
+    if (_sending) return;
+    if (text.isEmpty && !hasAttachments && !hasAudio) return;
 
     final replying = _replyingToMessage;
     String? replyId;
@@ -447,34 +498,68 @@ class _ChatScreenState extends State<ChatScreen> {
     });
 
     try {
-      final sent = await repo.sendMessage(
-        token: widget.accessToken,
-        peerUserId: _peerId,
-        text: text,
-        replyToMessageId: replyId,
-      );
+      if (text.isNotEmpty) {
+        final sent = await repo.sendMessage(
+          token: widget.accessToken,
+          peerUserId: _peerId,
+          text: text,
+          replyToMessageId: replyId,
+        );
 
-      _inputCtrl.clear();
+        _inputCtrl.clear();
 
-      if (sent != null) {
-        if (replyId != null &&
-            (sent['reply_id'] == null || '${sent['reply_id']}' == '0')) {
-          sent['reply_id'] = replyId;
+        if (sent != null) {
+          if (replyId != null &&
+              (sent['reply_id'] == null || '${sent['reply_id']}' == '0')) {
+            sent['reply_id'] = replyId;
+          }
+          if (replying != null) {
+            sent['reply'] ??= Map<String, dynamic>.from(replying);
+          }
+
+          _mergeIncoming([sent], toTail: true);
+          _applyLocalReactionsToMessages();
         }
-        if (replying != null) {
-          sent['reply'] ??= Map<String, dynamic>.from(replying);
-        }
+      }
 
-        _mergeIncoming([sent], toTail: true);
-        _applyLocalReactionsToMessages();
-
-        if (mounted) {
-          setState(() {
-            _hasNewMessage =
-                true; // ✅ đánh dấu: đã có tin nhắn mới trong phiên này
-          });
-          _scrollToBottom();
+      if (hasAttachments) {
+        final List<_PendingAttachment> attachments =
+            List<_PendingAttachment>.from(_pendingAttachments);
+        for (final _PendingAttachment attachment in attachments) {
+          final sent = await repo.sendMessage(
+            token: widget.accessToken,
+            peerUserId: _peerId,
+            filePath: attachment.path,
+          );
+          if (sent != null) {
+            _mergeIncoming([sent], toTail: true);
+            _applyLocalReactionsToMessages();
+          }
         }
+      }
+      if (hasAudio) {
+        final sent = await repo.sendMessage(
+          token: widget.accessToken,
+          peerUserId: _peerId,
+          filePath: _voiceDraftPath!,
+        );
+        if (sent != null) {
+          _mergeIncoming([sent], toTail: true);
+          _applyLocalReactionsToMessages();
+        }
+      }
+
+      if (mounted && (hasAttachments || text.isNotEmpty || hasAudio)) {
+        if (hasAudio) {
+          await _voicePreviewPlayer.stop();
+        }
+        setState(() {
+          _hasNewMessage =
+              true; // ✅ đánh dấu: đã có tin nhắn mới trong phiên này
+          _pendingAttachments = [];
+          _clearVoiceDraft();
+        });
+        _scrollToBottom();
       }
     } finally {
       if (mounted) {
@@ -490,33 +575,291 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _pickAndSendFile() async {
     if (_sending) return;
 
+    final _AttachChoice? choice = await showModalBottomSheet<_AttachChoice>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.insert_drive_file),
+                title: Text(_tr('choose_file', 'Chọn tệp')),
+                onTap: () => Navigator.pop(context, _AttachChoice.file),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: Text(_tr('media_library', 'Thư viện (ảnh/video)')),
+                onTap: () => Navigator.pop(context, _AttachChoice.galleryMedia),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    switch (choice) {
+      case _AttachChoice.file:
+        await _handlePickFile();
+        break;
+      case _AttachChoice.galleryMedia:
+        await _handlePickMedia();
+        break;
+      default:
+        return;
+    }
+  }
+
+  Future<void> _handlePickFile() async {
     final res = await FilePicker.platform.pickFiles(allowMultiple: false);
     if (res == null || res.files.isEmpty) return;
     final path = res.files.single.path;
     if (path == null) return;
+    _addPendingAttachments([path]);
+  }
 
-    setState(() => _sending = true);
-    try {
-      final sent = await repo.sendMessage(
-        token: widget.accessToken,
-        peerUserId: _peerId,
-        filePath: path,
-      );
-      if (sent != null) {
-        _mergeIncoming([sent], toTail: true);
-        _applyLocalReactionsToMessages();
-        if (mounted) {
-          setState(() {
-            _hasNewMessage = true; // ✅ gửi file cũng tính là tin mới
-          });
-          _scrollToBottom();
-        }
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _sending = false);
-      }
+  Future<void> _handlePickMedia() async {
+    final List<XFile> picked = await _picker.pickMultipleMedia(
+          requestFullMetadata: false,
+        ) ??
+        [];
+    if (picked.isEmpty) return;
+    _addPendingAttachments(picked.map((e) => e.path).toList());
+  }
+
+  void _addPendingAttachments(List<String> paths) {
+    if (paths.isEmpty) return;
+    final List<_PendingAttachment> items = paths
+        .where((p) => p.isNotEmpty)
+        .map(
+          (p) => _PendingAttachment(
+            path: p,
+            type: _detectAttachmentType(p),
+          ),
+        )
+        .toList();
+    if (items.isEmpty) return;
+    setState(() {
+      _pendingAttachments.addAll(items);
+    });
+  }
+
+  Widget _buildPendingAttachments() {
+    return SizedBox(
+      height: 96,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _pendingAttachments.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          final _PendingAttachment att = _pendingAttachments[index];
+          return Stack(
+            children: [
+              Container(
+                width: 96,
+                height: 96,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: _buildAttachmentPreview(att),
+              ),
+              Positioned(
+                top: 4,
+                right: 4,
+                child: GestureDetector(
+                  onTap: _sending
+                      ? null
+                      : () {
+                          setState(() {
+                            _pendingAttachments.removeAt(index);
+                          });
+                        },
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      shape: BoxShape.circle,
+                    ),
+                    child:
+                        const Icon(Icons.close, size: 16, color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildVoicePreview(BuildContext context) {
+    final Duration effectiveDur = _voicePreviewDur > Duration.zero
+        ? _voicePreviewDur
+        : (_voiceDraftDuration > Duration.zero
+            ? _voiceDraftDuration
+            : _voicePreviewPos);
+    final double progress = (effectiveDur.inMilliseconds > 0)
+        ? (_voicePreviewPos.inMilliseconds.clamp(
+                0, effectiveDur.inMilliseconds) /
+            effectiveDur.inMilliseconds)
+        : 0;
+    final theme = Theme.of(context);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceVariant.withOpacity(.6),
+        borderRadius: BorderRadius.circular(16),
+        border:
+            Border.all(color: theme.colorScheme.onSurface.withOpacity(0.08)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
+          IconButton(
+            iconSize: 30,
+            onPressed: _toggleVoicePreviewPlayback,
+            icon: Icon(
+              _voicePreviewPlaying
+                  ? Icons.pause_circle_filled
+                  : Icons.play_circle_filled,
+              color: theme.colorScheme.primary,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _WaveformSeekBar(
+                  progress: progress,
+                  activeColor: theme.colorScheme.onSurface,
+                  inactiveColor:
+                      theme.colorScheme.onSurface.withOpacity(0.25),
+                  maxHeight: 30,
+                  samples:
+                      _generateWaveform(_voiceDraftPath ?? 'voice_preview'),
+                  onSeekPercent: (p) async {
+                    if (effectiveDur.inMilliseconds > 0) {
+                      final int targetMs =
+                          (p * effectiveDur.inMilliseconds).toInt();
+                      await _voicePreviewPlayer
+                          .seek(Duration(milliseconds: targetMs));
+                    }
+                  },
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  effectiveDur > Duration.zero
+                      ? _formatDuration(effectiveDur)
+                      : (_voiceDraftPath ?? ''),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withOpacity(.7),
+                  ),
+                ),
+              ],
+            ),
+          ),
+            IconButton(
+            tooltip: _tr('remove', 'Xóa'),
+            onPressed: () async {
+              await _voicePreviewPlayer.stop();
+              setState(() {
+                _clearVoiceDraft();
+              });
+            },
+            icon: const Icon(Icons.close),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAttachmentPreview(_PendingAttachment att) {
+    switch (att.type) {
+      case _AttachmentType.image:
+        return Image.file(
+          File(att.path),
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _fallbackPreview(att),
+        );
+      case _AttachmentType.video:
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            Container(
+              color: Colors.black12,
+              child: Image.file(
+                File(att.path),
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const SizedBox(),
+              ),
+            ),
+            const Center(
+              child:
+                  Icon(Icons.play_circle_fill, size: 32, color: Colors.white70),
+            ),
+          ],
+        );
+      case _AttachmentType.file:
+      default:
+        return _fallbackPreview(att);
     }
+  }
+
+  Widget _fallbackPreview(_PendingAttachment att) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      color: Colors.grey.shade100,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const Icon(Icons.insert_drive_file, size: 28, color: Colors.black54),
+          const SizedBox(height: 6),
+          Text(
+            p.basename(att.path),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 12, color: Colors.black87),
+          ),
+        ],
+      ),
+    );
+  }
+
+  _AttachmentType _detectAttachmentType(String path) {
+    final String ext = p.extension(path).toLowerCase();
+    const Set<String> imageExts = {
+      '.png',
+      '.jpg',
+      '.jpeg',
+      '.webp',
+      '.gif',
+      '.bmp',
+      '.heic',
+      '.heif',
+    };
+    const Set<String> videoExts = {
+      '.mp4',
+      '.mov',
+      '.m4v',
+      '.mkv',
+      '.avi',
+      '.webm',
+      '.wmv',
+    };
+    if (imageExts.contains(ext)) return _AttachmentType.image;
+    if (videoExts.contains(ext)) return _AttachmentType.video;
+    return _AttachmentType.file;
   }
 
   Future<void> _toggleRecord() async {
@@ -526,38 +869,35 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     if (_recOn) {
+      final recorded = _recElapsed;
+      _stopRecordingTimer();
       final path = await _recorder.stopRecorder();
       _recOn = false;
-      setState(() {});
-
       if (path != null) {
-        setState(() => _sending = true);
-        try {
-          final sent = await repo.sendMessage(
-            token: widget.accessToken,
-            peerUserId: _peerId,
-            filePath: path,
-          );
-          if (sent != null) {
-            _mergeIncoming([sent], toTail: true);
-            _applyLocalReactionsToMessages();
-            if (mounted) {
-              setState(() {
-                _hasNewMessage = true; // ✅ voice cũng tính là tin mới
-              });
-              _scrollToBottom();
-            }
-          }
-        } finally {
-          if (mounted) {
-            setState(() => _sending = false);
-          }
-        }
+        setState(() {
+          _voiceDraftPath = path;
+          _voiceDraftDuration =
+              recorded > Duration.zero ? recorded : _voiceDraftDuration;
+          _recElapsed = Duration.zero;
+        });
+      } else {
+        setState(() {
+          _recElapsed = Duration.zero;
+        });
       }
     } else {
       final dir = await getTemporaryDirectory();
       final filename = 'voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
       final fullPath = '${dir.path}/$filename';
+      _stopRecordingTimer();
+      if (_voicePreviewPlaying) {
+        await _voicePreviewPlayer.stop();
+        _voicePreviewPlaying = false;
+      }
+      setState(() {
+        _clearVoiceDraft();
+        _recElapsed = Duration.zero;
+      });
 
       await _recorder.startRecorder(
         toFile: fullPath,
@@ -568,6 +908,7 @@ class _ChatScreenState extends State<ChatScreen> {
       );
 
       _recOn = true;
+      _startRecordingTimer();
       setState(() {});
     }
   }
@@ -584,12 +925,71 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {});
   }
 
+  void _startRecordingTimer() {
+    _recTimer?.cancel();
+    _recElapsed = Duration.zero;
+    _recTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      setState(() {
+        _recElapsed += const Duration(seconds: 1);
+      });
+    });
+  }
+
+  void _stopRecordingTimer() {
+    _recTimer?.cancel();
+    _recTimer = null;
+  }
+
+  void _clearVoiceDraft() {
+    _voiceDraftPath = null;
+    _voiceDraftDuration = Duration.zero;
+    _voicePreviewPlaying = false;
+    _voicePreviewPos = Duration.zero;
+    _voicePreviewDur = Duration.zero;
+  }
+
+  String _formatDuration(Duration d) {
+    final String m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final String s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  String _tr(String key, String fallback) {
+    try {
+      return getTranslated(key, context) ?? fallback;
+    } catch (_) {
+      return fallback;
+    }
+  }
+
   Future<bool> _ensureMic() async {
     final st = await Permission.microphone.status;
     if (st.isGranted) return true;
 
     final rs = await Permission.microphone.request();
     return rs.isGranted;
+  }
+
+  Future<void> _toggleVoicePreviewPlayback() async {
+    if (_voiceDraftPath == null) return;
+    if (_voicePreviewPlaying) {
+      await _voicePreviewPlayer.pause();
+      setState(() {
+        _voicePreviewPlaying = false;
+      });
+      return;
+    }
+
+    try {
+      await _voicePreviewPlayer.play(DeviceFileSource(_voiceDraftPath!));
+      setState(() {
+        _voicePreviewPlaying = true;
+      });
+    } catch (_) {
+      setState(() {
+        _voicePreviewPlaying = false;
+      });
+    }
   }
 
   // =================================================
@@ -649,7 +1049,9 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Không thể bắt đầu cuộc gọi: $e')),
+        SnackBar(
+            content: Text(
+                '${_tr('call_failed', 'Không thể bắt đầu cuộc gọi')}: $e')),
       );
     }
   }
@@ -849,8 +1251,14 @@ class _ChatScreenState extends State<ChatScreen> {
     if (id <= 0) return;
 
     final current = _getReactionForMessage(message);
+    final bool isCallInvite =
+        CallInvite.tryParse(_plainTextOf(message)) != null;
 
-    final result = await _showMessageMenu(current, isMe: isMe);
+    final result = await _showMessageMenu(
+      current,
+      isMe: isMe,
+      allowReplyForward: !isCallInvite,
+    );
     if (result == null) return;
 
     if (result.reactionId != null) {
@@ -870,7 +1278,9 @@ class _ChatScreenState extends State<ChatScreen> {
           await Clipboard.setData(ClipboardData(text: text));
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Đã sao chép tin nhắn')),
+              SnackBar(
+                  content: Text(
+                      _tr('copied_message', 'Đã sao chép tin nhắn'))),
             );
           }
         }
@@ -897,7 +1307,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<_MessageMenuResult?> _showMessageMenu(int currentReaction,
-      {required bool isMe}) {
+      {required bool isMe, bool allowReplyForward = true}) {
     return showModalBottomSheet<_MessageMenuResult>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -970,37 +1380,39 @@ class _ChatScreenState extends State<ChatScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      _MessageActionButton(
-                        icon: Icons.reply,
-                        label: 'Trả lời',
-                        onTap: () => Navigator.of(ctx).pop(
-                          const _MessageMenuResult(
-                              action: _MessageAction.reply),
+                      if (allowReplyForward)
+                        _MessageActionButton(
+                          icon: Icons.reply,
+                          label: _tr('reply', 'Trả lời'),
+                          onTap: () => Navigator.of(ctx).pop(
+                            const _MessageMenuResult(
+                                action: _MessageAction.reply),
+                          ),
                         ),
-                      ),
                       _MessageActionButton(
                         icon: Icons.copy,
-                        label: 'Sao chép',
+                        label: _tr('copy', 'Sao chép'),
                         onTap: () => Navigator.of(ctx).pop(
                           const _MessageMenuResult(action: _MessageAction.copy),
                         ),
                       ),
                       _MessageActionButton(
                         icon: Icons.delete_outline,
-                        label: 'Xóa',
+                        label: _tr('delete', 'Xóa'),
                         onTap: () => Navigator.of(ctx).pop(
                           const _MessageMenuResult(
                               action: _MessageAction.delete),
                         ),
                       ),
-                      _MessageActionButton(
-                        icon: Icons.forward,
-                        label: 'Chuyển tiếp',
-                        onTap: () => Navigator.of(ctx).pop(
-                          const _MessageMenuResult(
-                              action: _MessageAction.forward),
+                      if (allowReplyForward)
+                        _MessageActionButton(
+                          icon: Icons.forward,
+                          label: _tr('forward', 'Chuyển tiếp'),
+                          onTap: () => Navigator.of(ctx).pop(
+                            const _MessageMenuResult(
+                                action: _MessageAction.forward),
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),
@@ -1029,7 +1441,9 @@ class _ChatScreenState extends State<ChatScreen> {
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Không xóa được tin nhắn')),
+            SnackBar(
+                content: Text(
+                    _tr('delete_message_failed', 'Không xóa được tin nhắn'))),
           );
         }
       }
@@ -1037,7 +1451,9 @@ class _ChatScreenState extends State<ChatScreen> {
       debugPrint('deleteMessage error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Không xóa được tin nhắn: $e')),
+          SnackBar(
+              content: Text(
+                  '${_tr('delete_message_failed', 'Không xóa được tin nhắn')}: $e')),
         );
       }
     }
@@ -1190,7 +1606,6 @@ class _ChatScreenState extends State<ChatScreen> {
         ? (_scroll.position.maxScrollExtent - _scroll.position.pixels)
         : 0.0;
     final nearBottom = distFromBottom < 200;
-
     if (_messages.length != _lastItemCount) {
       if (_messages.length > _lastItemCount && nearBottom) {
         _scrollToBottom();
@@ -1205,6 +1620,7 @@ class _ChatScreenState extends State<ChatScreen> {
         return false;
       },
       child: Scaffold(
+        resizeToAvoidBottomInset: true,
         appBar: AppBar(
           elevation: 0,
           centerTitle: false,
@@ -1252,12 +1668,12 @@ class _ChatScreenState extends State<ChatScreen> {
                 return Row(
                   children: [
                     IconButton(
-                      tooltip: 'Gọi thoại',
+                      tooltip: _tr('audio_call', 'Gọi thoại'),
                       icon: const Icon(Icons.call),
                       onPressed: enabled ? () => _startCall('audio') : null,
                     ),
                     IconButton(
-                      tooltip: 'Gọi video',
+                      tooltip: _tr('video_call', 'Gọi video'),
                       icon: const Icon(Icons.videocam),
                       onPressed: enabled ? () => _startCall('video') : null,
                     ),
@@ -1268,75 +1684,141 @@ class _ChatScreenState extends State<ChatScreen> {
             const SizedBox(width: 4),
           ],
         ),
-        body: Stack(
-          children: [
-            Column(
-              children: [
-                if (_loading && _messages.isEmpty)
-                  const LinearProgressIndicator(minHeight: 2),
-                Expanded(
-                  child: RefreshIndicator(
-                    onRefresh: _onRefresh,
-                    child: _messages.isEmpty
-                        ? LayoutBuilder(
-                            builder: (context, constraints) {
-                              return SingleChildScrollView(
-                                physics:
-                                    const AlwaysScrollableScrollPhysics(),
-                                child: ConstrainedBox(
-                                  constraints: BoxConstraints(
-                                      minHeight: constraints.maxHeight),
-                                  child: _buildEmptyChatState(
-                                    peerAvatar: peerAvatar,
-                                    title: title,
+        body: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: () => FocusScope.of(context).unfocus(),
+          child: Stack(
+            children: [
+              Column(
+                children: [
+                  if (_loading && _messages.isEmpty)
+                    const LinearProgressIndicator(minHeight: 2),
+                  Expanded(
+                    child: RefreshIndicator(
+                      onRefresh: _onRefresh,
+                      child: _messages.isEmpty
+                          ? LayoutBuilder(
+                              builder: (context, constraints) {
+                                return SingleChildScrollView(
+                                  physics:
+                                      const AlwaysScrollableScrollPhysics(),
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                        minHeight: constraints.maxHeight),
+                                    child: _buildEmptyChatState(
+                                      peerAvatar: peerAvatar,
+                                      title: title,
+                                    ),
                                   ),
-                                ),
-                              );
-                            },
-                          )
-                        : ListView.builder(
-                            controller: _scroll,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                            itemCount: _messages.length,
-                            itemBuilder: (ctx, i) {
-                              final m = _messages[i];
-                              final isMe = (m['position'] == 'right');
+                                );
+                              },
+                            )
+                          : ListView.builder(
+                              controller: _scroll,
+                              keyboardDismissBehavior:
+                                  ScrollViewKeyboardDismissBehavior.onDrag,
+                              padding:
+                                  const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                              itemCount: _messages.length,
+                              itemBuilder: (ctx, i) {
+                                final m = _messages[i];
+                                final isMe = (m['position'] == 'right');
 
-                              final plain = _plainTextOf(m);
-                              final inv = CallInvite.tryParse(plain);
+                                final plain = _plainTextOf(m);
+                                final inv = CallInvite.tryParse(plain);
 
-                              if (inv != null && !inv.isExpired()) {
-                                final callId = inv.callId;
-                                final cc =
-                                    Provider.of<CallController>(context, listen: false);
-                                final alreadyHandled = _handledIncoming.contains(callId) ||
-                                    cc.isCallHandled(callId);
+                                if (inv != null && !inv.isExpired()) {
+                                  final callId = inv.callId;
+                                  final cc = Provider.of<CallController>(
+                                      context,
+                                      listen: false);
+                                  final alreadyHandled =
+                                      _handledIncoming.contains(callId) ||
+                                          cc.isCallHandled(callId);
 
-        if (!isMe && !alreadyHandled) {
-          _handledIncoming.add(callId);
-          cc.markCallHandled(callId);
+                                  if (!isMe && !alreadyHandled) {
+                                    _handledIncoming.add(callId);
+                                    cc.markCallHandled(callId);
 
-          // iOS đang dùng CallKit (UI hệ thống), không auto mở IncomingCallScreen Flutter
-          if (!Platform.isIOS) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!mounted) return;
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-          builder: (_) => CallScreen(
-            isCaller: false,
-            callId: inv.callId,
-            mediaType: inv.mediaType,
-            peerName: widget.peerName,
-            peerAvatar: widget.peerAvatar,
-          ),
-        ),
-      );
-            });
-          }
-        }
+                                    // iOS đang dùng CallKit (UI hệ thống), không auto mở IncomingCallScreen Flutter
+                                    if (!Platform.isIOS) {
+                                      WidgetsBinding.instance
+                                          .addPostFrameCallback((_) {
+                                        if (!mounted) return;
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => CallScreen(
+                                              isCaller: false,
+                                              callId: inv.callId,
+                                              mediaType: inv.mediaType,
+                                              peerName: widget.peerName,
+                                              peerAvatar: widget.peerAvatar,
+                                            ),
+                                          ),
+                                        );
+                                      });
+                                    }
+                                  }
 
+                                  if (!isMe) {
+                                    final msgAvatar =
+                                        (m['user_data']?['avatar'] ?? '')
+                                            .toString();
+                                    final leftAvatar = msgAvatar.isNotEmpty
+                                        ? msgAvatar
+                                        : peerAvatar;
+
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 8.0),
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.end,
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 16,
+                                            backgroundImage:
+                                                leftAvatar.isNotEmpty
+                                                    ? NetworkImage(leftAvatar)
+                                                    : null,
+                                            child: leftAvatar.isEmpty
+                                                ? const Icon(Icons.person,
+                                                    size: 18)
+                                                : null,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Flexible(
+                                            child: _buildCallInviteTile(inv,
+                                                isMe: false),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }
+
+                                  // yourself
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 8.0),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.end,
+                                      children: [
+                                        Flexible(
+                                          child: _buildCallInviteTile(inv,
+                                              isMe: true),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }
+
+                                final reactionId = _getReactionForMessage(m);
+                                final hasReply = _hasReplyTag(m);
+                                final replyMsg =
+                                    hasReply ? _findRepliedMessage(m) : null;
+
+                                // normal bubble
                                 if (!isMe) {
                                   final msgAvatar =
                                       (m['user_data']?['avatar'] ?? '')
@@ -1364,15 +1846,61 @@ class _ChatScreenState extends State<ChatScreen> {
                                         ),
                                         const SizedBox(width: 8),
                                         Flexible(
-                                          child: _buildCallInviteTile(inv,
-                                              isMe: false),
+                                          child: _SwipeReplyWrapper(
+                                            isMe: false,
+                                            onReply: () {
+                                              setState(() {
+                                                _replyingToMessage = m;
+                                              });
+                                            },
+                                            child: GestureDetector(
+                                              behavior: HitTestBehavior.opaque,
+                                              onLongPress: () =>
+                                                  _onLongPressMessage(m, false),
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  if (hasReply)
+                                                    _buildReplyHeader(
+                                                      message: m,
+                                                      replyMsg: replyMsg,
+                                                      isMe: false,
+                                                    ),
+                                                  if (replyMsg != null)
+                                                    _buildReplyPreview(replyMsg,
+                                                        isMe: false),
+                                                  Stack(
+                                                    clipBehavior: Clip.none,
+                                                    children: [
+                                                      ChatMessageBubble(
+                                                        key: ValueKey(
+                                                            '${m['id'] ?? m.hashCode}'),
+                                                        message: m,
+                                                        isMe: false,
+                                                      ),
+                                                      if (reactionId != 0)
+                                                        Positioned(
+                                                          bottom: -14,
+                                                          left: 8,
+                                                          child:
+                                                              _buildReactionBadge(
+                                                                  reactionId,
+                                                                  isMe: false),
+                                                        ),
+                                                    ],
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
                                         ),
                                       ],
                                     ),
                                   );
                                 }
 
-                                // yourself
+                                // my message
                                 return Padding(
                                   padding:
                                       const EdgeInsets.symmetric(vertical: 8.0),
@@ -1380,49 +1908,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                     mainAxisAlignment: MainAxisAlignment.end,
                                     children: [
                                       Flexible(
-                                        child: _buildCallInviteTile(inv,
-                                            isMe: true),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }
-
-                              final reactionId = _getReactionForMessage(m);
-                              final hasReply = _hasReplyTag(m);
-                              final replyMsg =
-                                  hasReply ? _findRepliedMessage(m) : null;
-
-                              // normal bubble
-                              if (!isMe) {
-                                final msgAvatar =
-                                    (m['user_data']?['avatar'] ?? '')
-                                        .toString();
-                                final leftAvatar = msgAvatar.isNotEmpty
-                                    ? msgAvatar
-                                    : peerAvatar;
-
-                                return Padding(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 8.0),
-                                  child: Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.end,
-                                    children: [
-                                      CircleAvatar(
-                                        radius: 16,
-                                        backgroundImage: leftAvatar.isNotEmpty
-                                            ? NetworkImage(leftAvatar)
-                                            : null,
-                                        child: leftAvatar.isEmpty
-                                            ? const Icon(Icons.person,
-                                                size: 18)
-                                            : null,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Flexible(
                                         child: _SwipeReplyWrapper(
-                                          isMe: false,
+                                          isMe: true,
                                           onReply: () {
                                             setState(() {
                                               _replyingToMessage = m;
@@ -1431,21 +1918,20 @@ class _ChatScreenState extends State<ChatScreen> {
                                           child: GestureDetector(
                                             behavior: HitTestBehavior.opaque,
                                             onLongPress: () =>
-                                                _onLongPressMessage(
-                                                    m, false),
+                                                _onLongPressMessage(m, true),
                                             child: Column(
                                               crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
+                                                  CrossAxisAlignment.end,
                                               children: [
                                                 if (hasReply)
                                                   _buildReplyHeader(
                                                     message: m,
                                                     replyMsg: replyMsg,
-                                                    isMe: false,
+                                                    isMe: true,
                                                   ),
                                                 if (replyMsg != null)
                                                   _buildReplyPreview(replyMsg,
-                                                      isMe: false),
+                                                      isMe: true),
                                                 Stack(
                                                   clipBehavior: Clip.none,
                                                   children: [
@@ -1453,16 +1939,16 @@ class _ChatScreenState extends State<ChatScreen> {
                                                       key: ValueKey(
                                                           '${m['id'] ?? m.hashCode}'),
                                                       message: m,
-                                                      isMe: false,
+                                                      isMe: true,
                                                     ),
                                                     if (reactionId != 0)
                                                       Positioned(
                                                         bottom: -14,
-                                                        left: 8,
+                                                        right: 8,
                                                         child:
                                                             _buildReactionBadge(
                                                                 reactionId,
-                                                                isMe: false),
+                                                                isMe: true),
                                                       ),
                                                   ],
                                                 ),
@@ -1474,197 +1960,179 @@ class _ChatScreenState extends State<ChatScreen> {
                                     ],
                                   ),
                                 );
-                              }
-
-                              // my message
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    vertical: 8.0),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
-                                  children: [
-                                    Flexible(
-                                      child: _SwipeReplyWrapper(
-                                        isMe: true,
-                                        onReply: () {
-                                          setState(() {
-                                            _replyingToMessage = m;
-                                          });
-                                        },
-                                        child: GestureDetector(
-                                          behavior: HitTestBehavior.opaque,
-                                          onLongPress: () =>
-                                              _onLongPressMessage(m, true),
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.end,
-                                            children: [
-                                              if (hasReply)
-                                                _buildReplyHeader(
-                                                  message: m,
-                                                  replyMsg: replyMsg,
-                                                  isMe: true,
-                                                ),
-                                              if (replyMsg != null)
-                                                _buildReplyPreview(replyMsg,
-                                                    isMe: true),
-                                              Stack(
-                                                clipBehavior: Clip.none,
-                                                children: [
-                                                  ChatMessageBubble(
-                                                    key: ValueKey(
-                                                        '${m['id'] ?? m.hashCode}'),
-                                                    message: m,
-                                                    isMe: true,
-                                                  ),
-                                                  if (reactionId != 0)
-                                                    Positioned(
-                                                      bottom: -14,
-                                                      right: 8,
-                                                      child:
-                                                          _buildReactionBadge(
-                                                              reactionId,
-                                                              isMe: true),
-                                                    ),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-                ),
-                // Thanh "Đang trả lời..."
-                if (_replyingToMessage != null)
-                  Container(
-                    width: double.infinity,
-                    margin:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade300),
+                              },
+                            ),
                     ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 3,
-                          height: 32,
-                          margin: const EdgeInsets.only(right: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.blue,
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                        Expanded(
-                          child: Text(
-                            _plainTextOf(_replyingToMessage!),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: Colors.black87,
+                  ),
+                  // Thanh "Đang trả lời..."
+                  if (_replyingToMessage != null)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 3,
+                            height: 32,
+                            margin: const EdgeInsets.only(right: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.blue,
+                              borderRadius: BorderRadius.circular(2),
                             ),
                           ),
+                          Expanded(
+                            child: Text(
+                              _plainTextOf(_replyingToMessage!),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close, size: 18),
+                            onPressed: () {
+                              setState(() {
+                                _replyingToMessage = null;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (_pendingAttachments.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
+                      child: _buildPendingAttachments(),
+                    ),
+                  if (_recOn)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.fiber_manual_record,
+                            size: 16,
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '${_tr('recording', 'Đang thu âm')} ${_formatDuration(_recElapsed)}',
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color:
+                                          Theme.of(context).colorScheme.error,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (_voiceDraftPath != null && !_recOn)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                      child: _buildVoicePreview(context),
+                    ),
+                  SafeArea(
+                    top: false,
+                    minimum: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _inputCtrl,
+                            enabled: !_sending,
+                            minLines: 1,
+                            maxLines: 5,
+                            onTap: () {
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                Future.delayed(
+                                    const Duration(milliseconds: 80),
+                                    _scrollToBottom);
+                              });
+                            },
+                            decoration: InputDecoration(
+                              hintText: _sending
+                                  ? _tr('sending', 'Đang gửi...')
+                                  : _tr('send_a_message', 'Nhập tin nhắn...'),
+                              isDense: true,
+                              filled: true,
+                              fillColor: Colors.white,
+                              prefixIcon: IconButton(
+                                icon: const Icon(Icons.attach_file),
+                                onPressed: _sending ? null : _pickAndSendFile,
+                                tooltip: _tr('attachment', 'Đính kèm'),
+                              ),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _recOn ? Icons.mic_off : Icons.mic,
+                                  color: _recOn ? Colors.red : null,
+                                ),
+                                onPressed: _sending ? null : _toggleRecord,
+                                tooltip: _recOn
+                                    ? _tr('stop_and_send', 'Dừng & gửi')
+                                    : _tr('record_audio', 'Ghi âm'),
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(18),
+                                borderSide: BorderSide(
+                                    color: Colors.blue.shade200, width: 1),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(18),
+                                borderSide: BorderSide(
+                                    color: Colors.blue.shade400, width: 1.5),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  vertical: 10, horizontal: 8),
+                            ),
+                            onSubmitted: (_) => _sendText(),
+                          ),
                         ),
+                        const SizedBox(width: 8),
                         IconButton(
-                          icon: const Icon(Icons.close, size: 18),
-                          onPressed: () {
-                            setState(() {
-                              _replyingToMessage = null;
-                            });
-                          },
+                          onPressed: _sending ? null : _sendText,
+                          icon: const Icon(Icons.send),
+                          tooltip: _tr('send', 'Gửi'),
                         ),
                       ],
                     ),
                   ),
-                SafeArea(
-                  top: false,
-                  minimum: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _inputCtrl,
-                          enabled: !_sending,
-                          minLines: 1,
-                          maxLines: 5,
-                          decoration: InputDecoration(
-                            hintText:
-                                _sending ? 'Đang gửi...' : 'Nhập tin nhắn...',
-                            isDense: true,
-                            filled: true,
-                            fillColor: Colors.white,
-                            prefixIcon: IconButton(
-                              icon: const Icon(Icons.attach_file),
-                              onPressed: _sending ? null : _pickAndSendFile,
-                              tooltip: 'Đính kèm',
-                            ),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _recOn ? Icons.mic_off : Icons.mic,
-                                color: _recOn ? Colors.red : null,
-                              ),
-                              onPressed: _sending ? null : _toggleRecord,
-                              tooltip: _recOn ? 'Dừng & gửi' : 'Ghi âm',
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(18),
-                              borderSide: BorderSide(
-                                  color: Colors.blue.shade200, width: 1),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(18),
-                              borderSide: BorderSide(
-                                  color: Colors.blue.shade400, width: 1.5),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                                vertical: 10, horizontal: 8),
-                          ),
-                          onSubmitted: (_) => _sendText(),
-                        ),
+                ],
+              ),
+              if (_showScrollToBottom)
+                Positioned(
+                  right: 12,
+                  bottom: 76,
+                  child: Material(
+                    color: Colors.white,
+                    shape: const CircleBorder(),
+                    elevation: 3,
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: () => _scrollToBottom(),
+                      child: const Padding(
+                        padding: EdgeInsets.all(10),
+                        child: Icon(Icons.arrow_downward),
                       ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        onPressed: _sending ? null : _sendText,
-                        icon: const Icon(Icons.send),
-                        tooltip: 'Gửi',
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            if (_showScrollToBottom)
-              Positioned(
-                right: 12,
-                bottom: 76,
-                child: Material(
-                  color: Colors.white,
-                  shape: const CircleBorder(),
-                  elevation: 3,
-                  child: InkWell(
-                    customBorder: const CircleBorder(),
-                    onTap: () => _scrollToBottom(),
-                    child: const Padding(
-                      padding: EdgeInsets.all(10),
-                      child: Icon(Icons.arrow_downward),
                     ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1705,7 +2173,9 @@ class _ChatScreenState extends State<ChatScreen> {
             Icon(isVideo ? Icons.videocam : Icons.call, color: fg, size: 16),
             const SizedBox(width: 8),
             Text(
-              isVideo ? 'Cuộc gọi video' : 'Cuộc gọi thoại',
+              isVideo
+                  ? _tr('video_call', 'Cuộc gọi video')
+                  : _tr('audio_call', 'Cuộc gọi thoại'),
               style: TextStyle(color: fg),
             ),
           ],
@@ -1754,6 +2224,124 @@ class _MessageActionButton extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+enum _AttachChoice { file, galleryMedia }
+
+enum _AttachmentType { image, video, file }
+
+class _PendingAttachment {
+  final String path;
+  final _AttachmentType type;
+
+  const _PendingAttachment({
+    required this.path,
+    required this.type,
+  });
+}
+
+List<double> _generateWaveform(String key, {int count = 32}) {
+  final rnd = Random(key.hashCode);
+  final List<double> values = [];
+  for (int i = 0; i < count; i++) {
+    final double base = 0.25 + rnd.nextDouble() * 0.75; // 0.25..1.0
+    values.add(base);
+  }
+  final List<double> mirrored = [
+    ...values.take(count ~/ 2),
+    ...(values.take(count - count ~/ 2).toList().reversed),
+  ];
+  return mirrored;
+}
+
+class _WaveformSeekBar extends StatelessWidget {
+  final double progress; // 0..1
+  final Color activeColor;
+  final Color inactiveColor;
+  final ValueChanged<double>? onSeekPercent;
+  final double maxHeight;
+  final List<double>? samples;
+
+  const _WaveformSeekBar({
+    required this.progress,
+    required this.activeColor,
+    required this.inactiveColor,
+    this.onSeekPercent,
+    this.maxHeight = 30,
+    this.samples,
+  });
+
+  static const List<double> _basePattern = [
+    0.25,
+    0.35,
+    0.45,
+    0.6,
+    0.75,
+    0.9,
+    1.0,
+    0.9,
+    0.8,
+    1.0,
+    0.9,
+    0.75,
+    0.6,
+    0.45,
+    0.35,
+    0.25
+  ];
+  static const double _barWidth = 5;
+  static const double _barSpacing = 6;
+
+  @override
+  Widget build(BuildContext context) {
+    final clamped = progress.clamp(0.0, 1.0);
+    return LayoutBuilder(
+      builder: (ctx, constraints) {
+        final List<double> pattern = samples ?? _basePattern;
+        final double totalWidth = (_barWidth * pattern.length) +
+            _barSpacing * (pattern.length - 1);
+        final double available =
+            constraints.maxWidth.isFinite ? constraints.maxWidth : totalWidth;
+        final double scale = available / totalWidth;
+        final int activeBars =
+            (clamped * pattern.length).floor().clamp(0, pattern.length);
+
+        Widget bars = Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (int i = 0; i < pattern.length; i++) ...[
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                width: _barWidth * scale,
+                height: (pattern[i].clamp(0.18, 1.0) * maxHeight) * scale,
+                decoration: BoxDecoration(
+                  color: i <= activeBars ? activeColor : inactiveColor,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              if (i != pattern.length - 1)
+                SizedBox(width: _barSpacing * scale),
+            ],
+          ],
+        );
+
+        if (onSeekPercent == null) return bars;
+
+        return GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTapDown: (details) {
+            final double dx = details.localPosition.dx.clamp(0.0, available);
+            onSeekPercent!(dx / available);
+          },
+          child: SizedBox(
+            width: available,
+            child: bars,
+          ),
+        );
+      },
     );
   }
 }
