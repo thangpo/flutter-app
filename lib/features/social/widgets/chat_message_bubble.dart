@@ -1,8 +1,9 @@
 // G:\flutter-app\lib\features\social\widgets\chat_message_bubble.dart
 import 'dart:convert';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:chewie/chewie.dart';
 import 'package:flutter/material.dart';
+import 'dart:math';
+
 import 'package:just_audio/just_audio.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -33,7 +34,6 @@ class ChatMessageBubble extends StatefulWidget {
 class _ChatMessageBubbleState extends State<ChatMessageBubble> {
   // VIDEO
   VideoPlayerController? _vp;
-  ChewieController? _chewie;
   bool _videoReady = false;
 
   // AUDIO
@@ -63,7 +63,6 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
 
   @override
   void dispose() {
-    _chewie?.dispose();
     _vp?.dispose();
     _audio.dispose();
     super.dispose();
@@ -73,16 +72,24 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
     try {
       _vp = VideoPlayerController.networkUrl(Uri.parse(_mediaUrl));
       await _vp!.initialize();
-      _chewie = ChewieController(
-        videoPlayerController: _vp!,
-        autoPlay: false,
-        looping: false,
-        allowMuting: true,
-        showControls: true,
-        materialProgressColors: ChewieProgressColors(),
-      );
+      await _vp!.setLooping(true);
+      _vp!.addListener(() {
+        if (!mounted) return;
+        setState(() {});
+      });
       if (mounted) setState(() => _videoReady = true);
     } catch (_) {}
+  }
+
+  void _toggleVideoPlayPause() {
+    final controller = _vp;
+    if (controller == null || !controller.value.isInitialized) return;
+    if (controller.value.isPlaying) {
+      controller.pause();
+    } else {
+      controller.play();
+    }
+    setState(() {});
   }
 
   Future<void> _initAudio() async {
@@ -238,45 +245,86 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
     final bg = widget.isMe ? const Color(0xFF2F80ED) : const Color(0xFFEFEFEF);
     final fg = widget.isMe ? Colors.white : Colors.black87;
 
+    final double maxBubbleWidth = MediaQuery.of(context).size.width * 0.5;
     final bubble = ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 260),
+      constraints: BoxConstraints(maxWidth: maxBubbleWidth),
       child: Column(
         crossAxisAlignment:
             widget.isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
           // ====== IMAGE ======
           if (_isImage && _mediaUrl.isNotEmpty)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: GestureDetector(
-                onTap: () => _openImageFull(_mediaUrl),
-                child: CachedNetworkImage(
-                  imageUrl: _mediaUrl,
-                  fit: BoxFit.cover,
-                  placeholder: (c, _) => Container(
-                    height: 220,
-                    color: Colors.black12,
-                    alignment: Alignment.center,
-                    child: const CircularProgressIndicator(),
-                  ),
-                  errorWidget: (c, _, __) => Container(
-                    height: 120,
-                    color: Colors.black12,
-                    alignment: Alignment.center,
-                    child: const Icon(Icons.broken_image),
+            SizedBox(
+              width: maxBubbleWidth,
+              height: maxBubbleWidth * 1.25,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: GestureDetector(
+                  onTap: () => _openImageFull(_mediaUrl),
+                  child: CachedNetworkImage(
+                    imageUrl: _mediaUrl,
+                    fit: BoxFit.cover,
+                    placeholder: (c, _) => Container(
+                      color: Colors.black12,
+                      alignment: Alignment.center,
+                      child: const CircularProgressIndicator(),
+                    ),
+                    errorWidget: (c, _, __) => Container(
+                      color: Colors.black12,
+                      alignment: Alignment.center,
+                      child: const Icon(Icons.broken_image),
+                    ),
                   ),
                 ),
               ),
             ),
 
-          // ====== VIDEO ======
+              // ====== VIDEO ======
           if (_isVideo && _mediaUrl.isNotEmpty)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: AspectRatio(
-                aspectRatio: _videoReady ? _vp!.value.aspectRatio : 1,
+            SizedBox(
+              width: maxBubbleWidth,
+              height: maxBubbleWidth * 1.25,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
                 child: _videoReady
-                    ? Chewie(controller: _chewie!)
+                    ? Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          FittedBox(
+                            fit: BoxFit.cover,
+                            child: SizedBox(
+                              width: _vp!.value.size.width > 0
+                                  ? _vp!.value.size.width
+                                  : maxBubbleWidth,
+                              height: _vp!.value.size.height > 0
+                                  ? _vp!.value.size.height
+                                  : maxBubbleWidth * 1.25,
+                              child: VideoPlayer(_vp!),
+                            ),
+                          ),
+                          Positioned.fill(
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: _toggleVideoPlayPause,
+                                child: AnimatedOpacity(
+                                  opacity: _vp!.value.isPlaying ? 0.0 : 0.9,
+                                  duration: const Duration(milliseconds: 160),
+                                  child: Container(
+                                    color: Colors.black38,
+                                    alignment: Alignment.center,
+                                    child: const Icon(
+                                      Icons.play_circle_fill,
+                                      color: Colors.white,
+                                      size: 48,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
                     : const Center(child: CircularProgressIndicator()),
               ),
             ),
@@ -445,71 +493,186 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
   Widget _buildAudioPlayer({required Color bg, required Color fg}) {
     final pos = _audioPos.inSeconds;
     final dur = _audioDur.inSeconds == 0 ? 1 : _audioDur.inSeconds;
+    final double progress =
+        dur > 0 ? pos.clamp(0, dur).toDouble() / dur.toDouble() : 0;
+    final List<double> samples =
+        _generateWaveform(_mediaUrl.isNotEmpty ? _mediaUrl : 'audio');
 
     return Container(
-      width: 200,
-      height: 42,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      margin: const EdgeInsets.only(top: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 5,
-            offset: const Offset(2, 2),
-          )
-        ],
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-            onPressed: !_audioInited
-                ? null
-                : () async {
-                    if (_audioPlaying) {
-                      await _audio.pause();
-                    } else {
-                      await _audio.play();
-                    }
-                  },
-            icon: Icon(
-              _audioPlaying
-                  ? Icons.pause_circle_filled
-                  : Icons.play_circle_fill,
-              color: fg,
-              size: 26,
-            ),
-          ),
-          Expanded(
-            child: Slider(
-              value: pos.toDouble().clamp(0, dur.toDouble()),
-              min: 0,
-              max: dur.toDouble(),
-              activeColor: Colors.white,
-              inactiveColor: Colors.white24,
-              onChanged: !_audioInited
+        width: 220,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        margin: const EdgeInsets.only(top: 4),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 5,
+              offset: const Offset(2, 2),
+            )
+          ],
+        ),
+        child: Row(
+          children: [
+            IconButton(
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              onPressed: !_audioInited
                   ? null
-                  : (v) async {
-                      await _audio.seek(Duration(seconds: v.toInt()));
+                  : () async {
+                      if (_audioPlaying) {
+                        await _audio.pause();
+                      } else {
+                        await _audio.play();
+                      }
                     },
+              icon: Icon(
+                _audioPlaying
+                    ? Icons.pause_circle_filled
+                    : Icons.play_circle_fill,
+                color: fg,
+                size: 26,
+              ),
             ),
-          ),
-          Text(
-            _fmt(_audioPos),
-            style: TextStyle(color: fg.withOpacity(0.9), fontSize: 11),
-          ),
-        ],
-      ),
-    );
+            const SizedBox(width: 4),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _WaveformSeekBar(
+                    progress: progress,
+                    activeColor: fg,
+                    inactiveColor: fg.withOpacity(0.25),
+                    samples: samples,
+                    maxHeight: 26,
+                    onSeekPercent: !_audioInited
+                        ? null
+                        : (p) async {
+                            final target = Duration(
+                                seconds: (p * dur.toDouble()).toInt());
+                            await _audio.seek(target);
+                          },
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _fmt(_audioPos),
+                    style: TextStyle(color: fg.withOpacity(0.9), fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ));
   }
 
   String _fmt(Duration d) {
     final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
     final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$m:$s';
+  }
+}
+
+List<double> _generateWaveform(String key, {int count = 32}) {
+  final rnd = Random(key.hashCode);
+  final List<double> values = [];
+  for (int i = 0; i < count; i++) {
+    final double base = 0.25 + rnd.nextDouble() * 0.75;
+    values.add(base);
+  }
+  return [
+    ...values.take(count ~/ 2),
+    ...(values.take(count - count ~/ 2).toList().reversed),
+  ];
+}
+
+class _WaveformSeekBar extends StatelessWidget {
+  final double progress; // 0..1
+  final Color activeColor;
+  final Color inactiveColor;
+  final ValueChanged<double>? onSeekPercent;
+  final double maxHeight;
+  final List<double>? samples;
+
+  const _WaveformSeekBar({
+    required this.progress,
+    required this.activeColor,
+    required this.inactiveColor,
+    this.onSeekPercent,
+    this.maxHeight = 26,
+    this.samples,
+  });
+
+  static const List<double> _basePattern = [
+    0.25,
+    0.35,
+    0.45,
+    0.6,
+    0.75,
+    0.9,
+    1.0,
+    0.9,
+    0.8,
+    1.0,
+    0.9,
+    0.75,
+    0.6,
+    0.45,
+    0.35,
+    0.25
+  ];
+  static const double _barWidth = 4.0;
+  static const double _barSpacing = 5.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final clamped = progress.clamp(0.0, 1.0);
+    return LayoutBuilder(
+      builder: (ctx, constraints) {
+        final List<double> pattern = samples ?? _basePattern;
+        final double totalWidth = (_barWidth * pattern.length) +
+            _barSpacing * (pattern.length - 1);
+        final double available =
+            constraints.maxWidth.isFinite ? constraints.maxWidth : totalWidth;
+        final double scale = available / totalWidth;
+        final int activeBars =
+            (clamped * pattern.length).floor().clamp(0, pattern.length);
+
+        Widget bars = Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (int i = 0; i < pattern.length; i++) ...[
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                width: _barWidth * scale,
+                height: (pattern[i].clamp(0.18, 1.0) * maxHeight) * scale,
+                decoration: BoxDecoration(
+                  color: i <= activeBars ? activeColor : inactiveColor,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              if (i != pattern.length - 1)
+                SizedBox(width: _barSpacing * scale),
+            ],
+          ],
+        );
+
+        if (onSeekPercent == null) return bars;
+
+        return GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTapDown: (details) {
+            final double dx = details.localPosition.dx.clamp(0.0, available);
+            onSeekPercent!(dx / available);
+          },
+          child: SizedBox(
+            width: available,
+            child: bars,
+          ),
+        );
+      },
+    );
   }
 }

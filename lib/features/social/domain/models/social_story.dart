@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 
 class SocialStory {
   final String id;
@@ -31,6 +32,7 @@ class SocialStory {
 
   bool get hasItems => items.isNotEmpty;
   SocialStoryItem? get firstItem => hasItems ? items.first : null;
+  SocialStoryItem? get previewItem => _pickLatestItem(items);
 
   SocialStory copyWith({
     String? id,
@@ -71,6 +73,7 @@ class SocialStory {
       parsedItems.add(SocialStoryItem.fromJson(json));
     }
 
+    final SocialStoryItem? preview = _pickLatestItem(parsedItems);
     SocialStoryItem? first = parsedItems.isNotEmpty ? parsedItems.first : null;
 
     Map<String, dynamic> userData = <String, dynamic>{};
@@ -118,8 +121,8 @@ class SocialStory {
               '')
           .toString(),
       userAvatar: userData['avatar']?.toString(),
-      thumbUrl: first?.thumbUrl,
-      mediaUrl: first?.mediaUrl,
+      thumbUrl: preview?.thumbUrl ?? preview?.mediaUrl,
+      mediaUrl: preview?.mediaUrl ?? preview?.thumbUrl,
       items: parsedItems,
       isAd: _parseBool(json['is_ad']),
       adPayload: json['ad_payload'] is Map<String, dynamic>
@@ -210,8 +213,40 @@ class SocialStoryItem {
             ? SocialStoryReaction.fromJson(
                 Map<String, dynamic>.from(json['reaction']))
             : null;
-    final List<SocialStoryOverlay> overlays =
-        _parseOverlays(json['overlay_meta']);
+    List<SocialStoryOverlay> overlays = _parseOverlays(json['overlay_meta']);
+    bool overlayFoundAtRoot = overlays.isNotEmpty;
+
+    // Fallback: some backends nest overlay_meta inside the first image entry.
+    if (overlays.isEmpty && json['images'] is List) {
+      for (final dynamic image in (json['images'] as List)) {
+        if (image is Map<String, dynamic>) {
+          overlays = _parseOverlays(image['overlay_meta']);
+          if (overlays.isNotEmpty) break;
+        } else if (image is Map) {
+          overlays =
+              _parseOverlays((image as Map<Object?, Object?>)['overlay_meta']);
+          if (overlays.isNotEmpty) break;
+        }
+      }
+    }
+
+    // Fallback for video stories: overlay_meta might live on the video entry.
+    if (overlays.isEmpty && json['videos'] is List) {
+      for (final dynamic video in (json['videos'] as List)) {
+        if (video is Map<String, dynamic>) {
+          overlays = _parseOverlays(video['overlay_meta']);
+          if (overlays.isNotEmpty) break;
+        } else if (video is Map) {
+          overlays =
+              _parseOverlays((video as Map<Object?, Object?>)['overlay_meta']);
+          if (overlays.isNotEmpty) break;
+        }
+      }
+    }
+    // if (overlays.isNotEmpty) {
+    //   debugPrint(
+    //       'Parsed story overlays: item=${json['id'] ?? json['story_id']} root=$overlayFoundAtRoot imagesOrVideos=${!overlayFoundAtRoot}');
+    // }
 
     return SocialStoryItem(
       id: (json['story_id'] ?? json['id'] ?? '').toString(),
@@ -234,6 +269,23 @@ class SocialStoryItem {
       overlays: overlays,
     );
   }
+}
+
+SocialStoryItem? _pickLatestItem(List<SocialStoryItem> items) {
+  if (items.isEmpty) return null;
+  SocialStoryItem latest = items.first;
+  for (final SocialStoryItem item in items.skip(1)) {
+    final DateTime? a = item.postedAt;
+    final DateTime? b = latest.postedAt;
+    if (a != null && (b == null || a.isAfter(b))) {
+      latest = item;
+      continue;
+    }
+    if (a == null && b == null) {
+      latest = item;
+    }
+  }
+  return latest;
 }
 
 class SocialStoryOverlay {
@@ -287,10 +339,16 @@ List<SocialStoryOverlay> _parseOverlays(dynamic raw) {
   if (raw is String && raw.trim().isNotEmpty) {
     try {
       final decoded = jsonDecode(raw);
-      if (decoded is List) list = decoded;
+      if (decoded is List) {
+        list = decoded;
+      } else if (decoded is Map<String, dynamic>) {
+        list = _extractOverlayList(decoded);
+      }
     } catch (_) {}
   } else if (raw is List) {
     list = raw;
+  } else if (raw is Map<String, dynamic>) {
+    list = _extractOverlayList(raw);
   }
   if (list == null) return const <SocialStoryOverlay>[];
   final List<SocialStoryOverlay> overlays = <SocialStoryOverlay>[];
@@ -303,6 +361,16 @@ List<SocialStoryOverlay> _parseOverlays(dynamic raw) {
     }
   }
   return overlays;
+}
+
+List<dynamic>? _extractOverlayList(Map<String, dynamic> map) {
+  if (map['overlays'] is List) return map['overlays'] as List<dynamic>;
+  if (map['layout'] is Map<String, dynamic>) {
+    final Map<String, dynamic> layout =
+        map['layout'] as Map<String, dynamic>;
+    if (layout['overlays'] is List) return layout['overlays'] as List<dynamic>;
+  }
+  return null;
 }
 
 Color? _parseColor(String? value) {

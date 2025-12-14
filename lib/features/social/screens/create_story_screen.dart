@@ -282,17 +282,28 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
             highlightHash: null,
             overlayMeta: overlayMeta,
           );
-        } else if (_canvasImageElement != null) {
-          final _StoryCanvasMediaElement imageElement = _canvasImageElement!;
-          final String? overlayMeta = _buildOverlayMeta();
+        } else if (_canvasElements.any(
+          (element) => element is _StoryCanvasMediaElement && !element.isVideo,
+        )) {
+          final _CapturedCanvasImage? capture =
+              await _captureCanvasImage(const _CanvasCaptureConfig());
+          if (capture == null) {
+            showCustomSnackBar(
+              getTranslated('story_cannot_generate_image', context) ??
+                  'Cannot generate image',
+              context,
+              isError: true,
+            );
+            return;
+          }
           await controller.createStory(
             fileType: 'image',
-            filePath: imageElement.file.path,
+            filePath: capture.file.path,
             coverPath: null,
             storyDescription: _canvasStoryDescription(),
             storyTitle: null,
             highlightHash: null,
-            overlayMeta: overlayMeta,
+            overlayMeta: null, // baked into captured canvas
           );
         } else {
           final File? image = await _renderTextStoryToImageFile();
@@ -724,8 +735,87 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
         'preset': element.preset.name,
       });
     }
-    if (overlays.isEmpty) return null;
-    return jsonEncode(overlays);
+    final Map<String, dynamic> meta = <String, dynamic>{};
+    if (overlays.isNotEmpty) {
+      meta['overlays'] = overlays;
+    }
+    final _StoryCanvasMediaElement? videoElement = _canvasVideoElement;
+    if (videoElement != null) {
+      final double canvasW = _canvasSize.width;
+      final double canvasH = _canvasSize.height;
+      final double left = videoElement.position.dx - (videoElement.size.width / 2);
+      final double top = videoElement.position.dy - (videoElement.size.height / 2);
+      final Map<String, dynamic> canvasMeta = {
+        'width': canvasW,
+        'height': canvasH,
+      };
+      final Map<String, dynamic>? gradient = _backgroundGradientMeta();
+      if (gradient != null) {
+        canvasMeta['gradient'] = gradient;
+      } else {
+        canvasMeta['background'] = _canvasBackgroundHex();
+      }
+      meta['canvas'] = canvasMeta;
+      meta['video'] = {
+        'x': left / canvasW,
+        'y': top / canvasH,
+        'w': videoElement.size.width / canvasW,
+        'h': videoElement.size.height / canvasH,
+      };
+    }
+    if (meta.isEmpty) return null;
+    return jsonEncode(meta);
+  }
+
+  String _canvasBackgroundHex() {
+    if (_mode == _StoryComposeMode.text &&
+        _selectedBackgroundIndex >= 0 &&
+        _selectedBackgroundIndex < _backgrounds.length) {
+      final Gradient g = _backgrounds[_selectedBackgroundIndex].gradient;
+      if (g is LinearGradient && g.colors.isNotEmpty) {
+        final Color c = g.colors.first;
+        final int rgb = c.value & 0x00FFFFFF;
+        return '#${rgb.toRadixString(16).padLeft(6, '0')}';
+      }
+    }
+    return '#000000';
+  }
+
+  Map<String, dynamic>? _backgroundGradientMeta() {
+    if (_mode != _StoryComposeMode.text) return null;
+    if (_selectedBackgroundIndex < 0 ||
+        _selectedBackgroundIndex >= _backgrounds.length) {
+      return null;
+    }
+    final Gradient gradient = _backgrounds[_selectedBackgroundIndex].gradient;
+    if (gradient is! LinearGradient || gradient.colors.length < 2) {
+      return null;
+    }
+    final List<String> colors = gradient.colors.map((Color c) {
+      final int rgb = c.value & 0x00FFFFFF;
+      return '#${rgb.toRadixString(16).padLeft(6, '0')}';
+    }).toList();
+
+    final AlignmentGeometry beginGeom = gradient.begin;
+    final AlignmentGeometry endGeom = gradient.end;
+    final Alignment begin = beginGeom is Alignment
+        ? beginGeom
+        : beginGeom.resolve(TextDirection.ltr);
+    final Alignment end = endGeom is Alignment
+        ? endGeom
+        : endGeom.resolve(TextDirection.ltr);
+    // Flutter Alignment is -1..1, convert to 0..1 for server
+    final double bx = (begin.x + 1) / 2;
+    final double by = (begin.y + 1) / 2;
+    final double ex = (end.x + 1) / 2;
+    final double ey = (end.y + 1) / 2;
+
+    return <String, dynamic>{
+      'type': 'linear',
+      'colors': colors.take(2).toList(), // server dùng 2 màu đầu
+      'begin': {'x': bx, 'y': by},
+      'end': {'x': ex, 'y': ey},
+    };
   }
 
 
@@ -1547,10 +1637,12 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
   void _clampElement(_StoryCanvasElement element, Size canvasSize) {
     final double halfW = element.size.width / 2;
     final double halfH = element.size.height / 2;
-    final double minX = halfW;
-    final double maxX = canvasSize.width - halfW;
-    final double minY = halfH;
-    final double maxY = canvasSize.height - halfH;
+    // Allow media to sit slightly beyond the edges so users can flush-align.
+    final double extraReach = element is _StoryCanvasMediaElement ? 16.0 : 0.0;
+    final double minX = halfW - extraReach;
+    final double maxX = canvasSize.width - halfW + extraReach;
+    final double minY = halfH - extraReach;
+    final double maxY = canvasSize.height - halfH + extraReach;
     element.position = Offset(
       element.position.dx.clamp(minX, maxX),
       element.position.dy.clamp(minY, maxY),
@@ -1864,6 +1956,15 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
     _StoryCanvasElement element,
     bool editing,
   ) {
+    BoxFit _fitForMedia(_StoryCanvasMediaElement media) {
+      final double w = _canvasSize.width;
+      final double h = _canvasSize.height;
+      if (w <= 0 || h <= 0) return BoxFit.contain;
+      final bool fillW = media.size.width >= w * 0.9;
+      final bool fillH = media.size.height >= h * 0.9;
+      return (fillW && fillH) ? BoxFit.cover : BoxFit.contain;
+    }
+
     if (element is _StoryCanvasTextElement) {
       final TextStyle textStyle = _textStyleFor(element);
       final Widget baseText = editing
@@ -1916,12 +2017,13 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
     if (element is _StoryCanvasMediaElement) {
       final BorderRadius radius = BorderRadius.circular(20);
       final Widget mediaWidget;
+      final BoxFit fit = _fitForMedia(element);
       if (element.isVideo) {
         final VideoPlayerController? controller =
             _canvasVideoControllers[element.id];
         if (controller != null && controller.value.isInitialized) {
           mediaWidget = FittedBox(
-            fit: BoxFit.cover,
+            fit: fit,
             child: SizedBox(
               width: controller.value.size.width,
               height: controller.value.size.height,
@@ -1931,7 +2033,7 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
         } else if (element.thumbnail != null) {
           mediaWidget = Image.memory(
             element.thumbnail!,
-            fit: BoxFit.cover,
+            fit: fit,
           );
         } else {
           mediaWidget = Container(
@@ -1946,7 +2048,7 @@ class _SocialCreateStoryScreenState extends State<SocialCreateStoryScreen> {
       } else {
         mediaWidget = Image.file(
           File(element.file.path),
-          fit: BoxFit.cover,
+          fit: fit,
         );
       }
       return SizedBox.fromSize(
