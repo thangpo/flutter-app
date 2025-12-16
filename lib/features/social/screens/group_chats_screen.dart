@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../controllers/group_chat_controller.dart';
 import 'group_chat_screen.dart';
@@ -14,7 +14,9 @@ import 'package:flutter_sixvalley_ecommerce/features/social/utils/wowonder_text.
 
 class GroupChatsScreen extends StatefulWidget {
   final String accessToken;
-  const GroupChatsScreen({super.key, required this.accessToken});
+  final bool showFooterNav;
+  const GroupChatsScreen(
+      {super.key, required this.accessToken, this.showFooterNav = true});
 
   @override
   State<GroupChatsScreen> createState() => _GroupChatsScreenState();
@@ -316,9 +318,8 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
                             g['last_message_time'],
                       );
                       final cachedText = _previewCache[groupId] ?? '';
-                      final preview = cachedText.isNotEmpty
-                          ? cachedText
-                          : _previewText(g);
+                      final preview =
+                          cachedText.isNotEmpty ? cachedText : _previewText(g);
                       final unread = _unread(g);
                       final muted = _isMuted(g);
                       final online = _isOnline(g);
@@ -354,47 +355,52 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
       ),
 
       // === FOOTER NAV (floating iOS style) ===
-      bottomNavigationBar: Consumer<GroupChatController>(
-        builder: (context, ctrl, _) {
-          final totalGroupUnread =
-          ctrl.groups.fold<int>(0, (sum, g) => sum + _unread(g));
+      bottomNavigationBar: widget.showFooterNav
+          ? Consumer<GroupChatController>(
+              builder: (context, ctrl, _) {
+                final totalGroupUnread =
+                    ctrl.groups.fold<int>(0, (sum, g) => sum + _unread(g));
 
-          return SocialTabsBottomNav(
-            currentIndex: 2, // đang ở Group
-            accessToken: widget.accessToken,
-            chatBadgeCount: 0, // nếu bạn có unread chat thì nhét vào đây
-            groupBadgeCount: totalGroupUnread, // unread nhóm
-            onTap: (i) {
-              if (i == 2) return;
+                return SocialTabsBottomNav(
+                  currentIndex: 2, // đang ở Group
+                  accessToken: widget.accessToken,
+                  chatBadgeCount: 0, // nếu bạn có unread chat thì nhét vào đây
+                  groupBadgeCount: totalGroupUnread, // unread nhóm
+                  onTap: (i) {
+                    if (i == 2) return;
 
-              if (i == 0) {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => FriendsListScreen(accessToken: widget.accessToken),
-                  ),
+                    if (i == 0) {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => FriendsListScreen(
+                              accessToken: widget.accessToken),
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (i == 1) {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => PageMessagesScreen(
+                              accessToken: widget.accessToken),
+                        ),
+                      );
+                      return;
+                    }
+
+                    // i == 3 : Menu (tuỳ bạn gắn màn nào)
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('Chưa gắn điều hướng cho Menu')),
+                    );
+                  },
                 );
-                return;
-              }
-
-              if (i == 1) {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => PageMessagesScreen(accessToken: widget.accessToken),
-                  ),
-                );
-                return;
-              }
-
-              // i == 3 : Menu (tuỳ bạn gắn màn nào)
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Chưa gắn điều hướng cho Menu')),
-              );
-            },
-          );
-        },
-      ),
+              },
+            )
+          : null,
     );
   }
 }
@@ -705,7 +711,8 @@ class SocialTabsBottomNav extends StatelessWidget {
                 right: -10,
                 top: -6,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                   decoration: BoxDecoration(
                     color: Colors.red,
                     borderRadius: BorderRadius.circular(12),
@@ -731,8 +738,8 @@ class SocialTabsBottomNav extends StatelessWidget {
         items: [
           BottomNavigationBarItem(
             icon: iconWithBadge(CupertinoIcons.chat_bubble_2, chatBadgeCount),
-            activeIcon:
-            iconWithBadge(CupertinoIcons.chat_bubble_2_fill, chatBadgeCount),
+            activeIcon: iconWithBadge(
+                CupertinoIcons.chat_bubble_2_fill, chatBadgeCount),
             label: getTranslated('chat_section', context) ?? 'Chat',
           ),
           const BottomNavigationBarItem(
@@ -743,7 +750,7 @@ class SocialTabsBottomNav extends StatelessWidget {
           BottomNavigationBarItem(
             icon: iconWithBadge(CupertinoIcons.person_3, groupBadgeCount),
             activeIcon:
-            iconWithBadge(CupertinoIcons.person_3_fill, groupBadgeCount),
+                iconWithBadge(CupertinoIcons.person_3_fill, groupBadgeCount),
             label: getTranslated('group_chat', context) ?? 'Group',
           ),
           BottomNavigationBarItem(
@@ -815,7 +822,7 @@ class AndroidMovingCircleBottomBar extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
 
     final Color barColor =
-    isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE8EBF0);
+        isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE8EBF0);
     final Color scaffoldBg = theme.scaffoldBackgroundColor;
 
     return SafeArea(
@@ -858,7 +865,7 @@ class AndroidMovingCircleBottomBar extends StatelessWidget {
                       child: Row(
                         children: List.generate(
                           items.length,
-                              (index) => Expanded(
+                          (index) => Expanded(
                             child: _AndroidNavItemWidget(
                               item: items[index],
                               selected: index == currentIndex,
@@ -930,7 +937,8 @@ class _AndroidNavItemWidget extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
-    final Color iconColor = selected ? cs.primary : cs.onSurface.withOpacity(0.7);
+    final Color iconColor =
+        selected ? cs.primary : cs.onSurface.withOpacity(0.7);
     final FontWeight labelWeight = selected ? FontWeight.w600 : FontWeight.w400;
 
     Widget iconArea;

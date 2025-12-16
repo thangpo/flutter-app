@@ -27,6 +27,8 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_list
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_group_detail_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_group.dart';
+import 'package:flutter_sixvalley_ecommerce/features/dashboard/screens/dashboard_chat_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/dashboard/screens/dashboard_chat_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_page_controller.dart'
     as page_ctrl;
@@ -278,9 +280,9 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
       children: [
         Positioned.fill(
           child: RepaintBoundary(
-              child: ColoredBox(
-                color: pageBg,
-                child: SafeArea(
+            child: ColoredBox(
+              color: pageBg,
+              child: SafeArea(
                 top: false,
                 bottom: false,
                 child: Consumer<SocialController>(
@@ -336,7 +338,8 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
                           }
                           if (i == 2) {
                             return _BirthdaySection(
-                              users: sc.birthdayUsers, // ⭐ dùng list từ controller
+                              users:
+                                  sc.birthdayUsers, // ⭐ dùng list từ controller
                             );
                           }
 
@@ -406,8 +409,9 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
       if (token == null || token.isEmpty) return;
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => FriendsListScreen(
+          builder: (_) => DashboardChatScreen(
             accessToken: token,
+            initialIndex: 0,
           ),
         ),
       );
@@ -500,28 +504,28 @@ class SocialFeedScreenState extends State<SocialFeedScreen>
 
     final PreferredSizeWidget? materialAppBar = !isIOSPlatform
         ? AppBar(
-      backgroundColor: pageBg,
-      elevation: 0,
-      titleSpacing: 0,
-      title: Padding(
-        padding: const EdgeInsets.only(left: 8),
-        child: Image.asset(
-          logoAsset,
-          height: 32,
-          fit: BoxFit.contain,
-        ),
-      ),
-      actions: [
-        Padding(
-          padding: const EdgeInsets.only(right: 12),
-          child: _HeaderActionsPill(
-            onSearch: openSearch,
-            onFriends: openFriends,
-            onMessages: openMessages,
-          ),
-        ),
-      ],
-    )
+            backgroundColor: pageBg,
+            elevation: 0,
+            titleSpacing: 0,
+            title: Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: Image.asset(
+                logoAsset,
+                height: 32,
+                fit: BoxFit.contain,
+              ),
+            ),
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: _HeaderActionsPill(
+                  onSearch: openSearch,
+                  onFriends: openFriends,
+                  onMessages: openMessages,
+                ),
+              ),
+            ],
+          )
         : null;
 
     final AdaptiveAppBar adaptiveAppBar = AdaptiveAppBar(
@@ -619,8 +623,7 @@ class _WhatsOnYourMind extends StatelessWidget {
     }();
 
     final String placeholder =
-        getTranslated('whats_on_your_mind', context) ??
-            "What's on your mind?";
+        getTranslated('whats_on_your_mind', context) ?? "What's on your mind?";
 
     void openComposer() {
       Navigator.of(context).push(
@@ -646,8 +649,7 @@ class _WhatsOnYourMind extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
-            padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               children: [
                 // Avatar
@@ -657,15 +659,14 @@ class _WhatsOnYourMind extends StatelessWidget {
                   child: CircleAvatar(
                     radius: 20,
                     backgroundColor: cs.surfaceVariant,
-                    backgroundImage: (avatarUrl != null &&
-                        avatarUrl.isNotEmpty)
+                    backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
                         ? CachedNetworkImageProvider(avatarUrl)
                         : null,
                     child: (avatarUrl == null || avatarUrl.isEmpty)
                         ? Icon(
-                      Icons.person,
-                      color: cs.onSurface.withOpacity(.6),
-                    )
+                            Icons.person,
+                            color: cs.onSurface.withOpacity(.6),
+                          )
                         : null,
                   ),
                 ),
@@ -762,9 +763,9 @@ class _StoriesSectionFromApiState extends State<_StoriesSectionFromApi> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final SocialUser? currentUser =
-    context.select<SocialController, SocialUser?>((c) => c.currentUser);
+        context.select<SocialController, SocialUser?>((c) => c.currentUser);
     final SocialStory? myStory = context.select<SocialController, SocialStory?>(
-          (c) => c.currentUserStory,
+      (c) => c.currentUserStory,
     );
 
     final List<SocialStory> orderedStories = _orderedStories(
@@ -801,17 +802,17 @@ class _StoriesSectionFromApiState extends State<_StoriesSectionFromApi> {
               onTap: story.items.isEmpty
                   ? null
                   : () {
-                final int initialItem = _firstUnviewedItemIndex(story);
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => SocialStoryViewerScreen(
-                      stories: List<SocialStory>.from(orderedStories),
-                      initialStoryIndex: entryIndex,
-                      initialItemIndex: initialItem,
-                    ),
-                  ),
-                );
-              },
+                      final int initialItem = _firstUnviewedItemIndex(story);
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => SocialStoryViewerScreen(
+                            stories: List<SocialStory>.from(orderedStories),
+                            initialStoryIndex: entryIndex,
+                            initialItemIndex: initialItem,
+                          ),
+                        ),
+                      );
+                    },
             );
           },
         ),
@@ -896,8 +897,10 @@ class _StoryCardFromApi extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final onSurface = cs.onSurface;
     final previewItem = story.previewItem ?? story.firstItem;
-    final thumb =
-        previewItem?.thumbUrl ?? previewItem?.mediaUrl ?? story.thumbUrl ?? story.mediaUrl;
+    final thumb = previewItem?.thumbUrl ??
+        previewItem?.mediaUrl ??
+        story.thumbUrl ??
+        story.mediaUrl;
     final overlays = previewItem?.overlays ?? const <SocialStoryOverlay>[];
     // if (overlays.isNotEmpty) {
     //   debugPrint(
@@ -916,25 +919,25 @@ class _StoryCardFromApi extends StatelessWidget {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: Material(
-                  color: cs.surfaceVariant,
-                  child: InkWell(
-                    onTap: onTap,
-                    child: Stack(
-                      children: [
-                        // ảnh story
-                        Positioned.fill(
-                          child: StoryOverlayStack(
-                            media: thumb != null && thumb.isNotEmpty
-                                ? Image(
-                                    image: CachedNetworkImageProvider(thumb),
-                                    fit: BoxFit.cover,
-                                  )
-                                : Container(color: cs.surfaceVariant),
-                            overlays: overlays,
-                            maxLines: 3,
-                            maxFontSize: 40,
-                          ),
+                color: cs.surfaceVariant,
+                child: InkWell(
+                  onTap: onTap,
+                  child: Stack(
+                    children: [
+                      // ảnh story
+                      Positioned.fill(
+                        child: StoryOverlayStack(
+                          media: thumb != null && thumb.isNotEmpty
+                              ? Image(
+                                  image: CachedNetworkImageProvider(thumb),
+                                  fit: BoxFit.cover,
+                                )
+                              : Container(color: cs.surfaceVariant),
+                          overlays: overlays,
+                          maxLines: 3,
+                          maxFontSize: 40,
                         ),
+                      ),
 
                       // gradient dưới
                       Positioned.fill(
@@ -974,18 +977,18 @@ class _StoryCardFromApi extends StatelessWidget {
                             radius: 18,
                             backgroundColor: cs.surfaceVariant,
                             backgroundImage: (story.userAvatar != null &&
-                                story.userAvatar!.isNotEmpty)
+                                    story.userAvatar!.isNotEmpty)
                                 ? CachedNetworkImageProvider(
-                              story.userAvatar!,
-                            )
+                                    story.userAvatar!,
+                                  )
                                 : null,
                             child: (story.userAvatar == null ||
-                                story.userAvatar!.isEmpty)
+                                    story.userAvatar!.isEmpty)
                                 ? Icon(
-                              Icons.person,
-                              color: onSurface.withOpacity(.7),
-                              size: 20,
-                            )
+                                    Icons.person,
+                                    color: onSurface.withOpacity(.7),
+                                    size: 20,
+                                  )
                                 : null,
                           ),
                         ),
@@ -1073,9 +1076,8 @@ class _HeaderActionsPill extends StatelessWidget {
         ? Colors.white.withOpacity(0.12)
         : Colors.black.withOpacity(0.05);
 
-    final Color iconColor = isDark
-        ? Colors.white.withOpacity(0.9)
-        : cs.onSurface.withOpacity(0.85);
+    final Color iconColor =
+        isDark ? Colors.white.withOpacity(0.9) : cs.onSurface.withOpacity(0.85);
 
     return Container(
       // tăng padding để pill dài & cao hơn
@@ -1173,10 +1175,9 @@ class _CreateStoryCard extends StatelessWidget {
       return null;
     }();
 
-    final String label =
-        getTranslated('add_to_story', context) ??
-            getTranslated('create_story', context) ??
-            'Add to Story';
+    final String label = getTranslated('add_to_story', context) ??
+        getTranslated('create_story', context) ??
+        'Add to Story';
 
     void openCreateStory() {
       Navigator.of(context).push(
@@ -1202,9 +1203,9 @@ class _CreateStoryCard extends StatelessWidget {
                 Positioned.fill(
                   child: avatar != null && avatar.isNotEmpty
                       ? CachedNetworkImage(
-                    imageUrl: avatar,
-                    fit: BoxFit.cover,
-                  )
+                          imageUrl: avatar,
+                          fit: BoxFit.cover,
+                        )
                       : Container(color: cs.surfaceVariant),
                 ),
                 Positioned.fill(
@@ -1620,8 +1621,7 @@ class SocialPostCard extends StatelessWidget {
   final ValueChanged<SocialPost>? onPostUpdated;
   const SocialPostCard({required this.post, this.onPostUpdated});
 
-  page_models.SocialGetPage _buildStubPage(
-      SocialPost post, String pageIdStr) {
+  page_models.SocialGetPage _buildStubPage(SocialPost post, String pageIdStr) {
     final int id = int.tryParse(pageIdStr) ?? 0;
     final String name = (post.userName ?? '').trim();
     final String avatar = post.userAvatar ?? '';
@@ -1735,19 +1735,22 @@ class SocialPostCard extends StatelessWidget {
                   InkWell(
                     borderRadius: BorderRadius.circular(40),
                     onTap: () {
-                      final String? pageIdStr = (post.pageId?.trim().isNotEmpty ?? false)
-                          ? post.pageId!.trim()
-                          : post.sharedPost?.pageId?.trim();
+                      final String? pageIdStr =
+                          (post.pageId?.trim().isNotEmpty ?? false)
+                              ? post.pageId!.trim()
+                              : post.sharedPost?.pageId?.trim();
                       if (pageIdStr != null && pageIdStr.isNotEmpty) {
                         try {
-                          final pageCtrl = context.read<page_ctrl.SocialPageController>();
+                          final pageCtrl =
+                              context.read<page_ctrl.SocialPageController>();
                           final page_models.SocialGetPage? page =
                               pageCtrl.findPageByIdString(pageIdStr);
                           if (page != null) {
                             Navigator.of(context).push(
                               MaterialPageRoute(
                                 builder: (_) =>
-                                    page_screens.SocialPageDetailScreen(page: page),
+                                    page_screens.SocialPageDetailScreen(
+                                        page: page),
                               ),
                             );
                             return;
@@ -1803,19 +1806,22 @@ class SocialPostCard extends StatelessWidget {
                     child: InkWell(
                       borderRadius: BorderRadius.circular(6),
                       onTap: () {
-                        final String? pageIdStr = (post.pageId?.trim().isNotEmpty ?? false)
-                            ? post.pageId!.trim()
-                            : post.sharedPost?.pageId?.trim();
+                        final String? pageIdStr =
+                            (post.pageId?.trim().isNotEmpty ?? false)
+                                ? post.pageId!.trim()
+                                : post.sharedPost?.pageId?.trim();
                         if (pageIdStr != null && pageIdStr.isNotEmpty) {
                           try {
-                            final pageCtrl = context.read<page_ctrl.SocialPageController>();
+                            final pageCtrl =
+                                context.read<page_ctrl.SocialPageController>();
                             final page_models.SocialGetPage? page =
                                 pageCtrl.findPageByIdString(pageIdStr);
                             if (page != null) {
                               Navigator.of(context).push(
                                 MaterialPageRoute(
                                   builder: (_) =>
-                                      page_screens.SocialPageDetailScreen(page: page),
+                                      page_screens.SocialPageDetailScreen(
+                                          page: page),
                                 ),
                               );
                               return;
@@ -1828,7 +1834,8 @@ class SocialPostCard extends StatelessWidget {
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (_) =>
-                                  page_screens.SocialPageDetailScreen(page: stub),
+                                  page_screens.SocialPageDetailScreen(
+                                      page: stub),
                             ),
                           );
                           return;
@@ -2488,7 +2495,6 @@ class SocialPostCard extends StatelessWidget {
   }
 }
 
-
 class _PostAdCard extends StatefulWidget {
   final AdsModel ad;
   const _PostAdCard({required this.ad});
@@ -2730,8 +2736,8 @@ class _PostOptionEntry {
     required this.icon,
     required this.labelKey,
     required this.fallback,
-      this.highlighted = false,
-    });
+    this.highlighted = false,
+  });
 }
 
 String _editableTextFromPost(SocialPost post) {

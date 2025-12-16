@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -11,6 +11,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/wowonder_text.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/chat_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_page_mess.dart';
+import 'package:flutter_sixvalley_ecommerce/features/dashboard/screens/dashboard_chat_screen.dart';
 
 // nhóm chat
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_chat_controller.dart';
@@ -21,7 +22,9 @@ import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
 
 class FriendsListScreen extends StatefulWidget {
   final String accessToken;
-  const FriendsListScreen({super.key, required this.accessToken});
+  final bool showFooterNav;
+  const FriendsListScreen(
+      {super.key, required this.accessToken, this.showFooterNav = true});
 
   @override
   State<FriendsListScreen> createState() => _FriendsListScreenState();
@@ -77,8 +80,7 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
 
   // Format time label for list items
   String _formatTimeLabel(SocialFriend u) {
-    final ts = _normalizedTimestamp(
-        _lastTimeCache[u.id] ?? u.lastMessageTime);
+    final ts = _normalizedTimestamp(_lastTimeCache[u.id] ?? u.lastMessageTime);
     if (ts != null) {
       final dt = DateTime.fromMillisecondsSinceEpoch(ts * 1000);
       final now = DateTime.now();
@@ -165,41 +167,46 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
       floatingActionButton: null,
 
       /// ✅ Thanh tab bar dạng "floating capsule"
-      bottomNavigationBar: Padding(
-        padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          bottom: 8 + bottomInset, // chừa chỗ cho thanh điều hướng hệ thống
-        ),
-        child: _MessengerFooter(
-          currentIndex: _tabIndex,
-          chatBadgeCount: chatBadgeCount,
-          showNotifDot: notifDot,
-          onTap: (i) {
-            setState(() => _tabIndex = i);
+      bottomNavigationBar: widget.showFooterNav
+          ? Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                bottom:
+                    8 + bottomInset, // chừa chỗ cho thanh điều hướng hệ thống
+              ),
+              child: _MessengerFooter(
+                currentIndex: _tabIndex,
+                chatBadgeCount: chatBadgeCount,
+                showNotifDot: notifDot,
+                onTap: (i) {
+                  setState(() => _tabIndex = i);
 
-            if (i == 1) {
-              // 👈 Tab STORIES → mở màn Trang / Tin nhắn Page
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      PageMessagesScreen(accessToken: widget.accessToken),
-                ),
-              );
-            } else if (i == 2) {
-              // Group chat như cũ
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      GroupChatsScreen(accessToken: widget.accessToken),
-                ),
-              );
-            }
-          },
-        ),
-      ),
+                  if (i == 1) {
+                    // 👈 Tab STORIES → mở màn Trang / Tin nhắn Page
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            PageMessagesScreen(accessToken: widget.accessToken),
+                      ),
+                    );
+                  } else if (i == 2) {
+                    // Group chat như cũ
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => DashboardChatScreen(
+                          accessToken: widget.accessToken,
+                          initialIndex: 2,
+                        ),
+                      ),
+                    );
+                  }
+                },
+              ),
+            )
+          : null,
 
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -290,9 +297,10 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                           // preview: ưu tiên tin nhắn (cache/fetch), fallback sang trạng thái khi không có
                           _loadLatestIfMissing(u);
                           final cachedText = _lastTextCache[u.id] ?? '';
-                          final messagePreview =
-                              (cachedText.isNotEmpty ? cachedText : (u.lastMessageText ?? ''))
-                                  .trim();
+                          final messagePreview = (cachedText.isNotEmpty
+                                  ? cachedText
+                                  : (u.lastMessageText ?? ''))
+                              .trim();
                           final statusFallback = u.isOnline
                               ? getTranslated('active_now', context) ?? ''
                               : (u.lastSeen ?? '').trim();
@@ -497,7 +505,7 @@ class _MessengerFooter extends StatelessWidget {
             ),
             item(
               index: 1,
-              icon: Icons.flag_outlined, 
+              icon: Icons.flag_outlined,
               label: 'Pages',
             ),
             item(
