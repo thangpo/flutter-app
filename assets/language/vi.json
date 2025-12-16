@@ -1816,5 +1816,6 @@
   "call_audio_ended": "Cuộc gọi thoại đã kết thúc",
   "call_video_ended": "Cuộc gọi video đã kết thúc",
   "call_missed": "Cuộc gọi nhỡ",
-  "no_message": "Chưa có tin nhắn"
+  "no_message": "Chưa có tin nhắn",
+  "voice_message": "Tin nhắn thu âm"
 }

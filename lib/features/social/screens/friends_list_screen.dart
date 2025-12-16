@@ -389,7 +389,9 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                           _loadLatestIfMissing(u);
                           final cachedText = _lastTextCache[u.id] ?? '';
                           final rawPreview =
-                          (cachedText.isNotEmpty ? cachedText : (u.lastMessageText ?? '')).trim();
+                          (cachedText.isNotEmpty ? cachedText : (u.lastMessageText ?? ''))
+                              .toString()
+                              .trim();
 
                           final messagePreview = normalizeChatPreview(rawPreview, context);
                           final statusFallback = u.isOnline

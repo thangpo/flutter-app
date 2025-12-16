@@ -1850,5 +1850,6 @@
   "call_audio_ended": "Voice call ended",
   "call_video_ended": "Video call ended",
   "call_missed": "Missed call",
-  "no_message": "No messages yet"
+  "no_message": "No messages yet",
+  "voice_message": "Voice message"
 }

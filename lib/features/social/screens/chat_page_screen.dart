@@ -2,16 +2,16 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io';
+import 'dart:ui' show FontFeature;
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:dio/dio.dart';
-import 'package:encrypt/encrypt.dart' as enc;   // 👈 thêm thư viện decrypt
+import 'package:encrypt/encrypt.dart' as enc;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_page_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_page_mess.dart';
 
@@ -50,6 +50,15 @@ class _PageChatScreenState extends State<PageChatScreen> {
   StreamSubscription? _progressSub;
   String? _recordingPath;
   bool _sending = false;
+  String? _voiceDraftPath;
+  Duration _voiceDraftDuration = Duration.zero;
+  Timer? _recTimer;
+  Duration _recElapsed = Duration.zero;
+  final FlutterSoundPlayer _draftPlayer = FlutterSoundPlayer();
+  bool _draftPlaying = false;
+  Duration _draftPos = Duration.zero;
+  StreamSubscription? _draftSub;
+  List<_PendingAttachment> _pendingAttachments = [];
 
   @override
   void initState() {
@@ -62,29 +71,51 @@ class _PageChatScreenState extends State<PageChatScreen> {
       );
       _initRecorder();
       _initPlayer();
+      _draftPlayer.openPlayer().then((_) async {
+        await _draftPlayer.setSubscriptionDuration(const Duration(milliseconds: 200));
+        _draftSub = _draftPlayer.onProgress?.listen((e) {
+          if (!mounted) return;
+          setState(() => _draftPos = e.position ?? Duration.zero);
+        });
+      });
     });
   }
 
   @override
   void dispose() {
     _inputCtrl.dispose();
+    _scrollCtrl.dispose();
     _recorder.closeRecorder();
     _progressSub?.cancel();
     _player.closePlayer();
+    _recTimer?.cancel();
+    _draftSub?.cancel();
+    _draftPlayer.closePlayer();
     context.read<SocialPageController>().disposePageChat();
     super.dispose();
   }
 
-  // ============================================================
-  // 🔐 1) DECRYPT giống ChatScreen
-  // ============================================================
+  void _startRecTimer() {
+    _recTimer?.cancel();
+    _recElapsed = Duration.zero;
+    _recTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() => _recElapsed += const Duration(seconds: 1));
+    });
+  }
+
+  void _stopRecTimer() {
+    _recTimer?.cancel();
+    _recTimer = null;
+  }
+
 
   String _plainTextOf(SocialPageMessage m) {
     final raw = m.text.trim();
     final timeStr = m.time.toString();
 
     if (raw.isEmpty) return "";
-    if (raw.startsWith("http")) return raw; // tránh decrypt media
+    if (raw.startsWith("http")) return raw;
 
     final dec = _tryDecryptWoWonder(raw, timeStr);
     return dec ?? raw;
@@ -127,25 +158,30 @@ class _PageChatScreenState extends State<PageChatScreen> {
     _playerReady = true;
   }
 
-  Future<void> _pickImage(SocialPageController pageCtrl) async {
+  Future<void> _pickMedia() async {
     if (_sending) return;
-    final XFile? x =
-    await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
-    if (x == null) return;
 
-    setState(() => _sending = true);
-    try {
-      final file = await MultipartFile.fromFile(
-        x.path,
-        filename: p.basename(x.path),
+    final List<XFile> picked =
+    await _picker.pickMultipleMedia(requestFullMetadata: false);
+    if (picked.isEmpty) return;
+
+    setState(() {
+      _pendingAttachments.addAll(
+        picked.map((x) => _PendingAttachment(
+          path: x.path,
+          type: _detectAttachmentType(x.path),
+        )),
       );
-      await pageCtrl.sendPageChatMessage(file: file, text: '');
-      _scrollToBottom();
-    } catch (e) {
-      _showError(e);
-    } finally {
-      if (mounted) setState(() => _sending = false);
-    }
+    });
+  }
+
+  _AttachmentType _detectAttachmentType(String path) {
+    final ext = p.extension(path).toLowerCase();
+    const img = {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.heic', '.heif'};
+    const vid = {'.mp4', '.mov', '.m4v', '.mkv', '.avi', '.webm', '.wmv'};
+    if (img.contains(ext)) return _AttachmentType.image;
+    if (vid.contains(ext)) return _AttachmentType.video;
+    return _AttachmentType.file;
   }
 
   Future<void> _toggleRecord(SocialPageController pageCtrl) async {
@@ -156,31 +192,37 @@ class _PageChatScreenState extends State<PageChatScreen> {
 
     if (!_recording) {
       final dir = await getTemporaryDirectory();
-      final path =
-          '${dir.path}/page_voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      final path = '${dir.path}/page_voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
       _recordingPath = path;
+      await _draftPlayer.stopPlayer();
       await _recorder.startRecorder(toFile: path, codec: Codec.aacMP4);
-      setState(() => _recording = true);
+      _startRecTimer();
+
+      setState(() {
+        _voiceDraftPath = null;
+        _voiceDraftDuration = Duration.zero;
+        _draftPos = Duration.zero;
+        _draftPlaying = false;
+        _recording = true;
+      });
     } else {
+      _stopRecTimer();
+
       final path = await _recorder.stopRecorder();
-      setState(() => _recording = false);
       final filePath = path ?? _recordingPath;
       _recordingPath = null;
-      if (filePath == null) return;
 
-      try {
-        final voicePart = await MultipartFile.fromFile(
-          filePath,
-          filename: p.basename(filePath),
-        );
-        await pageCtrl.sendPageChatMessage(
-          voiceFile: voicePart,
-          text: '',
-        );
-        _scrollToBottom();
-      } catch (e) {
-        _showError(e);
+      if (filePath == null) {
+        setState(() => _recording = false);
+        return;
       }
+
+      setState(() {
+        _recording = false;
+        _voiceDraftPath = filePath;
+        _voiceDraftDuration = _recElapsed;
+        _draftPos = Duration.zero;
+      });
     }
   }
 
@@ -194,9 +236,6 @@ class _PageChatScreenState extends State<PageChatScreen> {
     );
   }
 
-  // ============================================================
-  // UI
-  // ============================================================
 
   @override
   Widget build(BuildContext context) {
@@ -293,21 +332,114 @@ class _PageChatScreenState extends State<PageChatScreen> {
               },
             ),
           ),
+          if (_pendingAttachments.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+              child: _buildPendingAttachments(),
+            ),
+          if (_voiceDraftPath != null && !_recording)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+              child: _buildVoiceDraftPreview(pageCtrl),
+            ),
           _buildInputArea(pageCtrl),
         ],
       ),
     );
   }
 
-  // ============================================================
-  // MESSAGE BODY (UPDATE để dùng decrypt)
-  // ============================================================
+  Widget _buildPendingAttachments() {
+    return SizedBox(
+      height: 96,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _pendingAttachments.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          final att = _pendingAttachments[index];
+          return Stack(
+            children: [
+              Container(
+                width: 96,
+                height: 96,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: _buildAttachmentPreview(att),
+              ),
+              Positioned(
+                top: 4,
+                right: 4,
+                child: GestureDetector(
+                  onTap: _sending
+                      ? null
+                      : () => setState(() => _pendingAttachments.removeAt(index)),
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Colors.black54,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close, size: 16, color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildAttachmentPreview(_PendingAttachment att) {
+    switch (att.type) {
+      case _AttachmentType.image:
+        return Image.file(
+          File(att.path),
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _fallbackPreview(att),
+        );
+      case _AttachmentType.video:
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            Container(color: Colors.black12),
+            const Center(child: Icon(Icons.play_circle_fill, size: 34, color: Colors.white70)),
+          ],
+        );
+      default:
+        return _fallbackPreview(att);
+    }
+  }
+
+  Widget _fallbackPreview(_PendingAttachment att) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      color: Colors.grey.shade100,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.insert_drive_file, size: 28, color: Colors.black54),
+          const SizedBox(height: 6),
+          Text(
+            p.basename(att.path),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildMessageBody(SocialPageMessage msg, bool isMe) {
     if (_isVoiceMessage(msg)) {
       return _buildVoiceBubble(msg, isMe);
     }
-    // 1) Ảnh
     if (msg.media.isNotEmpty &&
         (msg.media.endsWith(".jpg") ||
             msg.media.endsWith(".jpeg") ||
@@ -317,12 +449,10 @@ class _PageChatScreenState extends State<PageChatScreen> {
       return Image.network(msg.media, width: 240, fit: BoxFit.cover);
     }
 
-    // 2) Sticker
     if (msg.stickers.isNotEmpty) {
       return Image.network(msg.stickers, width: 160);
     }
 
-    // 3) TEXT — dùng decrypt
     final txt = _plainTextOf(msg);
 
     return Text(
@@ -331,9 +461,6 @@ class _PageChatScreenState extends State<PageChatScreen> {
     );
   }
 
-  // ============================================================
-  // REPLY
-  // ============================================================
 
   Widget _buildReplyBubble(SocialPageReplyMessage reply, bool isMe) {
     final replyText = reply.text;
@@ -353,10 +480,6 @@ class _PageChatScreenState extends State<PageChatScreen> {
     );
   }
 
-  // ============================================================
-  // INPUT
-  // ============================================================
-
   Widget _buildInputArea(SocialPageController pageCtrl) {
     return SafeArea(
       child: Container(
@@ -366,7 +489,7 @@ class _PageChatScreenState extends State<PageChatScreen> {
           children: [
             IconButton(
               icon: const Icon(Icons.image),
-              onPressed: () => _pickImage(pageCtrl),
+              onPressed: _sending ? null : _pickMedia,
             ),
             Expanded(
               child: TextField(
@@ -393,23 +516,46 @@ class _PageChatScreenState extends State<PageChatScreen> {
             ),
             IconButton(
               icon: const Icon(Icons.send, color: Colors.blue),
-              onPressed: _sending
-                  ? null
-                  : () async {
-                      final text = _inputCtrl.text.trim();
-                      if (text.isEmpty) return;
+              onPressed: _sending ? null : () async {
+                final text = _inputCtrl.text.trim();
+                final hasText = text.isNotEmpty;
+                final hasAtt = _pendingAttachments.isNotEmpty;
+                final hasVoice = _voiceDraftPath != null;
 
-                      _inputCtrl.clear();
-                      setState(() => _sending = true);
-                      try {
-                        await pageCtrl.sendPageChatMessage(text: text);
-                        _scrollToBottom();
-                      } catch (e) {
-                        _showError(e);
-                      } finally {
-                        if (mounted) setState(() => _sending = false);
-                      }
-                    },
+                if (!hasText && !hasAtt && !hasVoice) return;
+
+                _inputCtrl.clear();
+                setState(() => _sending = true);
+
+                try {
+                  if (hasText) {
+                    await pageCtrl.sendPageChatMessage(text: text);
+                  }
+
+                  if (hasAtt) {
+                    final items = List<_PendingAttachment>.from(_pendingAttachments);
+                    for (final att in items) {
+                      final part = await MultipartFile.fromFile(
+                        att.path,
+                        filename: p.basename(att.path),
+                      );
+                      await pageCtrl.sendPageChatMessage(file: part, text: '');
+                    }
+                    setState(() => _pendingAttachments.clear());
+                  }
+
+                  // nếu bạn muốn bấm Send gửi luôn cả draft voice
+                  if (hasVoice) {
+                    await _sendVoiceDraft(pageCtrl);
+                  }
+
+                  _scrollToBottom();
+                } catch (e) {
+                  _showError(e);
+                } finally {
+                  if (mounted) setState(() => _sending = false);
+                }
+              },
             )
           ],
         ),
@@ -417,9 +563,106 @@ class _PageChatScreenState extends State<PageChatScreen> {
     );
   }
 
-  // ============================================================
-  // SCROLL
-  // ============================================================
+  Widget _buildVoiceDraftPreview(SocialPageController pageCtrl) {
+    final dur = _voiceDraftDuration > Duration.zero ? _voiceDraftDuration : _draftPos;
+    final maxMs = dur.inMilliseconds > 0 ? dur.inMilliseconds.toDouble() : 1.0;
+    final valMs = _draftPos.inMilliseconds.clamp(0, maxMs.toInt()).toDouble();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade200,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            icon: Icon(_draftPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled),
+            onPressed: _toggleDraftPlay,
+          ),
+          Expanded(
+            child: Slider(
+              value: valMs,
+              max: maxMs,
+              onChanged: (v) async {
+                final d = Duration(milliseconds: v.toInt());
+                await _draftPlayer.seekToPlayer(d);
+                setState(() => _draftPos = d);
+              },
+            ),
+          ),
+          Text(_formatDuration(dur)),
+          const SizedBox(width: 6),
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () async {
+              await _draftPlayer.stopPlayer();
+              setState(() {
+                _voiceDraftPath = null;
+                _voiceDraftDuration = Duration.zero;
+                _draftPos = Duration.zero;
+                _draftPlaying = false;
+              });
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.send, color: Colors.blue),
+            onPressed: () => _sendVoiceDraft(pageCtrl),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _toggleDraftPlay() async {
+    if (_voiceDraftPath == null) return;
+
+    if (_draftPlayer.isPlaying) {
+      await _draftPlayer.pausePlayer();
+      setState(() => _draftPlaying = false);
+      return;
+    }
+
+    await _draftPlayer.startPlayer(
+      fromURI: _voiceDraftPath,
+      codec: Codec.aacMP4,
+      whenFinished: () {
+        if (!mounted) return;
+        setState(() {
+          _draftPlaying = false;
+          _draftPos = Duration.zero;
+        });
+      },
+    );
+    setState(() => _draftPlaying = true);
+  }
+
+  Future<void> _sendVoiceDraft(SocialPageController pageCtrl, {bool manageSending = true}) async {
+    if (_voiceDraftPath == null) return;
+    if (manageSending && _sending) return;
+
+    if (manageSending) setState(() => _sending = true);
+    try {
+      final voicePart = await MultipartFile.fromFile(
+        _voiceDraftPath!,
+        filename: p.basename(_voiceDraftPath!),
+      );
+      await pageCtrl.sendPageChatMessage(voiceFile: voicePart, text: '');
+      await _draftPlayer.stopPlayer();
+
+      setState(() {
+        _voiceDraftPath = null;
+        _voiceDraftDuration = Duration.zero;
+        _draftPos = Duration.zero;
+        _draftPlaying = false;
+      });
+      _scrollToBottom();
+    } catch (e) {
+      _showError(e);
+    } finally {
+      if (manageSending && mounted) setState(() => _sending = false);
+    }
+  }
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -578,7 +821,6 @@ class _PageChatScreenState extends State<PageChatScreen> {
   }
 
   void _handleProgress(dynamic event) {
-    // PlaybackDisposition has position/duration
     final String? url = _playingUrl;
     if (url == null) return;
     try {
@@ -592,8 +834,16 @@ class _PageChatScreenState extends State<PageChatScreen> {
       }
       if (mounted) setState(() {});
     } catch (_) {
-      // ignore bad progress events
+
     }
   }
+}
 
+enum _AttachmentType { image, video, file }
+
+class _PendingAttachment {
+  final String path;
+  final _AttachmentType type;
+
+  const _PendingAttachment({required this.path, required this.type});
 }

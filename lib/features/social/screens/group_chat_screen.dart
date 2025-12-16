@@ -3,7 +3,7 @@ import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-
+import 'package:path/path.dart' as p;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -80,6 +80,22 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   // NEW: reply preview
   Map<String, dynamic>? _replyTo;
 
+  // ===== NEW: Pending attachments (multi image/video preview) =====
+  List<_PendingAttachment> _pendingAttachments = [];
+
+// ===== NEW: Voice draft preview (record -> preview -> send) =====
+  final FlutterSoundPlayer _draftPlayer = FlutterSoundPlayer();
+  StreamSubscription? _draftSub;
+  bool _draftReady = false;
+  bool _draftPlaying = false;
+  Duration _draftPos = Duration.zero;
+
+  String? _voiceDraftPath;
+  Duration _voiceDraftDuration = Duration.zero;
+
+  Timer? _recTimer;
+  Duration _recElapsed = Duration.zero;
+
   // NEW: realtime polling
   Timer? _pollTimer;
 
@@ -92,6 +108,13 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       _bindIncomingWatcher();
 
       await _initRecorder();
+      await _draftPlayer.openPlayer();
+      await _draftPlayer.setSubscriptionDuration(const Duration(milliseconds: 200));
+      _draftSub = _draftPlayer.onProgress?.listen((e) {
+        if (!mounted) return;
+        setState(() => _draftPos = e.position ?? Duration.zero);
+      });
+      _draftReady = true;
       final ctrl = context.read<GroupChatController>();
       await ctrl.loadMessages(widget.groupId);
       // Thử lấy meta từ store nếu widget không có
@@ -258,7 +281,24 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     _recorder.closeRecorder();
     _textCtrl.dispose();
     _scroll.dispose();
+    _recTimer?.cancel();
+    _draftSub?.cancel();
+    _draftPlayer.closePlayer();
     super.dispose();
+  }
+
+  void _startRecTimer() {
+    _recTimer?.cancel();
+    _recElapsed = Duration.zero;
+    _recTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() => _recElapsed += const Duration(seconds: 1));
+    });
+  }
+
+  void _stopRecTimer() {
+    _recTimer?.cancel();
+    _recTimer = null;
   }
 
   // ---------------- Recorder ----------------
@@ -276,11 +316,13 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       await _initRecorder();
       if (!_recReady) return;
     }
+
     if (!_recording) {
       try {
         final dir = await getTemporaryDirectory();
-        final path =
-            '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        final path = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        _recPath = path;
+
         await _recorder.startRecorder(
           toFile: path,
           codec: Codec.aacMP4,
@@ -288,32 +330,36 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           sampleRate: 44100,
           numChannels: 1,
         );
+
+        _startRecTimer();
+
         setState(() {
           _recording = true;
-          _recPath = path;
+
+          // clear draft cũ
+          _voiceDraftPath = null;
+          _voiceDraftDuration = Duration.zero;
+          _draftPos = Duration.zero;
+          _draftPlaying = false;
         });
       } catch (_) {}
     } else {
       try {
+        _stopRecTimer();
         final path = await _recorder.stopRecorder();
         setState(() => _recording = false);
+
         final realPath = path ?? _recPath;
         if (realPath == null) return;
 
-        if (_sending) return;
-        setState(() => _sending = true);
-        try {
-          await context.read<GroupChatController>().sendMessage(
-                widget.groupId,
-                '',
-                file: File(realPath),
-                type: 'voice',
-              );
-        } finally {
-          if (mounted) setState(() => _sending = false);
-        }
-        _scrollToBottom();
+        setState(() {
+          _voiceDraftPath = realPath;
+          _voiceDraftDuration = _recElapsed; // duration draft
+          _draftPos = Duration.zero;
+          _draftPlaying = false;
+        });
       } catch (_) {
+        _stopRecTimer();
         setState(() => _recording = false);
       }
     }
@@ -343,6 +389,39 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       }
     }
     _scrollToBottom();
+  }
+
+  Future<void> _pickMediaMulti() async {
+    if (_sending) return;
+
+    List<XFile> picked = [];
+    try {
+      picked = await _picker.pickMultipleMedia(requestFullMetadata: false) ?? [];
+    } catch (_) {
+      // fallback nếu image_picker version cũ
+      final imgs = await _picker.pickMultiImage(imageQuality: 85);
+      picked = imgs;
+    }
+
+    if (picked.isEmpty) return;
+
+    setState(() {
+      _pendingAttachments.addAll(
+        picked.map((x) => _PendingAttachment(
+          path: x.path,
+          type: _detectAttachmentType(x.path),
+        )),
+      );
+    });
+  }
+
+  _AttachmentType _detectAttachmentType(String path) {
+    final ext = p.extension(path).toLowerCase();
+    const img = {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.heic', '.heif'};
+    const vid = {'.mp4', '.mov', '.m4v', '.mkv', '.avi', '.webm', '.wmv'};
+    if (img.contains(ext)) return _AttachmentType.image;
+    if (vid.contains(ext)) return _AttachmentType.video;
+    return _AttachmentType.file;
   }
 
   Future<void> _pickImage() async {
@@ -412,19 +491,11 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.image),
-              title: const Text('Ảnh từ thư viện'),
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Ảnh / Video (chọn nhiều)'),
               onTap: () async {
                 Navigator.pop(ctx);
-                await _pickImage();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.videocam),
-              title: const Text('Video từ thư viện'),
-              onTap: () async {
-                Navigator.pop(ctx);
-                await _pickVideo();
+                await _pickMediaMulti();
               },
             ),
             ListTile(
@@ -768,6 +839,122 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     }
   }
 
+  Future<void> _toggleDraftPlay() async {
+    if (_voiceDraftPath == null || !_draftReady) return;
+
+    if (_draftPlayer.isPlaying) {
+      await _draftPlayer.pausePlayer();
+      if (!mounted) return;
+      setState(() => _draftPlaying = false);
+      return;
+    }
+
+    await _draftPlayer.startPlayer(
+      fromURI: _voiceDraftPath,
+      codec: Codec.aacMP4,
+      whenFinished: () {
+        if (!mounted) return;
+        setState(() {
+          _draftPlaying = false;
+          _draftPos = Duration.zero;
+        });
+      },
+    );
+
+    if (!mounted) return;
+    setState(() => _draftPlaying = true);
+  }
+
+  Future<void> _sendVoiceDraft() async {
+    if (_sending) return;
+    if (_voiceDraftPath == null) return;
+
+    setState(() => _sending = true);
+    try {
+      await context.read<GroupChatController>().sendMessage(
+        widget.groupId,
+        '',
+        file: File(_voiceDraftPath!),
+        type: 'voice',
+        replyTo: _replyTo,
+      );
+
+      await _draftPlayer.stopPlayer();
+
+      setState(() {
+        _voiceDraftPath = null;
+        _voiceDraftDuration = Duration.zero;
+        _draftPos = Duration.zero;
+        _draftPlaying = false;
+        _replyTo = null;
+      });
+
+      _scrollToBottom();
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  String _fmt(Duration d) {
+    int s = d.inSeconds;
+    if (s < 0) s = 0;
+    final mm = (s ~/ 60).toString().padLeft(2, '0');
+    final ss = (s % 60).toString().padLeft(2, '0');
+    return '$mm:$ss';
+  }
+
+  Widget _buildVoiceDraftPreview() {
+    final dur = _voiceDraftDuration > Duration.zero ? _voiceDraftDuration : _draftPos;
+    final maxMs = dur.inMilliseconds > 0 ? dur.inMilliseconds.toDouble() : 1.0;
+    final valMs = _draftPos.inMilliseconds.clamp(0, maxMs.toInt()).toDouble();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade200,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            icon: Icon(_draftPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled),
+            onPressed: _toggleDraftPlay,
+          ),
+          Expanded(
+            child: Slider(
+              value: valMs,
+              max: maxMs,
+              onChanged: (v) async {
+                final d = Duration(milliseconds: v.toInt());
+                await _draftPlayer.seekToPlayer(d);
+                if (!mounted) return;
+                setState(() => _draftPos = d);
+              },
+            ),
+          ),
+          Text(_fmt(dur)),
+          const SizedBox(width: 6),
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () async {
+              await _draftPlayer.stopPlayer();
+              if (!mounted) return;
+              setState(() {
+                _voiceDraftPath = null;
+                _voiceDraftDuration = Duration.zero;
+                _draftPos = Duration.zero;
+                _draftPlaying = false;
+              });
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.send, color: Colors.blue),
+            onPressed: _sendVoiceDraft,
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<void> _deleteConversation() async {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1239,6 +1426,92 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         const SizedBox(height: 6),
         Text(label, style: const TextStyle(fontSize: 12)),
       ],
+    );
+  }
+
+  Widget _buildPendingAttachments() {
+    return SizedBox(
+      height: 96,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _pendingAttachments.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          final att = _pendingAttachments[index];
+          return Stack(
+            children: [
+              Container(
+                width: 96,
+                height: 96,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: _buildAttachmentPreview(att),
+              ),
+              Positioned(
+                top: 4,
+                right: 4,
+                child: GestureDetector(
+                  onTap: _sending ? null : () => setState(() => _pendingAttachments.removeAt(index)),
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Colors.black54,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close, size: 16, color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildAttachmentPreview(_PendingAttachment att) {
+    switch (att.type) {
+      case _AttachmentType.image:
+        return Image.file(
+          File(att.path),
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _fallbackPreview(att),
+        );
+      case _AttachmentType.video:
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            Container(color: Colors.black12),
+            const Center(child: Icon(Icons.play_circle_fill, size: 34, color: Colors.white70)),
+          ],
+        );
+      default:
+        return _fallbackPreview(att);
+    }
+  }
+
+  Widget _fallbackPreview(_PendingAttachment att) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      color: Colors.grey.shade100,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.insert_drive_file, size: 28, color: Colors.black54),
+          const SizedBox(height: 6),
+          Text(
+            p.basename(att.path),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 12),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2018,12 +2291,27 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                   children: [
                     if (_replyTo != null)
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(8.0, 4.0, 8.0, 0.0),
+                        padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
                         child: _buildReplyPreview(),
                       ),
+
+                    // ✅ Preview attachments đặt ở đây (có width = full màn hình)
+                    if (_pendingAttachments.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
+                        child: _buildPendingAttachments(),
+                      ),
+
+                    // ✅ Preview voice đặt ở đây
+                    if (_voiceDraftPath != null && !_recording)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
+                        child: _buildVoiceDraftPreview(),
+                      ),
+
+                    // ✅ Row chỉ còn input + send
                     Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8.0, vertical: 6.0),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                       child: Row(
                         children: [
                           Expanded(
@@ -2034,9 +2322,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                               maxLines: 4,
                               textInputAction: TextInputAction.newline,
                               decoration: InputDecoration(
-                                hintText: _sending
-                                    ? 'Đang gửi...'
-                                    : 'Nhập tin nhắn...',
+                                hintText: _sending ? 'Đang gửi...' : 'Nhập tin nhắn...',
                                 isDense: true,
                                 filled: true,
                                 fillColor: Colors.white,
@@ -2051,25 +2337,14 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                                     color: _recording ? Colors.red : null,
                                   ),
                                   onPressed: _sending ? null : _toggleRecord,
-                                  tooltip: _recording
-                                      ? 'Dừng ghi & gửi'
-                                      : 'Nhấn để ghi âm / gửi',
                                 ),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(18),
                                 ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(18),
-                                  borderSide: BorderSide(
-                                      color: Colors.blue.shade200, width: 1),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(18),
-                                  borderSide: BorderSide(
-                                      color: Colors.blue.shade400, width: 1.5),
-                                ),
                                 contentPadding: const EdgeInsets.symmetric(
-                                    vertical: 10, horizontal: 8),
+                                  vertical: 10,
+                                  horizontal: 8,
+                                ),
                               ),
                               onSubmitted: (_) => _sendText(),
                             ),
@@ -2078,7 +2353,64 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                           IconButton(
                             tooltip: 'Gửi',
                             icon: const Icon(Icons.send),
-                            onPressed: _sending ? null : _sendText,
+                            onPressed: _sending ? null : () async {
+                              final text = _textCtrl.text.trim();
+                              final hasText = text.isNotEmpty;
+                              final hasAtt = _pendingAttachments.isNotEmpty;
+                              final hasVoice = _voiceDraftPath != null;
+
+                              if (!hasText && !hasAtt && !hasVoice) return;
+
+                              final replying = _replyTo;
+
+                              _textCtrl.clear();
+                              setState(() => _sending = true);
+
+                              try {
+                                if (hasText) {
+                                  await context.read<GroupChatController>().sendMessage(
+                                    widget.groupId,
+                                    text,
+                                    replyTo: replying,
+                                  );
+                                }
+
+                                if (hasAtt) {
+                                  final items = List<_PendingAttachment>.from(_pendingAttachments);
+                                  for (final att in items) {
+                                    final type = att.type == _AttachmentType.image
+                                        ? 'image'
+                                        : att.type == _AttachmentType.video
+                                        ? 'video'
+                                        : 'file';
+
+                                    await context.read<GroupChatController>().sendMessage(
+                                      widget.groupId,
+                                      '',
+                                      file: File(att.path),
+                                      type: type,
+                                      replyTo: replying,
+                                    );
+                                  }
+                                  if (mounted) setState(() => _pendingAttachments.clear());
+                                }
+
+                                if (hasVoice) {
+                                  // gửi voice draft và tự clear reply trong _sendVoiceDraft()
+                                  // nên tắt sending trước để _sendVoiceDraft() chạy đúng:
+                                  if (mounted) setState(() => _sending = false);
+                                  await _sendVoiceDraft();
+                                  return;
+                                }
+
+                                if (mounted) {
+                                  setState(() => _replyTo = null);
+                                }
+                                _scrollToBottom();
+                              } finally {
+                                if (mounted) setState(() => _sending = false);
+                              }
+                            },
                           ),
                         ],
                       ),
@@ -3017,4 +3349,12 @@ class _IncomingButton extends StatelessWidget {
       ],
     );
   }
+}
+enum _AttachmentType { image, video, file }
+
+class _PendingAttachment {
+  final String path;
+  final _AttachmentType type;
+
+  const _PendingAttachment({required this.path, required this.type});
 }
