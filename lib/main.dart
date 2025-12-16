@@ -88,7 +88,6 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/ice_ca
 import 'package:flutter_sixvalley_ecommerce/features/social/push/callkit_service.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/push/remote_rtc_log.dart';
 
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/incoming_call_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/call_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/call_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/webrtc_signaling_repository.dart';
@@ -238,11 +237,7 @@ Future<void> myBackgroundMessageHandler(RemoteMessage message) async {
           return;
         }
 
-        if (Platform.isAndroid) {
-          await SocialCallPushHandler.I.showIncomingCallNotification(data);
-        } else if (Platform.isIOS) {
-          await CallkitService.I.showIncomingCall(data);
-        }
+        await CallkitService.I.showIncomingCall(data);
       }
       print('? [BG] Show incoming call (platform-specific)');
     }
@@ -380,45 +375,8 @@ class CallUiConfig {
 }
 
 void _handleCallInviteOpen(Map<String, dynamic> data) {
-  if (CallUiConfig.useSystemIncomingUI) {
-    // Ðã có CallKit/ConnectionService lo UI. Không m? IncomingCallScreen Flutter n?a.
-    debugPrint('?? Skip IncomingCallScreen (system UI in use)');
-    return;
-  }
-
-  if (_incomingCallRouting) return;
-  _incomingCallRouting = true;
-
-  final nav = navigatorKey.currentState;
-  if (nav == null) {
-    _incomingCallRouting = false;
-    return;
-  }
-
-  final callIdStr = data['call_id']?.toString();
-  final callId = int.tryParse(callIdStr ?? '');
-  final media = (data['media']?.toString() == 'video') ? 'video' : 'audio';
-
-  if (callId == null) {
-    _incomingCallRouting = false;
-    return;
-  }
-
-  final callerName = data['caller_name']?.toString();
-  final callerAvatar = data['caller_avatar']?.toString();
-
-  nav
-      .push(
-        MaterialPageRoute(
-          builder: (_) => IncomingCallScreen(
-            callId: callId,
-            mediaType: media,
-            callerName: callerName ?? 'Cu?c g?i d?n',
-            callerAvatar: callerAvatar,
-          ),
-        ),
-      )
-      .whenComplete(() => _incomingCallRouting = false);
+  // Đã dùng CallKit/ConnectionService, không mở IncomingCallScreen Flutter nữa.
+  debugPrint('?? Skip IncomingCallScreen (system UI in use)');
 }
 
 // ===== GROUP: open UI khi c? l?i m?i nh?m =====
@@ -464,7 +422,7 @@ void _handleGroupCallInviteOpen(Map<String, dynamic> data) {
             groupId: groupId,
             mediaType: media,
             callId: callId,
-            groupName: groupName ?? 'Cu?c g?i nh?m',
+            groupName: groupName ?? 'Cuộc gọi nhóm',
           ),
         ),
       )

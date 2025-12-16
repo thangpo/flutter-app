@@ -39,9 +39,14 @@ class SocialFriend {
     final String? lastSeenText =
     (j['lastseen_time_text'] ?? j['last_seen_text'])?.toString();
 
-    /// ✅ CHỈ DÙNG unread NẾU BACKEND TRẢ RÕ
-    final bool hasUnread =
-        j['unread'] == 1 || j['unread'] == '1';
+    int unreadCount = 0;
+    final unreadRaw = j['unread'] ?? j['unread_count'];
+    if (unreadRaw is num) {
+      unreadCount = unreadRaw.toInt();
+    } else if (unreadRaw is String) {
+      unreadCount = int.tryParse(unreadRaw) ?? 0;
+    }
+    final bool hasUnread = unreadCount > 0;
 
     String? lastMessageText;
     final lastMsgRaw = j['last_message'];
