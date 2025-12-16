@@ -17,21 +17,17 @@ class SocialFriendsController extends GetxController {
   final friends = <SocialFriend>[].obs;
   final filtered = <SocialFriend>[].obs;
 
-  /// [context] để lấy currentUser từ Provider<SocialController> (nếu có)
   Future<void> load(String accessToken,
       {BuildContext? context, String? userId}) async {
     isLoading.value = true;
 
-    // 1) Ưu tiên userId truyền vào
     String? uid = userId;
 
-    // 2) Thử lấy từ SharedPreferences
     if (uid == null || uid.isEmpty) {
       final sp = await SharedPreferences.getInstance();
       uid = sp.getString(AppConstants.socialUserId);
     }
 
-    // 3) Nếu vẫn chưa có, thử lấy từ SocialController.currentUser
     if ((uid == null || uid.isEmpty) && context != null) {
       try {
         final sc = Provider.of<SocialController>(context, listen: false);
@@ -42,7 +38,7 @@ class SocialFriendsController extends GetxController {
     final raw = await repo.fetchFriends(token: accessToken, userId: uid);
 
     final list =
-        raw.map<SocialFriend>((e) => SocialFriend.fromWowonder(e)).toList();
+    raw.map<SocialFriend>((e) => SocialFriend.fromWowonder(e)).toList();
 
     friends.assignAll(list);
     filtered.assignAll(list);
@@ -54,8 +50,24 @@ class SocialFriendsController extends GetxController {
       filtered.assignAll(friends);
     } else {
       final k = q.toLowerCase();
-      filtered
-          .assignAll(friends.where((u) => u.name.toLowerCase().contains(k)));
+      filtered.assignAll(
+        friends.where((u) => u.name.toLowerCase().contains(k)),
+      );
+    }
+  }
+
+  /// ✅ MARK READ CHUẨN
+  void markRead(String userId) {
+    final i = friends.indexWhere((e) => e.id == userId);
+    if (i != -1) {
+      friends[i] = friends[i].copyWith(hasUnread: false);
+      friends.refresh();
+    }
+
+    final fi = filtered.indexWhere((e) => e.id == userId);
+    if (fi != -1) {
+      filtered[fi] = filtered[fi].copyWith(hasUnread: false);
+      filtered.refresh();
     }
   }
 }

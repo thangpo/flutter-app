@@ -1,9 +1,9 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
-
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_friends_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_friends_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_friend.dart';
@@ -18,7 +18,14 @@ import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_ch
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_group_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/group_chats_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/chat_preview_helper.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/widgets/create_story_tile.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_story_viewer_screen.dart';
+
+
 
 class FriendsListScreen extends StatefulWidget {
   final String accessToken;
@@ -31,33 +38,73 @@ class FriendsListScreen extends StatefulWidget {
 }
 
 class _FriendsListScreenState extends State<FriendsListScreen> {
-  final friendsCtrl =
-      Get.put(SocialFriendsController(SocialFriendsRepository()));
+  final friendsCtrl = Get.put(SocialFriendsController(SocialFriendsRepository()));
   final _chatRepo = SocialChatRepository();
   final searchCtrl = TextEditingController();
 
   int _tabIndex = 0;
   int chatBadgeCount = 1;
   bool notifDot = true;
-
-  // ✅ static: giữ lại dữ liệu ngay cả khi màn này bị dispose rồi tạo lại
+  Timer? _pollTimer;
   static final Map<String, int> _localLastActivity = {};
   final Map<String, String> _lastTextCache = {};
+  static final Map<String, int> _localLastRead = {};
   final Map<String, int> _lastTimeCache = {};
 
   @override
   void initState() {
     super.initState();
     friendsCtrl.load(widget.accessToken, context: context);
+
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      _refreshLatestChats();
+    });
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    searchCtrl.dispose();
+    super.dispose();
+  }
+
+  int _getLastMessageTs(SocialFriend u) {
+    final cached = _lastTimeCache[u.id];
+    if (cached != null && cached > 0) {
+      return _normalizedTimestamp(cached) ?? 0;
+    }
+    if (u.lastMessageTime != null && u.lastMessageTime! > 0) {
+      return _normalizedTimestamp(u.lastMessageTime!) ?? 0;
+    }
+    return 0;
+  }
+
+  Map<String, SocialStory> _storyByUserId(List<SocialStory> stories) {
+    final Map<String, SocialStory> map = {};
+    for (final s in stories) {
+      final uid = s.userId;
+      if (uid != null && uid.isNotEmpty && s.items.isNotEmpty) {
+        map[uid] = s;
+      }
+    }
+    return map;
+  }
+
+  bool _hasUnviewedStory(SocialStory s) {
+    return s.items.any((e) => e.isViewed == false);
+  }
+
+  bool _isUnread(SocialFriend u) {
+    final lastMsgTs = _getLastMessageTs(u);
+    final lastReadTs = _localLastRead[u.id] ?? 0;
+    return lastMsgTs > lastReadTs;
   }
 
   Future<void> _onRefresh() async {
     await friendsCtrl.load(widget.accessToken, context: context);
   }
 
-  /// So sánh để sort theo thời gian tin nhắn/hoạt động cuối (mới nhất lên trên)
   int _compareByLastMessage(SocialFriend a, SocialFriend b) {
-    // ✅ lấy timestamp local nếu có (chỉ set khi thực sự có tin mới)
     final taLocal = _localLastActivity[a.id.toString()];
     final tbLocal = _localLastActivity[b.id.toString()];
 
@@ -65,20 +112,17 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
     final tb = tbLocal ?? b.lastMessageTime ?? 0;
 
     if (ta == 0 && tb == 0) return 0;
-    return tb.compareTo(ta); // m?i nh?t l�n tr�n
+    return tb.compareTo(ta);
   }
 
-  // Convert timestamp (s or ms) to seconds
   int? _normalizedTimestamp(int? ts) {
     if (ts == null || ts <= 0) return null;
     if (ts > 2000000000) {
-      // looks like milliseconds
       return ts ~/ 1000;
     }
     return ts;
   }
 
-  // Format time label for list items
   String _formatTimeLabel(SocialFriend u) {
     final ts = _normalizedTimestamp(_lastTimeCache[u.id] ?? u.lastMessageTime);
     if (ts != null) {
@@ -103,9 +147,39 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
     return ls;
   }
 
+  Future<void> _refreshLatestChats() async {
+    final list = friendsCtrl.friends;
+
+    for (final u in list) {
+      try {
+        final msgs = await _chatRepo.getUserMessages(
+          token: widget.accessToken,
+          peerUserId: u.id,
+          limit: 1,
+        );
+
+        if (msgs.isEmpty) continue;
+
+        final m = msgs.last;
+        final tsRaw = m['time'] ?? m['timestamp'];
+        final ts = tsRaw is num ? tsRaw.toInt() : int.tryParse('$tsRaw') ?? 0;
+        final normalizedTs = _normalizedTimestamp(ts) ?? 0;
+        final currentTs = _getLastMessageTs(u);
+
+        if (normalizedTs > currentTs) {
+          setState(() {
+            _lastTimeCache[u.id] = ts;
+            _lastTextCache[u.id] =
+                (m['display_text'] ?? pickWoWonderText(m)).toString();
+          });
+        }
+      } catch (_) {}
+    }
+  }
+
   Future<void> _loadLatestIfMissing(SocialFriend u) async {
     if (_lastTextCache.containsKey(u.id)) return;
-    _lastTextCache[u.id] = ''; // mark loading
+    _lastTextCache[u.id] = '';
     try {
       final msgs = await _chatRepo.getUserMessages(
         token: widget.accessToken,
@@ -136,7 +210,7 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
         });
       }
     } catch (_) {
-      // ignore errors, fallback to existing data
+
     }
   }
 
@@ -144,6 +218,9 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final bottomInset = MediaQuery.of(context).padding.bottom;
+    final socialCtrl = context.watch<SocialController>();
+    final Map<String, SocialStory> storyMap =
+    _storyByUserId(socialCtrl.stories);
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -158,9 +235,6 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
               Images.logoWithNameImage,
               height: 35,
             ),
-            // nếu muốn chừa MenuWidget cạnh logo thì bật đoạn dưới
-            // const SizedBox(width: 8),
-            // const MenuWidget(),
           ],
         ),
       ),
@@ -211,14 +285,13 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 🔍 ô tìm kiếm dạng pill
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
             child: TextField(
               controller: searchCtrl,
               onChanged: friendsCtrl.search,
               decoration: InputDecoration(
-                hintText: 'Tìm kiếm',
+                hintText: getTranslated('search', context) ?? 'Search',
                 prefixIcon: const Icon(Icons.search),
                 filled: true,
                 fillColor: cs.surfaceVariant.withOpacity(.5),
@@ -230,8 +303,6 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
               ),
             ),
           ),
-
-          // 👥 dải avatar ngang (story-style) + "Tạo tin" đầu tiên
           SizedBox(
             height: 106,
             child: Obx(() {
@@ -245,18 +316,40 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
               return ListView.separated(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 10),
-                itemCount: list.length + 1, // +1 cho Ã´ "Táº¡o tin"
+                itemCount: list.length + 1,
                 separatorBuilder: (_, __) => const SizedBox(width: 10),
                 itemBuilder: (_, i) {
                   if (i == 0) {
-                    return const _CreateStoryTile();
+                    return const CreateStoryTile(size: 56);
                   }
+
                   final u = list[i - 1];
-                  return _AvatarStoryTile(
+                  final SocialStory? story = storyMap[u.id];
+
+                  return StoryAvatarTile(
                     name: u.name,
                     avatar: u.avatar,
                     online: u.isOnline,
-                    onTap: () => _openChat(u),
+                    story: story,
+                    onTap: () {
+                      if (story != null && story.items.isNotEmpty) {
+                        final stories = storyMap.values.toList();
+                        final storyIndex = stories.indexOf(story);
+                        final itemIndex =
+                        story.items.indexWhere((e) => e.isViewed == false);
+
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => SocialStoryViewerScreen(
+                              stories: stories,
+                              initialStoryIndex: storyIndex < 0 ? 0 : storyIndex,
+                              initialItemIndex: itemIndex < 0 ? 0 : itemIndex,
+                            ),
+                          ),
+                        );
+                      }
+                    },
                   );
                 },
               );
@@ -265,7 +358,6 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
 
           const SizedBox(height: 8),
 
-          // 📜 danh sách đoạn chat
           Expanded(
             child: Obx(() {
               final list = List<SocialFriend>.from(friendsCtrl.filtered);
@@ -293,14 +385,13 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                         itemCount: list.length,
                         itemBuilder: (_, i) {
                           final u = list[i];
-
-                          // preview: ưu tiên tin nhắn (cache/fetch), fallback sang trạng thái khi không có
+                          final bool unread = _isUnread(u);
                           _loadLatestIfMissing(u);
                           final cachedText = _lastTextCache[u.id] ?? '';
-                          final messagePreview = (cachedText.isNotEmpty
-                                  ? cachedText
-                                  : (u.lastMessageText ?? ''))
-                              .trim();
+                          final rawPreview =
+                          (cachedText.isNotEmpty ? cachedText : (u.lastMessageText ?? '')).trim();
+
+                          final messagePreview = normalizeChatPreview(rawPreview, context);
                           final statusFallback = u.isOnline
                               ? getTranslated('active_now', context) ?? ''
                               : (u.lastSeen ?? '').trim();
@@ -309,25 +400,69 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                               : statusFallback;
                           final rawTime = _formatTimeLabel(u).trim();
                           final timeLabel = rawTime.isNotEmpty ? rawTime : ' ';
+                          final SocialStory? story = storyMap[u.id];
 
-                          return InkWell(
-                            onTap: () => _openChat(u),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 8),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  _ChatAvatar(
-                                    url: u.avatar,
-                                    online: u.isOnline,
-                                    label: u.name,
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                /// ===== AVATAR: XEM STORY =====
+                                GestureDetector(
+                                  onTap: () {
+                                    final SocialStory? story = storyMap[u.id];
+                                    if (story != null && story.items.isNotEmpty) {
+                                      final stories = storyMap.values.toList();
+                                      final storyIndex = stories.indexOf(story);
+                                      final itemIndex =
+                                      story.items.indexWhere((e) => e.isViewed == false);
+
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => SocialStoryViewerScreen(
+                                            stories: stories,
+                                            initialStoryIndex: storyIndex < 0 ? 0 : storyIndex,
+                                            initialItemIndex: itemIndex < 0 ? 0 : itemIndex,
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  child: Stack(
+                                    clipBehavior: Clip.none,
+                                    children: [
+                                      StoryChatAvatar(
+                                        avatar: u.avatar,
+                                        label: u.name,
+                                        online: u.isOnline,
+                                        story: storyMap[u.id], // ⭐ border story
+                                      ),
+                                      if (unread)
+                                        Positioned(
+                                          right: -2,
+                                          top: -2,
+                                          child: Container(
+                                            width: 10,
+                                            height: 10,
+                                            decoration: const BoxDecoration(
+                                              color: Colors.blue,
+                                              shape: BoxShape.circle,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
                                   ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
+                                ),
+
+                                const SizedBox(width: 12),
+
+                                /// ===== TEXT AREA: MỞ CHAT =====
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: () => _openChat(u), // ⭐ MỞ CHAT
                                     child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Row(
                                           children: [
@@ -337,7 +472,8 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                                                 maxLines: 1,
                                                 overflow: TextOverflow.ellipsis,
                                                 style: TextStyle(
-                                                  fontWeight: FontWeight.w700,
+                                                  fontWeight:
+                                                  unread ? FontWeight.w700 : FontWeight.w500,
                                                   color: cs.onSurface,
                                                   fontSize: 15.5,
                                                 ),
@@ -347,8 +483,7 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                                               Text(
                                                 timeLabel,
                                                 style: TextStyle(
-                                                  color: cs.onSurface
-                                                      .withOpacity(.55),
+                                                  color: cs.onSurface.withOpacity(.55),
                                                   fontSize: 11.5,
                                                 ),
                                               ),
@@ -360,15 +495,19 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
-                                            color: cs.onSurface.withOpacity(.7),
+                                            color: unread
+                                                ? cs.onSurface
+                                                : cs.onSurface.withOpacity(.6),
                                             fontSize: 13,
+                                            fontWeight:
+                                            unread ? FontWeight.w600 : FontWeight.w400,
                                           ),
                                         ),
                                       ],
                                     ),
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           );
                         },
@@ -381,8 +520,15 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
     );
   }
 
-  // ✅ chỉ update khi ChatScreen trả về true (thực sự có tin mới)
   void _openChat(SocialFriend u) {
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+    setState(() {
+      _localLastRead[u.id] = now;
+    });
+
+    friendsCtrl.markRead(u.id);
+
     Navigator.push<bool>(
       context,
       MaterialPageRoute(
@@ -393,21 +539,10 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
           peerAvatar: u.avatar,
         ),
       ),
-    ).then((hasNewMessage) {
-      if (hasNewMessage == true) {
-        final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-        setState(() {
-          _localLastActivity[u.id.toString()] = now;
-        });
-
-        // optional: reload từ server để preview/time chuẩn dữ liệu backend
-        friendsCtrl.load(widget.accessToken, context: context);
-      }
-    });
+    );
   }
 }
 
-/* ===== FOOTER (Messenger style – floating iOS-like) ===== */
 class _MessengerFooter extends StatelessWidget {
   final int currentIndex;
   final int chatBadgeCount;
@@ -506,7 +641,7 @@ class _MessengerFooter extends StatelessWidget {
             item(
               index: 1,
               icon: Icons.flag_outlined,
-              label: 'Pages',
+              label: getTranslated('pages', context) ?? 'Pages',
             ),
             item(
               index: 2,
@@ -562,8 +697,6 @@ class _Dot extends StatelessWidget {
   }
 }
 
-/* ===== Avatar components & skeletons ===== */
-
 class _CreateStoryTile extends StatelessWidget {
   const _CreateStoryTile();
 
@@ -588,7 +721,7 @@ class _CreateStoryTile extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Tạo tin',
+            getTranslated('create_story', context) ?? 'Create story',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: 12.5, color: cs.onSurface),
@@ -770,6 +903,170 @@ class _MessengerSkeleton extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class StoryChatAvatar extends StatelessWidget {
+  final String? avatar;
+  final String label;
+  final bool online;
+  final SocialStory? story;
+
+  const StoryChatAvatar({
+    super.key,
+    required this.avatar,
+    required this.label,
+    required this.online,
+    this.story,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final bool hasStory = story != null && story!.items.isNotEmpty;
+    final bool hasUnviewed = hasStory && story!.items.any((e) => e.isViewed == false);
+
+    return Stack(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(2.5),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: hasStory
+                ? const LinearGradient(
+              colors: [
+                Color(0xFF1877F2),
+                Color(0xFF9C27B0),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            )
+                : LinearGradient(
+              colors: [
+                cs.surfaceVariant,
+                cs.surfaceVariant,
+              ],
+            ),
+          ),
+          child: CircleAvatar(
+            radius: 26,
+            backgroundColor: cs.surfaceVariant,
+            backgroundImage:
+            (avatar != null && avatar!.isNotEmpty)
+                ? NetworkImage(avatar!)
+                : null,
+            child: (avatar == null || avatar!.isEmpty)
+                ? Text(
+              label.isNotEmpty ? label[0] : '?',
+              style: TextStyle(
+                color: cs.onSurface,
+                fontWeight: FontWeight.bold,
+              ),
+            )
+                : null,
+          ),
+        ),
+
+        Positioned(
+          right: 0,
+          bottom: 0,
+          child: Container(
+            width: 14,
+            height: 14,
+            decoration: BoxDecoration(
+              color: online ? Colors.green : cs.surfaceVariant,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                width: 2,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class StoryAvatarTile extends StatelessWidget {
+  final String name;
+  final String? avatar;
+  final bool online;
+  final SocialStory? story;
+  final VoidCallback? onTap;
+
+  const StoryAvatarTile({
+    super.key,
+    required this.name,
+    required this.avatar,
+    required this.online,
+    this.story,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final bool hasStory = story != null && story!.items.isNotEmpty;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: SizedBox(
+        width: 74,
+        child: Column(
+          children: [
+            /// ===== AVATAR + STORY BORDER =====
+            Container(
+              padding: const EdgeInsets.all(2.5),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: hasStory
+                    ? const LinearGradient(
+                  colors: [
+                    Color(0xFF1877F2), // Facebook blue
+                    Color(0xFF9C27B0), // Purple
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+                    : null,
+              ),
+              child: CircleAvatar(
+                radius: 26,
+                backgroundColor: cs.surfaceVariant,
+                backgroundImage:
+                (avatar != null && avatar!.isNotEmpty)
+                    ? NetworkImage(avatar!)
+                    : null,
+                child: (avatar == null || avatar!.isEmpty)
+                    ? Text(
+                  name.isNotEmpty ? name[0] : '?',
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.bold,
+                  ),
+                )
+                    : null,
+              ),
+            ),
+
+            const SizedBox(height: 6),
+
+            /// ===== NAME =====
+            Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12.5,
+                color: cs.onSurface,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
