@@ -8,11 +8,14 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_list
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/group_chats_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/chat_page_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:flutter_sixvalley_ecommerce/features/dashboard/screens/dashboard_chat_screen.dart';
 
 class PageMessagesScreen extends StatefulWidget {
   final String accessToken;
+  final bool showFooterNav;
 
-  const PageMessagesScreen({super.key, required this.accessToken});
+  const PageMessagesScreen(
+      {super.key, required this.accessToken, this.showFooterNav = true});
 
   @override
   State<PageMessagesScreen> createState() => _PageMessagesScreenState();
@@ -92,7 +95,8 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                           color: cs.primary.withOpacity(.18),
                           shape: BoxShape.circle,
                         ),
-                        child: Icon(Icons.chat_bubble_outline, color: cs.primary),
+                        child:
+                            Icon(Icons.chat_bubble_outline, color: cs.primary),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -109,7 +113,7 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                             ),
                             Text(
                               getTranslated(
-                                  'page_messages_subtitle', context) ??
+                                      'page_messages_subtitle', context) ??
                                   'Theo dõi hội thoại khách hàng và Page của bạn',
                               style: TextStyle(
                                 fontSize: 12,
@@ -128,17 +132,17 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
                     hintText:
-                    getTranslated('search_page_conversation', context) ??
-                        'Tìm kiếm hội thoại hoặc tên Page',
+                        getTranslated('search_page_conversation', context) ??
+                            'Tìm kiếm hội thoại hoặc tên Page',
                     prefixIcon: const Icon(Icons.search),
                     suffixIcon: _searchCtrl.text.isNotEmpty
                         ? IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () {
-                        _searchCtrl.clear();
-                        setState(() {});
-                      },
-                    )
+                            icon: const Icon(Icons.close),
+                            onPressed: () {
+                              _searchCtrl.clear();
+                              setState(() {});
+                            },
+                          )
                         : null,
                     filled: true,
                     fillColor: cs.surfaceVariant.withOpacity(.35),
@@ -159,7 +163,7 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                     const SizedBox(width: 8),
                     _MiniTabChip(
                       label:
-                      getTranslated('my_pages', context) ?? 'Page của tôi',
+                          getTranslated('my_pages', context) ?? 'Page của tôi',
                       selected: _tabIndex == 1,
                       onTap: () => setState(() => _tabIndex = 1),
                     ),
@@ -174,255 +178,257 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
             child: pageCtrl.loadingPageChatList
                 ? const Center(child: CircularProgressIndicator())
                 : RefreshIndicator(
-              onRefresh: () => pageCtrl.refreshPageChatList(),
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 8),
-                itemCount: threads.length,
-                itemBuilder: (_, index) {
-                  final item = threads[index];
+                    onRefresh: () => pageCtrl.refreshPageChatList(),
+                    child: ListView.builder(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      itemCount: threads.length,
+                      itemBuilder: (_, index) {
+                        final item = threads[index];
 
-                  // TAB FILTER
-                  if (_tabIndex == 1 && !item.isMyPage) {
-                    return const SizedBox.shrink();
-                  }
+                        // TAB FILTER
+                        if (_tabIndex == 1 && !item.isMyPage) {
+                          return const SizedBox.shrink();
+                        }
 
-                  final bool isOwner = item.isMyPage;
-                  final String displayName = isOwner
-                      ? (item.peerName.isNotEmpty
-                      ? item.peerName
-                      : item.pageTitle)
-                      : item.pageTitle;
-                  final String subtitle =
-                  isOwner ? '(${item.pageName})' : '@${item.pageName}';
-                  final String avatarUrl =
-                  isOwner && item.peerAvatar.isNotEmpty
-                      ? item.peerAvatar
-                      : item.avatar;
-                  final String avatarFallback = displayName.isNotEmpty
-                      ? displayName[0].toUpperCase()
-                      : '?';
+                        final bool isOwner = item.isMyPage;
+                        final String displayName = isOwner
+                            ? (item.peerName.isNotEmpty
+                                ? item.peerName
+                                : item.pageTitle)
+                            : item.pageTitle;
+                        final String subtitle = isOwner
+                            ? '(${item.pageName})'
+                            : '@${item.pageName}';
+                        final String avatarUrl =
+                            isOwner && item.peerAvatar.isNotEmpty
+                                ? item.peerAvatar
+                                : item.avatar;
+                        final String avatarFallback = displayName.isNotEmpty
+                            ? displayName[0].toUpperCase()
+                            : '?';
 
-                  final String chatTitle = item.isMyPage
-                      ? (item.peerName.isNotEmpty
-                      ? item.peerName
-                      : item.pageTitle)
-                      : item.pageTitle;
-                  final String chatAvatar =
-                  item.isMyPage && item.peerAvatar.isNotEmpty
-                      ? item.peerAvatar
-                      : item.avatar;
+                        final String chatTitle = item.isMyPage
+                            ? (item.peerName.isNotEmpty
+                                ? item.peerName
+                                : item.pageTitle)
+                            : item.pageTitle;
+                        final String chatAvatar =
+                            item.isMyPage && item.peerAvatar.isNotEmpty
+                                ? item.peerAvatar
+                                : item.avatar;
 
-                  return InkWell(
-                    onTap: () {
-                      final recipientId =
-                      item.isMyPage ? item.userId : item.ownerId;
+                        return InkWell(
+                          onTap: () {
+                            final recipientId =
+                                item.isMyPage ? item.userId : item.ownerId;
 
-                      context
-                          .read<SocialPageController>()
-                          .markPageThreadRead(
-                        item.pageId,
-                        peerId: recipientId,
-                      );
+                            context
+                                .read<SocialPageController>()
+                                .markPageThreadRead(
+                                  item.pageId,
+                                  peerId: recipientId,
+                                );
 
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => PageChatScreen(
-                            pageId: int.parse(item.pageId),
-                            recipientId: recipientId,
-                            pageTitle: chatTitle,
-                            pageAvatar: chatAvatar,
-                            pageSubtitle: subtitle,
-                          ),
-                        ),
-                      );
-                    },
-                    child: Container(
-                      padding:
-                      const EdgeInsets.symmetric(vertical: 10),
-                      color: Colors.transparent,
-                      child: Row(
-                        children: [
-                          // AVATAR
-                          Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              CircleAvatar(
-                                radius: 28,
-                                backgroundImage: avatarUrl.isNotEmpty
-                                    ? NetworkImage(avatarUrl)
-                                    : null,
-                                backgroundColor: Theme.of(context)
-                                    .colorScheme
-                                    .surfaceVariant
-                                    .withOpacity(.3),
-                                child: avatarUrl.isEmpty
-                                    ? Text(
-                                  avatarFallback,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 18,
-                                  ),
-                                )
-                                    : null,
-                              ),
-                              if (item.isMyPage)
-                                Positioned(
-                                  right: -2,
-                                  bottom: -2,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(2),
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .primary,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: Theme.of(context)
-                                            .scaffoldBackgroundColor,
-                                        width: 2.5,
-                                      ),
-                                    ),
-                                    child: const Icon(
-                                      Icons.check,
-                                      size: 13,
-                                      color: Colors.white,
-                                    ),
-                                  ),
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => PageChatScreen(
+                                  pageId: int.parse(item.pageId),
+                                  recipientId: recipientId,
+                                  pageTitle: chatTitle,
+                                  pageAvatar: chatAvatar,
+                                  pageSubtitle: subtitle,
                                 ),
-                            ],
-                          ),
-
-                          const SizedBox(width: 14),
-
-                          // INFO
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment:
-                              CrossAxisAlignment.start,
+                              ),
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            color: Colors.transparent,
+                            child: Row(
                               children: [
-                                Row(
+                                // AVATAR
+                                Stack(
+                                  clipBehavior: Clip.none,
                                   children: [
-                                    Expanded(
-                                      child: Text(
-                                        displayName,
+                                    CircleAvatar(
+                                      radius: 28,
+                                      backgroundImage: avatarUrl.isNotEmpty
+                                          ? NetworkImage(avatarUrl)
+                                          : null,
+                                      backgroundColor: Theme.of(context)
+                                          .colorScheme
+                                          .surfaceVariant
+                                          .withOpacity(.3),
+                                      child: avatarUrl.isEmpty
+                                          ? Text(
+                                              avatarFallback,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 18,
+                                              ),
+                                            )
+                                          : null,
+                                    ),
+                                    if (item.isMyPage)
+                                      Positioned(
+                                        right: -2,
+                                        bottom: -2,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(2),
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primary,
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                              color: Theme.of(context)
+                                                  .scaffoldBackgroundColor,
+                                              width: 2.5,
+                                            ),
+                                          ),
+                                          child: const Icon(
+                                            Icons.check,
+                                            size: 13,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+
+                                const SizedBox(width: 14),
+
+                                // INFO
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              displayName,
+                                              style: TextStyle(
+                                                fontSize: 15.5,
+                                                fontWeight: item.unreadCount > 0
+                                                    ? FontWeight.w700
+                                                    : FontWeight.w600,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          Text(
+                                            item.lastMessageTime,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurface
+                                                  .withOpacity(.6),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        subtitle,
                                         style: TextStyle(
-                                          fontSize: 15.5,
-                                          fontWeight:
-                                          item.unreadCount > 0
-                                              ? FontWeight.w700
-                                              : FontWeight.w600,
+                                          fontSize: 13,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurface
+                                              .withOpacity(.7),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        item.lastMessage,
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: item.unreadCount > 0
+                                              ? FontWeight.w600
+                                              : FontWeight.w400,
+                                          color: item.unreadCount > 0
+                                              ? Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurface
+                                              : Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurface
+                                                  .withOpacity(.8),
                                         ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
-                                    ),
-                                    Text(
-                                      item.lastMessageTime,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurface
-                                            .withOpacity(.6),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  subtitle,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurface
-                                        .withOpacity(.7),
+                                    ],
                                   ),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  item.lastMessage,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: item.unreadCount > 0
-                                        ? FontWeight.w600
-                                        : FontWeight.w400,
-                                    color: item.unreadCount > 0
-                                        ? Theme.of(context)
-                                        .colorScheme
-                                        .onSurface
-                                        : Theme.of(context)
-                                        .colorScheme
-                                        .onSurface
-                                        .withOpacity(.8),
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ],
                             ),
                           ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
-            ),
+                  ),
           ),
         ],
       ),
 
       // FOOTER NAV
-      bottomNavigationBar: Padding(
-        padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          bottom: 8 + bottomInset,
-        ),
-        child: _GroupFooterNav(
-          currentIndex: 1, // màn Page messages
-          chatBadgeCount: 0,
-          showNotifDot: false,
-          onTap: (i) {
-            if (i == 1) return; // đang ở tab Pages rồi
-
-            if (i == 0) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      FriendsListScreen(accessToken: widget.accessToken),
-                ),
-              );
-              return;
-            }
-
-            if (i == 2) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      GroupChatsScreen(accessToken: widget.accessToken),
-                ),
-              );
-              return;
-            }
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  getTranslated(
-                      'navigation_not_implemented', context) ??
-                      'Chưa gắn điều hướng cho tab $i',
-                ),
+      bottomNavigationBar: widget.showFooterNav
+          ? Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                bottom: 8 + bottomInset,
               ),
-            );
-          },
-        ),
-      ),
+              child: _GroupFooterNav(
+                currentIndex: 1, // màn Page messages
+                chatBadgeCount: 0,
+                showNotifDot: false,
+                onTap: (i) {
+                  if (i == 1) return; // đang ở tab Pages rồi
+
+                  if (i == 0) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            FriendsListScreen(accessToken: widget.accessToken),
+                      ),
+                    );
+                    return;
+                  }
+
+                  if (i == 2) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => DashboardChatScreen(
+                          accessToken: widget.accessToken,
+                          initialIndex: 2,
+                        ),
+                      ),
+                    );
+                    return;
+                  }
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        getTranslated('navigation_not_implemented', context) ??
+                            'Chưa gắn điều hướng cho tab $i',
+                      ),
+                    ),
+                  );
+                },
+              ),
+            )
+          : null,
     );
   }
 }
@@ -577,8 +583,7 @@ class _GroupFooterNav extends StatelessWidget {
             item(
               index: 0,
               icon: Icons.chat_bubble,
-              label:
-              getTranslated('chat_section', context) ?? 'Đoạn chat',
+              label: getTranslated('chat_section', context) ?? 'Đoạn chat',
               badge: chatBadgeCount,
             ),
             item(
@@ -589,8 +594,7 @@ class _GroupFooterNav extends StatelessWidget {
             item(
               index: 2,
               icon: Icons.groups,
-              label:
-              getTranslated('group_chat', context) ?? 'Nhóm chat',
+              label: getTranslated('group_chat', context) ?? 'Nhóm chat',
               dot: showNotifDot,
             ),
             item(

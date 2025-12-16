@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +11,9 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/wowonder_text.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/chat_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_page_mess.dart';
+import 'package:flutter_sixvalley_ecommerce/features/dashboard/screens/dashboard_chat_screen.dart';
+
+// nhóm chat
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_chat_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_group_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/group_chats_screen.dart';
@@ -26,7 +29,9 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_story
 
 class FriendsListScreen extends StatefulWidget {
   final String accessToken;
-  const FriendsListScreen({super.key, required this.accessToken});
+  final bool showFooterNav;
+  const FriendsListScreen(
+      {super.key, required this.accessToken, this.showFooterNav = true});
 
   @override
   State<FriendsListScreen> createState() => _FriendsListScreenState();
@@ -119,8 +124,7 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
   }
 
   String _formatTimeLabel(SocialFriend u) {
-    final ts = _normalizedTimestamp(
-        _lastTimeCache[u.id] ?? u.lastMessageTime);
+    final ts = _normalizedTimestamp(_lastTimeCache[u.id] ?? u.lastMessageTime);
     if (ts != null) {
       final dt = DateTime.fromMillisecondsSinceEpoch(ts * 1000);
       final now = DateTime.now();
@@ -236,39 +240,47 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
       ),
       floatingActionButton: null,
 
-      bottomNavigationBar: Padding(
-        padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          bottom: 8 + bottomInset,
-        ),
-        child: _MessengerFooter(
-          currentIndex: _tabIndex,
-          chatBadgeCount: chatBadgeCount,
-          showNotifDot: notifDot,
-          onTap: (i) {
-            setState(() => _tabIndex = i);
+      /// ✅ Thanh tab bar dạng "floating capsule"
+      bottomNavigationBar: widget.showFooterNav
+          ? Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                bottom:
+                    8 + bottomInset, // chừa chỗ cho thanh điều hướng hệ thống
+              ),
+              child: _MessengerFooter(
+                currentIndex: _tabIndex,
+                chatBadgeCount: chatBadgeCount,
+                showNotifDot: notifDot,
+                onTap: (i) {
+                  setState(() => _tabIndex = i);
 
-            if (i == 1) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      PageMessagesScreen(accessToken: widget.accessToken),
-                ),
-              );
-            } else if (i == 2) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      GroupChatsScreen(accessToken: widget.accessToken),
-                ),
-              );
-            }
-          },
-        ),
-      ),
+                  if (i == 1) {
+                    // 👈 Tab STORIES → mở màn Trang / Tin nhắn Page
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            PageMessagesScreen(accessToken: widget.accessToken),
+                      ),
+                    );
+                  } else if (i == 2) {
+                    // Group chat như cũ
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => DashboardChatScreen(
+                          accessToken: widget.accessToken,
+                          initialIndex: 2,
+                        ),
+                      ),
+                    );
+                  }
+                },
+              ),
+            )
+          : null,
 
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
