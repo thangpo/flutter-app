@@ -1,16 +1,14 @@
-// G:\flutter-app\lib\features\social\screens\chat_screen.dart
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
-
 import 'package:audioplayers/audioplayers.dart';
 import 'package:encrypt/encrypt.dart' as enc;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Clipboard
+import 'package:flutter/services.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -18,28 +16,18 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:get/get.dart';
-
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_friends_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_friend.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/chat_info_screen.dart';
-
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_chat_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
-
-// Bubble + repo
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/chat_message_bubble.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_chat_repository.dart';
-
-// Call
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/call_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/push/callkit_service.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/call_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/incoming_call_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/call_invite.dart';
-
-// FCM Realtime
 import 'package:flutter_sixvalley_ecommerce/features/social/fcm/fcm_chat_handler.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -61,7 +49,6 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  // ============ Core ===============
   final repo = SocialChatRepository();
   final _inputCtrl = TextEditingController();
   final _scroll = ScrollController();
@@ -70,15 +57,10 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _loading = false;
   bool _sending = false;
   bool _hasMore = true;
-
-  /// ✅ dùng để báo ngược lại FriendsList: trong phiên này có tin mới hay không
   bool _hasNewMessage = false;
-
   String? _beforeId;
-
   late final String _peerId;
 
-  // =========== Recorder ==============
   final _recorder = FlutterSoundRecorder();
   bool _recReady = false;
   bool _recOn = false;
@@ -92,18 +74,10 @@ class _ChatScreenState extends State<ChatScreen> {
   Duration _voicePreviewDur = Duration.zero;
   final ImagePicker _picker = ImagePicker();
   List<_PendingAttachment> _pendingAttachments = [];
-
-  // UI scroll logic
   bool _showScrollToBottom = false;
   int _lastItemCount = 0;
-
-  // Tránh mở nhiều lần IncomingCall
   final Set<int> _handledIncoming = {};
-
-  // FCM realtime stream
   StreamSubscription? _fcmStream;
-
-  // ===== POLLING REALTIME (fallback nếu FCM không bắn) =====
   Timer? _pollTimer;
   bool _pollInFlight = false;
   Duration _pollInterval = const Duration(seconds: 5);
@@ -117,10 +91,7 @@ class _ChatScreenState extends State<ChatScreen> {
     6: '😡',
   };
 
-  /// Lưu reaction local: { messageId(String) : reactionId(int) }
   Map<String, int> _localReactions = {};
-
-  /// Tin nhắn đang được "trả lời"
   Map<String, dynamic>? _replyingToMessage;
 
   @override
@@ -129,13 +100,9 @@ class _ChatScreenState extends State<ChatScreen> {
     _peerId = widget.peerUserId;
 
     _initRecorder();
-    _loadLocalReactions(); // load map reaction local
+    _loadLocalReactions();
     _loadInitialMessages();
-
-    // Realtime từ FCM (nếu có)
     _listenRealtime();
-
-    // Polling fallback
     _startPolling();
 
     _scroll.addListener(_onScroll);
@@ -188,9 +155,6 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
-  // =================================================
-  // REACTIONS LOCAL STORAGE
-  // =================================================
   String get _reactionsStorageKey => 'chat_reactions_$_peerId';
 
   Future<void> _loadLocalReactions() async {
@@ -254,9 +218,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // =================================================
-  // REALTIME LISTENER (FCM)
-  // =================================================
   void _listenRealtime() {
     _fcmStream = FcmChatHandler.messagesStream.listen((evt) {
       if (evt.peerId != _peerId) return;
@@ -264,9 +225,6 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  // =================================================
-  // POLLING REALTIME (fallback)
-  // =================================================
   void _startPolling() {
     _stopPolling();
     _pollTimer = Timer.periodic(_pollInterval, (_) => _pollOnce());
@@ -283,16 +241,12 @@ class _ChatScreenState extends State<ChatScreen> {
 
     _pollInFlight = true;
     try {
-      // dùng cùng logic với FCM realtime
       await _reloadLatest();
     } finally {
       _pollInFlight = false;
     }
   }
 
-  // =================================================
-  // INITIAL LOAD
-  // =================================================
   Future<void> _loadInitialMessages() async {
     await _fetchNew();
     await repo.readChats(
@@ -302,9 +256,6 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollToBottom(immediate: true);
   }
 
-  // =================================================
-  // SCROLL
-  // =================================================
   void _onScroll() {
     if (!_scroll.hasClients) return;
 
@@ -320,10 +271,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // =================================================
-  // MESSAGE FETCHING
-  // =================================================
-
   Future<void> _reloadLatest() async {
     try {
       final list = await repo.getUserMessages(
@@ -334,7 +281,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
       list.sort((a, b) => (_msgId(a)).compareTo(_msgId(b)));
 
-      // merge + apply reactions local
       _mergeIncoming(list, toTail: true);
       _applyLocalReactionsToMessages();
 
@@ -415,9 +361,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // =================================================
-  // MERGE
-  // =================================================
   void _mergeIncoming(List<Map<String, dynamic>> incoming,
       {required bool toTail}) {
     if (incoming.isEmpty) return;
@@ -446,18 +389,11 @@ class _ChatScreenState extends State<ChatScreen> {
     _messages.sort((a, b) => _msgId(a).compareTo(_msgId(b)));
   }
 
-  // =================================================
-  // ID
-  // =================================================
   int _msgId(Map<String, dynamic> m) =>
       int.tryParse('${m['id'] ?? m['message_id'] ?? m['msg_id'] ?? ''}') ?? 0;
 
   String _msgIdStr(Map<String, dynamic> m) =>
       '${m['id'] ?? m['message_id'] ?? m['msg_id'] ?? ''}';
-
-  // =================================================
-  // SCROLL
-  // =================================================
   void _scrollToBottom({bool immediate = false}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scroll.hasClients) return;
@@ -476,9 +412,6 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  // =================================================
-  // SEND TEXT (có reply_id)
-  // =================================================
   Future<void> _sendText() async {
     final text = _inputCtrl.text.trim();
     final bool hasAttachments = _pendingAttachments.isNotEmpty;
@@ -555,7 +488,7 @@ class _ChatScreenState extends State<ChatScreen> {
         }
         setState(() {
           _hasNewMessage =
-              true; // ✅ đánh dấu: đã có tin nhắn mới trong phiên này
+              true;
           _pendingAttachments = [];
           _clearVoiceDraft();
         });
@@ -567,10 +500,6 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
   }
-
-  // =================================================
-  // FILE & VOICE
-  // =================================================
 
   Future<void> _pickAndSendFile() async {
     if (_sending) return;
@@ -992,17 +921,11 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // =================================================
-  // REFRESH
-  // =================================================
   Future<void> _onRefresh() async {
     await _fetchNew();
     await repo.readChats(token: widget.accessToken, peerUserId: _peerId);
   }
 
-  // =================================================
-  // CALL
-  // =================================================
   Future<void> _startCall(String mediaType) async {
     final call = context.read<CallController>();
 
@@ -1016,7 +939,6 @@ class _ChatScreenState extends State<ChatScreen> {
         calleeId: calleeId,
         mediaType: mediaType,
       );
-      // Đánh dấu call_id này đã được xử lý (để chính caller không nhận lại CallKit)
       CallkitService.I.markServerCallHandled(callId);
 
       final payload = {
@@ -1056,9 +978,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // =================================================
-  // DECRYPT
-  // =================================================
   String _plainTextOf(Map<String, dynamic> m) {
     final display = (m['display_text'] ?? '').toString();
     if (display.isNotEmpty) return display;
@@ -1100,10 +1019,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // =================================================
-  // REPLY HELPERS
-  // =================================================
-
   bool _hasReplyTag(Map<String, dynamic> m) {
     final v = m['reply_id'] ?? m['reply_to_id'] ?? (m['reply']?['id']);
     if (v == null) return false;
@@ -1125,16 +1040,12 @@ class _ChatScreenState extends State<ChatScreen> {
     return null;
   }
 
-  /// Header nhỏ: "Tran đã trả lời tin nhắn của chính mình" / "Bạn đã trả lời Tran" ...
-  /// Dòng text: "Bạn đã trả lời Tran" / "Tran đã trả lời tin nhắn của chính mình"
   Widget _buildReplyHeader({
     required Map<String, dynamic> message,
     Map<String, dynamic>? replyMsg,
     required bool isMe,
   }) {
     final peerName = widget.peerName ?? '';
-
-    // Đoán người được reply có phải chính người gửi message hay không
     bool repliedIsMe = false;
     if (replyMsg != null) {
       final rpPos = replyMsg['position'];
@@ -1183,7 +1094,7 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Align(
         alignment: isMe
             ? Alignment.centerRight
-            : Alignment.centerLeft, // dóng theo bubble
+            : Alignment.centerLeft,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1193,8 +1104,8 @@ class _ChatScreenState extends State<ChatScreen> {
               child: Text(
                 text,
                 style: const TextStyle(
-                  fontSize: 10, // chữ bé hơn 1 tẹo
-                  color: Colors.grey, // không nền, chỉ chữ xám
+                  fontSize: 10,
+                  color: Colors.grey,
                   fontStyle: FontStyle.italic,
                 ),
               ),
@@ -1205,15 +1116,14 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  /// Thanh nội dung tin nhắn được reply (quote)
   Widget _buildReplyPreview(
     Map<String, dynamic> replyMsg, {
     required bool isMe,
   }) {
     final text = _plainTextOf(replyMsg);
 
-    final bgColor = Colors.grey.shade200; // nền xám nhẹ
-    final maxWidth = MediaQuery.of(context).size.width * 0.6; // ~ nửa màn hình
+    final bgColor = Colors.grey.shade200;
+    final maxWidth = MediaQuery.of(context).size.width * 0.6;
 
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -1232,18 +1142,14 @@ class _ChatScreenState extends State<ChatScreen> {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               fontSize: 12,
-              color: Colors.black87, // chữ đen
-              fontStyle: FontStyle.italic, // nghiêng
+              color: Colors.black87,
+              fontStyle: FontStyle.italic,
             ),
           ),
         ),
       ),
     );
   }
-
-  // =================================================
-  // REACTION + ACTION HANDLERS
-  // =================================================
 
   Future<void> _onLongPressMessage(
       Map<String, dynamic> message, bool isMe) async {
@@ -1740,25 +1646,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                     _handledIncoming.add(callId);
                                     cc.markCallHandled(callId);
 
-                                    // iOS đang dùng CallKit (UI hệ thống), không auto mở IncomingCallScreen Flutter
-                                    if (!Platform.isIOS) {
-                                      WidgetsBinding.instance
-                                          .addPostFrameCallback((_) {
-                                        if (!mounted) return;
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => CallScreen(
-                                              isCaller: false,
-                                              callId: inv.callId,
-                                              mediaType: inv.mediaType,
-                                              peerName: widget.peerName,
-                                              peerAvatar: widget.peerAvatar,
-                                            ),
-                                          ),
-                                        );
-                                      });
-                                    }
+                                    // Đã dùng CallKit/ConnectionService, không mở UI incoming Flutter nữa
                                   }
 
                                   if (!isMe) {
@@ -2148,20 +2036,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
     return InkWell(
       borderRadius: BorderRadius.circular(14),
-      onTap: () {
-        if (Platform.isIOS) return; // iOS đã dùng CallKit UI
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => IncomingCallScreen(
-              callId: inv.callId,
-              mediaType: inv.mediaType,
-              peerName: widget.peerName,
-              peerAvatar: widget.peerAvatar,
-            ),
-          ),
-        );
-      },
+      // Không mở UI incoming Flutter nữa (đã dùng CallKit/ConnectionService)
+      onTap: () {},
       child: Container(
         constraints: const BoxConstraints(maxWidth: 260),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

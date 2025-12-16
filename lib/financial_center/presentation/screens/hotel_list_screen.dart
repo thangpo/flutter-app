@@ -1,10 +1,11 @@
-import 'dart:math';
 import 'hotel_map_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import '../services/hotel_service.dart';
-import 'package:provider/provider.dart';
+import '../widgets/hotel_map_preview.dart';
+import '../widgets/hotel_highlight_carousel.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
 
@@ -110,48 +111,6 @@ class _HotelListScreenState extends State<HotelListScreen> {
     return getTranslated(key, context) ?? fallback;
   }
 
-  List<Marker> _buildMarkers() {
-    final List<Marker> markers = [];
-
-    for (final h in _hotels) {
-      final lat = double.tryParse(h['lat']?.toString() ?? '');
-      final lng = double.tryParse(h['lng']?.toString() ?? '');
-      if (lat == null || lng == null) continue;
-
-      markers.add(
-        Marker(
-          point: LatLng(lat, lng),
-          width: 40,
-          height: 40,
-          child: GestureDetector(
-            onTap: () {
-
-            },
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.25),
-                    blurRadius: 6,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.location_on,
-                color: Color(0xFFEF4444),
-                size: 26,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-    return markers;
-  }
-
   void _moveToHotel(Map<String, dynamic> hotel) {
     final lat = double.tryParse(hotel['lat']?.toString() ?? '');
     final lng = double.tryParse(hotel['lng']?.toString() ?? '');
@@ -203,13 +162,14 @@ class _HotelListScreenState extends State<HotelListScreen> {
             children: [
               const SizedBox(height: 12),
               Padding(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 16),
-                child: GestureDetector(
-                  onTap: () {
-                    final mapData =
-                    _buildMapDataFromHotels();
-
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: HotelMapPreview(
+                  hotels: _hotels,
+                  center: _mapCenter,
+                  zoom: _mapZoom,
+                  controller: _mapController,
+                  onOpenMap: () {
+                    final mapData = _buildMapDataFromHotels();
                     if (mapData.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -232,76 +192,16 @@ class _HotelListScreenState extends State<HotelListScreen> {
                       ),
                     );
                   },
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(24),
-                    child: SizedBox(
-                      height: 240,
-                      child: Stack(
-                        children: [
-                          FlutterMap(
-                            mapController: _mapController,
-                            options: MapOptions(
-                              initialCenter: _mapCenter,
-                              initialZoom: _mapZoom,
-                            ),
-                            children: [
-                              TileLayer(
-                                urlTemplate:
-                                'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                userAgentPackageName:
-                                'com.vnshop.vietnamtoure',
-                              ),
-                              MarkerLayer(
-                                markers: _buildMarkers(),
-                              ),
-                            ],
-                          ),
-                          Positioned(
-                            left: 12,
-                            top: 12,
-                            child: Container(
-                              padding: const EdgeInsets
-                                  .symmetric(
-                                  horizontal: 10,
-                                  vertical: 6),
-                              decoration: BoxDecoration(
-                                color: Colors.black
-                                    .withOpacity(0.45),
-                                borderRadius:
-                                BorderRadius.circular(999),
-                              ),
-                              child: Row(
-                                mainAxisSize:
-                                MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.map_rounded,
-                                    size: 16,
-                                    color: Colors.white,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    _tr(
-                                      context,
-                                      'hotel_map_label',
-                                      'Bản đồ khách sạn',
-                                    ),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight:
-                                      FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
                 ),
+              ),
+
+              const SizedBox(height: 20),
+
+              HotelHighlightCarousel(
+                hotels: _hotels,
+                onTap: (hotel) {
+                  _moveToHotel(hotel);
+                },
               ),
 
               const SizedBox(height: 20),

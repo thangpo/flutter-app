@@ -8,7 +8,8 @@ String normalizeChatPreview(String raw, BuildContext context) {
   final decoded = raw
       .replaceAll('&quot;', '"')
       .replaceAll('&#039;', "'")
-      .replaceAll('&amp;', '&');
+      .replaceAll('&amp;', '&')
+      .trim();
 
   try {
     final data = jsonDecode(decoded);
@@ -17,25 +18,61 @@ String normalizeChatPreview(String raw, BuildContext context) {
       final type = data['type'];
       final callType = data['call_type'];
 
-      if (type == 'call_invite') {
-        return callType == 'video'
-            ? '🎥 ${getTranslated('call_video', context) ?? 'Video call'}'
-            : '📞 ${getTranslated('call_audio', context) ?? 'Voice call'}';
-      }
+      switch (type) {
+        case 'call_invite':
+          return callType == 'video'
+              ? '🎥 ${getTranslated('call_video', context) ?? 'Video call'}'
+              : '📞 ${getTranslated('call_audio', context) ?? 'Voice call'}';
 
-      if (type == 'call_end') {
-        return callType == 'video'
-            ? '🎥 ${getTranslated('call_video_ended', context) ?? 'Video call ended'}'
-            : '📞 ${getTranslated('call_audio_ended', context) ?? 'Voice call ended'}';
-      }
+        case 'call_end':
+          return callType == 'video'
+              ? '🎥 ${getTranslated('call_video_ended', context) ?? 'Video call ended'}'
+              : '📞 ${getTranslated('call_audio_ended', context) ?? 'Voice call ended'}';
 
-      if (type == 'call_missed') {
-        return '📞 ${getTranslated('call_missed', context) ?? 'Missed call'}';
+        case 'call_missed':
+          return '📞 ${getTranslated('call_missed', context) ?? 'Missed call'}';
       }
     }
   } catch (_) {
 
   }
 
-  return raw;
+  final lower = decoded.toLowerCase();
+
+  if (lower.endsWith('.m4a') ||
+      lower.endsWith('.aac') ||
+      lower.endsWith('.mp3') ||
+      lower.contains('voice_') ||
+      lower.contains('audio')) {
+    return '🎤 ${getTranslated('voice_message', context) ?? 'Voice message'}';
+  }
+
+  if (lower.endsWith('.jpg') ||
+      lower.endsWith('.jpeg') ||
+      lower.endsWith('.png') ||
+      lower.endsWith('.webp') ||
+      lower.contains('screenshot') ||
+      lower.contains('image') ||
+      lower.contains('photo')) {
+    return '🖼 ${getTranslated('photo', context) ?? 'Photo'}';
+  }
+
+  if (lower.endsWith('.mp4') ||
+      lower.endsWith('.mov') ||
+      lower.endsWith('.avi') ||
+      lower.endsWith('.mkv') ||
+      lower.contains('video')) {
+    return '🎥 ${getTranslated('video', context) ?? 'Video'}';
+  }
+
+  if (lower.contains('.pdf') ||
+      lower.contains('.doc') ||
+      lower.contains('.docx') ||
+      lower.contains('.xls') ||
+      lower.contains('.zip') ||
+      lower.contains('.rar')) {
+    return '📎 ${getTranslated('attachment', context) ?? 'File'}';
+  }
+
+  return decoded;
 }
