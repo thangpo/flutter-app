@@ -1810,5 +1810,11 @@
   "record_audio": "Ghi âm",
   "forward": "Chuyển tiếp",
   "choose_file": "Chọn tệp",
-  "media_library": "Thư viện (ảnh/video)"
+  "media_library": "Thư viện (ảnh/video)",
+  "call_audio": "Cuộc gọi thoại",
+  "call_video": "Cuộc gọi video",
+  "call_audio_ended": "Cuộc gọi thoại đã kết thúc",
+  "call_video_ended": "Cuộc gọi video đã kết thúc",
+  "call_missed": "Cuộc gọi nhỡ",
+  "no_message": "Chưa có tin nhắn"
 }

@@ -1844,5 +1844,11 @@
   "record_audio": "Record audio",
   "forward": "Forward",
   "choose_file": "Choose file",
-  "media_library": "Media library"
+  "media_library": "Media library",
+  "call_audio": "Voice call",
+  "call_video": "Video call",
+  "call_audio_ended": "Voice call ended",
+  "call_video_ended": "Video call ended",
+  "call_missed": "Missed call",
+  "no_message": "No messages yet"
 }
