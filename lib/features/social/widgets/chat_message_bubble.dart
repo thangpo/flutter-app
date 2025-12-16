@@ -15,7 +15,6 @@ import 'package:http/http.dart' as http;
 import 'package:encrypt/encrypt.dart' as enc;
 
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/call_invite.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/incoming_call_screen.dart';
 
 class ChatMessageBubble extends StatefulWidget {
   final Map<String, dynamic> message;
@@ -448,23 +447,7 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
             ],
           ),
         ),
-        if (!widget.isMe && !isExpired)
-          Padding(
-            padding: const EdgeInsets.only(left: 8),
-            child: TextButton(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => IncomingCallScreen(
-                      callId: invite.callId,
-                      mediaType: invite.media,
-                    ),
-                  ),
-                );
-              },
-              child: const Text('Trả lời'),
-            ),
-          ),
+        // Không mở IncomingCallScreen nữa (CallKit/ConnectionService lo UI)
       ],
     );
 

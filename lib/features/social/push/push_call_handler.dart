@@ -12,7 +12,6 @@ import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart'
     show navigatorKey;
 
-import '../screens/incoming_call_screen.dart';
 import '../screens/call_screen.dart';
 import '../controllers/call_controller.dart';
 
@@ -205,17 +204,6 @@ class SocialCallPushHandler {
         );
         return;
       }
-
-      // tap body: mở màn incoming để user chọn
-      // tap body: mở màn incoming để user chọn (Android only)
-      if (Platform.isAndroid) {
-        _openIncomingScreen(
-          callId: callId,
-          media: media,
-          callerName: callerName,
-          peerAvatar: callerAvatar,
-        );
-      }
     }
 
     if (ctx != null && ctx.mounted) {
@@ -228,24 +216,6 @@ class SocialCallPushHandler {
         await _doAttachAndOpen(ctx2);
       });
     }
-  }
-
-  void _openIncomingScreen({
-    required int callId,
-    required String media,
-    String? callerName,
-    String? peerAvatar,
-  }) {
-    navigatorKey.currentState?.push(
-      MaterialPageRoute(
-        builder: (_) => IncomingCallScreen(
-          callId: callId,
-          mediaType: media,
-          callerName: callerName,
-          peerAvatar: peerAvatar,
-        ),
-      ),
-    );
   }
 
   void _openCallScreen({

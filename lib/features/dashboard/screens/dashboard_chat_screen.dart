@@ -6,16 +6,17 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_list_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/group_chats_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_page_mess.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/search_chat_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_page_mess.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:flutter_sixvalley_ecommerce/features/dashboard/screens/dashboard_screen.dart';
 
 /// Dashboard thu gọn cho các danh sách chat (1-1, Page, Group).
 /// Chỉ hiển thị khi ở màn list, không áp vào màn chat chi tiết.
 class DashboardChatScreen extends StatefulWidget {
   final String accessToken;
 
-  /// Tab mặc định: 0 = Chat, 1 = Page chat, 2 = Group chat, 3 = Search.
+  /// Tab mặc định: 0 = Chat, 1 = Page chat, 2 = Group chatZ, 3 = Search.
   final int initialIndex;
 
   const DashboardChatScreen({
@@ -33,17 +34,22 @@ class _DashboardChatScreenState extends State<DashboardChatScreen> {
   late int _pageIndex;
   final PageStorageBucket _bucket = PageStorageBucket();
   int? _iosMajor;
+  final GlobalKey<SearchChatScreenState> _searchKey =
+      GlobalKey<SearchChatScreenState>();
+  final List<int> _tabHistory = [];
+  static const int _homeIndex = -1; // bỏ tab home
+  static const int _searchIndex = 3;
 
   @override
   void initState() {
     super.initState();
-    _pageIndex = widget.initialIndex;
+    // index: 0=chat,1=page,2=group,3=search
+    _pageIndex = widget.initialIndex.clamp(0, _searchIndex);
+    _tabHistory.add(_pageIndex);
     if (!kIsWeb && Platform.isIOS) {
       _iosMajor = _detectIOSMajor();
     }
   }
-
-  // ... các import & class giữ nguyên
 
   @override
   Widget build(BuildContext context) {
@@ -51,6 +57,8 @@ class _DashboardChatScreenState extends State<DashboardChatScreen> {
     final platformBrightness = MediaQuery.platformBrightnessOf(context);
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final bool isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
+    final bool hideNav = _pageIndex == _searchIndex && isKeyboardOpen;
 
     Color navActiveColor = cs.primary;
     if (isIOSPlatform && platformBrightness == Brightness.dark) {
@@ -58,6 +66,10 @@ class _DashboardChatScreenState extends State<DashboardChatScreen> {
     }
     String t(String key, String fallback) =>
         getTranslated(key, context) ?? fallback;
+    Object _sym(String sfSymbol, IconData fallback) {
+      final v = _iosMajor ?? 0;
+      return v >= 26 ? sfSymbol : fallback;
+    }
 
     final List<Widget> screens = [
       FriendsListScreen(
@@ -73,7 +85,7 @@ class _DashboardChatScreenState extends State<DashboardChatScreen> {
           accessToken: widget.accessToken,
           showFooterNav: false),
       SearchChatScreen(
-        key: const PageStorageKey('chat_search'),
+        key: _searchKey,
         accessToken: widget.accessToken,
       ),
     ];
@@ -83,51 +95,29 @@ class _DashboardChatScreenState extends State<DashboardChatScreen> {
       child: IndexedStack(index: _pageIndex, children: screens),
     );
 
-    // -------- iOS dùng AdaptiveBottomNavigationBar (auto iOS 26+ / iOS cũ) --------
-    if (isIOSPlatform) {
-      // iOS 26+ -> SF Symbol string, iOS thấp hơn -> CupertinoIcons
-      Object _sym(String sfSymbol, IconData fallback) {
-        final v = _iosMajor ?? 0;
-        return v >= 26 ? sfSymbol : fallback;
-      }
+    final iosDestinations = <AdaptiveNavigationDestination>[
+      AdaptiveNavigationDestination(
+        icon: _sym('bubble.left.and.bubble.right.fill',
+            CupertinoIcons.chat_bubble_2_fill),
+        label: t('chat_section', 'Chat'),
+      ),
+      AdaptiveNavigationDestination(
+        icon: _sym('flag.fill', CupertinoIcons.flag_fill),
+        label: t('pages', 'Pages'),
+      ),
+      AdaptiveNavigationDestination(
+        icon: _sym('person.3.fill', CupertinoIcons.person_3_fill),
+        label: t('group_chat', 'Group'),
+        addSpacerAfter:
+            true, // Tạo khoảng trống để tab Search nằm tách bên phải (iOS 26+)
+      ),
+      AdaptiveNavigationDestination(
+        icon: _sym('magnifyingglass', CupertinoIcons.search),
+        label: t('search', 'Search'),
+        isSearch: true,
+      ),
+    ];
 
-      final iosDestinations = <AdaptiveNavigationDestination>[
-        AdaptiveNavigationDestination(
-          icon: _sym('bubble.left.and.bubble.right.fill',
-              CupertinoIcons.chat_bubble_2_fill),
-          label: t('chat_section', 'Chat'),
-        ),
-        AdaptiveNavigationDestination(
-          icon: _sym('flag.fill', CupertinoIcons.flag_fill),
-          label: t('pages', 'Pages'),
-        ),
-        AdaptiveNavigationDestination(
-          icon: _sym('person.3.fill', CupertinoIcons.person_3_fill),
-          label: t('group_chat', 'Group'),
-          addSpacerAfter:
-              true, // Tạo khoảng trống để tab Search nằm tách bên phải (iOS 26+)
-        ),
-        AdaptiveNavigationDestination(
-          icon: _sym('magnifyingglass', CupertinoIcons.search),
-          label: t('search', 'Search'),
-          isSearch: true,
-        ),
-      ];
-
-      return AdaptiveScaffold(
-        body: body,
-        bottomNavigationBar: AdaptiveBottomNavigationBar(
-          items: iosDestinations,
-          selectedIndex: _pageIndex,
-          onTap: _setPage,
-          useNativeBottomBar: true, // iOS 26+ sẽ là UITabBar native
-          selectedItemColor: navActiveColor, // màu icon/label khi chọn
-          // unselectedItemColor: CupertinoColors.inactiveGray, // (tuỳ chọn)
-        ),
-      );
-    }
-
-    // -------- Android giữ nguyên custom bar của bạn --------
     final List<_ChatNavItem> items = [
       _ChatNavItem(
           icon: Icons.chat_bubble_outline,
@@ -147,44 +137,80 @@ class _DashboardChatScreenState extends State<DashboardChatScreen> {
           label: t('search', 'Search')),
     ];
 
-    return Scaffold(
-      body: body,
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: ChatAndroidBottomBar(
-          items: items,
-          currentIndex: _pageIndex,
-          onTap: _setPage,
-        ),
-      ),
+    final Widget scaffold = isIOSPlatform
+        ? AdaptiveScaffold(
+            body: body,
+            bottomNavigationBar: hideNav
+                ? null
+                : AdaptiveBottomNavigationBar(
+                    items: iosDestinations,
+                    selectedIndex: _pageIndex,
+                    onTap: _setPage,
+                    useNativeBottomBar: true, // iOS 26+ sẽ là UITabBar native
+                    selectedItemColor:
+                        navActiveColor, // màu icon/label khi chọn
+                    // unselectedItemColor: CupertinoColors.inactiveGray, // (tuỳ chọn)
+                  ),
+          )
+        : Scaffold(
+            body: body,
+            bottomNavigationBar: hideNav
+                ? null
+                : Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: ChatAndroidBottomBar(
+                      items: items,
+                      currentIndex: _pageIndex,
+                      onTap: _setPage,
+                    ),
+                  ),
+          );
+
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: scaffold,
     );
   }
 
   void _setPage(int index) {
-    // Search tab: mở màn search_chat full-screen
-    if (index == 3) {
-      setState(() => _pageIndex = index);
-      final route = (!kIsWeb && Platform.isIOS)
-          ? CupertinoPageRoute(
-              fullscreenDialog: true,
-              builder: (_) => SearchChatScreen(accessToken: widget.accessToken),
-            )
-          : MaterialPageRoute(
-              fullscreenDialog: true,
-              builder: (_) => SearchChatScreen(accessToken: widget.accessToken),
-            );
-      Navigator.of(context).push(route);
-      return;
-    }
 
     if (index == _pageIndex) return;
-    setState(() => _pageIndex = index);
+    setState(() {
+      _pageIndex = index;
+      _pushTabHistory(index);
+    });
+    if (index == _searchIndex) {
+      _searchKey.currentState?.focusInput();
+    }
+  }
+
+  Future<bool> _onWillPop() async {
+    if (_tabHistory.length > 1) {
+      setState(() {
+        _tabHistory.removeLast();
+        _pageIndex = _tabHistory.last;
+      });
+      if (_pageIndex == _searchIndex) {
+        _searchKey.currentState?.focusInput();
+      }
+      return false;
+    }
+    return true;
+  }
+
+  void _pushTabHistory(int index) {
+    if (_tabHistory.isEmpty || _tabHistory.last != index) {
+      _tabHistory.add(index);
+      const int maxLen = 10;
+      if (_tabHistory.length > maxLen) {
+        _tabHistory.removeRange(0, _tabHistory.length - maxLen);
+      }
+    }
   }
 
   int? _detectIOSMajor() {
     try {
       final s = Platform.operatingSystemVersion;
-      // Đồng bộ cách bắt phiên bản với dashboard_screen để không miss glyph SF Symbol
       final m = RegExp(r'(\d+)(?:\.\d+)?').firstMatch(s);
       if (m != null) return int.tryParse(m.group(1)!);
     } catch (_) {}
@@ -202,11 +228,13 @@ class _ChatNavItem {
   final IconData icon;
   final IconData? activeIcon;
   final String label;
+  final bool addSpacerAfter;
 
   _ChatNavItem({
     required this.icon,
     required this.label,
     this.activeIcon,
+    this.addSpacerAfter = false,
   });
 }
 
@@ -237,8 +265,12 @@ class ChatAndroidBottomBar extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10),
         child: LayoutBuilder(
           builder: (context, constraints) {
+            const double gapWidth = 16;
+            final int gapCount =
+                items.where((element) => element.addSpacerAfter).length;
             final double barWidth = constraints.maxWidth;
-            final double itemWidth = barWidth / items.length;
+            final double itemWidth =
+                (barWidth - (gapWidth * gapCount)) / items.length;
 
             const double circleSize = 70;
             const double circleBottom = 40;
@@ -254,124 +286,98 @@ class ChatAndroidBottomBar extends StatelessWidget {
                   Positioned(
                     left: 0,
                     right: 0,
-                    bottom: 0,
+                    top: 16,
                     child: Container(
-                      height: 76,
+                      height: 70,
                       decoration: BoxDecoration(
                         color: barColor,
-                        borderRadius: BorderRadius.circular(24),
+                        borderRadius: BorderRadius.circular(26),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.08),
+                            color: Colors.black.withOpacity(0.1),
                             blurRadius: 12,
-                            offset: const Offset(0, -1),
+                            offset: const Offset(0, 6),
                           ),
                         ],
-                      ),
-                      child: Row(
-                        children: List.generate(
-                          items.length,
-                          (index) => Expanded(
-                            child: _ChatAndroidNavItemWidget(
-                              item: items[index],
-                              selected: index == currentIndex,
-                              onTap: () => onTap(index),
-                            ),
-                          ),
-                        ),
                       ),
                     ),
                   ),
-                  AnimatedPositioned(
-                    duration: const Duration(milliseconds: 230),
-                    curve: Curves.easeOutCubic,
+                  Positioned(
                     left: circleLeft,
                     bottom: circleBottom,
                     child: Container(
-                      height: circleSize,
                       width: circleSize,
+                      height: circleSize,
                       decoration: BoxDecoration(
-                        color: scaffoldBg,
                         shape: BoxShape.circle,
+                        color: scaffoldBg,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.08),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
+                            color: Colors.black.withOpacity(0.16),
+                            blurRadius: 12,
+                            offset: const Offset(0, 6),
                           ),
                         ],
                       ),
-                      child: Container(
-                        margin: const EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withOpacity(0.10),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: Icon(
-                            items[currentIndex].activeIcon ??
-                                items[currentIndex].icon,
-                            size: 32,
-                            color: theme.colorScheme.primary,
-                          ),
-                        ),
-                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 22,
+                    child: Row(
+                      children: List.generate(items.length, (i) {
+                        final item = items[i];
+                        final bool active = i == currentIndex;
+                        final icon = active
+                            ? (item.activeIcon ?? item.icon)
+                            : item.icon;
+
+                        return Row(
+                          children: [
+                            SizedBox(
+                              width: itemWidth,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(18),
+                                onTap: () => onTap(i),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const SizedBox(height: 4),
+                                    Icon(
+                                      icon,
+                                      color: active
+                                          ? Colors.blue
+                                          : Colors.grey.shade700,
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      item.label,
+                                      style: TextStyle(
+                                        color: active
+                                            ? Colors.blue
+                                            : Colors.grey.shade700,
+                                        fontSize: 11.5,
+                                        fontWeight: active
+                                            ? FontWeight.w600
+                                            : FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            if (item.addSpacerAfter)
+                              const SizedBox(width: gapWidth),
+                          ],
+                        );
+                      }),
                     ),
                   ),
                 ],
               ),
             );
           },
-        ),
-      ),
-    );
-  }
-}
-
-class _ChatAndroidNavItemWidget extends StatelessWidget {
-  final _ChatNavItem item;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _ChatAndroidNavItemWidget({
-    required this.item,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-
-    final Color iconColor =
-        selected ? cs.primary : cs.onSurface.withOpacity(0.7);
-    final FontWeight labelWeight = selected ? FontWeight.w600 : FontWeight.w400;
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.only(top: 8, bottom: 10),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (!selected)
-              Icon(item.icon, size: 24, color: iconColor)
-            else
-              const SizedBox(height: 16),
-            const SizedBox(height: 2),
-            Text(
-              item.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelSmall?.copyWith(
-                fontSize: 11.5,
-                fontWeight: labelWeight,
-                color: cs.onSurface.withOpacity(selected ? 0.95 : 0.75),
-              ),
-            ),
-          ],
         ),
       ),
     );

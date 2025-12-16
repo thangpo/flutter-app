@@ -27,7 +27,6 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/call_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/push/callkit_service.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/call_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/incoming_call_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/call_invite.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/fcm/fcm_chat_handler.dart';
 
@@ -1647,25 +1646,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                     _handledIncoming.add(callId);
                                     cc.markCallHandled(callId);
 
-                                    // iOS đang dùng CallKit (UI hệ thống), không auto mở IncomingCallScreen Flutter
-                                    if (!Platform.isIOS) {
-                                      WidgetsBinding.instance
-                                          .addPostFrameCallback((_) {
-                                        if (!mounted) return;
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => CallScreen(
-                                              isCaller: false,
-                                              callId: inv.callId,
-                                              mediaType: inv.mediaType,
-                                              peerName: widget.peerName,
-                                              peerAvatar: widget.peerAvatar,
-                                            ),
-                                          ),
-                                        );
-                                      });
-                                    }
+                                    // Đã dùng CallKit/ConnectionService, không mở UI incoming Flutter nữa
                                   }
 
                                   if (!isMe) {
@@ -2055,20 +2036,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
     return InkWell(
       borderRadius: BorderRadius.circular(14),
-      onTap: () {
-        if (Platform.isIOS) return; // iOS đã dùng CallKit UI
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => IncomingCallScreen(
-              callId: inv.callId,
-              mediaType: inv.mediaType,
-              peerName: widget.peerName,
-              peerAvatar: widget.peerAvatar,
-            ),
-          ),
-        );
-      },
+      // Không mở UI incoming Flutter nữa (đã dùng CallKit/ConnectionService)
+      onTap: () {},
       child: Container(
         constraints: const BoxConstraints(maxWidth: 260),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

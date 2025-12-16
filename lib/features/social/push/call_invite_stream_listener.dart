@@ -18,9 +18,7 @@ import '../controllers/group_call_controller.dart';
 import '../domain/models/call_invite.dart';
 import '../fcm/fcm_chat_handler.dart';
 import 'callkit_service.dart';
-import '../screens/incoming_call_screen.dart';
 import '../screens/group_call_screen.dart';
-import '../screens/group_incoming_call_screen.dart';
 
 /// Listen FCM foreground để mở UI nghe/từ chối ngay (1-1 & group).
 class CallInviteForegroundListener {
@@ -469,92 +467,16 @@ class CallInviteForegroundListener {
       return;
     }
 
-    // iOS: bỏ hẳn incoming trong-app, chỉ dùng CallKit
-    if (Platform.isIOS) {
-      final ctx = navigatorKey.currentState?.overlay?.context ??
-          navigatorKey.currentContext;
-      if (ctx != null) {
-        try {
-          final cc = ctx.read<CallController>();
-          if (!cc.isCallHandled(inv.callId)) {
-            cc.attachCall(
-              callId: inv.callId,
-              mediaType: inv.mediaType,
-              initialStatus: 'ringing',
-            );
-          }
-        } catch (_) {}
-      }
-      return;
-    }
-
-    await CallkitService.I.flushPendingActions();
-    if (CallkitService.I.isServerCallHandled(inv.callId)) return;
     if (_routing) return;
-    // 1) Đợi mọi action accept từ CallKit chạy xong (attachCall, open CallScreen, v.v.)
-    await CallkitService.I.flushPendingActions();
-
-    // 2) Nếu cuộc gọi đã được handle (đã bấm "Nghe" từ CallKit) thì KHÔNG mở màn incoming nữa
-    if (CallkitService.I.isServerCallHandled(inv.callId)) {
-      return;
-    }
-
-    // 3) Tránh push chồng màn (đang routing)
-    if (_routing) return;
-
-    final nav = navigatorKey.currentState;
-    final ctx = nav?.overlay?.context ?? navigatorKey.currentContext;
-
-    // 4) Nếu chưa có context, chờ frame kế rồi gọi lại (vẫn async, không đệ quy vô hạn)
-    if (nav == null || ctx == null || !(ctx.mounted)) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        // fire-and-forget; không cần await ở đây
-        _openIncoming(
-          inv,
-          callerName: callerName,
-          callerAvatar: callerAvatar,
-        );
-      });
-      return;
-    }
 
     _routing = true;
-
     try {
-      final cc = ctx.read<CallController>();
-
-      // 5) Bỏ qua nếu call này đã được attach & không còn 'ringing'
-      if (cc.isCallHandled(inv.callId) ||
-          (cc.activeCallId == inv.callId && cc.callStatus != 'ringing')) {
-        _routing = false;
-        return;
-      }
-
-      // 6) Đến đây mới attach trạng thái 'ringing' để hiển thị incoming trong-app
-      cc.attachCall(
-        callId: inv.callId,
-        mediaType: inv.mediaType,
-        initialStatus: 'ringing',
-      );
-
-      // 7) Trước khi push, kiểm tra lại lần nữa đề phòng race hiếm gặp
-      if (CallkitService.I.isServerCallHandled(inv.callId)) {
-        _routing = false;
-        return;
-      }
-
-      await nav.push(
-        MaterialPageRoute(
-          builder: (_) => IncomingCallScreen(
-            callId: inv.callId,
-            mediaType: inv.mediaType,
-            callerName: callerName,
-            callerAvatar: callerAvatar,
-          ),
-        ),
-      );
-    } catch (_) {
-      // giữ app an toàn nếu có lỗi
+      await CallkitService.I.showIncomingCall({
+        'call_id': inv.callId,
+        'media': inv.mediaType,
+        if (callerName != null) 'caller_name': callerName,
+        if (callerAvatar != null) 'caller_avatar': callerAvatar,
+      });
     } finally {
       _routing = false;
     }
@@ -569,60 +491,20 @@ class CallInviteForegroundListener {
     required String media,
     String? groupName,
   }) {
-    if (Platform.isIOS) {
-      // iOS dùng CallKit, không mở UI Flutter
-      CallkitService.I.showIncomingGroupCall({
-        'call_id': callId,
-        'group_id': groupId,
-        'media': media,
-        'group_name': groupName,
-      });
-      return;
-    }
     if (_routing) return;
-
-    final nav = navigatorKey.currentState;
-    final ctx = nav?.overlay?.context ?? navigatorKey.currentContext;
-
-    if (nav == null || ctx == null || !ctx.mounted) {
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _openGroupIncoming(
-          callId: callId,
-          groupId: groupId,
-          media: media,
-          groupName: groupName,
-        ),
-      );
-      return;
-    }
-
     _routing = true;
-
-    try {
-      final gc = ctx.read<GroupCallController>();
-      gc.currentCallId = callId;
-      gc.status = CallStatus.ringing;
-    } catch (_) {}
-
-    nav
-        .push(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => GroupIncomingCallScreen(
-          groupId: groupId,
-          callId: callId,
-          media: media,
-          groupName: groupName,
-        ),
-      ),
-    )
-        .whenComplete(() {
-      _routing = false;
-    });
+    CallkitService.I.showIncomingGroupCall({
+      'call_id': callId,
+      'group_id': groupId,
+      'media': media,
+      'group_name': groupName,
+    }).whenComplete(() => _routing = false);
   }
+
   static bool _isActiveCallOnThisDevice(int callId) {
     try {
-      final ctx = navigatorKey.currentState?.overlay?.context ?? navigatorKey.currentContext;
+      final ctx = navigatorKey.currentState?.overlay?.context ??
+          navigatorKey.currentContext;
       if (ctx == null) return false;
       final cc = ctx.read<CallController>();
       if (cc.activeCallId != callId) return false;

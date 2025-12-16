@@ -1817,5 +1817,16 @@
   "call_video_ended": "Cuộc gọi video đã kết thúc",
   "call_missed": "Cuộc gọi nhỡ",
   "no_message": "Chưa có tin nhắn",
-  "voice_message": "Tin nhắn thu âm"
+  "voice_message": "Tin nhắn thu âm",
+  "search_chat_hint": "Tìm bạn bè, nhóm, trang",
+  "search_chat_enter_keyword": "Nhập từ khóa để tìm kiếm",
+  "search_tab_all": "Tất cả",
+  "search_tab_friends": "Bạn bè",
+  "search_tab_pages": "Trang",
+  "search_tab_groups": "Nhóm",
+  "search_section_friends": "Bạn bè",
+  "search_section_groups": "Nhóm",
+  "search_section_pages": "Trang",
+  "search_chat_user_prefix": "Người dùng #"
 }
+
