@@ -310,18 +310,21 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                   if (i == 0) {
                     return const CreateStoryTile(size: 56);
                   }
+
                   final u = list[i - 1];
-                  return _AvatarStoryTile(
+                  final SocialStory? story = storyMap[u.id];
+
+                  return StoryAvatarTile(
                     name: u.name,
                     avatar: u.avatar,
                     online: u.isOnline,
+                    story: story,
                     onTap: () {
-                      final SocialStory? story = storyMap[u.id];
-
                       if (story != null && story.items.isNotEmpty) {
                         final stories = storyMap.values.toList();
                         final storyIndex = stories.indexOf(story);
-                        final itemIndex = story.items.indexWhere((e) => e.isViewed == false);
+                        final itemIndex =
+                        story.items.indexWhere((e) => e.isViewed == false);
 
                         Navigator.push(
                           context,
@@ -333,8 +336,6 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                             ),
                           ),
                         );
-                      } else {
-                        _openChat(u);
                       }
                     },
                   );
@@ -387,21 +388,43 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                               : statusFallback;
                           final rawTime = _formatTimeLabel(u).trim();
                           final timeLabel = rawTime.isNotEmpty ? rawTime : ' ';
+                          final SocialStory? story = storyMap[u.id];
 
-                          return InkWell(
-                            onTap: () => _openChat(u),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  Stack(
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                /// ===== AVATAR: XEM STORY =====
+                                GestureDetector(
+                                  onTap: () {
+                                    final SocialStory? story = storyMap[u.id];
+                                    if (story != null && story.items.isNotEmpty) {
+                                      final stories = storyMap.values.toList();
+                                      final storyIndex = stories.indexOf(story);
+                                      final itemIndex =
+                                      story.items.indexWhere((e) => e.isViewed == false);
+
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => SocialStoryViewerScreen(
+                                            stories: stories,
+                                            initialStoryIndex: storyIndex < 0 ? 0 : storyIndex,
+                                            initialItemIndex: itemIndex < 0 ? 0 : itemIndex,
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  child: Stack(
                                     clipBehavior: Clip.none,
                                     children: [
-                                      _ChatAvatar(
-                                        url: u.avatar,
-                                        online: u.isOnline,
+                                      StoryChatAvatar(
+                                        avatar: u.avatar,
                                         label: u.name,
+                                        online: u.isOnline,
+                                        story: storyMap[u.id], // ⭐ border story
                                       ),
                                       if (unread)
                                         Positioned(
@@ -418,10 +441,14 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                                         ),
                                     ],
                                   ),
+                                ),
 
-                                  const SizedBox(width: 12),
+                                const SizedBox(width: 12),
 
-                                  Expanded(
+                                /// ===== TEXT AREA: MỞ CHAT =====
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: () => _openChat(u), // ⭐ MỞ CHAT
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
@@ -450,9 +477,7 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                                               ),
                                           ],
                                         ),
-
                                         const SizedBox(height: 3),
-
                                         Text(
                                           preview.isEmpty ? ' ' : preview,
                                           maxLines: 1,
@@ -469,8 +494,8 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                                       ],
                                     ),
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           );
                         },
@@ -887,21 +912,30 @@ class StoryChatAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final bool hasStory = story != null;
-    final bool hasUnviewed =
-        hasStory && story!.items.any((e) => e.isViewed == false);
+    final bool hasStory = story != null && story!.items.isNotEmpty;
+    final bool hasUnviewed = hasStory && story!.items.any((e) => e.isViewed == false);
 
     return Stack(
       children: [
         Container(
-          padding: EdgeInsets.all(hasStory ? 2.5 : 0),
+          padding: const EdgeInsets.all(2.5),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            gradient: hasUnviewed
-                ? LinearGradient(
-              colors: [Colors.blue, Colors.purple],
+            gradient: hasStory
+                ? const LinearGradient(
+              colors: [
+                Color(0xFF1877F2),
+                Color(0xFF9C27B0),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             )
-                : null,
+                : LinearGradient(
+              colors: [
+                cs.surfaceVariant,
+                cs.surfaceVariant,
+              ],
+            ),
           ),
           child: CircleAvatar(
             radius: 26,
@@ -939,6 +973,88 @@ class StoryChatAvatar extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class StoryAvatarTile extends StatelessWidget {
+  final String name;
+  final String? avatar;
+  final bool online;
+  final SocialStory? story;
+  final VoidCallback? onTap;
+
+  const StoryAvatarTile({
+    super.key,
+    required this.name,
+    required this.avatar,
+    required this.online,
+    this.story,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final bool hasStory = story != null && story!.items.isNotEmpty;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: SizedBox(
+        width: 74,
+        child: Column(
+          children: [
+            /// ===== AVATAR + STORY BORDER =====
+            Container(
+              padding: const EdgeInsets.all(2.5),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: hasStory
+                    ? const LinearGradient(
+                  colors: [
+                    Color(0xFF1877F2), // Facebook blue
+                    Color(0xFF9C27B0), // Purple
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+                    : null,
+              ),
+              child: CircleAvatar(
+                radius: 26,
+                backgroundColor: cs.surfaceVariant,
+                backgroundImage:
+                (avatar != null && avatar!.isNotEmpty)
+                    ? NetworkImage(avatar!)
+                    : null,
+                child: (avatar == null || avatar!.isEmpty)
+                    ? Text(
+                  name.isNotEmpty ? name[0] : '?',
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.bold,
+                  ),
+                )
+                    : null,
+              ),
+            ),
+
+            const SizedBox(height: 6),
+
+            /// ===== NAME =====
+            Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12.5,
+                color: cs.onSurface,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
