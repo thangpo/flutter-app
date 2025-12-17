@@ -385,8 +385,10 @@ class CallkitService {
           final cc = ctx?.read<CallController>();
           final activeId = cc?.activeCallId;
           final activeStatus = cc?.callStatus;
-          final isActive =
-              activeId != null && activeStatus != 'ended' && activeStatus != 'declined';
+          final isActive = activeId != null &&
+              activeStatus != 'ended' &&
+              activeStatus != 'declined' &&
+              activeStatus != 'ringing';
 
           final sameCall = isActive && serverCallId > 0 && activeId == serverCallId;
           final strayNoId = isActive && serverCallId <= 0;
