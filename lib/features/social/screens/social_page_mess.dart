@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
-import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_page_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_page_chat.dart';
-
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_list_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/group_chats_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/chat_page_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/chat_page_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/group_chats_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_list_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_page_chat.dart';
 import 'package:flutter_sixvalley_ecommerce/features/dashboard/screens/dashboard_chat_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_page_controller.dart';
 
 class PageMessagesScreen extends StatefulWidget {
   final String accessToken;
@@ -48,8 +46,6 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
 
     final pageCtrl = context.watch<SocialPageController>();
     final List<PageChatThread> origin = pageCtrl.pageChatList;
-
-    // SEARCH
     final List<PageChatThread> threads = origin.where((item) {
       if (_searchCtrl.text.isEmpty) return true;
       final q = _searchCtrl.text.toLowerCase();
@@ -70,7 +66,6 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
       ),
       body: Column(
         children: [
-          // Header + search + tabs
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: Column(
@@ -173,7 +168,6 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
             ),
           ),
 
-          // LIST
           Expanded(
             child: pageCtrl.loadingPageChatList
                 ? const Center(child: CircularProgressIndicator())
@@ -186,7 +180,6 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                       itemBuilder: (_, index) {
                         final item = threads[index];
 
-                        // TAB FILTER
                         if (_tabIndex == 1 && !item.isMyPage) {
                           return const SizedBox.shrink();
                         }
@@ -248,7 +241,6 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                             color: Colors.transparent,
                             child: Row(
                               children: [
-                                // AVATAR
                                 Stack(
                                   clipBehavior: Clip.none,
                                   children: [
@@ -300,7 +292,6 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
 
                                 const SizedBox(width: 14),
 
-                                // INFO
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
@@ -378,7 +369,6 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
         ],
       ),
 
-      // FOOTER NAV
       bottomNavigationBar: widget.showFooterNav
           ? Padding(
               padding: EdgeInsets.only(
@@ -387,11 +377,11 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                 bottom: 8 + bottomInset,
               ),
               child: _GroupFooterNav(
-                currentIndex: 1, // màn Page messages
+                currentIndex: 1,
                 chatBadgeCount: 0,
                 showNotifDot: false,
                 onTap: (i) {
-                  if (i == 1) return; // đang ở tab Pages rồi
+                  if (i == 1) return;
 
                   if (i == 0) {
                     Navigator.push(
@@ -432,10 +422,6 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
     );
   }
 }
-
-/* -------------------------------------------------------------
-   COMPONENTS
-------------------------------------------------------------- */
 
 class _MiniTabChip extends StatelessWidget {
   final String label;
@@ -484,13 +470,10 @@ class _UnreadBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const SizedBox.shrink(); // unused
+    return const SizedBox.shrink();
   }
 }
 
-/// =====================
-/// Footer Nav
-/// =====================
 class _GroupFooterNav extends StatelessWidget {
   final int currentIndex;
   final int chatBadgeCount;
