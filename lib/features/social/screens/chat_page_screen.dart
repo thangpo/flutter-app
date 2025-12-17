@@ -59,6 +59,9 @@ class _PageChatScreenState extends State<PageChatScreen> {
   Duration _draftPos = Duration.zero;
   StreamSubscription? _draftSub;
   List<_PendingAttachment> _pendingAttachments = [];
+  bool _recOn = false;
+  bool _recPaused = false;
+  Duration _draftDur = Duration.zero;
 
   @override
   void initState() {
