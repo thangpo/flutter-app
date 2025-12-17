@@ -29,6 +29,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/push/callkit_service
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/call_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/call_invite.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/fcm/fcm_chat_handler.dart';
+import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
 
 class ChatScreen extends StatefulWidget {
   final String accessToken;
@@ -52,7 +53,10 @@ class _ChatScreenState extends State<ChatScreen> {
   final repo = SocialChatRepository();
   final _inputCtrl = TextEditingController();
   final _scroll = ScrollController();
-
+  bool _recPaused = false;
+  StreamSubscription? _recProgressSub;
+  final List<double> _recWave = [];
+  static const int _recWaveMax = 40;
   List<Map<String, dynamic>> _messages = [];
   bool _loading = false;
   bool _sending = false;
@@ -104,8 +108,13 @@ class _ChatScreenState extends State<ChatScreen> {
     _loadInitialMessages();
     _listenRealtime();
     _startPolling();
-
     _scroll.addListener(_onScroll);
+
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Color(0xFF1F1F1F),
+      statusBarIconBrightness: Brightness.light,
+      statusBarBrightness: Brightness.dark,
+    ));
 
     _voicePreviewPlayer.onPlayerComplete.listen((event) {
       if (mounted) {
@@ -144,7 +153,8 @@ class _ChatScreenState extends State<ChatScreen> {
     _inputCtrl.dispose();
     _scroll.dispose();
     _fcmStream?.cancel();
-
+    _recProgressSub?.cancel();
+    _recProgressSub = null;
     _stopPolling();
 
     if (_recOn) _recorder.stopRecorder();
@@ -153,6 +163,29 @@ class _ChatScreenState extends State<ChatScreen> {
     _voicePreviewPlayer.dispose();
 
     super.dispose();
+  }
+
+  void _startRecorderWaveListen() {
+    _recProgressSub?.cancel();
+    _recProgressSub = _recorder.onProgress?.listen((e) {
+      final db = e.decibels;
+      if (db == null) return;
+
+      final v = ((db + 60) / 60).clamp(0.0, 1.0);
+
+      if (!mounted) return;
+      setState(() {
+        _recWave.add(v);
+        if (_recWave.length > _recWaveMax) {
+          _recWave.removeRange(0, _recWave.length - _recWaveMax);
+        }
+      });
+    });
+  }
+
+  void _stopRecorderWaveListen() {
+    _recProgressSub?.cancel();
+    _recProgressSub = null;
   }
 
   String get _reactionsStorageKey => 'chat_reactions_$_peerId';
@@ -359,6 +392,132 @@ class _ChatScreenState extends State<ChatScreen> {
         setState(() => _loading = false);
       }
     }
+  }
+
+  Future<void> _startRecording() async {
+    if (!_recReady) {
+      await _initRecorder();
+      if (!_recReady) return;
+    }
+
+    final dir = await getTemporaryDirectory();
+    final filename = 'voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    final fullPath = '${dir.path}/$filename';
+
+    _stopRecordingTimer();
+
+    if (_voicePreviewPlaying) {
+      await _voicePreviewPlayer.stop();
+      _voicePreviewPlaying = false;
+    }
+
+    setState(() {
+      _clearVoiceDraft();
+      _recElapsed = Duration.zero;
+    });
+
+    await _recorder.startRecorder(
+      toFile: fullPath,
+      codec: Codec.aacMP4,
+      bitRate: 64000,
+      sampleRate: 44100,
+      numChannels: 1,
+    );
+
+    _recOn = true;
+    _startRecordingTimer();
+    setState(() {});
+  }
+
+  Future<void> _finishRecording({bool sendNow = false}) async {
+    if (!_recOn) return;
+
+    final recorded = _recElapsed;
+    _stopRecordingTimer();
+
+    final path = await _recorder.stopRecorder();
+    _recOn = false;
+
+    if (path == null) {
+      setState(() => _recElapsed = Duration.zero);
+      return;
+    }
+
+    setState(() {
+      _voiceDraftPath = path;
+      _voiceDraftDuration = recorded > Duration.zero ? recorded : _voiceDraftDuration;
+      _recElapsed = Duration.zero;
+    });
+
+    if (sendNow) {
+      await _sendText();
+    }
+  }
+
+  Future<void> _stopRecording({bool saveToDraft = true}) async {
+    if (!_recOn) return;
+
+    final recorded = _recElapsed;
+    _stopRecordingTimer();
+    _stopRecorderWaveListen();
+
+    final path = await _recorder.stopRecorder();
+    _recOn = false;
+    _recPaused = false;
+
+    if (!mounted) return;
+
+    if (saveToDraft && path != null) {
+      setState(() {
+        _voiceDraftPath = path;
+        _voiceDraftDuration =
+        recorded > Duration.zero ? recorded : _voiceDraftDuration;
+        _recElapsed = Duration.zero;
+      });
+    } else {
+      setState(() {
+        _recElapsed = Duration.zero;
+        _recWave.clear();
+      });
+    }
+  }
+
+  Future<void> _togglePauseRecording() async {
+    if (!_recOn) return;
+
+    try {
+      if (_recPaused) {
+        await _recorder.resumeRecorder();
+        _recPaused = false;
+        _startRecordingTimer(resume: true);
+      } else {
+        await _recorder.pauseRecorder();
+        _recPaused = true;
+        _stopRecordingTimer();
+      }
+      if (mounted) setState(() {});
+    } catch (_) {}
+  }
+
+  Future<void> _reRecord() async {
+    await _voicePreviewPlayer.stop();
+    setState(() {
+      _clearVoiceDraft();
+      _recWave.clear();
+    });
+    await _toggleRecord();
+  }
+
+  Future<void> _cancelRecording() async {
+    if (_recOn) {
+      _stopRecordingTimer();
+      await _recorder.stopRecorder();
+      _recOn = false;
+    }
+    setState(() {
+      _clearVoiceDraft();
+      _recElapsed = Duration.zero;
+    });
   }
 
   void _mergeIncoming(List<Map<String, dynamic>> incoming,
@@ -765,6 +924,201 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  Widget _buildRecordingBar({required bool isDark}) {
+    final grad = LinearGradient(
+      colors: isDark
+          ? const [Color(0xFF3F45C8), Color(0xFF3A2A7A)]
+          : const [Color(0xFF5663FF), Color(0xFF6D3BFF)],
+    );
+
+    return Row(
+      children: [
+        IconButton(
+          tooltip: _tr('delete', 'Xóa'),
+          onPressed: _sending ? null : _cancelRecording,
+          icon: const Icon(Icons.delete_outline),
+        ),
+        Expanded(
+          child: Container(
+            height: 54,
+            decoration: BoxDecoration(
+              gradient: grad,
+              borderRadius: BorderRadius.circular(28),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    iconSize: 22,
+                    onPressed: _sending ? null : () => _finishRecording(sendNow: false),
+                    icon: const Icon(Icons.pause, color: Colors.black87),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _DottedLine(
+                    tick: _recElapsed.inSeconds,
+                    color: Colors.white.withOpacity(0.9),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  _formatDuration(_recElapsed),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        IconButton(
+          tooltip: 'Gửi',
+          onPressed: _sending ? null : () => _finishRecording(sendNow: true),
+          icon: const Icon(Icons.send),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildVoiceDraftCard({required bool isDark}) {
+    final theme = Theme.of(context);
+
+    final Duration effectiveDur = _voicePreviewDur > Duration.zero
+        ? _voicePreviewDur
+        : (_voiceDraftDuration > Duration.zero ? _voiceDraftDuration : _voicePreviewPos);
+
+    final double progress = (effectiveDur.inMilliseconds > 0)
+        ? (_voicePreviewPos.inMilliseconds.clamp(0, effectiveDur.inMilliseconds) /
+        effectiveDur.inMilliseconds)
+        : 0;
+
+    final cardBg = isDark ? const Color(0xFF2C2C2C) : const Color(0xFFF0F0F0);
+    final barBg = isDark ? const Color(0xFF151515) : const Color(0xFF1B1B1B);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+          _tr('voice_seek_hint', 'Trượt ngón tay trên bản ghi âm để phát từ bất kỳ điểm nào.'),
+            style: TextStyle(
+              fontSize: 12,
+              color: (isDark ? Colors.white70 : Colors.black54),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          Container(
+            height: 52,
+            decoration: BoxDecoration(
+              color: barBg,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                IconButton(
+                  onPressed: _toggleVoicePreviewPlayback,
+                  icon: Icon(
+                    _voicePreviewPlaying ? Icons.pause : Icons.play_arrow,
+                    color: Colors.white,
+                  ),
+                ),
+                Expanded(
+                  child: _WaveformSeekBar(
+                    progress: progress,
+                    activeColor: Colors.white,
+                    inactiveColor: Colors.white24,
+                    maxHeight: 26,
+                    samples: _generateWaveform(_voiceDraftPath ?? 'voice_preview'),
+                    onSeekPercent: (p) async {
+                      if (effectiveDur.inMilliseconds > 0) {
+                        final ms = (p * effectiveDur.inMilliseconds).toInt();
+                        await _voicePreviewPlayer.seek(Duration(milliseconds: ms));
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _formatDuration(effectiveDur),
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+                const SizedBox(width: 10),
+                Container(width: 1, height: 40, color: Colors.white24),
+                IconButton(
+                  tooltip: _tr('re_record', 'Ghi lại'),
+                  onPressed: () async {
+                    await _voicePreviewPlayer.stop();
+                    setState(() => _clearVoiceDraft());
+                    await _startRecording();
+                  },
+                  icon: const Icon(Icons.mic, color: Colors.white),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              IconButton(
+                tooltip: 'Xóa',
+                onPressed: () async {
+                  await _voicePreviewPlayer.stop();
+                  setState(() => _clearVoiceDraft());
+                },
+                icon: const Icon(Icons.delete, color: Colors.redAccent),
+              ),
+              IconButton(
+                tooltip: 'Ghi lại',
+                onPressed: () async {
+                  await _voicePreviewPlayer.stop();
+                  setState(() => _clearVoiceDraft());
+                  await _startRecording();
+                },
+                icon: Icon(Icons.refresh, color: theme.colorScheme.primary),
+              ),
+              const Spacer(),
+              ElevatedButton(
+                onPressed: _sending ? null : _sendText,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: theme.colorScheme.primary,
+                  shape: const StadiumBorder(),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(_tr('send', 'Gửi'), style: const TextStyle(fontWeight: FontWeight.w700)),
+                    const SizedBox(width: 10),
+                    const Icon(Icons.send, size: 18),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   _AttachmentType _detectAttachmentType(String path) {
     final String ext = p.extension(path).toLowerCase();
     const Set<String> imageExts = {
@@ -854,10 +1208,13 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {});
   }
 
-  void _startRecordingTimer() {
+  void _startRecordingTimer({bool resume = false}) {
     _recTimer?.cancel();
-    _recElapsed = Duration.zero;
+    if (!resume) _recElapsed = Duration.zero;
+
     _recTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (_recPaused) return;
+      if (!mounted) return;
       setState(() {
         _recElapsed += const Duration(seconds: 1);
       });
@@ -1224,7 +1581,6 @@ class _ChatScreenState extends State<ChatScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Thanh reaction
                 Container(
                   height: 56,
                   decoration: BoxDecoration(
@@ -1268,7 +1624,6 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                // Hàng action
                 Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -1500,14 +1855,10 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  // =================================================
-  // UI
-  // =================================================
   @override
   Widget build(BuildContext context) {
     final title = widget.peerName ?? 'Chat';
     final peerAvatar = widget.peerAvatar ?? '';
-
     final distFromBottom = _scroll.hasClients
         ? (_scroll.position.maxScrollExtent - _scroll.position.pixels)
         : 0.0;
@@ -1519,24 +1870,57 @@ class _ChatScreenState extends State<ChatScreen> {
       _lastItemCount = _messages.length;
     }
 
-    return WillPopScope(
-      onWillPop: () async {
-        // ✅ khi bấm back vật lý – trả _hasNewMessage về FriendsList
-        Navigator.pop(context, _hasNewMessage);
-        return false;
-      },
-      child: Scaffold(
-        resizeToAvoidBottomInset: true,
-        appBar: AppBar(
-          elevation: 0,
-          centerTitle: false,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () {
-              // ✅ khi bấm nút back trên AppBar – cũng trả flag
-              Navigator.pop(context, _hasNewMessage);
-            },
-          ),
+    final isDark = Provider.of<ThemeController>(context, listen: true).darkTheme;
+
+    final barColor = isDark ? const Color(0xFF1F1F1F) : Colors.white;
+    final fgColor  = isDark ? Colors.white : Colors.black;
+
+    final overlay = SystemUiOverlayStyle(
+      statusBarColor: barColor,
+      statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+      statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+    );
+
+    final pageBg   = isDark ? const Color(0xFF0F0F0F) : const Color(0xFFF6F6F6);
+    final barBg    = isDark ? const Color(0xFF141414) : Colors.transparent;
+
+    final inputFill   = isDark ? const Color(0xFF2A2A2A) : Colors.white;
+    final borderColor = isDark ? Colors.white24 : Colors.blue.shade200;
+    final focusBorder = isDark ? Colors.white38 : Colors.blue.shade400;
+
+    final hintColor = isDark ? Colors.white54 : Colors.black54;
+    final iconColor = isDark ? Colors.white70 : Colors.black54;
+
+    final sendBg = Theme.of(context).colorScheme.primary;
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: overlay,
+        child: WillPopScope(
+          onWillPop: () async {
+            Navigator.pop(context, _hasNewMessage);
+            return false;
+          },
+          child: Scaffold(
+            backgroundColor: pageBg,
+            appBar: AppBar(
+              backgroundColor: barColor,
+              foregroundColor: fgColor,
+              iconTheme: IconThemeData(color: fgColor),
+              titleTextStyle: TextStyle(
+                color: fgColor,
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+              ),
+              surfaceTintColor: Colors.transparent,
+              scrolledUnderElevation: 0,
+              elevation: 0,
+              systemOverlayStyle: overlay,
+
+              centerTitle: false,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => Navigator.pop(context, _hasNewMessage),
+              ),
           title: GestureDetector(
             behavior: HitTestBehavior.translucent,
             onTap: () {
@@ -1645,8 +2029,6 @@ class _ChatScreenState extends State<ChatScreen> {
                                   if (!isMe && !alreadyHandled) {
                                     _handledIncoming.add(callId);
                                     cc.markCallHandled(callId);
-
-                                    // Đã dùng CallKit/ConnectionService, không mở UI incoming Flutter nữa
                                   }
 
                                   if (!isMe) {
@@ -1685,7 +2067,6 @@ class _ChatScreenState extends State<ChatScreen> {
                                     );
                                   }
 
-                                  // yourself
                                   return Padding(
                                     padding: const EdgeInsets.symmetric(
                                         vertical: 8.0),
@@ -1706,7 +2087,6 @@ class _ChatScreenState extends State<ChatScreen> {
                                 final replyMsg =
                                     hasReply ? _findRepliedMessage(m) : null;
 
-                                // normal bubble
                                 if (!isMe) {
                                   final msgAvatar =
                                       (m['user_data']?['avatar'] ?? '')
@@ -1788,7 +2168,6 @@ class _ChatScreenState extends State<ChatScreen> {
                                   );
                                 }
 
-                                // my message
                                 return Padding(
                                   padding:
                                       const EdgeInsets.symmetric(vertical: 8.0),
@@ -1852,7 +2231,6 @@ class _ChatScreenState extends State<ChatScreen> {
                             ),
                     ),
                   ),
-                  // Thanh "Đang trả lời..."
                   if (_replyingToMessage != null)
                     Container(
                       width: double.infinity,
@@ -1926,109 +2304,121 @@ class _ChatScreenState extends State<ChatScreen> {
                         ],
                       ),
                     ),
-                  if (_voiceDraftPath != null && !_recOn)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                      child: _buildVoicePreview(context),
-                    ),
+                  // if (_voiceDraftPath != null && !_recOn)
+                  //   Padding(
+                  //     padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                  //     child: _buildVoicePreview(context),
+                  //   ),
                   SafeArea(
                     top: false,
                     minimum: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _inputCtrl,
-                            enabled: !_sending,
-                            minLines: 1,
-                            maxLines: 5,
-                            onTap: () {
-                              WidgetsBinding.instance.addPostFrameCallback((_) {
-                                Future.delayed(
-                                    const Duration(milliseconds: 80),
-                                    _scrollToBottom);
-                              });
-                            },
-                            decoration: InputDecoration(
-                              hintText: _sending
-                                  ? _tr('sending', 'Đang gửi...')
-                                  : _tr('send_a_message', 'Nhập tin nhắn...'),
-                              isDense: true,
-                              filled: true,
-                              fillColor: Colors.white,
-                              prefixIcon: IconButton(
-                                icon: const Icon(Icons.attach_file),
-                                onPressed: _sending ? null : _pickAndSendFile,
-                                tooltip: _tr('attachment', 'Đính kèm'),
-                              ),
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                                  _recOn ? Icons.mic_off : Icons.mic,
-                                  color: _recOn ? Colors.red : null,
+                    child: _recOn
+                        ? _buildRecordingBar(isDark: isDark)
+                        : (_voiceDraftPath != null
+                        ? _buildVoiceDraftCard(isDark: isDark)
+                        : Container(
+                      decoration: BoxDecoration(
+                        color: barBg,
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _inputCtrl,
+                              enabled: !_sending,
+                              minLines: 1,
+                              maxLines: 5,
+                              cursorColor: isDark ? Colors.white : Colors.black,
+                              style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                              decoration: InputDecoration(
+                                hintText: _sending
+                                    ? _tr('sending', 'Đang gửi...')
+                                    : _tr('send_a_message', 'Nhập tin nhắn...'),
+                                hintStyle: TextStyle(color: hintColor),
+                                isDense: true,
+                                filled: true,
+                                fillColor: inputFill,
+                                prefixIcon: IconButton(
+                                  icon: Icon(Icons.attach_file, color: iconColor),
+                                  onPressed: _sending ? null : _pickAndSendFile,
                                 ),
-                                onPressed: _sending ? null : _toggleRecord,
-                                tooltip: _recOn
-                                    ? _tr('stop_and_send', 'Dừng & gửi')
-                                    : _tr('record_audio', 'Ghi âm'),
+                                suffixIcon: IconButton(
+                                  icon: Icon(Icons.mic, color: iconColor),
+                                  onPressed: _sending ? null : _startRecording, // bắt đầu ghi âm
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                  borderSide: BorderSide(color: borderColor, width: 1),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                  borderSide: BorderSide(color: borderColor, width: 1),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                  borderSide: BorderSide(color: focusBorder, width: 1.5),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
                               ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(18),
-                                borderSide: BorderSide(
-                                    color: Colors.blue.shade200, width: 1),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(18),
-                                borderSide: BorderSide(
-                                    color: Colors.blue.shade400, width: 1.5),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                  vertical: 10, horizontal: 8),
+                              onSubmitted: (_) => _sendText(),
                             ),
-                            onSubmitted: (_) => _sendText(),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          onPressed: _sending ? null : _sendText,
-                          icon: const Icon(Icons.send),
-                          tooltip: _tr('send', 'Gửi'),
-                        ),
-                      ],
-                    ),
-                  ),
+                          const SizedBox(width: 8),
+                          Material(
+                            color: sendBg,
+                            shape: const CircleBorder(),
+                            child: InkWell(
+                              customBorder: const CircleBorder(),
+                              onTap: _sending ? null : _sendText,
+                              child: const Padding(
+                                padding: EdgeInsets.all(10),
+                                child: Icon(Icons.send, color: Colors.white),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )),
+                  )
                 ],
               ),
               if (_showScrollToBottom)
                 Positioned(
                   right: 12,
                   bottom: 76,
-                  child: Material(
-                    color: Colors.white,
-                    shape: const CircleBorder(),
-                    elevation: 3,
-                    child: InkWell(
-                      customBorder: const CircleBorder(),
-                      onTap: () => _scrollToBottom(),
-                      child: const Padding(
-                        padding: EdgeInsets.all(10),
-                        child: Icon(Icons.arrow_downward),
-                      ),
-                    ),
+                  child: Builder(
+                    builder: (context) {
+                      final isDark =
+                          Provider.of<ThemeController>(context, listen: true).darkTheme;
+
+                      final bg = isDark ? const Color(0xFF2A2A2A) : Colors.white;
+                      final fg = isDark ? Colors.white : Colors.black87;
+
+                      return Material(
+                        color: bg,
+                        shape: const CircleBorder(),
+                        elevation: 3,
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: _scrollToBottom,
+                          child: Padding(
+                            padding: const EdgeInsets.all(10),
+                            child: Icon(Icons.arrow_downward, color: fg),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
             ],
           ),
         ),
       ),
+        ),
     );
   }
 
-  // =================================================
-  // CALL INVITE TILE
-  // =================================================
   Widget _buildCallInviteTile(CallInvite inv, {required bool isMe}) {
     final isVideo = inv.mediaType == 'video';
     final bg = isMe ? const Color(0xFF2F80ED) : const Color(0xFFEFEFEF);
@@ -2036,7 +2426,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
     return InkWell(
       borderRadius: BorderRadius.circular(14),
-      // Không mở UI incoming Flutter nữa (đã dùng CallKit/ConnectionService)
       onTap: () {},
       child: Container(
         constraints: const BoxConstraints(maxWidth: 260),
@@ -2060,8 +2449,6 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 }
-
-/// ================== HỖ TRỢ MENU ==================
 
 enum _MessageAction { reply, copy, delete, forward }
 
@@ -2122,7 +2509,7 @@ List<double> _generateWaveform(String key, {int count = 32}) {
   final rnd = Random(key.hashCode);
   final List<double> values = [];
   for (int i = 0; i < count; i++) {
-    final double base = 0.25 + rnd.nextDouble() * 0.75; // 0.25..1.0
+    final double base = 0.25 + rnd.nextDouble() * 0.75;
     values.add(base);
   }
   final List<double> mirrored = [
@@ -2133,7 +2520,7 @@ List<double> _generateWaveform(String key, {int count = 32}) {
 }
 
 class _WaveformSeekBar extends StatelessWidget {
-  final double progress; // 0..1
+  final double progress;
   final Color activeColor;
   final Color inactiveColor;
   final ValueChanged<double>? onSeekPercent;
@@ -2222,6 +2609,45 @@ class _WaveformSeekBar extends StatelessWidget {
   }
 }
 
+class _DottedLine extends StatelessWidget {
+  final int tick;
+  final Color color;
+
+  const _DottedLine({
+    required this.tick,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (_, c) {
+        final w = c.maxWidth.isFinite ? c.maxWidth : 220.0;
+        final count = (w / 6).floor().clamp(18, 60);
+
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: List.generate(count, (i) {
+            // tạo hiệu ứng “đuôi mờ” nhẹ theo tick
+            final phase = (tick % 8);
+            final dist = (i - (count - 1 - phase)).abs();
+            final opacity = (dist <= 4) ? 0.45 : 0.95;
+
+            return Container(
+              width: 2.2,
+              height: 2.2,
+              decoration: BoxDecoration(
+                color: color.withOpacity(opacity),
+                shape: BoxShape.circle,
+              ),
+            );
+          }),
+        );
+      },
+    );
+  }
+}
+
 class _SwipeReplyWrapper extends StatefulWidget {
   final Widget child;
   final bool isMe;
@@ -2239,22 +2665,19 @@ class _SwipeReplyWrapper extends StatefulWidget {
 
 class _SwipeReplyWrapperState extends State<_SwipeReplyWrapper> {
   double _dragDx = 0;
-  static const double _maxShift = 80; // kéo tối đa ~80px
+  static const double _maxShift = 80;
 
   @override
   Widget build(BuildContext context) {
-    // Giới hạn theo hướng cho phép
     double effectiveDx;
     if (widget.isMe) {
-      // mình: chỉ cho kéo sang trái (âm)
       effectiveDx = _dragDx.clamp(-_maxShift, 0);
     } else {
-      // người khác: chỉ cho kéo sang phải (dương)
       effectiveDx = _dragDx.clamp(0, _maxShift);
     }
 
     final progress =
-        (effectiveDx.abs() / _maxShift).clamp(0.0, 1.0); // 0 -> 1 cho icon
+        (effectiveDx.abs() / _maxShift).clamp(0.0, 1.0);
 
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
@@ -2265,7 +2688,7 @@ class _SwipeReplyWrapperState extends State<_SwipeReplyWrapper> {
       },
       onHorizontalDragEnd: (_) {
         final threshold =
-            _maxShift * 0.6; // phải kéo > ~60% maxShift mới trigger
+            _maxShift * 0.6;
 
         bool trigger = false;
         if (widget.isMe) {
@@ -2279,7 +2702,7 @@ class _SwipeReplyWrapperState extends State<_SwipeReplyWrapper> {
         }
 
         setState(() {
-          _dragDx = 0; // snap bubble về chỗ cũ
+          _dragDx = 0;
         });
       },
       onHorizontalDragCancel: () {
@@ -2290,7 +2713,6 @@ class _SwipeReplyWrapperState extends State<_SwipeReplyWrapper> {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Icon reply nằm ở phía “kéo ra”
           Positioned(
             left: widget.isMe ? null : 0,
             right: widget.isMe ? 0 : null,
@@ -2306,7 +2728,6 @@ class _SwipeReplyWrapperState extends State<_SwipeReplyWrapper> {
               ),
             ),
           ),
-          // Bubble dịch chuyển theo tay
           Transform.translate(
             offset: Offset(effectiveDx, 0),
             child: widget.child,
@@ -2371,11 +2792,8 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
     });
 
     try {
-      // 🔹 Friends (GetX)
       if (Get.isRegistered<SocialFriendsController>()) {
         _friendsCtrl = Get.find<SocialFriendsController>();
-
-        // Ưu tiên filtered nếu đã search, không thì friends
         final friends = _friendsCtrl!.filtered.isNotEmpty
             ? _friendsCtrl!.filtered
             : _friendsCtrl!.friends;
@@ -2383,7 +2801,6 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
         _allFriends = List<SocialFriend>.from(friends);
       }
 
-      // 🔹 Groups (Provider)
       _groupCtrl = context.read<GroupChatController>();
       if (_groupCtrl!.groups.isEmpty) {
         await _groupCtrl!.loadGroups();
@@ -2437,10 +2854,8 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
           (m['is_audio'] == true) ||
           (m['is_file'] == true);
 
-      // caption dùng chung cho cả text lẫn media
       final caption = (m['display_text'] ?? m['text'] ?? '').toString().trim();
 
-      // ================= MEDIA =================
       if (isMedia && mediaUrl.isNotEmpty && mediaUrl.startsWith('http')) {
         final uri = Uri.parse(mediaUrl);
         final res = await http.get(uri);
@@ -2454,39 +2869,31 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
           await file.writeAsBytes(res.bodyBytes);
 
           if (isGroup) {
-            // 👉 forward vào nhóm
             final gc = _groupCtrl ?? context.read<GroupChatController>();
-
-            // đoán type theo cờ is_image / is_video / is_audio / is_file
             String mediaType = 'file';
             if (m['is_image'] == true)
               mediaType = 'image';
             else if (m['is_video'] == true)
               mediaType = 'video';
             else if (m['is_audio'] == true) mediaType = 'voice';
-
-            // ⬇️ Ở group: text là tham số bắt buộc
             await gc.sendMessage(
               targetId,
-              caption, // có thể rỗng, không sao
+              caption,
               file: file,
               type: mediaType,
             );
-            sent = {}; // đánh dấu là đã gửi xong
+            sent = {};
           } else {
-            // 👉 forward 1-1
             sent = await widget.repo.sendMessage(
               token: widget.accessToken,
               peerUserId: targetId,
               filePath: file.path,
-              // nếu có caption thì đính kèm luôn
               text: caption.isNotEmpty ? caption : null,
             );
           }
         }
       }
 
-      // ================= TEXT =================
       if (sent == null) {
         final text = (m['display_text'] ?? m['text'] ?? '').toString().trim();
         if (text.isEmpty) {
@@ -2498,7 +2905,7 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
 
           await gc.sendMessage(
             targetId,
-            text, // ⬅️ text bắt buộc
+            text,
           );
         } else {
           sent = await widget.repo.sendMessage(
@@ -2542,7 +2949,6 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
     final mediaUrl = (m['media_url'] ?? m['media'] ?? '').toString();
     final isImage = m['is_image'] == true && mediaUrl.startsWith('http');
 
-    // Filter theo keyword
     var friends = _allFriends;
     var groups = _allGroups;
     if (_keyword.isNotEmpty) {
@@ -2567,7 +2973,6 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 📌 Preview tin nhắn
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
@@ -2614,7 +3019,6 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
             ),
           ),
 
-          // 🔍 Search
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: TextField(
