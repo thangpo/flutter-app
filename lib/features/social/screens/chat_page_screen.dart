@@ -481,82 +481,128 @@ class _PageChatScreenState extends State<PageChatScreen> {
   }
 
   Widget _buildInputArea(SocialPageController pageCtrl) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final barBg = isDark ? const Color(0xFF141414) : Colors.transparent;
+    final inputFill = isDark ? const Color(0xFF2A2A2A) : Colors.white;
+
+    final borderColor = isDark ? Colors.white24 : Colors.blue.shade200;
+    final focusBorder = isDark ? Colors.white38 : Colors.blue.shade400;
+
+    final hintColor = isDark ? Colors.white54 : Colors.black54;
+    final iconColor = isDark ? Colors.white70 : Colors.black54;
+
+    final sendBg = theme.colorScheme.primary;
+
+    Future<void> doSend() async {
+      final text = _inputCtrl.text.trim();
+      final hasText = text.isNotEmpty;
+      final hasAtt = _pendingAttachments.isNotEmpty;
+      final hasVoice = _voiceDraftPath != null;
+
+      if (_sending) return;
+      if (!hasText && !hasAtt && !hasVoice) return;
+
+      _inputCtrl.clear();
+      setState(() => _sending = true);
+
+      try {
+        if (hasText) {
+          await pageCtrl.sendPageChatMessage(text: text);
+        }
+
+        if (hasAtt) {
+          final items = List<_PendingAttachment>.from(_pendingAttachments);
+          for (final att in items) {
+            final part = await MultipartFile.fromFile(
+              att.path,
+              filename: p.basename(att.path),
+            );
+            await pageCtrl.sendPageChatMessage(file: part, text: '');
+          }
+          if (mounted) setState(() => _pendingAttachments.clear());
+        }
+
+        if (hasVoice) {
+          await _sendVoiceDraft(pageCtrl, manageSending: false);
+        }
+
+        _scrollToBottom();
+      } catch (e) {
+        _showError(e);
+      } finally {
+        if (mounted) setState(() => _sending = false);
+      }
+    }
+
     return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.fromLTRB(8, 6, 8, 8),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(.4),
+        decoration: BoxDecoration(
+          color: barBg,
+          borderRadius: BorderRadius.circular(18),
+        ),
         child: Row(
           children: [
-            IconButton(
-              icon: const Icon(Icons.image),
-              onPressed: _sending ? null : _pickMedia,
-            ),
             Expanded(
               child: TextField(
                 controller: _inputCtrl,
+                enabled: !_sending,
                 minLines: 1,
-                maxLines: 4,
+                maxLines: 5,
+                cursorColor: isDark ? Colors.white : Colors.black,
+                style: TextStyle(color: isDark ? Colors.white : Colors.black),
                 decoration: InputDecoration(
-                  hintText: "Nhập tin nhắn...",
+                  hintText: _sending ? "Đang gửi..." : "Nhập tin nhắn...",
+                  hintStyle: TextStyle(color: hintColor),
+                  isDense: true,
                   filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                  fillColor: inputFill,
+
+                  prefixIcon: IconButton(
+                    icon: Icon(Icons.attach_file, color: iconColor),
+                    onPressed: _sending ? null : _pickMedia,
                   ),
+
+                  suffixIcon: IconButton(
+                    icon: Icon(Icons.mic, color: iconColor),
+                    onPressed: _sending ? null : () => _toggleRecord(pageCtrl),
+                  ),
+
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(18),
+                    borderSide: BorderSide(color: borderColor, width: 1),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(18),
+                    borderSide: BorderSide(color: borderColor, width: 1),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(18),
+                    borderSide: BorderSide(color: focusBorder, width: 1.5),
+                  ),
+                  contentPadding:
+                  const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
                 ),
+                onSubmitted: (_) => doSend(),
               ),
             ),
             const SizedBox(width: 8),
-            IconButton(
-              icon: Icon(
-                _recording ? Icons.mic : Icons.mic_none,
-                color: _recording ? Colors.red : null,
+
+            Material(
+              color: sendBg,
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: _sending ? null : doSend,
+                child: const Padding(
+                  padding: EdgeInsets.all(10),
+                  child: Icon(Icons.send, color: Colors.white),
+                ),
               ),
-              onPressed: () => _toggleRecord(pageCtrl),
             ),
-            IconButton(
-              icon: const Icon(Icons.send, color: Colors.blue),
-              onPressed: _sending ? null : () async {
-                final text = _inputCtrl.text.trim();
-                final hasText = text.isNotEmpty;
-                final hasAtt = _pendingAttachments.isNotEmpty;
-                final hasVoice = _voiceDraftPath != null;
-
-                if (!hasText && !hasAtt && !hasVoice) return;
-
-                _inputCtrl.clear();
-                setState(() => _sending = true);
-
-                try {
-                  if (hasText) {
-                    await pageCtrl.sendPageChatMessage(text: text);
-                  }
-
-                  if (hasAtt) {
-                    final items = List<_PendingAttachment>.from(_pendingAttachments);
-                    for (final att in items) {
-                      final part = await MultipartFile.fromFile(
-                        att.path,
-                        filename: p.basename(att.path),
-                      );
-                      await pageCtrl.sendPageChatMessage(file: part, text: '');
-                    }
-                    setState(() => _pendingAttachments.clear());
-                  }
-
-                  // nếu bạn muốn bấm Send gửi luôn cả draft voice
-                  if (hasVoice) {
-                    await _sendVoiceDraft(pageCtrl);
-                  }
-
-                  _scrollToBottom();
-                } catch (e) {
-                  _showError(e);
-                } finally {
-                  if (mounted) setState(() => _sending = false);
-                }
-              },
-            )
           ],
         ),
       ),

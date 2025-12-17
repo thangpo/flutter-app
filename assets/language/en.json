@@ -1861,5 +1861,7 @@
   "search_section_friends": "Friends",
   "search_section_groups": "Groups",
   "search_section_pages": "Pages",
-  "search_chat_user_prefix": "User #"
+  "search_chat_user_prefix": "User #",
+  "re_record": "Re-record",
+  "voice_seek_hint": "Drag on the voice message to play from any point."
 }

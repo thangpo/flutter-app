@@ -1827,6 +1827,8 @@
   "search_section_friends": "Bạn bè",
   "search_section_groups": "Nhóm",
   "search_section_pages": "Trang",
-  "search_chat_user_prefix": "Người dùng #"
+  "search_chat_user_prefix": "Người dùng #",
+  "re_record": "Ghi lại",
+  "voice_seek_hint": "Trượt ngón tay trên bản ghi âm để phát từ bất kỳ điểm nào."
 }
 
