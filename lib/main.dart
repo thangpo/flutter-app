@@ -117,6 +117,24 @@ bool _incomingCallRouting = false;
 const MethodChannel _androidCallkitIntentChannel =
     MethodChannel('com.vnsshop.ecommerce/callkit_intent');
 
+Map<String, dynamic> _normalizeAndroidCallkitBundle(Map<String, dynamic> data) {
+  // Intent từ flutter_callkit_incoming (Android) trả về Bundle với key dạng
+  // EXTRA_CALLKIT_ID / EXTRA_CALLKIT_EXTRA...
+  // Chuẩn hoá sang format eventChannel của plugin: {id, extra, nameCaller, avatar, ...}
+  final id = (data['EXTRA_CALLKIT_ID'] ?? data['id'] ?? '').toString();
+  final extraAny = data['EXTRA_CALLKIT_EXTRA'] ?? data['extra'];
+  final extra = extraAny is Map
+      ? extraAny.map((k, v) => MapEntry(k.toString(), v))
+      : <String, dynamic>{};
+
+  return <String, dynamic>{
+    'id': id,
+    'nameCaller': (data['EXTRA_CALLKIT_NAME_CALLER'] ?? '').toString(),
+    'avatar': (data['EXTRA_CALLKIT_AVATAR'] ?? '').toString(),
+    'extra': extra,
+  };
+}
+
 Future<void> _bindAndroidCallkitIntentChannel() async {
   try {
     _androidCallkitIntentChannel.setMethodCallHandler((call) async {
@@ -125,9 +143,10 @@ Future<void> _bindAndroidCallkitIntentChannel() async {
       if (args is! Map) return;
       final action = args['action']?.toString();
       final dataAny = args['data'];
-      final data = dataAny is Map
+      final rawData = dataAny is Map
           ? dataAny.map((k, v) => MapEntry(k.toString(), v))
           : <String, dynamic>{};
+      final data = _normalizeAndroidCallkitBundle(rawData);
 
       int callId = 0;
       try {
@@ -162,9 +181,10 @@ Future<void> _handleInitialAndroidCallkitIntent() async {
     if (res is! Map) return;
     final action = res['action']?.toString();
     final dataAny = res['data'];
-    final data = dataAny is Map
+    final rawData = dataAny is Map
         ? dataAny.map((k, v) => MapEntry(k.toString(), v))
         : <String, dynamic>{};
+    final data = _normalizeAndroidCallkitBundle(rawData);
     if ((action == null || action.isEmpty) && data.isEmpty) return;
 
     int callId = 0;
@@ -311,6 +331,19 @@ Future<void> myBackgroundMessageHandler(RemoteMessage message) async {
     } else if (type == 'call_invite' ||
         type == 'call_invite_group' ||
         (type.isEmpty && hasGroupCallIds)) {
+      // Android: show CallKit UI by native receiver (CallInviteMessagingReceiver) to avoid MethodChannel hang in killed-state.
+      if (Platform.isAndroid && type == 'call_invite') {
+        try {
+          await RemoteRtcLog.send(
+            event: 'bg_call_invite_skip_android_native',
+            callId: int.tryParse(
+                    '${data['call_id'] ?? data['id'] ?? data['callId'] ?? ''}') ??
+                0,
+            details: {'reason': 'native_receiver'},
+          );
+        } catch (_) {}
+        return;
+      }
       try {
         final prefs = await SharedPreferences.getInstance();
         final myId = prefs.getString(AppConstants.socialUserId);

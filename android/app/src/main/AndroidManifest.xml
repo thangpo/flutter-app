@@ -161,6 +161,17 @@
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="vnshop247_channel" />
 
+        <!-- FCM receiver riêng cho call_invite (Android background/killed) -->
+        <receiver
+            android:name=".CallInviteMessagingReceiver"
+            android:exported="true"
+            android:permission="com.google.android.c2dm.permission.SEND">
+            <intent-filter>
+                <action android:name="com.google.android.c2dm.intent.RECEIVE" />
+                <category android:name="${applicationId}" />
+            </intent-filter>
+        </receiver>
+
         <!--
           GỠ BỎ Khai báo sai dịch vụ FCM:
           Bạn đang khai báo trực tiếp com.google.firebase.messaging.FirebaseMessagingService (lớp base/abstract).
