@@ -243,11 +243,15 @@ class ChatAndroidBottomBar extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
 
+  /// giống ảnh: chỉ icon, không label
+  final bool showLabel;
+
   const ChatAndroidBottomBar({
     super.key,
     required this.items,
     required this.currentIndex,
     required this.onTap,
+    this.showLabel = false,
   });
 
   @override
@@ -255,123 +259,142 @@ class ChatAndroidBottomBar extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final Color barColor =
-        isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE8EBF0);
-    final Color scaffoldBg = theme.scaffoldBackgroundColor;
+    final Color barColor = isDark ? const Color(0xFF1F1F1F) : Colors.white;
+    final Color inactiveColor = isDark ? Colors.white60 : Colors.black45;
+    final Color activeColor = theme.colorScheme.primary;
+
+    const double outerPad = 12; // padding 2 bên
+    const double barHeight = 62;
+    const double barRadius = 26;
+
+    const double bubbleSize = 54; // nút tròn nổi
+    const double bubbleLift = 18; // nâng lên giống ảnh
 
     return SafeArea(
-      minimum: const EdgeInsets.only(bottom: 8),
+      top: false,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10),
+        padding: const EdgeInsets.only(bottom: 8),
         child: LayoutBuilder(
-          builder: (context, constraints) {
-            const double gapWidth = 16;
-            final int gapCount =
-                items.where((element) => element.addSpacerAfter).length;
-            final double barWidth = constraints.maxWidth;
-            final double itemWidth =
-                (barWidth - (gapWidth * gapCount)) / items.length;
+          builder: (context, c) {
+            final width = c.maxWidth;
 
-            const double circleSize = 70;
-            const double circleBottom = 40;
+            // chiều rộng thanh (pill)
+            final pillWidth = width - outerPad * 2;
 
-            final double circleCenterX = itemWidth * (currentIndex + 0.5);
-            final double circleLeft = circleCenterX - circleSize / 2;
+            final itemWidth = pillWidth / items.length;
+            final bubbleLeft = outerPad +
+                (itemWidth * currentIndex) +
+                (itemWidth / 2) -
+                (bubbleSize / 2);
 
             return SizedBox(
-              height: 110,
+              height: barHeight + bubbleLift + 14,
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
+                  // pill background
                   Positioned(
-                    left: 0,
-                    right: 0,
-                    top: 16,
+                    left: outerPad,
+                    right: outerPad,
+                    bottom: 0,
                     child: Container(
-                      height: 70,
+                      height: barHeight,
                       decoration: BoxDecoration(
                         color: barColor,
-                        borderRadius: BorderRadius.circular(26),
+                        borderRadius: BorderRadius.circular(barRadius),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 12,
+                            color: Colors.black.withOpacity(isDark ? 0.35 : 0.10),
+                            blurRadius: 14,
                             offset: const Offset(0, 6),
                           ),
                         ],
                       ),
-                    ),
-                  ),
-                  Positioned(
-                    left: circleLeft,
-                    bottom: circleBottom,
-                    child: Container(
-                      width: circleSize,
-                      height: circleSize,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: scaffoldBg,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.16),
-                            blurRadius: 12,
-                            offset: const Offset(0, 6),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 22,
-                    child: Row(
-                      children: List.generate(items.length, (i) {
-                        final item = items[i];
-                        final bool active = i == currentIndex;
-                        final icon = active
-                            ? (item.activeIcon ?? item.icon)
-                            : item.icon;
+                      child: Row(
+                        children: List.generate(items.length, (i) {
+                          final item = items[i];
+                          final active = i == currentIndex;
 
-                        return Row(
-                          children: [
-                            SizedBox(
-                              width: itemWidth,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(18),
-                                onTap: () => onTap(i),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
+                          // chừa chỗ cho bubble nổi, để icon trong row không đè lên
+                          final iconToShow = active
+                              ? (item.activeIcon ?? item.icon)
+                              : item.icon;
+
+                          return SizedBox(
+                            width: itemWidth,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(18),
+                              onTap: () => onTap(i),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const SizedBox(height: 6),
+                                  Opacity(
+                                    opacity: active ? 0.0 : 1.0,
+                                    child: Icon(iconToShow, color: inactiveColor),
+                                  ),
+                                  if (showLabel) ...[
                                     const SizedBox(height: 4),
-                                    Icon(
-                                      icon,
-                                      color: active
-                                          ? Colors.blue
-                                          : Colors.grey.shade700,
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      item.label,
-                                      style: TextStyle(
-                                        color: active
-                                            ? Colors.blue
-                                            : Colors.grey.shade700,
-                                        fontSize: 11.5,
-                                        fontWeight: active
-                                            ? FontWeight.w600
-                                            : FontWeight.w500,
+                                    Opacity(
+                                      opacity: active ? 0.0 : 1.0,
+                                      child: Text(
+                                        item.label,
+                                        style: TextStyle(
+                                          color: inactiveColor,
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w500,
+                                        ),
                                       ),
                                     ),
                                   ],
-                                ),
+                                ],
                               ),
                             ),
-                            if (item.addSpacerAfter)
-                              const SizedBox(width: gapWidth),
-                          ],
-                        );
-                      }),
+                          );
+                        }),
+                      ),
+                    ),
+                  ),
+
+                  // bubble nổi (active)
+                  AnimatedPositioned(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOut,
+                    left: bubbleLeft,
+                    bottom: (barHeight - bubbleSize) / 2 + bubbleLift,
+                    child: Material(
+                      color: activeColor,
+                      shape: const CircleBorder(),
+                      elevation: 10,
+                      shadowColor: Colors.black.withOpacity(isDark ? 0.45 : 0.18),
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: () => onTap(currentIndex),
+                        child: SizedBox(
+                          width: bubbleSize,
+                          height: bubbleSize,
+                          child: Icon(
+                            items[currentIndex].activeIcon ?? items[currentIndex].icon,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // “đế” nhỏ dưới bubble (nhìn giống ảnh có nền cong nhẹ)
+                  AnimatedPositioned(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOut,
+                    left: bubbleLeft + (bubbleSize - 26) / 2,
+                    bottom: 10,
+                    child: Container(
+                      width: 26,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: activeColor.withOpacity(0.20),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                   ),
                 ],

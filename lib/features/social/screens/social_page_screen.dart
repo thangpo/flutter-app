@@ -1,15 +1,12 @@
 import 'dart:ui' show lerpDouble, ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_page_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_get_page.dart';
-
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/create_page_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/edit_page_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_page_detail.dart';
-
 import 'package:flutter_sixvalley_ecommerce/utill/images.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 
@@ -33,11 +30,10 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
 
     _tabController.addListener(() {
       if (_tabController.index == 2) {
-        // Tab "Đã thích"
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           final social = context.read<SocialController>();
-          final myId = social.currentUser?.id; // user_id hiện tại
+          final myId = social.currentUser?.id;
           context.read<SocialPageController>().ensureLikedPagesLoaded(
             userId: myId,
           );
@@ -50,7 +46,6 @@ class _SocialPagesScreenState extends State<SocialPagesScreen>
   void didChangeDependencies() {
     super.didChangeDependencies();
 
-    // Lần đầu vào màn sẽ gọi load gợi ý
     if (!_requestedSuggestedPages) {
       _requestedSuggestedPages = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {

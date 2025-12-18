@@ -23,8 +23,6 @@ class GroupChatsScreen extends StatefulWidget {
 }
 
 class _GroupChatsScreenState extends State<GroupChatsScreen> {
-  final _searchCtrl = TextEditingController();
-  String _keyword = '';
   final Map<String, String> _previewCache = {};
   final Map<String, int> _timeCache = {};
 
@@ -38,7 +36,6 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
 
   @override
   void dispose() {
-    _searchCtrl.dispose();
     super.dispose();
   }
 
@@ -263,59 +260,13 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
 
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-            child: SizedBox(
-              height: 42,
-              child: TextField(
-                controller: _searchCtrl,
-                onChanged: (v) => setState(() => _keyword = v.trim().toLowerCase()),
-                decoration: InputDecoration(
-                  hintText: getTranslated('search_group', context) ?? 'Search',
-                  prefixIcon: const Icon(Icons.search),
-                  filled: true,
-                  fillColor: isDark
-                      ? const Color(0xFF2A2A2A)
-                      : const Color(0xFFEDEFF3),
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide.none,
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(
-                      color: Theme.of(context).colorScheme.primary.withOpacity(.35),
-                      width: 1,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-
           Expanded(
             child: Consumer<GroupChatController>(
               builder: (context, ctrl, _) {
                 if (ctrl.groupsLoading) {
                   return const Center(child: CircularProgressIndicator());
                 }
-
                 var groups = List<Map<String, dynamic>>.from(ctrl.groups);
-                if (_keyword.isNotEmpty) {
-                  groups = groups.where((g) {
-                    final name = (g['group_name'] ?? g['name'] ?? '')
-                        .toString()
-                        .toLowerCase();
-                    return name.contains(_keyword);
-                  }).toList();
-                }
                 _sortGroups(groups);
 
                 if (groups.isEmpty) {
