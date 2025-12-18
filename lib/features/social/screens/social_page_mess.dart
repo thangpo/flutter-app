@@ -67,103 +67,44 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [cs.primary.withOpacity(.15), cs.surfaceVariant],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: cs.primary.withOpacity(.18),
-                          shape: BoxShape.circle,
-                        ),
-                        child:
-                            Icon(Icons.chat_bubble_outline, color: cs.primary),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              getTranslated('page_messages', context) ??
-                                  'Tin nhắn Page',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 15,
-                              ),
-                            ),
-                            Text(
-                              getTranslated(
-                                      'page_messages_subtitle', context) ??
-                                  'Theo dõi hội thoại khách hàng và Page của bạn',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: cs.onSurface.withOpacity(.65),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                _SegmentedTabs(
+                  index: _tabIndex,
+                  labels: [
+                    getTranslated('all', context) ?? 'All',
+                    getTranslated('my_pages', context) ?? 'My Pages',
+                  ],
+                  onChanged: (i) => setState(() => _tabIndex = i),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
+
                 TextField(
                   controller: _searchCtrl,
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
-                    hintText:
-                        getTranslated('search_page_conversation', context) ??
-                            'Tìm kiếm hội thoại hoặc tên Page',
+                    hintText: getTranslated('search_page_conversation', context) ??
+                        'Search conversations or Page name',
                     prefixIcon: const Icon(Icons.search),
                     suffixIcon: _searchCtrl.text.isNotEmpty
                         ? IconButton(
-                            icon: const Icon(Icons.close),
-                            onPressed: () {
-                              _searchCtrl.clear();
-                              setState(() {});
-                            },
-                          )
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        _searchCtrl.clear();
+                        setState(() {});
+                      },
+                    )
                         : null,
                     filled: true,
-                    fillColor: cs.surfaceVariant.withOpacity(.35),
+                    fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(.35),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide.none,
                     ),
                   ),
                 ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    _MiniTabChip(
-                      label: getTranslated('all', context) ?? 'Tất cả',
-                      selected: _tabIndex == 0,
-                      onTap: () => setState(() => _tabIndex = 0),
-                    ),
-                    const SizedBox(width: 8),
-                    _MiniTabChip(
-                      label:
-                          getTranslated('my_pages', context) ?? 'Page của tôi',
-                      selected: _tabIndex == 1,
-                      onTap: () => setState(() => _tabIndex = 1),
-                    ),
-                  ],
-                )
               ],
             ),
           ),
@@ -419,6 +360,85 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
               ),
             )
           : null,
+    );
+  }
+}
+
+class _SegmentedTabs extends StatelessWidget {
+  final int index;
+  final List<String> labels;
+  final ValueChanged<int> onChanged;
+
+  const _SegmentedTabs({
+    required this.index,
+    required this.labels,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final bg = isDark ? const Color(0xFF1F1F1F) : const Color(0xFFEDEDED);
+    final border = isDark ? Colors.white12 : Colors.black12;
+    final active = isDark ? const Color(0xFF2A2A2A) : Colors.white;
+    final activeText = isDark ? Colors.white : Colors.black87;
+    final inactiveText = isDark ? Colors.white70 : Colors.black54;
+
+    return LayoutBuilder(
+      builder: (ctx, c) {
+        final w = c.maxWidth;
+        final itemW = w / labels.length;
+
+        return Container(
+          height: 40,
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: border, width: 1),
+          ),
+          child: Stack(
+            children: [
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                left: itemW * index,
+                top: 0,
+                bottom: 0,
+                width: itemW,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: active,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              Row(
+                children: List.generate(labels.length, (i) {
+                  final selected = i == index;
+                  return Expanded(
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: () => onChanged(i),
+                      child: Center(
+                        child: Text(
+                          labels[i],
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: selected ? activeText : inactiveText,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

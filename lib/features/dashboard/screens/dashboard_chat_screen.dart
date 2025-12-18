@@ -109,7 +109,7 @@ class _DashboardChatScreenState extends State<DashboardChatScreen> {
         icon: _sym('person.3.fill', CupertinoIcons.person_3_fill),
         label: t('group_chat', 'Group'),
         addSpacerAfter:
-            true, // Tạo khoảng trống để tab Search nằm tách bên phải (iOS 26+)
+            true,
       ),
       AdaptiveNavigationDestination(
         icon: _sym('magnifyingglass', CupertinoIcons.search),

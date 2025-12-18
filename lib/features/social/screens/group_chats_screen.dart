@@ -52,7 +52,7 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
     if (ts is num) v = ts.toInt();
     if (ts is String) v = int.tryParse(ts);
     if (v == null || v <= 0) return null;
-    if (v > 2000000000) return v ~/ 1000; // ms -> s
+    if (v > 2000000000) return v ~/ 1000;
     return v;
   }
 
@@ -73,7 +73,7 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
       Map<String, dynamic> g, GroupChatController ctrl) async {
     final groupId = (g['group_id'] ?? g['id'] ?? '').toString();
     if (groupId.isEmpty) return;
-    if (_previewCache.containsKey(groupId)) return; // đã có (kể cả rỗng)
+    if (_previewCache.containsKey(groupId)) return;
     _previewCache[groupId] = '';
 
     try {
@@ -96,14 +96,12 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
         });
       }
     } catch (_) {
-      // ignore errors; keep fallback preview
+
     }
   }
 
   String _previewText(Map<String, dynamic> g) {
     final sender = (g['last_sender_name'] ?? g['last_sender'] ?? '').toString();
-
-    // last_message as map (WoWonder style)
     final lm = g['last_message'];
     Map<String, dynamic>? lastMap;
     if (lm is Map<String, dynamic>) {
@@ -131,7 +129,6 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
       }
     }
 
-    // flat text (various keys)
     final text = g['last_message_text'] ??
         g['last_text'] ??
         g['text'] ??
@@ -143,7 +140,6 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
       return sender.isNotEmpty ? '$sender: $t' : t;
     }
 
-    // type/media label
     final type = (g['last_message_type'] ?? g['type_two'] ?? '').toString();
     String tag = '';
     switch (type) {
@@ -214,64 +210,96 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(getTranslated('group_chat', context)!),
         elevation: 0,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        surfaceTintColor: Colors.transparent,
+        titleSpacing: 0,
+        title: Text(
+          getTranslated('group_chat', context) ?? 'Group chat',
+          style: const TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
         actions: [
-          IconButton(
-            tooltip: getTranslated('create_group_chat', context)!,
-            icon: const Icon(Icons.group_add),
-            onPressed: () async {
-              final success = await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      CreateGroupScreen(accessToken: widget.accessToken),
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.add, size: 18),
+              label: Text(getTranslated('add', context) ?? 'Add'),
+              style: ElevatedButton.styleFrom(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              );
-              if (!mounted) return;
-              if (success == true) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content:
-                        Text(getTranslated('group_created_success', context)!),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              ),
+              onPressed: () async {
+                final success = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CreateGroupScreen(accessToken: widget.accessToken),
                   ),
                 );
-                await _reloadGroups();
-              }
-            },
+                if (!mounted) return;
+                if (success == true) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(getTranslated('group_created_success', context) ?? 'Created'),
+                    ),
+                  );
+                  await _reloadGroups();
+                }
+              },
+            ),
           ),
         ],
       ),
 
-      // === BODY ===
       body: Column(
         children: [
-          // 🔍 Search – cho giống FriendsListScreen
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            child: TextField(
-              controller: _searchCtrl,
-              onChanged: (v) =>
-                  setState(() => _keyword = v.trim().toLowerCase()),
-              decoration: InputDecoration(
-                hintText: getTranslated('search_group', context),
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: cs.surfaceVariant.withOpacity(.5),
-                contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(999),
-                  borderSide: BorderSide.none,
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+            child: SizedBox(
+              height: 42,
+              child: TextField(
+                controller: _searchCtrl,
+                onChanged: (v) => setState(() => _keyword = v.trim().toLowerCase()),
+                decoration: InputDecoration(
+                  hintText: getTranslated('search_group', context) ?? 'Search',
+                  prefixIcon: const Icon(Icons.search),
+                  filled: true,
+                  fillColor: isDark
+                      ? const Color(0xFF2A2A2A)
+                      : const Color(0xFFEDEFF3),
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.primary.withOpacity(.35),
+                      width: 1,
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
 
-          // List
           Expanded(
             child: Consumer<GroupChatController>(
               builder: (context, ctrl, _) {
@@ -354,7 +382,6 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
         ],
       ),
 
-      // === FOOTER NAV (floating iOS style) ===
       bottomNavigationBar: widget.showFooterNav
           ? Consumer<GroupChatController>(
               builder: (context, ctrl, _) {
@@ -362,10 +389,10 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
                     ctrl.groups.fold<int>(0, (sum, g) => sum + _unread(g));
 
                 return SocialTabsBottomNav(
-                  currentIndex: 2, // đang ở Group
+                  currentIndex: 2,
                   accessToken: widget.accessToken,
-                  chatBadgeCount: 0, // nếu bạn có unread chat thì nhét vào đây
-                  groupBadgeCount: totalGroupUnread, // unread nhóm
+                  chatBadgeCount: 0,
+                  groupBadgeCount: totalGroupUnread,
                   onTap: (i) {
                     if (i == 2) return;
 
@@ -391,7 +418,6 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
                       return;
                     }
 
-                    // i == 3 : Menu (tuỳ bạn gắn màn nào)
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                           content: Text('Chưa gắn điều hướng cho Menu')),
@@ -405,9 +431,6 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
   }
 }
 
-/// =====================
-/// Group list item – đồng style với FriendsListScreen
-/// =====================
 class _GroupTile extends StatelessWidget {
   final ColorScheme cs;
   final String avatarUrl;
@@ -415,8 +438,8 @@ class _GroupTile extends StatelessWidget {
   final String subtitle;
   final String timeText;
   final int unread;
-  final bool muted; // hiện tại không vẽ icon nữa, chỉ để dành nếu cần
-  final bool online; // cũng không vẽ icon, giữ nếu sau này xài
+  final bool muted;
+  final bool online;
   final VoidCallback onTap;
 
   const _GroupTile({
@@ -444,7 +467,6 @@ class _GroupTile extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Avatar giống _ChatAvatar
             Stack(
               children: [
                 CircleAvatar(
@@ -466,12 +488,10 @@ class _GroupTile extends StatelessWidget {
             ),
             const SizedBox(width: 12),
 
-            // Title + subtitle
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // name + time
                   Row(
                     children: [
                       Expanded(
@@ -520,9 +540,6 @@ class _GroupTile extends StatelessWidget {
   }
 }
 
-/// =====================
-/// Footer Nav (floating, iOS-like)
-/// =====================
 class _GroupFooterNav extends StatelessWidget {
   final int currentIndex;
   final int chatBadgeCount;

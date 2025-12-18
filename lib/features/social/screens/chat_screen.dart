@@ -663,28 +663,35 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _pickAndSendFile() async {
     if (_sending) return;
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     final _AttachChoice? choice = await showModalBottomSheet<_AttachChoice>(
       context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
+      barrierColor: Colors.black54,            // nền tối phía sau
+      backgroundColor: Colors.transparent,     // trong suốt để tự vẽ
+      isScrollControlled: false,
       builder: (context) {
         return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.insert_drive_file),
-                title: Text(_tr('choose_file', 'Chọn tệp')),
-                onTap: () => Navigator.pop(context, _AttachChoice.file),
-              ),
-              ListTile(
-                leading: const Icon(Icons.photo_library),
-                title: Text(_tr('media_library', 'Thư viện (ảnh/video)')),
-                onTap: () => Navigator.pop(context, _AttachChoice.galleryMedia),
-              ),
-            ],
+          child: Container(
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1F1F1F) : Colors.white, // nền sheet
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.insert_drive_file),
+                  title: Text(_tr('choose_file', 'Chọn tệp')),
+                  onTap: () => Navigator.pop(context, _AttachChoice.file),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.photo_library),
+                  title: Text(_tr('media_library', 'Thư viện (ảnh/video)')),
+                  onTap: () => Navigator.pop(context, _AttachChoice.galleryMedia),
+                ),
+              ],
+            ),
           ),
         );
       },
