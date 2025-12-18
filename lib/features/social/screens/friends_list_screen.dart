@@ -12,8 +12,6 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_page_
 import 'package:flutter_sixvalley_ecommerce/features/dashboard/screens/dashboard_chat_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/chat_page_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_page_chat.dart';
-
-// nhóm chat
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_chat_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/group_chat_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_page_controller.dart';
@@ -24,8 +22,6 @@ import 'package:flutter_sixvalley_ecommerce/features/social/widgets/create_story
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_story.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_story_viewer_screen.dart';
-
-
 
 class FriendsListScreen extends StatefulWidget {
   final String accessToken;
@@ -40,7 +36,6 @@ class FriendsListScreen extends StatefulWidget {
 class _FriendsListScreenState extends State<FriendsListScreen> {
   final friendsCtrl = Get.put(SocialFriendsController(SocialFriendsRepository()));
   final _chatRepo = SocialChatRepository();
-  final searchCtrl = TextEditingController();
 
   int _tabIndex = 0;
   int chatBadgeCount = 1;
@@ -50,7 +45,6 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
   final Map<String, String> _lastTextCache = {};
   static final Map<String, int> _localLastRead = {};
   final Map<String, int> _lastTimeCache = {};
-  String _searchKeyword = '';
   final Map<String, String> _groupPreviewCache = {};
   final Map<String, int> _groupTimeCache = {};
 
@@ -80,7 +74,6 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
   @override
   void dispose() {
     _pollTimer?.cancel();
-    searchCtrl.dispose();
     super.dispose();
   }
 
@@ -114,6 +107,22 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
     final lastMsgTs = _getLastMessageTs(u);
     final lastReadTs = _localLastRead[u.id] ?? 0;
     return lastMsgTs > lastReadTs;
+  }
+
+  bool _isOutgoingMessage(Map<String, dynamic> m) {
+    final pos = (m['position'] ?? m['msg_position'] ?? m['direction'] ?? '')
+        .toString()
+        .toLowerCase();
+
+    if (pos == 'right' || pos == 'out' || pos == 'sent') return true;
+
+    final owner = m['onwer'] ?? m['owner'] ?? m['is_owner'];
+    if (owner == 1 || owner == true || owner.toString() == '1') return true;
+
+    final fromMe = m['from_me'] ?? m['is_my_message'];
+    if (fromMe == 1 || fromMe == true || fromMe.toString() == '1') return true;
+
+    return false;
   }
 
   Future<void> _onRefresh() async {
@@ -187,10 +196,16 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
         final currentTs = _getLastMessageTs(u);
 
         if (normalizedTs > currentTs) {
+          final fromMe = _isOutgoingMessage(Map<String, dynamic>.from(m));
+
           setState(() {
             _lastTimeCache[u.id] = ts;
-            _lastTextCache[u.id] =
-                (m['display_text'] ?? pickWoWonderText(m)).toString();
+            _lastTextCache[u.id] = (m['display_text'] ?? pickWoWonderText(m)).toString();
+
+            // ✅ Nếu là tin nhắn do mình gửi -> không coi là unread
+            if (fromMe) {
+              _localLastRead[u.id] = normalizedTs;
+            }
           });
         }
       } catch (_) {}
@@ -208,6 +223,7 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
       );
       if (msgs.isNotEmpty) {
         final m = msgs.last;
+        final fromMe = _isOutgoingMessage(Map<String, dynamic>.from(m));
         String text = (m['display_text'] ?? '').toString().trim();
         if (text.isEmpty) {
           text = pickWoWonderText(m);
@@ -226,19 +242,15 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
           if (ts != null) {
             _lastTimeCache[u.id] = ts;
             _localLastActivity[u.id] = _normalizedTimestamp(ts) ?? ts;
+
+            if (fromMe) {
+              _localLastRead[u.id] = _normalizedTimestamp(ts) ?? ts;
+            }
           }
         });
       }
     } catch (_) {
-
     }
-  }
-
-  bool _matchesSearch(List<String> sources) {
-    if (_searchKeyword.isEmpty) return true;
-    return sources.any(
-      (txt) => txt.toLowerCase().contains(_searchKeyword),
-    );
   }
 
   int _pageTimestamp(PageChatThread t) {
@@ -520,16 +532,6 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
           ? (t.peerName.isNotEmpty ? t.peerName : t.pageTitle)
           : t.pageTitle;
       final subtitle = t.isMyPage ? '(${t.pageName})' : '@${t.pageName}';
-      if (!_matchesSearch([
-        chatTitle,
-        subtitle,
-        t.pageTitle,
-        t.pageName,
-        t.peerName,
-      ])) {
-        continue;
-      }
-
       final ts = _pageTimestamp(t);
       final timeLabel = _formatTimestampLabel(ts);
       final previewRaw = _pagePreview(t, context);
@@ -569,10 +571,6 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
       previewCached.isNotEmpty ? previewCached : _groupPreview(g, context);
       final ts = _groupLastTimestamp(g);
       final timeLabel = _formatTimestampLabel(ts);
-
-      if (!_matchesSearch([groupName, preview, gid])) {
-        continue;
-      }
       _ensureGroupPreview(g, groupCtrl);
 
       entries.add(
@@ -680,28 +678,6 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            child: TextField(
-              controller: searchCtrl,
-              onChanged: (v) {
-                _searchKeyword = v.trim().toLowerCase();
-                friendsCtrl.search(v);
-                setState(() {});
-              },
-              decoration: InputDecoration(
-                hintText: getTranslated('search', context) ?? 'Search',
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: cs.surfaceVariant.withOpacity(.5),
-                contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(999),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-          ),
           SizedBox(
             height: 106,
             child: Obx(() {

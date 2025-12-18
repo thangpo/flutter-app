@@ -1,10 +1,10 @@
-﻿// G:\flutter-app\lib\features\social\screens\group_chat_screen.dart
-import 'dart:io';
+﻿import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
-
+import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,7 +13,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
-
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_chat_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/group_chat_message_bubble.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
@@ -47,86 +46,70 @@ class GroupChatScreen extends StatefulWidget {
   State<GroupChatScreen> createState() => _GroupChatScreenState();
 }
 
+enum _ComposerMode { idle, recording, preview }
+
 class _GroupChatScreenState extends State<GroupChatScreen> {
   final _textCtrl = TextEditingController();
   final _scroll = ScrollController();
-
-  // Pickers
   final _picker = ImagePicker();
-
-  // Voice recorder
   final FlutterSoundRecorder _recorder = FlutterSoundRecorder();
   bool _recReady = false;
   bool _recording = false;
   String? _recPath;
-
-  // Chống gửi đúp
   bool _sending = false;
-
-  // Messenger-like UX
   bool _showScrollToBottom = false;
   int _lastItemCount = 0;
-
-  // --- override tên & avatar để cập nhật ngay ---
-  String? _titleOverride; // tên nhóm sau khi đổi
-  String? _avatarOverridePath; // http(s) hoặc file path/local uri
-
-  // Flag chống bấm gọi liên tiếp
+  String? _titleOverride;
+  String? _avatarOverridePath;
   bool _launchingCall = false;
-
-  // NEW: chống mở nhiều dialog "cuộc gọi đến"
   bool _ringingDialogOpen = false;
-
-  // NEW: reply preview
   Map<String, dynamic>? _replyTo;
-
-  // ===== NEW: Pending attachments (multi image/video preview) =====
   List<_PendingAttachment> _pendingAttachments = [];
-
-// ===== NEW: Voice draft preview (record -> preview -> send) =====
   final FlutterSoundPlayer _draftPlayer = FlutterSoundPlayer();
   StreamSubscription? _draftSub;
   bool _draftReady = false;
   bool _draftPlaying = false;
   Duration _draftPos = Duration.zero;
-
   String? _voiceDraftPath;
   Duration _voiceDraftDuration = Duration.zero;
-
   Timer? _recTimer;
   Duration _recElapsed = Duration.zero;
-
-  // NEW: realtime polling
   Timer? _pollTimer;
+  bool _recOn = false;
+  bool _recPaused = false;
+  Duration _draftDur = Duration.zero;
+
+  _ComposerMode get _mode {
+    if (_recOn) return _ComposerMode.recording;
+    if (_voiceDraftPath != null) return _ComposerMode.preview;
+    return _ComposerMode.idle;
+  }
 
   @override
   void initState() {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // Không autoOpen; dùng dialog Chấp nhận/Từ chối qua onIncoming
       _bindIncomingWatcher();
-
       await _initRecorder();
       await _draftPlayer.openPlayer();
       await _draftPlayer.setSubscriptionDuration(const Duration(milliseconds: 200));
       _draftSub = _draftPlayer.onProgress?.listen((e) {
         if (!mounted) return;
-        setState(() => _draftPos = e.position ?? Duration.zero);
+        setState(() {
+          _draftPos = e.position ?? Duration.zero;
+          _draftDur = e.duration ?? _draftDur;
+        });
       });
       _draftReady = true;
       final ctrl = context.read<GroupChatController>();
       await ctrl.loadMessages(widget.groupId);
-      // Thử lấy meta từ store nếu widget không có
       _hydrateFromStore();
       _scrollToBottom(immediate: true);
-
-      // Bật vòng lặp realtime
       _startRealtimePolling();
     });
 
     _scroll.addListener(() {
-      // Hiện nút "xuống cuối" khi ở cách cuối danh sách > 300px
       final distanceFromBottom =
           _scroll.position.maxScrollExtent - _scroll.position.pixels;
       final show = distanceFromBottom > 300;
@@ -134,7 +117,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         setState(() => _showScrollToBottom = show);
       }
 
-      // Nạp tin cũ khi kéo lên gần đỉnh
       if (_scroll.position.pixels <= 100) {
         final ctrl = context.read<GroupChatController>();
         final list = ctrl.messagesOf(widget.groupId);
@@ -149,37 +131,21 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     });
   }
 
-  // Gắn watcher inbox cho group này & thiết lập onIncoming
   void _bindIncomingWatcher() {
     final gcc = context.read<GroupCallController>();
     final gchat = context.read<GroupChatController>();
-
-    // Ngắt watcher cũ (nếu có) trước khi gắn mới
     gcc.stopWatchingInbox();
-
-    // Không auto mở phòng; chỉ callback cho UI
     gcc.watchGroupInbox(widget.groupId, autoOpen: false);
-
-    // Khi có cuộc gọi đến -> hiện dialog Chấp nhận / Từ chối
     gcc.onIncoming = (call) async {
       if (!mounted) return;
-      if (_ringingDialogOpen) return; // tránh trùng lặp
-
-      // Dữ liệu call từ API inbox
+      if (_ringingDialogOpen) return;
       final callId = (call['call_id'] ?? call['id']) is int
           ? (call['call_id'] ?? call['id']) as int
           : int.tryParse('${call['call_id'] ?? call['id'] ?? 0}') ?? 0;
       final media = (call['media'] ?? 'audio').toString();
       final joined = call['joined'] == true;
-
-      // user hiện tại & creator
       final meId = int.tryParse('${gchat.currentUserId}') ?? 0;
       final creatorId = int.tryParse('${call['creator_id'] ?? 0}') ?? 0;
-
-      // ⛔️ Không hiển thị dialog nếu:
-      // - đã join rồi (bao gồm creator vì create() đã mark joined_at)
-      // - mình chính là creator (caller)
-      // - controller đang ở đúng call này (đang trên màn call)
       if (joined ||
           creatorId == meId ||
           (gcc.currentCallId != null && gcc.currentCallId == callId)) {
@@ -231,7 +197,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     };
   }
 
-  // ====== REALTIME POLLING ======
   void _startRealtimePolling() {
     _pollTimer?.cancel();
     _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
@@ -252,7 +217,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // mỗi lần build lại có thể groups đã có dữ liệu -> hydrate
     _hydrateFromStore();
   }
 
@@ -260,7 +224,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   void didUpdateWidget(covariant GroupChatScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.groupId != widget.groupId) {
-      // ✅ Nếu chuyển sang group khác, gắn watcher mới (không autoOpen)
       _bindIncomingWatcher();
       _startRealtimePolling();
       setState(() {
@@ -271,7 +234,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
   @override
   void dispose() {
-    // ✅ Dừng watcher inbox khi rời màn và bỏ callback
     final gcc = context.read<GroupCallController>();
     gcc.stopWatchingInbox();
     gcc.onIncoming = null;
@@ -292,6 +254,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     _recElapsed = Duration.zero;
     _recTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
+      if (_recPaused) return;
       setState(() => _recElapsed += const Duration(seconds: 1));
     });
   }
@@ -301,7 +264,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     _recTimer = null;
   }
 
-  // ---------------- Recorder ----------------
   Future<void> _initRecorder() async {
     if (_recReady) return;
     final mic = await Permission.microphone.request();
@@ -310,62 +272,137 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     _recReady = true;
   }
 
-  Future<void> _toggleRecord() async {
+  Future<void> _startRecording() async {
     if (_sending) return;
+
     if (!_recReady) {
       await _initRecorder();
       if (!_recReady) return;
     }
 
-    if (!_recording) {
-      try {
-        final dir = await getTemporaryDirectory();
-        final path = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
-        _recPath = path;
+    final dir = await getTemporaryDirectory();
+    final path = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
 
-        await _recorder.startRecorder(
-          toFile: path,
-          codec: Codec.aacMP4,
-          bitRate: 128000,
-          sampleRate: 44100,
-          numChannels: 1,
-        );
+    await _draftPlayer.stopPlayer();
+    HapticFeedback.mediumImpact();
 
-        _startRecTimer();
+    setState(() {
+      _voiceDraftPath = null;
+      _voiceDraftDuration = Duration.zero;
+      _draftPos = Duration.zero;
+      _draftDur = Duration.zero;
+      _draftPlaying = false;
 
-        setState(() {
-          _recording = true;
+      _recElapsed = Duration.zero;
+      _recOn = true;
+      _recPaused = false;
+    });
 
-          // clear draft cũ
-          _voiceDraftPath = null;
-          _voiceDraftDuration = Duration.zero;
-          _draftPos = Duration.zero;
-          _draftPlaying = false;
-        });
-      } catch (_) {}
-    } else {
-      try {
-        _stopRecTimer();
-        final path = await _recorder.stopRecorder();
-        setState(() => _recording = false);
+    await _recorder.startRecorder(
+      toFile: path,
+      codec: Codec.aacMP4,
+      bitRate: 64000,
+      sampleRate: 44100,
+      numChannels: 1,
+    );
 
-        final realPath = path ?? _recPath;
-        if (realPath == null) return;
+    _startRecTimer();
+    _recPath = path;
+  }
 
-        setState(() {
-          _voiceDraftPath = realPath;
-          _voiceDraftDuration = _recElapsed; // duration draft
-          _draftPos = Duration.zero;
-          _draftPlaying = false;
-        });
-      } catch (_) {
-        _stopRecTimer();
-        setState(() => _recording = false);
-      }
+  Future<void> _finishRecording({bool sendNow = false}) async {
+    if (!_recOn) return;
+
+    _stopRecTimer();
+    final path = await _recorder.stopRecorder();
+    final filePath = path ?? _recPath;
+    _recPath = null;
+
+    HapticFeedback.lightImpact();
+
+    if (filePath == null) {
+      if (!mounted) return;
+      setState(() {
+        _recOn = false;
+        _recPaused = false;
+        _recElapsed = Duration.zero;
+      });
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _recOn = false;
+      _recPaused = false;
+      _voiceDraftPath = filePath;
+      _voiceDraftDuration =
+      _recElapsed > Duration.zero ? _recElapsed : _voiceDraftDuration;
+
+      _recElapsed = Duration.zero;
+      _draftPos = Duration.zero;
+      _draftDur = Duration.zero;
+      _draftPlaying = false;
+    });
+
+    if (sendNow) {
+      await _sendVoiceDraft();
     }
   }
 
-  // ---------------- Actions ----------------
+  Future<void> _cancelRecording() async {
+    if (_recOn) {
+      _stopRecTimer();
+      try { await _recorder.stopRecorder(); } catch (_) {}
+    }
+    if (!mounted) return;
+    setState(() {
+      _recOn = false;
+      _recPaused = false;
+      _recElapsed = Duration.zero;
+      _recPath = null;
+    });
+  }
+
+  Future<void> _togglePauseRecording() async {
+    if (!_recOn) return;
+    try {
+      if (_recPaused) {
+        await _recorder.resumeRecorder();
+        setState(() => _recPaused = false);
+      } else {
+        await _recorder.pauseRecorder();
+        setState(() => _recPaused = true);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _toggleRecord() async {
+    if (_sending) return;
+
+    if (_recOn) {
+      await _finishRecording(sendNow: false);
+    } else {
+      await _startRecording();
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _recording = _recOn;
+    });
+  }
+
+  List<double> _generateWaveform(String seed, {int count = 48}) {
+    final h = seed.hashCode;
+    final rnd = math.Random(h);
+    final list = <double>[];
+    for (var i = 0; i < count; i++) {
+      final base = 0.25 + 0.75 * rnd.nextDouble();
+      final wave = 0.65 + 0.35 * math.sin((i / count) * math.pi * 2);
+      list.add((base * wave).clamp(0.12, 1.0));
+    }
+    return list;
+  }
+
   Future<void> _sendText() async {
     final text = _textCtrl.text.trim();
     if (text.isEmpty || _sending) return;
@@ -441,6 +478,62 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     _scrollToBottom();
   }
 
+  Future<void> _sendAll() async {
+    final text = _textCtrl.text.trim();
+    final hasText = text.isNotEmpty;
+    final hasAtt = _pendingAttachments.isNotEmpty;
+    final hasVoice = _voiceDraftPath != null;
+
+    if (_sending) return;
+    if (!hasText && !hasAtt && !hasVoice) return;
+
+    final replying = _replyTo;
+
+    _textCtrl.clear();
+    setState(() => _sending = true);
+
+    try {
+      if (hasText) {
+        await context.read<GroupChatController>().sendMessage(
+          widget.groupId,
+          text,
+          replyTo: replying,
+        );
+      }
+
+      if (hasAtt) {
+        final items = List<_PendingAttachment>.from(_pendingAttachments);
+        for (final att in items) {
+          final type = att.type == _AttachmentType.image
+              ? 'image'
+              : att.type == _AttachmentType.video
+              ? 'video'
+              : 'file';
+
+          await context.read<GroupChatController>().sendMessage(
+            widget.groupId,
+            '',
+            file: File(att.path),
+            type: type,
+            replyTo: replying,
+          );
+        }
+        if (mounted) setState(() => _pendingAttachments.clear());
+      }
+
+      if (hasVoice) {
+        if (mounted) setState(() => _sending = false);
+        await _sendVoiceDraft();
+        return;
+      }
+
+      if (mounted) setState(() => _replyTo = null);
+      _scrollToBottom();
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
   Future<void> _pickVideo() async {
     if (_sending) return;
     final x = await _picker.pickVideo(source: ImageSource.gallery);
@@ -512,7 +605,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     );
   }
 
-  // Thu thập danh sách userId thành viên nhóm (trừ mình) để mời vào cuộc gọi
   Future<List<int>> _collectInvitees() async {
     final ids = <int>{};
     try {
@@ -564,7 +656,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     return list;
   }
 
-  // ====== GỌI NHÓM: xin quyền + điều hướng vào GroupCallRoom ======
   Future<void> _startGroupCall({required bool isVideo}) async {
     if (_launchingCall) return;
     _launchingCall = true;
@@ -624,9 +715,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     }
   }
 
-  // ---------------- Edit/Info helpers ----------------
-
-  // Lấy meta nhóm từ store nếu widget không có
   void _hydrateFromStore() {
     final ctrl = context.read<GroupChatController>();
     final idx = ctrl.groups
@@ -1060,7 +1148,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     }
   }
 
-  // NEW: Dialog thêm thành viên theo danh sách userId phân tách dấu phẩy
   Future<void> _openAddMembersDialog() async {
     final ctrl = context.read<GroupChatController>();
     final textCtrl = TextEditingController();
@@ -1515,7 +1602,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     );
   }
 
-  // ---------------- Scroll helpers ----------------
   void _scrollToBottom({bool immediate = false}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scroll.hasClients) return;
@@ -1532,7 +1618,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     });
   }
 
-  // ===== Long press menu (reactions + actions, Messenger-style) =====
   void _onMessageLongPress(Map<String, dynamic> message, bool isMe) {
     if (message['is_system'] == true) return;
     final idStr = '${message['id'] ?? ''}';
@@ -1677,7 +1762,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                               label: 'Chuyển tiếp',
                               onTap: () {
                                 Navigator.of(ctx).pop();
-                                // TODO: nối API forward group chat
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
                                     content: Text(
@@ -1710,6 +1794,343 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           emoji,
           style: const TextStyle(fontSize: 26),
         ),
+      ),
+    );
+  }
+
+  Widget _buildInputArea({
+    required bool isDark,
+    required Color barBg,
+    required Color inputFill,
+    required Color borderColor,
+    required Color focusBorder,
+    required Color hintColor,
+    required Color iconColor,
+    required Color sendBg,
+  }) {
+    final Color bg = switch (_mode) {
+      _ComposerMode.idle => barBg,
+      _ComposerMode.recording => Colors.transparent,
+      _ComposerMode.preview => Colors.transparent,
+    };
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+        alignment: Alignment.topCenter,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          switchInCurve: Curves.easeOut,
+          switchOutCurve: Curves.easeIn,
+          transitionBuilder: (child, anim) {
+            final slide = Tween<Offset>(
+              begin: const Offset(0, 0.12),
+              end: Offset.zero,
+            ).animate(anim);
+            return FadeTransition(
+              opacity: anim,
+              child: SlideTransition(position: slide, child: child),
+            );
+          },
+          child: _buildComposerByMode(
+            key: ValueKey(_mode),
+            isDark: isDark,
+            inputFill: inputFill,
+            borderColor: borderColor,
+            focusBorder: focusBorder,
+            hintColor: hintColor,
+            iconColor: iconColor,
+            sendBg: sendBg,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildComposerByMode({
+    required Key key,
+    required bool isDark,
+    required Color inputFill,
+    required Color borderColor,
+    required Color focusBorder,
+    required Color hintColor,
+    required Color iconColor,
+    required Color sendBg,
+  }) {
+    if (_mode == _ComposerMode.recording) {
+      return Container(key: key, child: _buildRecordingBar(isDark: isDark));
+    }
+
+    if (_mode == _ComposerMode.preview) {
+      return Container(key: key, child: _buildVoiceDraftCard(isDark: isDark));
+    }
+
+    // idle
+    return Container(
+      key: key,
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _textCtrl,
+              enabled: !_sending,
+              minLines: 1,
+              maxLines: 5,
+              cursorColor: isDark ? Colors.white : Colors.black,
+              style: TextStyle(color: isDark ? Colors.white : Colors.black),
+              decoration: InputDecoration(
+                hintText: _sending ? 'Đang gửi...' : 'Nhập tin nhắn...',
+                hintStyle: TextStyle(color: hintColor),
+                isDense: true,
+                filled: true,
+                fillColor: inputFill,
+                prefixIcon: IconButton(
+                  icon: Icon(Icons.attach_file, color: iconColor),
+                  onPressed: _sending ? null : _openAttachSheet,
+                ),
+                suffixIcon: _MicPressButton(
+                  color: iconColor,
+                  disabled: _sending,
+                  onTap: _startRecording,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide(color: borderColor, width: 1),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide(color: borderColor, width: 1),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide(color: focusBorder, width: 1.5),
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+              ),
+              onSubmitted: (_) => _sendAll(),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Material(
+            color: sendBg,
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: _sending ? null : _sendAll,
+              child: const Padding(
+                padding: EdgeInsets.all(10),
+                child: Icon(Icons.send, color: Colors.white),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecordingBar({required bool isDark}) {
+    final grad = LinearGradient(
+      colors: isDark
+          ? const [Color(0xFF3F45C8), Color(0xFF3A2A7A)]
+          : const [Color(0xFF5663FF), Color(0xFF6D3BFF)],
+    );
+
+    return Row(
+      children: [
+        IconButton(
+          tooltip: 'Xóa',
+          onPressed: _sending ? null : _cancelRecording,
+          icon: const Icon(Icons.delete_outline),
+        ),
+        Expanded(
+          child: Container(
+            height: 54,
+            decoration: BoxDecoration(
+              gradient: grad,
+              borderRadius: BorderRadius.circular(28),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    iconSize: 22,
+                    onPressed: _sending ? null : _togglePauseRecording,
+                    icon: Icon(
+                      _recPaused ? Icons.play_arrow : Icons.pause,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _DottedLine(
+                    tick: _recElapsed.inSeconds,
+                    color: Colors.white.withOpacity(0.9),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Row(
+                  children: [
+                    _BlinkDot(),
+                    const SizedBox(width: 8),
+                    Text(
+                      _fmt(_recElapsed),
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: 'Dừng',
+                  onPressed: _sending ? null : () => _finishRecording(sendNow: false),
+                  icon: const Icon(Icons.stop_circle, color: Colors.white),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildVoiceDraftCard({required bool isDark}) {
+    final theme = Theme.of(context);
+
+    final Duration effectiveDur = _draftDur > Duration.zero
+        ? _draftDur
+        : (_voiceDraftDuration > Duration.zero ? _voiceDraftDuration : _draftPos);
+
+    final double progress = (effectiveDur.inMilliseconds > 0)
+        ? (_draftPos.inMilliseconds.clamp(0, effectiveDur.inMilliseconds) /
+        effectiveDur.inMilliseconds)
+        : 0;
+
+    final cardBg = isDark ? const Color(0xFF2C2C2C) : const Color(0xFFF0F0F0);
+    final barBg  = isDark ? const Color(0xFF151515) : const Color(0xFF1B1B1B);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Trượt lên waveform để phát từ bất kỳ điểm nào.',
+            style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.black54),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            height: 52,
+            decoration: BoxDecoration(
+              color: barBg,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                IconButton(
+                  onPressed: _toggleDraftPlay,
+                  icon: Icon(
+                    _draftPlaying ? Icons.pause : Icons.play_arrow,
+                    color: Colors.white,
+                  ),
+                ),
+                Expanded(
+                  child: _WaveformSeekBar(
+                    progress: progress,
+                    activeColor: Colors.white,
+                    inactiveColor: Colors.white24,
+                    maxHeight: 26,
+                    samples: _generateWaveform(_voiceDraftPath ?? 'voice_preview'),
+                    onSeekPercent: (p) async {
+                      if (effectiveDur.inMilliseconds > 0) {
+                        final ms = (p * effectiveDur.inMilliseconds).toInt();
+                        await _draftPlayer.seekToPlayer(Duration(milliseconds: ms));
+                        setState(() => _draftPos = Duration(milliseconds: ms));
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _fmt(effectiveDur),
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+                const SizedBox(width: 10),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              IconButton(
+                tooltip: 'Xóa',
+                onPressed: () async {
+                  await _draftPlayer.stopPlayer();
+                  setState(() {
+                    _voiceDraftPath = null;
+                    _voiceDraftDuration = Duration.zero;
+                    _draftPos = Duration.zero;
+                    _draftDur = Duration.zero;
+                    _draftPlaying = false;
+                  });
+                },
+                icon: const Icon(Icons.delete, color: Colors.redAccent),
+              ),
+              IconButton(
+                tooltip: 'Ghi lại',
+                onPressed: () async {
+                  await _draftPlayer.stopPlayer();
+                  setState(() {
+                    _voiceDraftPath = null;
+                    _voiceDraftDuration = Duration.zero;
+                    _draftPos = Duration.zero;
+                    _draftDur = Duration.zero;
+                    _draftPlaying = false;
+                  });
+                  await _startRecording();
+                },
+                icon: Icon(Icons.refresh, color: theme.colorScheme.primary),
+              ),
+              const Spacer(),
+              ElevatedButton(
+                onPressed: _sending ? null : _sendVoiceDraft,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: theme.colorScheme.primary,
+                  shape: const StadiumBorder(),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Gửi', style: TextStyle(fontWeight: FontWeight.w700)),
+                    SizedBox(width: 10),
+                    Icon(Icons.send, size: 18),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -1749,8 +2170,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       ),
     );
   }
-
-  // ---------- REPLY HELPERS (giống 1-1) ----------
 
   String _plainTextOf(Map<String, dynamic> m) {
     final display = (m['display_text'] ?? '').toString();
@@ -2031,31 +2450,46 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     );
   }
 
-  // ---------------- UI ----------------
   @override
   Widget build(BuildContext context) {
     final ctrl = context.watch<GroupChatController>();
     final items = ctrl.messagesOf(widget.groupId);
     final isLoading = ctrl.messagesLoading(widget.groupId);
-
-    // Auto scroll khi có tin mới:
     final distanceFromBottom = _scroll.hasClients
         ? (_scroll.position.maxScrollExtent - _scroll.position.pixels)
         : 0;
     final nearBottom = distanceFromBottom < 200;
-
     if (items.length != _lastItemCount) {
       if (items.length > _lastItemCount && nearBottom) {
         _scrollToBottom();
       }
       _lastItemCount = items.length;
     }
-
     final title = _finalTitle(ctrl);
     final avatarProvider = _finalAvatarProvider(ctrl);
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final inputFill   = isDark ? const Color(0xFF2A2A2A) : Colors.white;
+    final borderColor = isDark ? Colors.white24 : Colors.blue.shade200;
+    final focusBorder = isDark ? Colors.white38 : Colors.blue.shade400;
+    final hintColor = isDark ? Colors.white54 : Colors.black54;
+    final iconColor = isDark ? Colors.white70 : Colors.black54;
+    final sendBg = theme.colorScheme.primary;
+    final barBg  = isDark ? const Color(0xFF141414) : Colors.transparent;
+
 
     return Scaffold(
       appBar: AppBar(
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        backgroundColor: theme.scaffoldBackgroundColor,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+
+        systemOverlayStyle:
+        isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+
         titleSpacing: 0,
         title: Row(
           children: [
@@ -2067,28 +2501,13 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                   : null,
             ),
             const SizedBox(width: 8),
-            Flexible(
-              child: Text(title, overflow: TextOverflow.ellipsis),
-            ),
+            Flexible(child: Text(title, overflow: TextOverflow.ellipsis)),
           ],
         ),
-        centerTitle: false,
         actions: [
-          IconButton(
-            tooltip: 'Gọi thoại',
-            icon: const Icon(Icons.call),
-            onPressed: () => _startGroupCall(isVideo: false),
-          ),
-          IconButton(
-            tooltip: 'Gọi video',
-            icon: const Icon(Icons.videocam),
-            onPressed: () => _startGroupCall(isVideo: true),
-          ),
-          IconButton(
-            tooltip: 'Thông tin',
-            icon: const Icon(Icons.info_outline),
-            onPressed: _openGroupInfoSheet,
-          ),
+          IconButton(icon: const Icon(Icons.call), onPressed: () => _startGroupCall(isVideo: false)),
+          IconButton(icon: const Icon(Icons.videocam), onPressed: () => _startGroupCall(isVideo: true)),
+          IconButton(icon: const Icon(Icons.info_outline), onPressed: _openGroupInfoSheet),
         ],
       ),
       body: Stack(
@@ -2223,7 +2642,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                               );
                             }
 
-                            // tin nhắn của chính mình
                             return Padding(
                               padding:
                                   const EdgeInsets.symmetric(vertical: 4.0),
@@ -2283,7 +2701,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                       ),
               ),
 
-              // Composer
               SafeArea(
                 top: false,
                 child: Column(
@@ -2295,124 +2712,23 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                         child: _buildReplyPreview(),
                       ),
 
-                    // ✅ Preview attachments đặt ở đây (có width = full màn hình)
                     if (_pendingAttachments.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
                         child: _buildPendingAttachments(),
                       ),
 
-                    // ✅ Preview voice đặt ở đây
-                    if (_voiceDraftPath != null && !_recording)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
-                        child: _buildVoiceDraftPreview(),
-                      ),
-
-                    // ✅ Row chỉ còn input + send
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _textCtrl,
-                              enabled: !_sending,
-                              minLines: 1,
-                              maxLines: 4,
-                              textInputAction: TextInputAction.newline,
-                              decoration: InputDecoration(
-                                hintText: _sending ? 'Đang gửi...' : 'Nhập tin nhắn...',
-                                isDense: true,
-                                filled: true,
-                                fillColor: Colors.white,
-                                prefixIcon: IconButton(
-                                  icon: const Icon(Icons.attach_file),
-                                  onPressed: _sending ? null : _openAttachSheet,
-                                  tooltip: 'Đính kèm',
-                                ),
-                                suffixIcon: IconButton(
-                                  icon: Icon(
-                                    _recording ? Icons.mic_off : Icons.mic,
-                                    color: _recording ? Colors.red : null,
-                                  ),
-                                  onPressed: _sending ? null : _toggleRecord,
-                                ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(18),
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  vertical: 10,
-                                  horizontal: 8,
-                                ),
-                              ),
-                              onSubmitted: (_) => _sendText(),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          IconButton(
-                            tooltip: 'Gửi',
-                            icon: const Icon(Icons.send),
-                            onPressed: _sending ? null : () async {
-                              final text = _textCtrl.text.trim();
-                              final hasText = text.isNotEmpty;
-                              final hasAtt = _pendingAttachments.isNotEmpty;
-                              final hasVoice = _voiceDraftPath != null;
-
-                              if (!hasText && !hasAtt && !hasVoice) return;
-
-                              final replying = _replyTo;
-
-                              _textCtrl.clear();
-                              setState(() => _sending = true);
-
-                              try {
-                                if (hasText) {
-                                  await context.read<GroupChatController>().sendMessage(
-                                    widget.groupId,
-                                    text,
-                                    replyTo: replying,
-                                  );
-                                }
-
-                                if (hasAtt) {
-                                  final items = List<_PendingAttachment>.from(_pendingAttachments);
-                                  for (final att in items) {
-                                    final type = att.type == _AttachmentType.image
-                                        ? 'image'
-                                        : att.type == _AttachmentType.video
-                                        ? 'video'
-                                        : 'file';
-
-                                    await context.read<GroupChatController>().sendMessage(
-                                      widget.groupId,
-                                      '',
-                                      file: File(att.path),
-                                      type: type,
-                                      replyTo: replying,
-                                    );
-                                  }
-                                  if (mounted) setState(() => _pendingAttachments.clear());
-                                }
-
-                                if (hasVoice) {
-                                  // gửi voice draft và tự clear reply trong _sendVoiceDraft()
-                                  // nên tắt sending trước để _sendVoiceDraft() chạy đúng:
-                                  if (mounted) setState(() => _sending = false);
-                                  await _sendVoiceDraft();
-                                  return;
-                                }
-
-                                if (mounted) {
-                                  setState(() => _replyTo = null);
-                                }
-                                _scrollToBottom();
-                              } finally {
-                                if (mounted) setState(() => _sending = false);
-                              }
-                            },
-                          ),
-                        ],
+                      child: _buildInputArea(
+                        isDark: isDark,
+                        barBg: barBg,
+                        inputFill: inputFill,
+                        borderColor: borderColor,
+                        focusBorder: focusBorder,
+                        hintColor: hintColor,
+                        iconColor: iconColor,
+                        sendBg: sendBg,
                       ),
                     ),
                   ],
@@ -2421,7 +2737,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
             ],
           ),
 
-          // Nút tròn trỏ xuống
           if (_showScrollToBottom)
             Positioned(
               right: 12,
@@ -2446,8 +2761,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   }
 }
 
-// ================== SWIPE REPLY WRAPPER ==================
-
 class _SwipeReplyWrapper extends StatefulWidget {
   final Widget child;
   final bool isMe;
@@ -2465,22 +2778,19 @@ class _SwipeReplyWrapper extends StatefulWidget {
 
 class _SwipeReplyWrapperState extends State<_SwipeReplyWrapper> {
   double _dragDx = 0;
-  static const double _maxShift = 80; // kéo tối đa ~80px
+  static const double _maxShift = 80;
 
   @override
   Widget build(BuildContext context) {
-    // Giới hạn theo hướng cho phép
     double effectiveDx;
     if (widget.isMe) {
-      // mình: chỉ cho kéo sang trái (âm)
       effectiveDx = _dragDx.clamp(-_maxShift, 0);
     } else {
-      // người khác: chỉ cho kéo sang phải (dương)
       effectiveDx = _dragDx.clamp(0, _maxShift);
     }
 
     final progress =
-        (effectiveDx.abs() / _maxShift).clamp(0.0, 1.0); // 0 -> 1 cho icon
+        (effectiveDx.abs() / _maxShift).clamp(0.0, 1.0);
 
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
@@ -2491,7 +2801,7 @@ class _SwipeReplyWrapperState extends State<_SwipeReplyWrapper> {
       },
       onHorizontalDragEnd: (_) {
         final threshold =
-            _maxShift * 0.6; // phải kéo > ~60% maxShift mới trigger
+            _maxShift * 0.6;
 
         bool trigger = false;
         if (widget.isMe) {
@@ -2505,7 +2815,7 @@ class _SwipeReplyWrapperState extends State<_SwipeReplyWrapper> {
         }
 
         setState(() {
-          _dragDx = 0; // snap bubble về chỗ cũ
+          _dragDx = 0;
         });
       },
       onHorizontalDragCancel: () {
@@ -2516,7 +2826,6 @@ class _SwipeReplyWrapperState extends State<_SwipeReplyWrapper> {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Icon reply nằm ở phía “kéo ra”
           Positioned(
             left: widget.isMe ? null : 0,
             right: widget.isMe ? 0 : null,
@@ -2532,7 +2841,6 @@ class _SwipeReplyWrapperState extends State<_SwipeReplyWrapper> {
               ),
             ),
           ),
-          // Bubble dịch chuyển theo tay
           Transform.translate(
             offset: Offset(effectiveDx, 0),
             child: widget.child,
@@ -2550,9 +2858,9 @@ class _SwipeReplyWrapperState extends State<_SwipeReplyWrapper> {
 
 class _GroupMediaTab extends StatefulWidget {
   final String groupId;
-  final String mediaType; // images | videos | audio | links | docs
+  final String mediaType;
   final String labelEmpty;
-  final bool isFileLike; // true = ListTile (file/link), false = grid
+  final bool isFileLike;
 
   const _GroupMediaTab({
     required this.groupId,
@@ -2577,8 +2885,6 @@ class _GroupMediaTabState extends State<_GroupMediaTab> {
     _loadAll();
   }
 
-  // ============= LOAD DATA =============
-
   Future<void> _loadAll() async {
     setState(() {
       _loading = true;
@@ -2595,13 +2901,10 @@ class _GroupMediaTabState extends State<_GroupMediaTab> {
 
       final List<String> types;
       if (widget.mediaType == 'images') {
-        // Tab 1: Ảnh / Video
         types = ['images', 'videos'];
       } else if (widget.mediaType == 'docs') {
-        // Tab 2: File -> gộp cả docs + audio (voice, nhạc...)
         types = ['docs', 'audio'];
       } else {
-        // Tab 3: links (hoặc loại khác nếu sau này thêm)
         types = [widget.mediaType];
       }
 
@@ -2617,7 +2920,6 @@ class _GroupMediaTabState extends State<_GroupMediaTab> {
         fetched.addAll(list);
       }
 
-      // Dedupe theo (id + media_url)
       final seen = <String>{};
       final result = <Map<String, dynamic>>[];
 
@@ -2647,11 +2949,8 @@ class _GroupMediaTabState extends State<_GroupMediaTab> {
     }
   }
 
-  // ============= HELPERS =============
-
   String _string(dynamic v) => v?.toString() ?? '';
 
-  /// URL media chính (đã được SocialChatRepository hydrate sẵn)
   String _getMediaUrl(Map<String, dynamic> m) {
     final v = _string(m['media_url']);
     if (v.isNotEmpty) return v;
@@ -2711,7 +3010,6 @@ class _GroupMediaTabState extends State<_GroupMediaTab> {
     return '';
   }
 
-  // Theo list bố đưa
   bool _isImageExt(String ext) =>
       ['jpg', 'jpeg', 'png', 'gif'].contains(ext);
 
@@ -2772,7 +3070,6 @@ class _GroupMediaTabState extends State<_GroupMediaTab> {
       m['file_size'] ?? m['size'] ?? m['file_size_formatted'],
     );
     if (raw.isEmpty) return '';
-    // nếu server đã format sẵn thì trả luôn
     if (raw.contains('KB') || raw.contains('MB') || raw.contains('GB')) {
       return raw;
     }
@@ -2829,8 +3126,6 @@ class _GroupMediaTabState extends State<_GroupMediaTab> {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
-  // ============= BUILD =============
-
   @override
   Widget build(BuildContext context) {
     if (_items.isEmpty && _loading) {
@@ -2846,7 +3141,6 @@ class _GroupMediaTabState extends State<_GroupMediaTab> {
       );
     }
 
-    // ---------- TAB 1: ẢNH / VIDEO (GRID) ----------
     if (!widget.isFileLike) {
       return GridView.builder(
         padding: const EdgeInsets.only(top: 4),
@@ -3357,4 +3651,221 @@ class _PendingAttachment {
   final _AttachmentType type;
 
   const _PendingAttachment({required this.path, required this.type});
+}
+
+class _MicPressButton extends StatelessWidget {
+  final Color color;
+  final bool disabled;
+  final VoidCallback onTap;
+
+  const _MicPressButton({
+    required this.color,
+    required this.disabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: 'Ghi âm',
+      icon: Icon(Icons.mic, color: disabled ? Colors.grey : color),
+      onPressed: disabled ? null : onTap,
+    );
+  }
+}
+
+class _DottedLine extends StatelessWidget {
+  final int tick;
+  final Color color;
+
+  const _DottedLine({required this.tick, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: _DottedLinePainter(tick: tick, color: color),
+      size: const Size(double.infinity, 18),
+    );
+  }
+}
+
+class _DottedLinePainter extends CustomPainter {
+  final int tick;
+  final Color color;
+
+  _DottedLinePainter({required this.tick, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round;
+
+    const gap = 8.0;
+    const seg = 6.0;
+
+    final shift = (tick % 10) * 1.2;
+
+    double x = -shift;
+    final y = size.height / 2;
+
+    while (x < size.width) {
+      canvas.drawLine(Offset(x, y), Offset(x + seg, y), paint);
+      x += seg + gap;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DottedLinePainter oldDelegate) {
+    return oldDelegate.tick != tick || oldDelegate.color != color;
+  }
+}
+
+class _BlinkDot extends StatefulWidget {
+  const _BlinkDot();
+
+  @override
+  State<_BlinkDot> createState() => _BlinkDotState();
+}
+
+class _BlinkDotState extends State<_BlinkDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 650),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: Tween<double>(begin: 0.25, end: 1).animate(_c),
+      child: Container(
+        width: 10,
+        height: 10,
+        decoration: BoxDecoration(
+          color: Colors.redAccent,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white24, width: 1),
+        ),
+      ),
+    );
+  }
+}
+
+class _WaveformSeekBar extends StatelessWidget {
+  final double progress; // 0..1
+  final Color activeColor;
+  final Color inactiveColor;
+  final double maxHeight;
+  final List<double> samples;
+  final ValueChanged<double> onSeekPercent;
+
+  const _WaveformSeekBar({
+    required this.progress,
+    required this.activeColor,
+    required this.inactiveColor,
+    required this.maxHeight,
+    required this.samples,
+    required this.onSeekPercent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (ctx, c) {
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onPanDown: (d) => _seek(d.localPosition.dx, c.maxWidth),
+          onPanUpdate: (d) => _seek(d.localPosition.dx, c.maxWidth),
+          child: CustomPaint(
+            painter: _WaveformPainter(
+              progress: progress,
+              activeColor: activeColor,
+              inactiveColor: inactiveColor,
+              maxHeight: maxHeight,
+              samples: samples,
+            ),
+            size: Size(double.infinity, maxHeight),
+          ),
+        );
+      },
+    );
+  }
+
+  void _seek(double dx, double width) {
+    if (width <= 0) return;
+    final p = (dx / width).clamp(0.0, 1.0);
+    onSeekPercent(p);
+  }
+}
+
+class _WaveformPainter extends CustomPainter {
+  final double progress;
+  final Color activeColor;
+  final Color inactiveColor;
+  final double maxHeight;
+  final List<double> samples;
+
+  _WaveformPainter({
+    required this.progress,
+    required this.activeColor,
+    required this.inactiveColor,
+    required this.maxHeight,
+    required this.samples,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (samples.isEmpty) return;
+
+    final count = samples.length;
+    final barW = (size.width / (count * 1.25)).clamp(2.0, 6.0);
+    final gap = barW * 0.25;
+
+    final totalW = count * barW + (count - 1) * gap;
+    double startX = (size.width - totalW) / 2;
+    if (startX.isNaN) startX = 0;
+
+    final activeUntil = (progress.clamp(0.0, 1.0) * count);
+
+    for (int i = 0; i < count; i++) {
+      final amp = samples[i].clamp(0.05, 1.0);
+      final h = amp * maxHeight;
+      final x = startX + i * (barW + gap);
+      final y = (size.height - h) / 2;
+
+      final paint = Paint()
+        ..color = (i + 1) <= activeUntil ? activeColor : inactiveColor
+        ..strokeCap = StrokeCap.round
+        ..strokeWidth = barW;
+
+      canvas.drawLine(
+        Offset(x + barW / 2, y),
+        Offset(x + barW / 2, y + h),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _WaveformPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.samples != samples ||
+        oldDelegate.activeColor != activeColor ||
+        oldDelegate.inactiveColor != inactiveColor ||
+        oldDelegate.maxHeight != maxHeight;
+  }
 }

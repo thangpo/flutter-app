@@ -64,7 +64,6 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _hasNewMessage = false;
   String? _beforeId;
   late final String _peerId;
-
   final _recorder = FlutterSoundRecorder();
   bool _recReady = false;
   bool _recOn = false;
@@ -97,6 +96,32 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Map<String, int> _localReactions = {};
   Map<String, dynamic>? _replyingToMessage;
+
+  int _localSeq = 0;
+  int _nextLocalId() {
+    return -(DateTime.now().millisecondsSinceEpoch) - (_localSeq++);
+  }
+
+  Map<String, dynamic> _makeLocalMsg({
+    required String type,
+    String text = '',
+    String? filePath,
+    String? replyId,
+  }) {
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    return {
+      'local_id': _nextLocalId(),
+      'position': 'right',
+      'time': now,
+      'local_type': type,
+      'local_status': 'sending',
+      'local_text': text,
+      'local_file_path': filePath,
+      if (replyId != null) 'reply_id': replyId,
+      'text': text,
+      'display_text': text,
+    };
+  }
 
   @override
   void initState() {
@@ -240,6 +265,15 @@ class _ChatScreenState extends State<ChatScreen> {
     return 0;
   }
 
+  int _sortKey(Map<String, dynamic> m) {
+    final real = int.tryParse('${m['id'] ?? m['message_id'] ?? m['msg_id'] ?? ''}') ?? 0;
+    if (real != 0) return real;
+
+    final localId = (m['local_id'] is int) ? (m['local_id'] as int).abs() : 0;
+
+    return (1 << 60) + localId;
+  }
+
   void _applyLocalReactionsToMessages() {
     if (_localReactions.isEmpty) return;
     for (final m in _messages) {
@@ -312,7 +346,7 @@ class _ChatScreenState extends State<ChatScreen> {
         limit: 30,
       );
 
-      list.sort((a, b) => (_msgId(a)).compareTo(_msgId(b)));
+      list.sort((a, b) => _sortKey(a).compareTo(_sortKey(b)));
 
       _mergeIncoming(list, toTail: true);
       _applyLocalReactionsToMessages();
@@ -334,7 +368,7 @@ class _ChatScreenState extends State<ChatScreen> {
         limit: 30,
       );
 
-      list.sort((a, b) => _msgId(a).compareTo(_msgId(b)));
+      list.sort((a, b) => _sortKey(a).compareTo(_sortKey(b)));
       _messages = list;
       _applyLocalReactionsToMessages();
 
@@ -353,7 +387,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _fetchOlder() async {
     if (_loading || !_hasMore) return;
-
     setState(() => _loading = true);
     final oldMax = _scroll.hasClients ? _scroll.position.maxScrollExtent : 0.0;
 
@@ -366,8 +399,7 @@ class _ChatScreenState extends State<ChatScreen> {
       );
 
       if (older.isNotEmpty) {
-        older.sort((a, b) => _msgId(a).compareTo(_msgId(b)));
-
+        older.sort((a, b) => _sortKey(a).compareTo(_sortKey(b)));
         _beforeId = _msgIdStr(older.first);
         _mergeIncoming(older, toTail: false);
         _applyLocalReactionsToMessages();
@@ -508,6 +540,70 @@ class _ChatScreenState extends State<ChatScreen> {
     await _toggleRecord();
   }
 
+  Future<void> _retryLocalMessage(Map<String, dynamic> localMsg) async {
+    final localId = localMsg['local_id'];
+    if (localId is! int) return;
+
+    setState(() {
+      final idx = _messages.indexWhere((m) => (m['local_id'] ?? 0) == localId);
+      if (idx >= 0) _messages[idx]['local_status'] = 'sending';
+    });
+
+    try {
+      Map<String, dynamic>? sent;
+
+      final t = (localMsg['local_type'] ?? '').toString();
+      final file = (localMsg['local_file_path'] ?? '').toString();
+      final txt = (localMsg['local_text'] ?? '').toString();
+      final replyId = (localMsg['reply_id'] ?? '').toString().trim();
+      final replyTo = replyId.isNotEmpty && replyId != '0' ? replyId : null;
+
+      if (t == 'text') {
+        sent = await repo.sendMessage(
+          token: widget.accessToken,
+          peerUserId: _peerId,
+          text: txt,
+          replyToMessageId: replyTo,
+        );
+      } else {
+        sent = await repo.sendMessage(
+          token: widget.accessToken,
+          peerUserId: _peerId,
+          filePath: file,
+        );
+      }
+
+      if (!mounted) return;
+
+      if (sent != null) {
+        if (replyTo != null && (sent['reply_id'] == null || '${sent['reply_id']}' == '0')) {
+          sent['reply_id'] = replyTo;
+        }
+
+        setState(() {
+          _messages.removeWhere((m) => (m['local_id'] ?? 0) == localId);
+          _mergeIncoming([sent!], toTail: true);
+          _applyLocalReactionsToMessages();
+        });
+        _scrollToBottom();
+      } else {
+        setState(() {
+          final idx = _messages.indexWhere((m) => (m['local_id'] ?? 0) == localId);
+          if (idx >= 0) _messages[idx]['local_status'] = 'failed';
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        final idx = _messages.indexWhere((m) => (m['local_id'] ?? 0) == localId);
+        if (idx >= 0) {
+          _messages[idx]['local_status'] = 'failed';
+          _messages[idx]['local_error'] = '$e';
+        }
+      });
+    }
+  }
+
   Future<void> _cancelRecording() async {
     if (_recOn) {
       _stopRecordingTimer();
@@ -529,7 +625,7 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
 
-    incoming.sort((a, b) => _msgId(a).compareTo(_msgId(b)));
+    incoming.sort((a, b) => _sortKey(a).compareTo(_sortKey(b)));
 
     final exist = _messages.map(_msgIdStr).toSet();
     final filtered = incoming.where((m) {
@@ -545,11 +641,36 @@ class _ChatScreenState extends State<ChatScreen> {
       _messages.insertAll(0, filtered);
     }
 
-    _messages.sort((a, b) => _msgId(a).compareTo(_msgId(b)));
+    _messages.sort((a, b) => _sortKey(a).compareTo(_sortKey(b)));
   }
 
-  int _msgId(Map<String, dynamic> m) =>
-      int.tryParse('${m['id'] ?? m['message_id'] ?? m['msg_id'] ?? ''}') ?? 0;
+  int _msgId(Map<String, dynamic> m) {
+    final real = int.tryParse('${m['id'] ?? m['message_id'] ?? m['msg_id'] ?? ''}') ?? 0;
+    if (real != 0) return real;
+    return (m['local_id'] is int) ? (m['local_id'] as int) : 0;
+  }
+
+  bool _isLocalMsg(Map<String, dynamic> m) {
+    return m.containsKey('local_id') && _msgId(m) < 0;
+  }
+
+  Widget _localStatusLine(Map<String, dynamic> m) {
+    if (!_isLocalMsg(m)) return const SizedBox.shrink();
+
+    final status = (m['local_status'] ?? '').toString();
+    final text = status == 'failed' ? 'Gửi lỗi · chạm để thử lại' : 'Đang gửi...';
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 3),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 10.5,
+          color: status == 'failed' ? Colors.redAccent : Colors.grey,
+        ),
+      ),
+    );
+  }
 
   String _msgIdStr(Map<String, dynamic> m) =>
       '${m['id'] ?? m['message_id'] ?? m['msg_id'] ?? ''}';
@@ -573,89 +694,101 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _sendText() async {
     final text = _inputCtrl.text.trim();
-    final bool hasAttachments = _pendingAttachments.isNotEmpty;
-    final bool hasAudio = _voiceDraftPath != null;
-    if (_sending) return;
-    if (text.isEmpty && !hasAttachments && !hasAudio) return;
-
+    final attachments = List<_PendingAttachment>.from(_pendingAttachments);
+    final voicePath = _voiceDraftPath;
+    if (text.isEmpty && attachments.isEmpty && voicePath == null) return;
     final replying = _replyingToMessage;
-    String? replyId;
-    if (replying != null) {
-      replyId = _msgIdStr(replying);
+    final replyId = replying != null ? _msgIdStr(replying) : null;
+
+    _inputCtrl.clear();
+    setState(() {
+      _replyingToMessage = null;
+      _pendingAttachments = [];
+      _clearVoiceDraft();
+      _hasNewMessage = true;
+    });
+
+    final locals = <Map<String, dynamic>>[];
+
+    if (text.isNotEmpty) {
+      locals.add(_makeLocalMsg(type: 'text', text: text, replyId: replyId));
+    }
+
+    for (final a in attachments) {
+      locals.add(_makeLocalMsg(type: a.type == _AttachmentType.image ? 'image'
+          : a.type == _AttachmentType.video ? 'video'
+          : 'file',
+        text: '',
+        filePath: a.path,
+        replyId: replyId,
+      ));
+    }
+
+    if (voicePath != null) {
+      locals.add(_makeLocalMsg(type: 'voice', filePath: voicePath, replyId: replyId));
     }
 
     setState(() {
-      _sending = true;
-      _replyingToMessage = null;
+      _messages.addAll(locals);
+      _messages.sort((a, b) => _sortKey(a).compareTo(_sortKey(b)));
     });
+    _scrollToBottom();
 
-    try {
-      if (text.isNotEmpty) {
-        final sent = await repo.sendMessage(
-          token: widget.accessToken,
-          peerUserId: _peerId,
-          text: text,
-          replyToMessageId: replyId,
-        );
+    for (final local in locals) {
+      final localId = local['local_id'] as int;
+      try {
+        Map<String, dynamic>? sent;
 
-        _inputCtrl.clear();
+        final t = (local['local_type'] ?? '').toString();
+        final file = (local['local_file_path'] ?? '').toString();
+        final txt = (local['local_text'] ?? '').toString();
+
+        if (t == 'text') {
+          sent = await repo.sendMessage(
+            token: widget.accessToken,
+            peerUserId: _peerId,
+            text: txt,
+            replyToMessageId: replyId,
+          );
+        } else {
+          sent = await repo.sendMessage(
+            token: widget.accessToken,
+            peerUserId: _peerId,
+            filePath: file,
+          );
+        }
 
         if (sent != null) {
-          if (replyId != null &&
-              (sent['reply_id'] == null || '${sent['reply_id']}' == '0')) {
+          if (replyId != null && (sent['reply_id'] == null || '${sent['reply_id']}' == '0')) {
             sent['reply_id'] = replyId;
           }
           if (replying != null) {
             sent['reply'] ??= Map<String, dynamic>.from(replying);
           }
 
-          _mergeIncoming([sent], toTail: true);
-          _applyLocalReactionsToMessages();
-        }
-      }
-
-      if (hasAttachments) {
-        final List<_PendingAttachment> attachments =
-            List<_PendingAttachment>.from(_pendingAttachments);
-        for (final _PendingAttachment attachment in attachments) {
-          final sent = await repo.sendMessage(
-            token: widget.accessToken,
-            peerUserId: _peerId,
-            filePath: attachment.path,
-          );
-          if (sent != null) {
-            _mergeIncoming([sent], toTail: true);
+          if (!mounted) return;
+          setState(() {
+            _messages.removeWhere((m) => (m['local_id'] ?? 0) == localId);
+            _mergeIncoming([sent!], toTail: true);
             _applyLocalReactionsToMessages();
-          }
+          });
+          _scrollToBottom();
+        } else {
+          if (!mounted) return;
+          setState(() {
+            final idx = _messages.indexWhere((m) => (m['local_id'] ?? 0) == localId);
+            if (idx >= 0) _messages[idx]['local_status'] = 'failed';
+          });
         }
-      }
-      if (hasAudio) {
-        final sent = await repo.sendMessage(
-          token: widget.accessToken,
-          peerUserId: _peerId,
-          filePath: _voiceDraftPath!,
-        );
-        if (sent != null) {
-          _mergeIncoming([sent], toTail: true);
-          _applyLocalReactionsToMessages();
-        }
-      }
-
-      if (mounted && (hasAttachments || text.isNotEmpty || hasAudio)) {
-        if (hasAudio) {
-          await _voicePreviewPlayer.stop();
-        }
+      } catch (e) {
+        if (!mounted) return;
         setState(() {
-          _hasNewMessage =
-              true;
-          _pendingAttachments = [];
-          _clearVoiceDraft();
+          final idx = _messages.indexWhere((m) => (m['local_id'] ?? 0) == localId);
+          if (idx >= 0) {
+            _messages[idx]['local_status'] = 'failed';
+            _messages[idx]['local_error'] = '$e';
+          }
         });
-        _scrollToBottom();
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _sending = false);
       }
     }
   }
@@ -663,28 +796,35 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _pickAndSendFile() async {
     if (_sending) return;
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     final _AttachChoice? choice = await showModalBottomSheet<_AttachChoice>(
       context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
+      barrierColor: Colors.black54,            // nền tối phía sau
+      backgroundColor: Colors.transparent,     // trong suốt để tự vẽ
+      isScrollControlled: false,
       builder: (context) {
         return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.insert_drive_file),
-                title: Text(_tr('choose_file', 'Chọn tệp')),
-                onTap: () => Navigator.pop(context, _AttachChoice.file),
-              ),
-              ListTile(
-                leading: const Icon(Icons.photo_library),
-                title: Text(_tr('media_library', 'Thư viện (ảnh/video)')),
-                onTap: () => Navigator.pop(context, _AttachChoice.galleryMedia),
-              ),
-            ],
+          child: Container(
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1F1F1F) : Colors.white, // nền sheet
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.insert_drive_file),
+                  title: Text(_tr('choose_file', 'Chọn tệp')),
+                  onTap: () => Navigator.pop(context, _AttachChoice.file),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.photo_library),
+                  title: Text(_tr('media_library', 'Thư viện (ảnh/video)')),
+                  onTap: () => Navigator.pop(context, _AttachChoice.galleryMedia),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -1473,6 +1613,66 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  Widget _buildLocalBubble(Map<String, dynamic> m, {required bool isDark}) {
+    final t = (m['local_type'] ?? '').toString();
+    final txt = (m['local_text'] ?? m['text'] ?? '').toString();
+    final path = (m['local_file_path'] ?? '').toString();
+
+    final bg = isDark ? const Color(0xFF2F80ED) : const Color(0xFF2F80ED);
+    final fg = Colors.white;
+
+    Widget child;
+
+    if (t == 'text') {
+      child = Text(txt, style: TextStyle(color: fg, fontSize: 14));
+    } else if (t == 'image' && path.isNotEmpty) {
+      child = ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.file(
+          File(path),
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Text('Ảnh lỗi', style: TextStyle(color: fg)),
+        ),
+      );
+    } else if ((t == 'video' || t == 'file') && path.isNotEmpty) {
+      child = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(t == 'video' ? Icons.videocam : Icons.insert_drive_file, color: fg, size: 18),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              p.basename(path),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: fg),
+            ),
+          ),
+        ],
+      );
+    } else if (t == 'voice' && path.isNotEmpty) {
+      child = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.mic, color: fg, size: 18),
+          const SizedBox(width: 8),
+          Text(_tr('voice_message', 'Tin nhắn thoại'), style: TextStyle(color: fg)),
+        ],
+      );
+    } else {
+      child = Text('(Đang chuẩn bị...)', style: TextStyle(color: fg));
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: child,
+    );
+  }
+
   Widget _buildReplyPreview(
     Map<String, dynamic> replyMsg, {
     required bool isMe,
@@ -2043,8 +2243,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                       padding: const EdgeInsets.symmetric(
                                           vertical: 8.0),
                                       child: Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.end,
+                                        crossAxisAlignment: CrossAxisAlignment.end,
                                         children: [
                                           CircleAvatar(
                                             radius: 16,
@@ -2081,11 +2280,32 @@ class _ChatScreenState extends State<ChatScreen> {
                                     ),
                                   );
                                 }
+                                final isLocal = _isLocalMsg(m);
+                                final status = (m['local_status'] ?? '').toString();
 
                                 final reactionId = _getReactionForMessage(m);
                                 final hasReply = _hasReplyTag(m);
-                                final replyMsg =
-                                    hasReply ? _findRepliedMessage(m) : null;
+                                final replyMsg = hasReply ? _findRepliedMessage(m) : null;
+
+                                if (isMe && isLocal) {
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.end,
+                                      children: [
+                                        Flexible(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.end,
+                                            children: [
+                                              _buildLocalBubble(m, isDark: isDark),
+                                              _localStatusLine(m),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }
 
                                 if (!isMe) {
                                   final msgAvatar =
@@ -2184,27 +2404,24 @@ class _ChatScreenState extends State<ChatScreen> {
                                           },
                                           child: GestureDetector(
                                             behavior: HitTestBehavior.opaque,
-                                            onLongPress: () =>
-                                                _onLongPressMessage(m, true),
+                                            onTap: () async {
+                                              if (isLocal && status == 'failed') {
+                                                await _retryLocalMessage(m);
+                                              }
+                                            },
+                                            onLongPress: () => _onLongPressMessage(m, true),
                                             child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.end,
+                                              crossAxisAlignment: CrossAxisAlignment.end,
                                               children: [
                                                 if (hasReply)
-                                                  _buildReplyHeader(
-                                                    message: m,
-                                                    replyMsg: replyMsg,
-                                                    isMe: true,
-                                                  ),
-                                                if (replyMsg != null)
-                                                  _buildReplyPreview(replyMsg,
-                                                      isMe: true),
+                                                  _buildReplyHeader(message: m, replyMsg: replyMsg, isMe: true),
+                                                if (replyMsg != null) _buildReplyPreview(replyMsg, isMe: true),
+
                                                 Stack(
                                                   clipBehavior: Clip.none,
                                                   children: [
                                                     ChatMessageBubble(
-                                                      key: ValueKey(
-                                                          '${m['id'] ?? m.hashCode}'),
+                                                      key: ValueKey('${m['id'] ?? m.hashCode}'),
                                                       message: m,
                                                       isMe: true,
                                                     ),
@@ -2212,13 +2429,12 @@ class _ChatScreenState extends State<ChatScreen> {
                                                       Positioned(
                                                         bottom: -14,
                                                         right: 8,
-                                                        child:
-                                                            _buildReactionBadge(
-                                                                reactionId,
-                                                                isMe: true),
+                                                        child: _buildReactionBadge(reactionId, isMe: true),
                                                       ),
                                                   ],
                                                 ),
+
+                                                _localStatusLine(m),
                                               ],
                                             ),
                                           ),
@@ -2326,7 +2542,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           Expanded(
                             child: TextField(
                               controller: _inputCtrl,
-                              enabled: !_sending,
+                              enabled: true,
                               minLines: 1,
                               maxLines: 5,
                               cursorColor: isDark ? Colors.white : Colors.black,

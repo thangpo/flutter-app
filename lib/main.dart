@@ -340,7 +340,7 @@ class AppLifecycleObserver extends WidgetsBindingObserver {
 
 Future<void> _showIncomingCallNotification(Map<String, dynamic> data) async {
   final isVideo = (data['media']?.toString() == 'video');
-  final title = isVideo ? 'Video call d?n' : 'Cu?c g?i d?n';
+  final title = isVideo ? 'Video call d?n' : 'Cuộc gọi đến';
   final body =
       'T? #${data['caller_id'] ?? ''} (Call ID ${data['call_id'] ?? ''})';
 

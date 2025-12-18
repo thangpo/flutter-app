@@ -1,9 +1,8 @@
 import 'dart:async';
-
+import 'dart:ui' show lerpDouble;
 import 'package:flutter/material.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:provider/provider.dart';
-
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_page_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/search_chat_result.dart';
@@ -29,11 +28,11 @@ class SearchChatScreen extends StatefulWidget {
   State<SearchChatScreen> createState() => SearchChatScreenState();
 }
 
-class SearchChatScreenState extends State<SearchChatScreen> {
+class SearchChatScreenState extends State<SearchChatScreen>  with SingleTickerProviderStateMixin{
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   Timer? _debounce;
-
+  late final TabController _tabController;
   bool _loading = false;
   String? _error;
   SearchChatResult _result = const SearchChatResult();
@@ -50,6 +49,13 @@ class SearchChatScreenState extends State<SearchChatScreen> {
   @override
   void initState() {
     super.initState();
+
+    _tabController = TabController(length: 4, vsync: this);
+    _tabController.addListener(() {
+      if (_tabController.indexIsChanging) return;
+      FocusScope.of(context).unfocus();
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
     });
@@ -57,6 +63,7 @@ class SearchChatScreenState extends State<SearchChatScreen> {
 
   @override
   void dispose() {
+    _tabController.dispose();
     _debounce?.cancel();
     _controller.dispose();
     _focusNode.dispose();
@@ -335,13 +342,13 @@ class SearchChatScreenState extends State<SearchChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     final socialCtrl = context.watch<SocialController>();
     final storyMap = _storyByUserId(socialCtrl.stories);
-    final bool isIOS26 = PlatformInfo.isIOS26OrHigher();
-    const Color? tabBackground = Colors.white;
-    const Color? tabSelected = Colors.white;
-    const Color? tabUnselected = Colors.white;
+
     final tabs = [
       getTranslated('search_tab_all', context) ?? 'All',
       getTranslated('search_tab_friends', context) ?? 'Friends',
@@ -349,13 +356,26 @@ class SearchChatScreenState extends State<SearchChatScreen> {
       getTranslated('search_tab_groups', context) ?? 'Groups',
     ];
 
+    // ✅ màu cho tab bar tự theo theme
+    final Color tabBackground = cs.surface;
+    final Color tabSelected = cs.primary;
+    final Color tabUnselected = cs.onSurface.withOpacity(isDark ? 0.70 : 0.60);
+
+    // ✅ màu cho search field trong AppBar
+    final Color searchFill = Color.alphaBlend(
+      cs.onSurface.withOpacity(isDark ? 0.12 : 0.05),
+      cs.surface,
+    );
+
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
+        backgroundColor: cs.surface, // ✅ auto light/dark
         appBar: AppBar(
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
+          backgroundColor: cs.surface, // ✅ auto
+          surfaceTintColor: Colors.transparent,
+          foregroundColor: cs.onSurface, // ✅ icon + text auto
           titleSpacing: 0,
           toolbarHeight: kToolbarHeight + 12,
           title: Padding(
@@ -363,27 +383,48 @@ class SearchChatScreenState extends State<SearchChatScreen> {
             child: TextField(
               controller: _controller,
               focusNode: _focusNode,
-              onChanged: _onQueryChanged,
+              onChanged: (v) {
+                _onQueryChanged(v);
+                setState(() {}); // để suffixIcon (nút x) cập nhật
+              },
               textInputAction: TextInputAction.search,
               decoration: InputDecoration(
-                hintText:
-                    getTranslated('search_chat_hint', context) ?? 'Tìm bạn bè, nhóm, page',
-                hintStyle: const TextStyle(color: Colors.black54),
+                hintText: getTranslated('search_chat_hint', context) ??
+                    'Tìm bạn bè, nhóm, page',
+                hintStyle: TextStyle(
+                  color: cs.onSurface.withOpacity(0.55),
+                  fontWeight: FontWeight.w400,
+                ),
                 filled: true,
-                fillColor: Colors.white,
-                border: InputBorder.none,
-                suffixIcon: _controller.text.isNotEmpty
+                fillColor: searchFill,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(
+                    color: cs.primary.withOpacity(0.35),
+                    width: 1,
+                  ),
+                ),
+                suffixIcon: _controller.text.trim().isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.close, color: Colors.black54),
-                        onPressed: () {
-                          _controller.clear();
-                          _onQueryChanged('');
-                          setState(() {});
-                        },
-                      )
+                  icon: Icon(Icons.close, color: cs.onSurface.withOpacity(0.55)),
+                  onPressed: () {
+                    _controller.clear();
+                    _onQueryChanged('');
+                    setState(() {});
+                  },
+                )
                     : null,
               ),
-              style: const TextStyle(color: Colors.black),
+              style: TextStyle(color: cs.onSurface),
             ),
           ),
         ),
@@ -392,27 +433,72 @@ class SearchChatScreenState extends State<SearchChatScreen> {
           bottom: false,
           child: _controller.text.trim().isEmpty
               ? Center(
-                  child: Text(
-                    getTranslated('search_chat_enter_keyword', context) ??
-                        'Nhập từ khóa để tìm kiếm',
-                  ),
-                )
-              : Padding(
-                  padding: EdgeInsets.only(
-                    top: 0,
-                  ),
-                  child: AdaptiveTabBarView(
-                    tabs: tabs,
-                    backgroundColor: tabBackground,
-                    selectedColor: tabSelected,
-                    unselectedColor: tabUnselected,
-                    onTabChanged: (_) => FocusScope.of(context).unfocus(),
-                    children: List.generate(
-                      tabs.length,
-                      (index) => _buildTabContent(index, cs, storyMap),
-                    ),
+            child: Text(
+              getTranslated('search_chat_enter_keyword', context) ??
+                  'Nhập từ khóa để tìm kiếm',
+              style: TextStyle(color: cs.onSurface.withOpacity(0.75)),
+            ),
+          )
+              : Column(
+            children: [
+              _androidPillTabBar(context, tabs),
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: List.generate(
+                    tabs.length,
+                        (index) => _buildTabContent(index, cs, storyMap),
                   ),
                 ),
+              ),
+            ],
+          )
+        ),
+      ),
+    );
+  }
+
+  Widget _androidPillTabBar(BuildContext context, List<String> tabs) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    final unselected = cs.onSurface.withOpacity(isDark ? 0.70 : 0.60);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+      child: Container(
+        height: 44,
+        decoration: BoxDecoration(
+          color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.02),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: AnimatedBuilder(
+          animation: _tabController.animation!,
+          builder: (context, _) {
+            final page = _tabController.animation!.value;
+            final dist = (page - page.round()).abs().clamp(0.0, 0.5);
+            final progress = (dist / 0.5).clamp(0.0, 1.0);
+            final radius = lerpDouble(12, 999, progress)!;
+
+            return TabBar(
+              controller: _tabController,
+              isScrollable: false,
+              dividerColor: Colors.transparent,
+              indicator: BoxDecoration(
+                color: cs.primary,
+                borderRadius: BorderRadius.circular(radius),
+              ),
+              indicatorSize: TabBarIndicatorSize.tab,
+              labelColor: Colors.white,
+              unselectedLabelColor: unselected,
+              labelStyle: theme.textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+              tabs: tabs.map((t) => Tab(text: t)).toList(),
+            );
+          },
         ),
       ),
     );
@@ -513,8 +599,8 @@ class SearchChatScreenState extends State<SearchChatScreen> {
                             child: Container(
                               width: 10,
                               height: 10,
-                              decoration: const BoxDecoration(
-                                color: Colors.blue,
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.primary,
                                 shape: BoxShape.circle,
                               ),
                             ),

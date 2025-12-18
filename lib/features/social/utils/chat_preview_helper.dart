@@ -15,22 +15,37 @@ String normalizeChatPreview(String raw, BuildContext context) {
     final data = jsonDecode(decoded);
 
     if (data is Map<String, dynamic>) {
-      final type = data['type'];
-      final callType = data['call_type'];
+      final type = (data['type'] ?? '').toString().toLowerCase();
+      final mediaRaw = data['media'];
+      final callTypeRaw = data['call_type'] ?? data['callType'] ?? data['call'] ?? data['is_video'];
+      final media = (mediaRaw ?? '').toString().toLowerCase();
+      final callType = (callTypeRaw ?? '').toString().toLowerCase();
+
+      final isVideo =
+          media == 'video' ||
+              callType == 'video' ||
+              callType == 'video_call' ||
+              callType == 'videocall' ||
+              callType == '1' ||
+              callType == 'true' ||
+              callTypeRaw == 1 ||
+              callTypeRaw == true;
 
       switch (type) {
         case 'call_invite':
-          return callType == 'video'
+          return isVideo
               ? '🎥 ${getTranslated('call_video', context) ?? 'Video call'}'
               : '📞 ${getTranslated('call_audio', context) ?? 'Voice call'}';
 
         case 'call_end':
-          return callType == 'video'
+          return isVideo
               ? '🎥 ${getTranslated('call_video_ended', context) ?? 'Video call ended'}'
               : '📞 ${getTranslated('call_audio_ended', context) ?? 'Voice call ended'}';
 
         case 'call_missed':
-          return '📞 ${getTranslated('call_missed', context) ?? 'Missed call'}';
+          return isVideo
+              ? '🎥 ${getTranslated('call_video_missed', context) ?? 'Missed video call'}'
+              : '📞 ${getTranslated('call_missed', context) ?? 'Missed call'}';
       }
     }
   } catch (_) {
@@ -73,6 +88,5 @@ String normalizeChatPreview(String raw, BuildContext context) {
       lower.contains('.rar')) {
     return '📎 ${getTranslated('attachment', context) ?? 'File'}';
   }
-
   return decoded;
 }
