@@ -12,6 +12,7 @@ import com.hiennv.flutter_callkit_incoming.CallkitSoundPlayerManager
 import com.hiennv.flutter_callkit_incoming.Data
 import com.hiennv.flutter_callkit_incoming.addCall
 import com.hiennv.flutter_callkit_incoming.getDataActiveCalls
+import com.hiennv.flutter_callkit_incoming.CallkitNotificationService
 import java.util.Locale
 
 /**
@@ -36,6 +37,29 @@ class CallInviteMessagingReceiver : BroadcastReceiver() {
 
         // Only handle 1-1 call invite
         val type = (data["type"] ?: "").trim()
+        if (type == "call_signal") {
+            // If caller ended/declined while app is killed, clear CallKit notification to avoid "timer keeps running".
+            val signal = (data["signal"] ?: "").trim()
+            val status = (data["call_status"] ?: data["status"] ?: "").trim()
+            if (signal == "action" && (status == "ended" || status == "declined")) {
+                val callIdRaw =
+                    (data["call_id"] ?: data["id"] ?: data["callId"] ?: "").trim()
+                if (callIdRaw.isNotEmpty()) {
+                    val systemId = makeSystemUuidFromServerId(callIdRaw)
+                    val b = Bundle()
+                    b.putString(CallkitConstants.EXTRA_CALLKIT_ID, systemId)
+                    try {
+                        val appCtx = context.applicationContext ?: context
+                        val sound = CallkitSoundPlayerManager(appCtx)
+                        val nm = CallkitNotificationManager(appCtx, sound)
+                        nm.clearIncomingNotification(b, false)
+                        CallkitNotificationService.stopService(appCtx)
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+            return
+        }
         if (type != "call_invite") return
 
         // Avoid duplicates when app is in foreground (foreground flow is already good)
