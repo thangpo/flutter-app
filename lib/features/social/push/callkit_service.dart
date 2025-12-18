@@ -31,6 +31,7 @@ class CallkitService {
   // Map server call_id -> system UUID đã dùng để show CallKit
   final Map<int, String> _systemIds = {};
   final Map<String, String> _groupSystemIds = {};
+  static const _storageKeyPrefix = 'callkit_map_'; // lưu mapping để recovery cold start
 
   /// Đánh dấu các event đã xử lý để tránh lặp
   final Set<String> _handled = <String>{};
@@ -117,7 +118,10 @@ class CallkitService {
 
     // id h? th?ng (string) d�ng d? show CallKit
     final systemId = _makeSystemUuidFromServerId(data['call_id']);
-    if (serverId > 0) _systemIds[serverId] = systemId;
+    if (serverId > 0) {
+      _systemIds[serverId] = systemId;
+      _persistSystemId(serverId, systemId);
+    }
 
     // B?t theo d�i ringing s?m d? b?t k?p end/decline
     final mediaEarly = _extractMedia(data);
@@ -126,7 +130,7 @@ class CallkitService {
     }
     // metadata hi?n th?
     final callerName =
-        (data['caller_name'] ?? data['name'] ?? 'Cu?c g?i d?n').toString();
+        (data['caller_name'] ?? data['name'] ?? 'Cuộc gọi đến').toString();
     final avatar = (data['caller_avatar'] ?? data['avatar'] ?? '').toString();
     final media = mediaEarly;
     final isVideo = media == 'video';
@@ -328,6 +332,22 @@ class CallkitService {
         if (parts.length > 1 && serverCallId <= 0) {
           serverCallId = int.tryParse(parts.last) ?? serverCallId;
         }
+      }
+    }
+    // Cold start Android: systemId có nhưng call_id trống -> đọc mapping persist
+    if (serverCallId <= 0 && systemId.isNotEmpty) {
+      final recovered = await _recoverCallId(systemId);
+      if (recovered > 0) {
+        serverCallId = recovered;
+        _systemIds[recovered] = systemId;
+      }
+    }
+    // Cold start Android: systemId có nhưng call_id trống -> đọc mapping persist
+    if (serverCallId <= 0 && systemId.isNotEmpty) {
+      final recovered = await _recoverCallId(systemId);
+      if (recovered > 0) {
+        serverCallId = recovered;
+        _systemIds[recovered] = systemId;
       }
     }
 
@@ -820,6 +840,53 @@ class CallkitService {
         '${hex.substring(20, 32)}';
   }
 
+  Future<void> _persistSystemId(int callId, String systemId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_storageKeyPrefix + systemId, callId);
+    } catch (_) {
+      // ignore
+    }
+  }
+
+  Future<int> _recoverCallId(String systemId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getInt(_storageKeyPrefix + systemId) ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Fallback: lấy cuộc gọi ringing mới nhất cho user hiện tại (type=inbox)
+  Future<Map<String, dynamic>> _fetchLatestIncomingCall() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString(AppConstants.socialAccessToken);
+      if (token == null || token.isEmpty) return {};
+
+      final uri = Uri.parse(
+        '${AppConstants.socialBaseUrl}/api/webrtc?type=inbox&access_token=$token&since=${DateTime.now().millisecondsSinceEpoch ~/ 1000 - 300}',
+      );
+      final resp = await http.post(uri, body: {
+        'server_key': AppConstants.socialServerKey,
+      }).timeout(const Duration(seconds: 6));
+
+      if (resp.statusCode != 200) return {};
+      final json = jsonDecode(resp.body);
+      final incoming = json['incoming'];
+      if (incoming is Map && incoming['id'] != null) {
+        return {
+          'call_id': int.tryParse('${incoming['id']}') ?? 0,
+          'media': (incoming['media_type'] ?? '').toString(),
+        };
+      }
+    } catch (_) {
+      // ignore
+    }
+    return {};
+  }
+
   String _extractGroupId(Map<dynamic, dynamic>? data) {
     if (data == null) return '';
     final raw = data['group_id'] ??
@@ -1131,6 +1198,17 @@ class CallkitService {
   }
   Future<void> _answer(int serverCallId, String media, String? peerName,
       String? peerAvatar) async {
+    if (serverCallId <= 0) {
+      // Thử hỏi server lấy cuộc gọi ringing mới nhất
+      final latest = await _fetchLatestIncomingCall();
+      unawaited(RemoteRtcLog.send(
+        event: 'answer_recover_inbox',
+        callId: latest['call_id'] ?? 0,
+        details: {'media': latest['media'], 'had_media': media},
+      ));
+      serverCallId = latest['call_id'] ?? 0;
+      media = media.isEmpty ? (latest['media'] ?? media) : media;
+    }
     if (serverCallId <= 0) {
       debugPrint('[CallKit] Skip answer: missing call_id in extra');
       return;
