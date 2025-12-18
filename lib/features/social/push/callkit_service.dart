@@ -1,7 +1,6 @@
 // lib/features/social/push/callkit_service.dart
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
@@ -31,14 +30,16 @@ class CallkitService {
   // Map server call_id -> system UUID đã dùng để show CallKit
   final Map<int, String> _systemIds = {};
   final Map<String, String> _groupSystemIds = {};
-  static const _storageKeyPrefix = 'callkit_map_'; // lưu mapping để recovery cold start
+  static const _storageKeyPrefix =
+      'callkit_map_'; // lưu mapping để recovery cold start
 
   /// Đánh dấu các event đã xử lý để tránh lặp
   final Set<String> _handled = <String>{};
   final Set<int> _handledServerIds = <int>{};
   final Set<String> _handledGroupKeys = <String>{};
   final Set<String> _endedGroupKeys = <String>{};
-  final Set<String> _endedGroupIds = <String>{}; // đánh dấu group đã dập (dù callId rỗng)
+  final Set<String> _endedGroupIds =
+      <String>{}; // đánh dấu group đã dập (dù callId rỗng)
 
   // Nhóm vừa end trong vài giây gần đây (debounce foreground)
   final Map<String, DateTime> _recentlyEndedGroup = {};
@@ -75,12 +76,78 @@ class CallkitService {
     }
   }
 
+  /// Android: khi user bấm Accept từ CallKit lúc app bị kill, plugin sẽ mở app bằng Intent
+  /// (action=`...ACTION_CALL_ACCEPT` và extra Bundle). Lúc này Flutter có thể bị hụt eventChannel,
+  /// nên ta xử lý lại intent bằng cách giả lập CallEvent.
+  Future<void> handleAndroidCallkitIntent(
+    String? rawAction,
+    Map<String, dynamic> data,
+  ) async {
+    if (rawAction == null || rawAction.isEmpty) return;
+    await init();
+
+    final a = rawAction.toUpperCase();
+    Event? ev;
+    if (a.contains('ACTION_CALL_ACCEPT')) {
+      ev = Event.actionCallAccept;
+    } else if (a.contains('ACTION_CALL_START')) {
+      ev = Event.actionCallStart;
+    } else if (a.contains('ACTION_CALL_DECLINE')) {
+      ev = Event.actionCallDecline;
+    } else if (a.contains('ACTION_CALL_ENDED')) {
+      ev = Event.actionCallEnded;
+    } else if (a.contains('ACTION_CALL_TIMEOUT')) {
+      ev = Event.actionCallTimeout;
+    } else if (a.contains('ACTION_CALL_INCOMING')) {
+      ev = Event.actionCallIncoming;
+    }
+
+    try {
+      final extraAny = data['extra'];
+      final extra = extraAny is Map
+          ? extraAny.map((k, v) => MapEntry(k.toString(), v))
+          : <String, dynamic>{};
+      final raw =
+          '${extra['call_id'] ?? extra['callId'] ?? extra['id'] ?? ''}'.trim();
+      final serverId = int.tryParse(raw) ?? 0;
+      unawaited(RemoteRtcLog.send(
+        event: 'android_callkit_intent_handle',
+        callId: serverId,
+        details: {
+          'action': rawAction,
+          'mapped': ev?.toString(),
+          'keys': data.keys.toList(),
+          'hasExtra': extra.isNotEmpty,
+        },
+      ));
+    } catch (_) {}
+
+    if (ev == null) return;
+    await _onEvent(CallEvent(data, ev));
+  }
+
   /// Hiển thị màn hình cuộc gọi đến (CallKit / ConnectionService)
   /// Hi?n CallKit/ConnectionService incoming
   Future<void> showIncomingCall(Map<String, dynamic> data) async {
     await init();
 
-    final serverId = int.tryParse('${data['call_id'] ?? ''}') ?? 0;
+    final serverId = _extractServerCallId(data);
+    // Important: in background isolate, unawaited logs can be dropped when isolate exits.
+    try {
+      await RemoteRtcLog.send(
+        event: 'callkit_show_incoming',
+        callId: serverId,
+        details: {
+          'keys': data.keys.toList(),
+          'call_id': data['call_id'],
+          'id': data['id'],
+          'callId': data['callId'],
+          'caller_id': data['caller_id'],
+          'caller_name': data['caller_name'] ?? data['name'],
+          'media': data['media'] ?? data['media_type'],
+        },
+      );
+    } catch (_) {}
 
     if (await _isSelfCall(data)) {
       unawaited(RemoteRtcLog.send(
@@ -101,8 +168,9 @@ class CallkitService {
         final cc = ctx.read<CallController>();
         final activeId = cc.activeCallId;
         final activeStatus = cc.callStatus;
-        final isActive =
-            activeId != null && activeStatus != 'ended' && activeStatus != 'declined';
+        final isActive = activeId != null &&
+            activeStatus != 'ended' &&
+            activeStatus != 'declined';
 
         // Nếu đang ở trong một cuộc gọi (caller/callee), đừng show CallKit mới:
         // - serverId trùng call hiện tại
@@ -116,8 +184,12 @@ class CallkitService {
       } catch (_) {}
     }
 
-    // id h? th?ng (string) d�ng d? show CallKit
-    final systemId = _makeSystemUuidFromServerId(data['call_id']);
+    // id hệ thống (string) dùng để show CallKit
+    // Android: event accept đôi khi mất extra -> dựa vào id/systemId để recover.
+    // Vì vậy id phải ổn định theo serverId nếu có.
+    final systemId = _makeSystemUuidFromServerId(serverId > 0
+        ? serverId
+        : (data['call_id'] ?? data['callId'] ?? data['id']));
     if (serverId > 0) {
       _systemIds[serverId] = systemId;
       _persistSystemId(serverId, systemId);
@@ -145,7 +217,19 @@ class CallkitService {
       duration: 60000, // ms
       textAccept: 'Nghe',
       textDecline: 'Từ chối',
-      extra: Map<String, dynamic>.from(data), // giữ payload gốc để đọc call_id
+      extra: () {
+        final extra = Map<String, dynamic>.from(data);
+        // Normalize để event accept/callback đọc được call_id
+        if (serverId > 0 &&
+            (extra['call_id'] == null || '${extra['call_id']}'.isEmpty)) {
+          extra['call_id'] = serverId;
+        }
+        if (media.isNotEmpty &&
+            (extra['media'] == null || '${extra['media']}'.isEmpty)) {
+          extra['media'] = media;
+        }
+        return extra;
+      }(),
       android: const AndroidParams(
         isCustomNotification: true,
         isShowFullLockedScreen: true,
@@ -168,9 +252,23 @@ class CallkitService {
     );
 
     try {
-      await FlutterCallkitIncoming.showCallkitIncoming(params);
+      await FlutterCallkitIncoming.showCallkitIncoming(params)
+          .timeout(const Duration(seconds: 5));
+      try {
+        await RemoteRtcLog.send(
+          event: 'callkit_show_ok',
+          callId: serverId,
+          details: {'systemId': systemId},
+        );
+      } catch (_) {}
     } catch (_) {
-      // noop
+      try {
+        await RemoteRtcLog.send(
+          event: 'callkit_show_err',
+          callId: serverId,
+          details: {'systemId': systemId},
+        );
+      } catch (_) {}
     }
 
     // ghi log server nếu là group (payload có group_id)
@@ -185,6 +283,24 @@ class CallkitService {
     }
   }
 
+  int _extractServerCallId(Map<String, dynamic> data) {
+    // 1) direct keys
+    for (final k in const ['call_id', 'callId', 'id']) {
+      final v = data[k];
+      final n = int.tryParse('${v ?? ''}'.trim()) ?? 0;
+      if (n > 0) return n;
+    }
+    // 2) sometimes nested extra/text contains json payload
+    final raw = (data['text'] ?? data['payload'] ?? '').toString();
+    if (raw.isNotEmpty) {
+      final m = RegExp(r'"call_id"\s*:\s*(\d+)').firstMatch(raw);
+      if (m != null) {
+        return int.tryParse(m.group(1) ?? '') ?? 0;
+      }
+    }
+    return 0;
+  }
+
   /// Hiện CallKit cho cuộc gọi nhóm (iOS)
   Future<void> showIncomingGroupCall(Map<String, dynamic> data) async {
     await init();
@@ -193,7 +309,8 @@ class CallkitService {
     final groupId = _extractGroupId(data);
     if (groupId.isEmpty) return;
     if (_wasGroupRecentlyEndedLocal(groupId)) {
-      _sendGroupDebugLog('SKIP_SHOW_RECENTLY_ENDED_LOCAL', {'group_id': groupId});
+      _sendGroupDebugLog(
+          'SKIP_SHOW_RECENTLY_ENDED_LOCAL', {'group_id': groupId});
       // Dập nếu SDK đã lỡ hiện (phòng hộ)
       await endGroupCall(groupId, serverId);
       return;
@@ -400,8 +517,8 @@ class CallkitService {
             '[CallKit] incoming shown: systemId=$systemId serverId=$serverCallId');
         // Nếu thiết bị đang ở trong call (caller/callee) thì bỏ qua incoming mới
         try {
-          final ctx =
-              navigatorKey.currentState?.overlay?.context ?? navigatorKey.currentContext;
+          final ctx = navigatorKey.currentState?.overlay?.context ??
+              navigatorKey.currentContext;
           final cc = ctx?.read<CallController>();
           final activeId = cc?.activeCallId;
           final activeStatus = cc?.callStatus;
@@ -410,11 +527,13 @@ class CallkitService {
               activeStatus != 'declined' &&
               activeStatus != 'ringing';
 
-          final sameCall = isActive && serverCallId > 0 && activeId == serverCallId;
+          final sameCall =
+              isActive && serverCallId > 0 && activeId == serverCallId;
           final strayNoId = isActive && serverCallId <= 0;
 
           if (sameCall || strayNoId) {
-            debugPrint('[CallKit] ignore incoming (already in call) activeId=$activeId');
+            debugPrint(
+                '[CallKit] ignore incoming (already in call) activeId=$activeId');
             if (systemId.isNotEmpty) {
               unawaited(FlutterCallkitIncoming.endCall(systemId));
             }
@@ -642,8 +761,13 @@ class CallkitService {
   /// Đồng bộ cuộc gọi đang active trên CallKit phòng khi event ANSWER bị hụt (cold start).
   Future<void> recoverActiveCalls() async {
     try {
+      await init();
       final raw = await FlutterCallkitIncoming.activeCalls();
       if (raw is! List) return;
+      unawaited(RemoteRtcLog.send(
+        event: 'recover_active_calls',
+        details: {'count': raw.length},
+      ));
       for (final item in raw) {
         if (item is! Map) continue;
         final map = Map<String, dynamic>.from(item);
@@ -656,8 +780,7 @@ class CallkitService {
 
         // iOS 18 fallback: coi như "đã nhận" nếu (a) CallKit gửi event ACCEPT trước đó
         // và _accepted có chứa systemId, hoặc (b) map có state/answered thủ công.
-        final accepted =
-            map['accepted'] == true ||
+        final accepted = map['accepted'] == true ||
             map['isAccepted'] == true ||
             map['hasConnected'] == true ||
             _accepted.contains(systemId) ||
@@ -667,7 +790,8 @@ class CallkitService {
         // Lấy serverCallId (có thể mất trên iOS 18). Thử thêm các đường suy ngược.
         int serverCallId = int.tryParse(
               '${extra['call_id'] ?? extra['callId'] ?? extra['id'] ?? ''}',
-            ) ?? 0;
+            ) ??
+            0;
 
         if (serverCallId <= 0) {
           // 1) Tra ngược từ bảng _systemIds (1-1)
@@ -682,12 +806,15 @@ class CallkitService {
             try {
               final list = await FlutterCallkitIncoming.activeCalls();
               for (final item in list) {
-                if (item is Map && '${item['id']}'.toLowerCase() == systemId.toLowerCase()) {
+                if (item is Map &&
+                    '${item['id']}'.toLowerCase() == systemId.toLowerCase()) {
                   final extraDyn2 = item['extra'] as Map<dynamic, dynamic>?;
                   final extra2 = extraDyn2 == null
                       ? <String, dynamic>{}
                       : extraDyn2.map((k, v) => MapEntry(k.toString(), v));
-                  final rawId = '${extra2['call_id'] ?? extra2['callId'] ?? extra2['id'] ?? ''}'.trim();
+                  final rawId =
+                      '${extra2['call_id'] ?? extra2['callId'] ?? extra2['id'] ?? ''}'
+                          .trim();
                   final n = int.tryParse(rawId) ?? 0;
                   if (n > 0) {
                     serverCallId = n;
@@ -783,11 +910,9 @@ class CallkitService {
     await endGroupCall(groupId, callId);
 
     _withGroupController((gc, ctx) async {
-      final matchesCall =
-          (callId > 0 && gc.currentCallId == callId) ||
-              (callId <= 0 && gc.currentCallId != null);
-      final matchesGroup =
-          groupId.isNotEmpty && (gc.currentGroupId == groupId);
+      final matchesCall = (callId > 0 && gc.currentCallId == callId) ||
+          (callId <= 0 && gc.currentCallId != null);
+      final matchesGroup = groupId.isNotEmpty && (gc.currentGroupId == groupId);
       final hasCurrent =
           gc.currentCallId != null || (gc.currentGroupId?.isNotEmpty ?? false);
       if (!hasCurrent || (!matchesCall && !matchesGroup)) {
@@ -1065,7 +1190,8 @@ class CallkitService {
       case 'Event.actionCallDecline':
         {
           final key = _groupKey(groupId, serverCallId);
-          if (_endedGroupKeys.contains(key) || _endedGroupIds.contains(groupId)) {
+          if (_endedGroupKeys.contains(key) ||
+              _endedGroupIds.contains(groupId)) {
             _sendGroupDebugLog('CALLKIT_IGNORE_ENDED', {
               'evt': evt,
               'call_id': serverCallId,
@@ -1075,7 +1201,9 @@ class CallkitService {
             await endGroupCall(groupId, serverCallId);
             return;
           }
-          if (evt.contains('TIMEOUT') || evt.contains('DECLINE') || evt.contains('ENDED')) {
+          if (evt.contains('TIMEOUT') ||
+              evt.contains('DECLINE') ||
+              evt.contains('ENDED')) {
             // không cần xử lý thêm; chỉ để CallKit tự đóng
             return;
           }
@@ -1104,7 +1232,8 @@ class CallkitService {
           }
           if (cid <= 0 && extra != null && extra.isNotEmpty) {
             final raw =
-                '${extra['call_id'] ?? extra['callId'] ?? extra['id'] ?? ''}'.trim();
+                '${extra['call_id'] ?? extra['callId'] ?? extra['id'] ?? ''}'
+                    .trim();
             cid = int.tryParse(raw) ?? cid;
           }
           final preferred = _ringingGroupMedia[key];
@@ -1196,6 +1325,7 @@ class CallkitService {
         return;
     }
   }
+
   Future<void> _answer(int serverCallId, String media, String? peerName,
       String? peerAvatar) async {
     if (serverCallId <= 0) {
@@ -1335,6 +1465,7 @@ class CallkitService {
       'reason': reason,
     });
   }
+
   Future<void> _endOrDecline(int serverCallId, String media,
       {required String reason}) async {
     if (serverCallId <= 0) return;
@@ -1454,8 +1585,8 @@ class CallkitService {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(AppConstants.socialAccessToken);
       final base = AppConstants.socialBaseUrl.endsWith('/')
-          ? AppConstants.socialBaseUrl.substring(
-              0, AppConstants.socialBaseUrl.length - 1)
+          ? AppConstants.socialBaseUrl
+              .substring(0, AppConstants.socialBaseUrl.length - 1)
           : AppConstants.socialBaseUrl;
       final uri = Uri.parse(
         token != null && token.isNotEmpty
@@ -1490,6 +1621,12 @@ class CallkitService {
   }) {
     if (_routingToCall) return;
     _routingToCall = true;
+
+    unawaited(RemoteRtcLog.send(
+      event: 'open_call_screen',
+      callId: callId,
+      details: {'media': mediaType, 'peer': peerName},
+    ));
 
     final route = MaterialPageRoute(
       settings: const RouteSettings(name: 'CallScreen'),

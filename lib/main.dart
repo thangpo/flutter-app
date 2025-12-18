@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:convert';
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -88,7 +89,6 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/ice_ca
 import 'package:flutter_sixvalley_ecommerce/features/social/push/callkit_service.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/push/remote_rtc_log.dart';
 
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/call_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/call_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/webrtc_signaling_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/fcm/fcm_chat_handler.dart';
@@ -100,7 +100,6 @@ import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/
 
 import 'di_container.dart' as di;
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_page_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/domain/services/social_page_service_interface.dart';
 
 // === ADD (n?u chua có bi?n này) ===
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
@@ -113,6 +112,86 @@ final FirebaseAnalyticsObserver observer =
 
 // tr?nh m? m?n nh?n cu?c g?i tr?ng
 bool _incomingCallRouting = false;
+
+// === Android CallKit cold-start intent bridge ===
+const MethodChannel _androidCallkitIntentChannel =
+    MethodChannel('com.vnsshop.ecommerce/callkit_intent');
+
+Future<void> _bindAndroidCallkitIntentChannel() async {
+  try {
+    _androidCallkitIntentChannel.setMethodCallHandler((call) async {
+      if (call.method != 'onCallkitIntent') return;
+      final args = call.arguments;
+      if (args is! Map) return;
+      final action = args['action']?.toString();
+      final dataAny = args['data'];
+      final data = dataAny is Map
+          ? dataAny.map((k, v) => MapEntry(k.toString(), v))
+          : <String, dynamic>{};
+
+      int callId = 0;
+      try {
+        final extraAny = data['extra'];
+        final extra = extraAny is Map
+            ? extraAny.map((k, v) => MapEntry(k.toString(), v))
+            : <String, dynamic>{};
+        callId = int.tryParse(
+                '${extra['call_id'] ?? extra['callId'] ?? extra['id'] ?? ''}') ??
+            0;
+      } catch (_) {}
+
+      await RemoteRtcLog.send(
+        event: 'android_callkit_intent_realtime',
+        callId: callId,
+        details: {
+          'action': action,
+          'keys': data.keys.toList(),
+        },
+      );
+      await CallkitService.I.handleAndroidCallkitIntent(action, data);
+    });
+  } catch (_) {
+    // ignore
+  }
+}
+
+Future<void> _handleInitialAndroidCallkitIntent() async {
+  try {
+    final res =
+        await _androidCallkitIntentChannel.invokeMethod('getInitialIntent');
+    if (res is! Map) return;
+    final action = res['action']?.toString();
+    final dataAny = res['data'];
+    final data = dataAny is Map
+        ? dataAny.map((k, v) => MapEntry(k.toString(), v))
+        : <String, dynamic>{};
+    if ((action == null || action.isEmpty) && data.isEmpty) return;
+
+    int callId = 0;
+    try {
+      final extraAny = data['extra'];
+      final extra = extraAny is Map
+          ? extraAny.map((k, v) => MapEntry(k.toString(), v))
+          : <String, dynamic>{};
+      callId = int.tryParse(
+              '${extra['call_id'] ?? extra['callId'] ?? extra['id'] ?? ''}') ??
+          0;
+    } catch (_) {}
+
+    await RemoteRtcLog.send(
+      event: 'android_callkit_intent_initial',
+      callId: callId,
+      details: {
+        'action': action,
+        'keys': data.keys.toList(),
+      },
+    );
+
+    await CallkitService.I.handleAndroidCallkitIntent(action, data);
+  } catch (_) {
+    // ignore
+  }
+}
 
 const AndroidNotificationChannel _callInviteChannel =
     AndroidNotificationChannel(
@@ -128,14 +207,15 @@ const AndroidNotificationChannel _callInviteChannel =
 Future<void> _markGroupEndedNow(String groupId) async {
   try {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('recent_end_'+groupId, DateTime.now().millisecondsSinceEpoch ~/ 1000);
+    await prefs.setInt(
+        'recent_end_' + groupId, DateTime.now().millisecondsSinceEpoch ~/ 1000);
   } catch (_) {}
 }
 
 Future<bool> _wasGroupRecentlyEnded(String groupId, {int seconds = 8}) async {
   try {
     final prefs = await SharedPreferences.getInstance();
-    final ts = prefs.getInt('recent_end_'+groupId) ?? 0;
+    final ts = prefs.getInt('recent_end_' + groupId) ?? 0;
     if (ts <= 0) return false;
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     return (now - ts) < seconds;
@@ -147,6 +227,15 @@ Future<bool> _wasGroupRecentlyEnded(String groupId, {int seconds = 8}) async {
 // Background FCM
 @pragma('vm:entry-point')
 Future<void> myBackgroundMessageHandler(RemoteMessage message) async {
+  // Ensure bindings are initialized in background isolate.
+  try {
+    WidgetsFlutterBinding.ensureInitialized();
+  } catch (_) {}
+  // Ensure plugins are registered for background isolate (needed for MethodChannels like callkit).
+  try {
+    DartPluginRegistrant.ensureInitialized();
+  } catch (_) {}
+
   try {
     if (Firebase.apps.isEmpty) {
       if (Platform.isAndroid) {
@@ -180,25 +269,48 @@ Future<void> myBackgroundMessageHandler(RemoteMessage message) async {
 
   // ==== X? L? CU?C G?I 1-1 ? BACKGROUND (data-only FCM) ====
   try {
-  final data = message.data;
-  final type = (data['type'] ?? '').toString();
-  final hasGroupCallIds =
-      data.containsKey('call_id') && data.containsKey('group_id');
-  final isGroupInvite = type == 'call_invite_group' ||
-      ((type.isEmpty || type == 'call_invite') && hasGroupCallIds) ||
-      data.containsKey('group_id') ||
-      (data['is_group'] ?? '') == '1' ||
-      (data['is_group'] ?? '') == 1;
+    final data = message.data;
+    final type = (data['type'] ?? '').toString();
+    // Log về server để debug trường hợp Android killed bị mất field call_id/caller_name
+    try {
+      await RemoteRtcLog.send(
+        event: 'bg_fcm_received',
+        callId: int.tryParse(
+                '${data['call_id'] ?? data['id'] ?? data['callId'] ?? ''}') ??
+            0,
+        details: {
+          'type': type,
+          'keys': data.keys.toList(),
+          'call_id': data['call_id'],
+          'id': data['id'],
+          'callId': data['callId'],
+          'caller_id':
+              data['caller_id'] ?? data['from_id'] ?? data['sender_id'],
+          'caller_name':
+              data['caller_name'] ?? data['sender_name'] ?? data['name'],
+          'media': data['media'] ?? data['media_type'] ?? data['call_type'],
+          'has_notification': message.notification != null,
+          'msg_id': message.messageId,
+        },
+      );
+    } catch (_) {}
+    final hasGroupCallIds =
+        data.containsKey('call_id') && data.containsKey('group_id');
+    final isGroupInvite = type == 'call_invite_group' ||
+        ((type.isEmpty || type == 'call_invite') && hasGroupCallIds) ||
+        data.containsKey('group_id') ||
+        (data['is_group'] ?? '') == '1' ||
+        (data['is_group'] ?? '') == 1;
 
-  if (type == 'call_group_end') {
-    final gid = (data['group_id'] ?? '').toString();
-    final cid = int.tryParse('${data['call_id'] ?? ''}') ?? 0;
-    await CallkitService.I.handleRemoteGroupEnded(gid, cid);
-    await _markGroupEndedNow(gid);
-    print('? [BG] End incoming group call via push (call_id=$cid gid=$gid)');
-  } else if (type == 'call_invite' ||
-      type == 'call_invite_group' ||
-      (type.isEmpty && hasGroupCallIds)) {
+    if (type == 'call_group_end') {
+      final gid = (data['group_id'] ?? '').toString();
+      final cid = int.tryParse('${data['call_id'] ?? ''}') ?? 0;
+      await CallkitService.I.handleRemoteGroupEnded(gid, cid);
+      await _markGroupEndedNow(gid);
+      print('? [BG] End incoming group call via push (call_id=$cid gid=$gid)');
+    } else if (type == 'call_invite' ||
+        type == 'call_invite_group' ||
+        (type.isEmpty && hasGroupCallIds)) {
       try {
         final prefs = await SharedPreferences.getInstance();
         final myId = prefs.getString(AppConstants.socialUserId);
@@ -214,7 +326,9 @@ Future<void> myBackgroundMessageHandler(RemoteMessage message) async {
         }
       } catch (_) {}
 
-      final bgCallId = int.tryParse('${data['call_id'] ?? ''}') ?? 0;
+      final bgCallId = int.tryParse(
+              '${data['call_id'] ?? data['id'] ?? data['callId'] ?? ''}') ??
+          0;
 
       if (isGroupInvite) {
         final gid = data['group_id']?.toString() ?? '';
@@ -237,11 +351,47 @@ Future<void> myBackgroundMessageHandler(RemoteMessage message) async {
           return;
         }
 
+        try {
+          await RemoteRtcLog.send(
+            event: 'bg_call_invite_before_show',
+            callId: bgCallId,
+            details: {
+              'type': type,
+              'keys': data.keys.toList(),
+              'call_id': data['call_id'],
+              'id': data['id'],
+              'callId': data['callId'],
+              'caller_name':
+                  data['caller_name'] ?? data['sender_name'] ?? data['name'],
+            },
+          );
+        } catch (_) {}
+
         await CallkitService.I.showIncomingCall(data);
+
+        try {
+          await RemoteRtcLog.send(
+            event: 'bg_call_invite_after_show',
+            callId: bgCallId,
+            details: {'type': type},
+          );
+        } catch (_) {}
       }
       print('? [BG] Show incoming call (platform-specific)');
     }
   } catch (e) {
+    try {
+      await RemoteRtcLog.send(
+        event: 'bg_call_invite_exception',
+        callId: int.tryParse(
+                '${message.data['call_id'] ?? message.data['id'] ?? message.data['callId'] ?? ''}') ??
+            0,
+        details: {
+          'error': '$e',
+          'type': (message.data['type'] ?? '').toString()
+        },
+      );
+    } catch (_) {}
     print('? [BG] Error handling background call_invite: $e');
   }
 }
@@ -551,6 +701,7 @@ Future<void> _ensureAndroidNotificationPermission() async {
 Future<void> main() async {
   HttpOverrides.global = MyHttpOverrides();
   WidgetsFlutterBinding.ensureInitialized();
+  await _bindAndroidCallkitIntentChannel();
   // Đảm bảo các action CallKit (accept từ background/cold start) được flush ngay frame đầu.
   WidgetsBinding.instance.addPostFrameCallback((_) {
     CallkitService.I.flushPendingActions();
@@ -623,6 +774,7 @@ Future<void> main() async {
     // Khi app v?a d?ng frame d?u tiên (k? c? m? t? CallKit) thì flush action pending
     CallkitService.I.flushPendingActions();
     CallkitService.I.recoverActiveCalls();
+    _handleInitialAndroidCallkitIntent();
   });
 
   assert(() {
@@ -718,7 +870,8 @@ Future<void> main() async {
 
       if (t == 'call_group_end') {
         final gid = (initialMessage.data['group_id'] ?? '').toString();
-        final cid = int.tryParse('${initialMessage.data['call_id'] ?? ''}') ?? 0;
+        final cid =
+            int.tryParse('${initialMessage.data['call_id'] ?? ''}') ?? 0;
         await CallkitService.I.handleRemoteGroupEnded(gid, cid);
         await _markGroupEndedNow(gid);
       } else if (isGroupInvite) {
@@ -740,10 +893,10 @@ Future<void> main() async {
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
       print('?? onMessageOpenedApp (main): ${message.data}');
       final t = (message.data['type'] ?? '').toString();
-      final hasGroupIds =
-          message.data.containsKey('call_id') && message.data.containsKey('group_id');
-      final isGroupInvite =
-          t == 'call_invite_group' || ((t.isEmpty || t == 'call_invite') && hasGroupIds);
+      final hasGroupIds = message.data.containsKey('call_id') &&
+          message.data.containsKey('group_id');
+      final isGroupInvite = t == 'call_invite_group' ||
+          ((t.isEmpty || t == 'call_invite') && hasGroupIds);
 
       if (t == 'call_group_end') {
         final gid = (message.data['group_id'] ?? '').toString();
