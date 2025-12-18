@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.app.ActivityManager
 import com.google.firebase.messaging.RemoteMessage
 import com.hiennv.flutter_callkit_incoming.CallkitConstants
 import com.hiennv.flutter_callkit_incoming.CallkitNotificationManager
@@ -11,7 +12,6 @@ import com.hiennv.flutter_callkit_incoming.CallkitSoundPlayerManager
 import com.hiennv.flutter_callkit_incoming.Data
 import com.hiennv.flutter_callkit_incoming.addCall
 import com.hiennv.flutter_callkit_incoming.getDataActiveCalls
-import io.flutter.plugins.firebase.messaging.FlutterFirebaseMessagingUtils
 import java.util.Locale
 
 /**
@@ -39,7 +39,7 @@ class CallInviteMessagingReceiver : BroadcastReceiver() {
         if (type != "call_invite") return
 
         // Avoid duplicates when app is in foreground (foreground flow is already good)
-        if (FlutterFirebaseMessagingUtils.isApplicationForeground(context)) return
+        if (isApplicationForeground(context)) return
 
         val callIdRaw = (data["call_id"] ?: data["id"] ?: data["callId"] ?: "").trim()
         if (callIdRaw.isEmpty()) return
@@ -133,5 +133,20 @@ class CallInviteMessagingReceiver : BroadcastReceiver() {
             "${hex.substring(16, 20)}-" +
             "${hex.substring(20, 32)}"
     }
-}
 
+    private fun isApplicationForeground(context: Context): Boolean {
+        return try {
+            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+                ?: return false
+            val processes = am.runningAppProcesses ?: return false
+            val pkg = context.packageName
+            processes.any { p ->
+                p.processName == pkg &&
+                    (p.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND ||
+                        p.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE)
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+}
