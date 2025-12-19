@@ -313,6 +313,7 @@ class AuthController with ChangeNotifier {
       try {
         await Provider.of<SocialController>(Get.context!, listen: false)
             .loadCurrentUser(force: true);
+        await _cacheSocialProfileFromController();
       } catch (_) {}
       try {
         await ZegoCallService.I
@@ -585,6 +586,7 @@ class AuthController with ChangeNotifier {
       try {
         await Provider.of<SocialController>(Get.context!, listen: false)
             .loadCurrentUser(force: true);
+        await _cacheSocialProfileFromController();
       } catch (_) {}
       try {
         await ZegoCallService.I
@@ -1481,6 +1483,24 @@ class AuthController with ChangeNotifier {
   void toggleRememberMe() {
     _isActiveRememberMe = !_isActiveRememberMe;
     notifyListeners();
+  }
+
+  Future<void> _cacheSocialProfileFromController() async {
+    try {
+      final sc = Provider.of<SocialController>(Get.context!, listen: false);
+      final user = sc.currentUser;
+      if (user == null) return;
+      final prefs = await SharedPreferences.getInstance();
+      final display =
+          (user.displayName ?? user.userName ?? user.id).toString().trim();
+      await prefs.setString(
+        AppConstants.socialUserName,
+        display.isNotEmpty ? display : user.id,
+      );
+      if (user.avatarUrl != null && user.avatarUrl!.isNotEmpty) {
+        await prefs.setString(AppConstants.socialUserAvatar, user.avatarUrl!);
+      }
+    } catch (_) {}
   }
 
   void clearVerificationMessage() {

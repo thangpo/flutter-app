@@ -145,6 +145,25 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
     return _tryDecryptText(raw, timeVal);
   }
 
+  Map<String, dynamic>? _tryParseZegoCallLog(String raw) {
+    var s = raw.trim();
+    if (s.contains('&quot;')) {
+      s = s.replaceAll('&quot;', '"').replaceAll('&amp;', '&');
+    }
+    if (!s.startsWith('{') || !s.endsWith('}')) return null;
+    try {
+      final decoded = jsonDecode(s);
+      if (decoded is! Map) return null;
+      final map = decoded.map((k, v) => MapEntry(k.toString(), v));
+      if ((map['type'] ?? '').toString() != 'zego_call_log') return null;
+      final media = (map['media'] ?? '').toString().toLowerCase();
+      if (media != 'audio' && media != 'video') return null;
+      return map;
+    } catch (_) {
+      return null;
+    }
+  }
+
   // 🎬 Lazy video
   VideoPlayerController? _vp;
   bool _videoReady = false;
@@ -471,9 +490,12 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
   }
 
   Widget _buildText() {
-    final text = _resolvedText();
+    final raw = _resolvedText();
+    final callLog = _tryParseZegoCallLog(raw);
+    if (callLog != null) return _buildZegoCallLogBubble(callLog);
+
     return Text(
-      text.isEmpty ? ' ' : text,
+      raw.isEmpty ? ' ' : raw,
       style: TextStyle(
         fontSize: 15,
         height: 1.35,
@@ -600,6 +622,59 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildZegoCallLogBubble(Map<String, dynamic> log) {
+    final media = (log['media'] ?? 'audio').toString();
+    final isVideo = media == 'video';
+    final bg = widget.isMe ? const Color(0xFF2F80ED) : const Color(0xFFEFEFEF);
+    final fg = widget.isMe ? Colors.white : Colors.black87;
+
+    final groupName = (log['group_name'] ?? '').toString().trim();
+
+    final title = widget.isMe
+        ? (isVideo ? 'Bạn đã gọi video' : 'Bạn đã gọi thoại')
+        : (isVideo ? 'Cuộc gọi video' : 'Cuộc gọi thoại');
+
+    final subtitle =
+        groupName.isNotEmpty ? 'Nhóm: $groupName' : 'ZEGOCLOUD Call';
+
+    final content = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(isVideo ? Icons.videocam : Icons.call, color: fg),
+        const SizedBox(width: 10),
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: fg,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: TextStyle(color: fg.withOpacity(0.7), fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: content,
     );
   }
 

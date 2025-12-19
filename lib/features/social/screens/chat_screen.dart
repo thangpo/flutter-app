@@ -1306,20 +1306,14 @@ class _ChatScreenState extends State<ChatScreen> {
         peerName: (widget.peerName ?? _peerId),
         isVideoCall: isVideo,
         callID: callId,
+        peerAvatar: widget.peerAvatar, // new
       );
       if (!ok) throw 'Không gửi được lời mời gọi';
-
-      final payload = {
-        'type': 'zego_call_log',
-        'call_id': callId, // string
-        'media': mediaType,
-        'ts': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      };
 
       await repo.sendMessage(
         token: widget.accessToken,
         peerUserId: _peerId,
-        text: jsonEncode(payload),
+        text: isVideo ? 'Cuộc gọi video' : 'Cuộc gọi thoại',
       );
     } catch (e) {
       if (!mounted) return;

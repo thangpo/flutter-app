@@ -72,6 +72,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   // NEW: chống mở nhiều dialog "cuộc gọi đến"
   bool _ringingDialogOpen = false;
 
+  String? _myUserId;
+  String? _myUserName;
+  String? _myAvatar;
+
   // NEW: reply preview
   Map<String, dynamic>? _replyTo;
 
@@ -94,9 +98,24 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   // NEW: realtime polling
   Timer? _pollTimer;
 
+  Future<void> _loadSelf() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _myUserId = prefs.getString(AppConstants.socialUserId);
+      _myUserName =
+          prefs.getString(AppConstants.socialUserName) ?? _myUserId ?? '';
+      _myAvatar = prefs.getString(AppConstants.socialUserAvatar);
+    });
+  }
+
+  String _myName() => _myUserName ?? _myUserId ?? '';
+  String? _myAvatarUrl() => _myAvatar;
+
   @override
   void initState() {
     super.initState();
+    _loadSelf();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _initRecorder();
@@ -519,11 +538,17 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       final ok = await ZegoCallService.I.startGroup(
         invitees: inviteeUsers,
         isVideoCall: isVideo,
+        groupId: widget.groupId,
         callID: callId,
         customData: {
           'group_id': widget.groupId,
           'group_name': groupName,
+          'group_avatar': widget.groupAvatar ?? '',
         },
+        callerName: _myName(),
+        callerAvatar: _myAvatarUrl(),
+        groupName: groupName,
+        groupAvatar: widget.groupAvatar,
       );
       if (!ok) throw 'Không gửi được lời mời gọi nhóm';
 
@@ -531,10 +556,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
             widget.groupId,
             jsonEncode({
               'type': 'zego_call_log',
-              'call_id': callId,
               'media': isVideo ? 'video' : 'audio',
               'group_id': widget.groupId,
               'group_name': groupName,
+              'call_id': callId,
               'ts': DateTime.now().millisecondsSinceEpoch ~/ 1000,
             }),
           );
