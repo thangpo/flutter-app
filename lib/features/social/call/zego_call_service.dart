@@ -38,6 +38,8 @@ class ZegoCallService {
       return;
     }
 
+    debugPrint('[ZEGO] Init requested for user=$userId appID=${ZegoCallConfig.appID}');
+
     final token = await _getValidToken(userId: userId);
     if (token == null || token.isEmpty) {
       debugPrint('[ZEGO] Không lấy được token từ server, bỏ qua init.');
@@ -47,25 +49,30 @@ class ZegoCallService {
     _userId = userId;
     _userName = userName;
 
-    await ZegoUIKitPrebuiltCallInvitationService().init(
-      appID: ZegoCallConfig.appID,
-      appSign: '', // AppSign nằm ở server, client chỉ dùng token
-      token: token,
-      userID: userId,
-      userName: userName,
-      plugins: [ZegoUIKitSignalingPlugin()],
-      requireConfig: (ZegoCallInvitationData data) {
-        final isVideo = data.type == ZegoCallType.videoCall;
-        final isGroup = data.invitees.length > 1;
-        return isGroup
-            ? (isVideo
-                ? ZegoUIKitPrebuiltCallConfig.groupVideoCall()
-                : ZegoUIKitPrebuiltCallConfig.groupVoiceCall())
-            : (isVideo
-                ? ZegoUIKitPrebuiltCallConfig.oneOnOneVideoCall()
-                : ZegoUIKitPrebuiltCallConfig.oneOnOneVoiceCall());
-      },
-    );
+    try {
+      await ZegoUIKitPrebuiltCallInvitationService().init(
+        appID: ZegoCallConfig.appID,
+        appSign: '', // AppSign nằm ở server, client chỉ dùng token
+        token: token,
+        userID: userId,
+        userName: userName,
+        plugins: [ZegoUIKitSignalingPlugin()],
+        requireConfig: (ZegoCallInvitationData data) {
+          final isVideo = data.type == ZegoCallType.videoCall;
+          final isGroup = data.invitees.length > 1;
+          return isGroup
+              ? (isVideo
+                  ? ZegoUIKitPrebuiltCallConfig.groupVideoCall()
+                  : ZegoUIKitPrebuiltCallConfig.groupVoiceCall())
+              : (isVideo
+                  ? ZegoUIKitPrebuiltCallConfig.oneOnOneVideoCall()
+                  : ZegoUIKitPrebuiltCallConfig.oneOnOneVoiceCall());
+        },
+      );
+    } catch (e) {
+      debugPrint('[ZEGO] Lỗi init service: $e');
+      return;
+    }
 
     _inited = true;
     debugPrint('[ZEGO] Call invitation service inited for user=$userId');
@@ -90,13 +97,6 @@ class ZegoCallService {
 
   Future<String?> _getValidToken({required String userId}) async {
     final prefs = await SharedPreferences.getInstance();
-    final cachedToken = prefs.getString(_prefTokenKey);
-    final expireAt = prefs.getInt(_prefExpireKey) ?? 0;
-    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    if (cachedToken != null && cachedToken.isNotEmpty && expireAt > now + 60) {
-      return cachedToken;
-    }
-
     final accessToken = prefs.getString(AppConstants.socialAccessToken) ?? '';
     if (accessToken.isEmpty) {
       debugPrint('[ZEGO] Không có social access_token để xin token');
@@ -104,12 +104,18 @@ class ZegoCallService {
     }
 
     try {
+      debugPrint(
+        '[ZEGO] Fetch token từ server: userId=$userId, access_token=${accessToken.substring(0, 6)}..., endpoint=${AppConstants.socialGenerateZegoTokenUri}',
+      );
       final res = await _tokenRepo.fetchToken(
         accessToken: accessToken,
         userId: userId,
       );
       await prefs.setString(_prefTokenKey, res.token);
       await prefs.setInt(_prefExpireKey, res.expireAt);
+      debugPrint(
+        '[ZEGO] Lấy token mới thành công, expireAt=${res.expireAt}, len=${res.token.length}',
+      );
       return res.token;
     } catch (e) {
       debugPrint('[ZEGO] Lỗi fetch token: $e');

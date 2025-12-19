@@ -63,27 +63,38 @@ class ZegoTokenRepository {
       '${AppConstants.socialBaseUrl}${AppConstants.socialGenerateZegoTokenUri}?access_token=$accessToken',
     );
 
-    final response = await http.post(url, body: {
+    final body = {
       'server_key': AppConstants.socialServerKey,
       // Server will trust access_token, but keep user_id for clarity/logging
       'user_id': userId,
-    });
+    };
+
+    // Debug log cho tracing
+    // ignore: avoid_print
+    print('[ZEGO] POST /api/zego_token body=$body');
+
+    final response = await http.post(url, body: body);
+
+    // Debug log cho tracing
+    // ignore: avoid_print
+    print(
+        '[ZEGO] POST /api/zego_token -> status=${response.statusCode}, len=${response.bodyBytes.length}');
 
     if (response.statusCode != 200) {
       throw Exception('HTTP ${response.statusCode} khi xin Zego token');
     }
 
-    final body = jsonDecode(response.body);
-    final status = body['api_status']?.toString();
+    final Map<String, dynamic> jsonBody = jsonDecode(response.body);
+    final status = jsonBody['api_status']?.toString();
     if (status != '200') {
-      final err = body['errors']?['error_text'] ??
-          body['error'] ??
-          body['message'] ??
+      final err = jsonBody['errors']?['error_text'] ??
+          jsonBody['error'] ??
+          jsonBody['message'] ??
           'api_status=$status';
       throw Exception('Không lấy được Zego token: $err');
     }
 
-    final parsed = ZegoTokenResponse.fromJson(body);
+    final parsed = ZegoTokenResponse.fromJson(jsonBody);
     if (parsed.token.isEmpty) {
       throw Exception('Zego token rỗng từ server');
     }
