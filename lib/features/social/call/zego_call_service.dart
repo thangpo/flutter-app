@@ -232,6 +232,8 @@ class ZegoCallService {
     if (!_inited) return false;
 
     _setProfile(peerId, peerName, peerAvatar);
+    // lưu luôn profile của mình để callee hiển thị
+    _setProfile(_userId ?? '', _userName, await _myAvatarFromPrefs());
 
     return ZegoUIKitPrebuiltCallInvitationService().send(
       invitees: [ZegoCallUser(peerId, peerName)],
@@ -244,6 +246,7 @@ class ZegoCallService {
         'scope': 'social',
         'mode': 'one_on_one',
         'peer_id': peerId,
+        'peer_name': peerName,
         'is_video': isVideoCall,
         'peer_avatar': peerAvatar ?? '',
         'caller_name': _userName ?? _userId ?? '',
