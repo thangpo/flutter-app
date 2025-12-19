@@ -13,7 +13,6 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/event_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/event_repository.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
 
 import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
@@ -83,20 +82,11 @@ import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_n
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_notifications_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/firebase_token_updater.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/push_navigation_helper.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/push/call_invite_stream_listener.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/push/push_call_handler.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/ice_candidate_lite.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/push/callkit_service.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/push/remote_rtc_log.dart';
-
-import 'package:flutter_sixvalley_ecommerce/features/social/controllers/call_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/webrtc_signaling_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/fcm/fcm_chat_handler.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/call/zego_call_service.dart';
 
-// Group call
-import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_call_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/group_call_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/webrtc_group_signaling_repository.dart';
+import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
+import 'package:zego_uikit_signaling_plugin/zego_uikit_signaling_plugin.dart';
 
 import 'di_container.dart' as di;
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_page_controller.dart';
@@ -109,140 +99,6 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 final FirebaseAnalytics analytics = FirebaseAnalytics.instance;
 final FirebaseAnalyticsObserver observer =
     FirebaseAnalyticsObserver(analytics: analytics);
-
-// tr?nh m? m?n nh?n cu?c g?i tr?ng
-bool _incomingCallRouting = false;
-
-// === Android CallKit cold-start intent bridge ===
-const MethodChannel _androidCallkitIntentChannel =
-    MethodChannel('com.vnsshop.ecommerce/callkit_intent');
-
-Map<String, dynamic> _normalizeAndroidCallkitBundle(Map<String, dynamic> data) {
-  // Intent từ flutter_callkit_incoming (Android) trả về Bundle với key dạng
-  // EXTRA_CALLKIT_ID / EXTRA_CALLKIT_EXTRA...
-  // Chuẩn hoá sang format eventChannel của plugin: {id, extra, nameCaller, avatar, ...}
-  final id = (data['EXTRA_CALLKIT_ID'] ?? data['id'] ?? '').toString();
-  final extraAny = data['EXTRA_CALLKIT_EXTRA'] ?? data['extra'];
-  final extra = extraAny is Map
-      ? extraAny.map((k, v) => MapEntry(k.toString(), v))
-      : <String, dynamic>{};
-
-  return <String, dynamic>{
-    'id': id,
-    'nameCaller': (data['EXTRA_CALLKIT_NAME_CALLER'] ?? '').toString(),
-    'avatar': (data['EXTRA_CALLKIT_AVATAR'] ?? '').toString(),
-    'extra': extra,
-  };
-}
-
-Future<void> _bindAndroidCallkitIntentChannel() async {
-  try {
-    _androidCallkitIntentChannel.setMethodCallHandler((call) async {
-      if (call.method != 'onCallkitIntent') return;
-      final args = call.arguments;
-      if (args is! Map) return;
-      final action = args['action']?.toString();
-      final dataAny = args['data'];
-      final rawData = dataAny is Map
-          ? dataAny.map((k, v) => MapEntry(k.toString(), v))
-          : <String, dynamic>{};
-      final data = _normalizeAndroidCallkitBundle(rawData);
-
-      int callId = 0;
-      try {
-        final extraAny = data['extra'];
-        final extra = extraAny is Map
-            ? extraAny.map((k, v) => MapEntry(k.toString(), v))
-            : <String, dynamic>{};
-        callId = int.tryParse(
-                '${extra['call_id'] ?? extra['callId'] ?? extra['id'] ?? ''}') ??
-            0;
-      } catch (_) {}
-
-      await RemoteRtcLog.send(
-        event: 'android_callkit_intent_realtime',
-        callId: callId,
-        details: {
-          'action': action,
-          'keys': data.keys.toList(),
-        },
-      );
-      await CallkitService.I.handleAndroidCallkitIntent(action, data);
-    });
-  } catch (_) {
-    // ignore
-  }
-}
-
-Future<void> _handleInitialAndroidCallkitIntent() async {
-  try {
-    final res =
-        await _androidCallkitIntentChannel.invokeMethod('getInitialIntent');
-    if (res is! Map) return;
-    final action = res['action']?.toString();
-    final dataAny = res['data'];
-    final rawData = dataAny is Map
-        ? dataAny.map((k, v) => MapEntry(k.toString(), v))
-        : <String, dynamic>{};
-    final data = _normalizeAndroidCallkitBundle(rawData);
-    if ((action == null || action.isEmpty) && data.isEmpty) return;
-
-    int callId = 0;
-    try {
-      final extraAny = data['extra'];
-      final extra = extraAny is Map
-          ? extraAny.map((k, v) => MapEntry(k.toString(), v))
-          : <String, dynamic>{};
-      callId = int.tryParse(
-              '${extra['call_id'] ?? extra['callId'] ?? extra['id'] ?? ''}') ??
-          0;
-    } catch (_) {}
-
-    await RemoteRtcLog.send(
-      event: 'android_callkit_intent_initial',
-      callId: callId,
-      details: {
-        'action': action,
-        'keys': data.keys.toList(),
-      },
-    );
-
-    await CallkitService.I.handleAndroidCallkitIntent(action, data);
-  } catch (_) {
-    // ignore
-  }
-}
-
-const AndroidNotificationChannel _callInviteChannel =
-    AndroidNotificationChannel(
-  'call_invite_channel',
-  'Call Invites',
-  description: 'Heads-up notifications for incoming calls',
-  importance: Importance.max,
-  playSound: true,
-  enableVibration: true,
-);
-
-// === Group-call end debounce helpers ===
-Future<void> _markGroupEndedNow(String groupId) async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(
-        'recent_end_' + groupId, DateTime.now().millisecondsSinceEpoch ~/ 1000);
-  } catch (_) {}
-}
-
-Future<bool> _wasGroupRecentlyEnded(String groupId, {int seconds = 8}) async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final ts = prefs.getInt('recent_end_' + groupId) ?? 0;
-    if (ts <= 0) return false;
-    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    return (now - ts) < seconds;
-  } catch (_) {
-    return false;
-  }
-}
 
 // Background FCM
 @pragma('vm:entry-point')
@@ -287,146 +143,17 @@ Future<void> myBackgroundMessageHandler(RemoteMessage message) async {
     print('? [BG] Firebase init error in background: $e');
   }
 
-  // ==== X? L? CU?C G?I 1-1 ? BACKGROUND (data-only FCM) ====
+  // Legacy WebRTC call_invite flow is removed (migrated to ZEGOCLOUD).
+  // Offline/online invitations are handled by `ZegoUIKitPrebuiltCallInvitationService`.
   try {
     final data = message.data;
     final type = (data['type'] ?? '').toString();
-    // Log về server để debug trường hợp Android killed bị mất field call_id/caller_name
-    try {
-      await RemoteRtcLog.send(
-        event: 'bg_fcm_received',
-        callId: int.tryParse(
-                '${data['call_id'] ?? data['id'] ?? data['callId'] ?? ''}') ??
-            0,
-        details: {
-          'type': type,
-          'keys': data.keys.toList(),
-          'call_id': data['call_id'],
-          'id': data['id'],
-          'callId': data['callId'],
-          'caller_id':
-              data['caller_id'] ?? data['from_id'] ?? data['sender_id'],
-          'caller_name':
-              data['caller_name'] ?? data['sender_name'] ?? data['name'],
-          'media': data['media'] ?? data['media_type'] ?? data['call_type'],
-          'has_notification': message.notification != null,
-          'msg_id': message.messageId,
-        },
-      );
-    } catch (_) {}
-    final hasGroupCallIds =
-        data.containsKey('call_id') && data.containsKey('group_id');
-    final isGroupInvite = type == 'call_invite_group' ||
-        ((type.isEmpty || type == 'call_invite') && hasGroupCallIds) ||
-        data.containsKey('group_id') ||
-        (data['is_group'] ?? '') == '1' ||
-        (data['is_group'] ?? '') == 1;
-
-    if (type == 'call_group_end') {
-      final gid = (data['group_id'] ?? '').toString();
-      final cid = int.tryParse('${data['call_id'] ?? ''}') ?? 0;
-      await CallkitService.I.handleRemoteGroupEnded(gid, cid);
-      await _markGroupEndedNow(gid);
-      print('? [BG] End incoming group call via push (call_id=$cid gid=$gid)');
-    } else if (type == 'call_invite' ||
+    if (type == 'call_invite' ||
         type == 'call_invite_group' ||
-        (type.isEmpty && hasGroupCallIds)) {
-      // Android: show CallKit UI by native receiver (CallInviteMessagingReceiver) to avoid MethodChannel hang in killed-state.
-      if (Platform.isAndroid && type == 'call_invite') {
-        try {
-          await RemoteRtcLog.send(
-            event: 'bg_call_invite_skip_android_native',
-            callId: int.tryParse(
-                    '${data['call_id'] ?? data['id'] ?? data['callId'] ?? ''}') ??
-                0,
-            details: {'reason': 'native_receiver'},
-          );
-        } catch (_) {}
-        return;
-      }
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final myId = prefs.getString(AppConstants.socialUserId);
-        final callerId =
-            (data['caller_id'] ?? data['from_id'] ?? data['sender_id'])
-                ?.toString();
-        if (myId != null &&
-            myId.isNotEmpty &&
-            callerId != null &&
-            callerId.isNotEmpty &&
-            callerId == myId) {
-          return;
-        }
-      } catch (_) {}
-
-      final bgCallId = int.tryParse(
-              '${data['call_id'] ?? data['id'] ?? data['callId'] ?? ''}') ??
-          0;
-
-      if (isGroupInvite) {
-        final gid = data['group_id']?.toString() ?? '';
-        if (gid.isEmpty) return;
-        if (bgCallId > 0 &&
-            CallkitService.I.isGroupCallHandled(gid, bgCallId)) {
-          print('? [BG] Skip group invite handled call_id=$bgCallId gid=$gid');
-          return;
-        }
-        // Hien thi CallKit/ConnectionService cho cuoc goi nhom ca iOS & Android
-        if (await _wasGroupRecentlyEnded(gid)) {
-          print('[BG] Skip group invite (recently ended) gid=' + gid);
-          await CallkitService.I.endGroupCall(gid, bgCallId);
-        } else {
-          await CallkitService.I.showIncomingGroupCall(data);
-        }
-      } else {
-        if (bgCallId > 0 && CallkitService.I.isServerCallHandled(bgCallId)) {
-          print('? [BG] Skip call_invite: already handled call_id=$bgCallId');
-          return;
-        }
-
-        try {
-          await RemoteRtcLog.send(
-            event: 'bg_call_invite_before_show',
-            callId: bgCallId,
-            details: {
-              'type': type,
-              'keys': data.keys.toList(),
-              'call_id': data['call_id'],
-              'id': data['id'],
-              'callId': data['callId'],
-              'caller_name':
-                  data['caller_name'] ?? data['sender_name'] ?? data['name'],
-            },
-          );
-        } catch (_) {}
-
-        await CallkitService.I.showIncomingCall(data);
-
-        try {
-          await RemoteRtcLog.send(
-            event: 'bg_call_invite_after_show',
-            callId: bgCallId,
-            details: {'type': type},
-          );
-        } catch (_) {}
-      }
-      print('? [BG] Show incoming call (platform-specific)');
+        type == 'call_group_end') {
+      return;
     }
-  } catch (e) {
-    try {
-      await RemoteRtcLog.send(
-        event: 'bg_call_invite_exception',
-        callId: int.tryParse(
-                '${message.data['call_id'] ?? message.data['id'] ?? message.data['callId'] ?? ''}') ??
-            0,
-        details: {
-          'error': '$e',
-          'type': (message.data['type'] ?? '').toString()
-        },
-      );
-    } catch (_) {}
-    print('? [BG] Error handling background call_invite: $e');
-  }
+  } catch (_) {}
 }
 
 Future<void> _debugPrintFcmToken() async {
@@ -509,8 +236,6 @@ class AppLifecycleObserver extends WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       // App v?o foreground
       AnalyticsHelper.logUserActive();
-      CallkitService.I.flushPendingActions();
-      CallkitService.I.recoverActiveCalls();
     } else if (state == AppLifecycleState.paused) {
       // App v?o background
       analytics.logEvent(
@@ -521,175 +246,7 @@ class AppLifecycleObserver extends WidgetsBindingObserver {
   }
 }
 
-Future<void> _showIncomingCallNotification(Map<String, dynamic> data) async {
-  final isVideo = (data['media']?.toString() == 'video');
-  final title = isVideo ? 'Video call d?n' : 'Cuộc gọi đến';
-  final body =
-      'T? #${data['caller_id'] ?? ''} (Call ID ${data['call_id'] ?? ''})';
-
-  final androidDetails = AndroidNotificationDetails(
-    _callInviteChannel.id,
-    _callInviteChannel.name,
-    channelDescription: _callInviteChannel.description,
-    importance: Importance.max,
-    priority: Priority.high,
-    category: AndroidNotificationCategory.call,
-    fullScreenIntent: true,
-    ticker: 'incoming_call',
-    styleInformation: const DefaultStyleInformation(true, true),
-    sound: RawResourceAndroidNotificationSound(
-        'notification'), // T?n file ?m thanh (kh?ng c?n du?i .mp3)
-  );
-
-  await flutterLocalNotificationsPlugin.show(
-    DateTime.now().millisecondsSinceEpoch ~/ 1000,
-    title,
-    body,
-    NotificationDetails(android: androidDetails),
-    payload: jsonEncode(data),
-  );
-}
-
-// === ADD ===
-// Production: dùng UI h? th?ng (iOS CallKit / Android ConnectionService)
-// -> KHÔNG d?y màn IncomingCallScreen Flutter n?a
-class CallUiConfig {
-  static const bool useSystemIncomingUI = true;
-}
-
-void _handleCallInviteOpen(Map<String, dynamic> data) {
-  // Đã dùng CallKit/ConnectionService, không mở IncomingCallScreen Flutter nữa.
-  debugPrint('?? Skip IncomingCallScreen (system UI in use)');
-}
-
-// ===== GROUP: open UI khi c? l?i m?i nh?m =====
-void _handleGroupCallInviteOpen(Map<String, dynamic> data) {
-  if (_incomingCallRouting) return;
-  _incomingCallRouting = true;
-
-  final nav = navigatorKey.currentState;
-  if (nav == null) {
-    _incomingCallRouting = false;
-    return;
-  }
-
-  final callId = int.tryParse(data['call_id']?.toString() ?? '');
-  final groupId = data['group_id']?.toString();
-  final groupName = data['group_name']?.toString();
-  final media = (data['media']?.toString() == 'video') ? 'video' : 'audio';
-
-  if (callId == null || groupId == null || groupId.isEmpty) {
-    _incomingCallRouting = false;
-    return;
-  }
-
-  final ctx = nav.overlay?.context ?? navigatorKey.currentContext;
-  if (ctx != null) {
-    final cc = Provider.of<CallController>(ctx, listen: false);
-    cc.attachCall(callId: callId, mediaType: media);
-
-    analytics.logEvent(
-      name: 'incoming_group_call_received',
-      parameters: {
-        'call_id': callId.toString(),
-        'media_type': media,
-        'group_id': groupId,
-      },
-    );
-  }
-
-  nav
-      .push(
-        MaterialPageRoute(
-          builder: (_) => GroupCallScreen(
-            groupId: groupId,
-            mediaType: media,
-            callId: callId,
-            groupName: groupName ?? 'Cuộc gọi nhóm',
-          ),
-        ),
-      )
-      .whenComplete(() => _incomingCallRouting = false);
-}
-
-/// =========================
-/// Helpers: d?m b?o navigator s?n s?ng
-/// d?ng cho getInitialMessage (terminated app)
-/// =========================
-Future<void> _waitNavigatorAndOpen(void Function() openFn) async {
-  for (int i = 0; i < 20; i++) {
-    final nav = navigatorKey.currentState;
-    if (nav != null) {
-      openFn();
-      return;
-    }
-    await Future.delayed(const Duration(milliseconds: 100));
-  }
-}
-
-Future<void> _scheduleCallInviteOpen(Map<String, dynamic> data) async {
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    _waitNavigatorAndOpen(() => _handleCallInviteOpen(data));
-  });
-}
-
-Future<void> _scheduleGroupCallInviteOpen(Map<String, dynamic> data) async {
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    _waitNavigatorAndOpen(() => _handleGroupCallInviteOpen(data));
-  });
-}
-
-Future<void> _handleCallSignal(Map<String, dynamic> data) async {
-  final ctx = navigatorKey.currentContext;
-  if (ctx == null) return;
-
-  final callId = int.tryParse('${data['call_id']}') ?? 0;
-  if (callId <= 0) return;
-
-  final offer = data['sdp_offer'] ?? data['offer'];
-  final answer = data['sdp_answer'] ?? data['answer'];
-  final status = (data['call_status'] ?? data['status'])?.toString();
-  IceCandidateLite? cand;
-  if (data['candidate'] != null && '${data['candidate']}'.isNotEmpty) {
-    cand = IceCandidateLite(
-      candidate: '${data['candidate']}',
-      sdpMid: data['sdp_mid']?.toString(),
-      sdpMLineIndex:
-          int.tryParse('${data['sdp_mline_index'] ?? data['mline'] ?? ''}'),
-    );
-  }
-
-  try {
-    ctx.read<CallController>().ingestPushSignal(
-          callId: callId,
-          sdpOffer: offer?.toString(),
-          sdpAnswer: answer?.toString(),
-          candidate: cand,
-          status: status,
-        );
-
-    unawaited(RemoteRtcLog.send(
-      event: 'push_call_signal',
-      callId: callId,
-      details: {
-        'status': status,
-        'hasOffer': offer != null,
-        'hasAnswer': answer != null,
-        'hasCandidate': cand != null,
-      },
-    ));
-
-    // N?u server báo ended/declined -> dóng CallKit/UI ngay c? khi chua có poll
-    if (status == 'ended' || status == 'declined') {
-      await CallkitService.I.endCallForServerId(callId);
-      try {
-        Navigator.of(ctx, rootNavigator: true).popUntil(
-          (route) => route.settings.name != 'CallScreen',
-        );
-      } catch (_) {}
-    }
-  } catch (_) {}
-}
+// Legacy WebRTC call notification/open handlers removed (migrated to ZEGOCLOUD).
 
 // === REPLACE this function ===
 Future<void> _ensureAndroidNotificationPermission() async {
@@ -734,14 +291,14 @@ Future<void> _ensureAndroidNotificationPermission() async {
 Future<void> main() async {
   HttpOverrides.global = MyHttpOverrides();
   WidgetsFlutterBinding.ensureInitialized();
-  await _bindAndroidCallkitIntentChannel();
-  // Đảm bảo các action CallKit (accept từ background/cold start) được flush ngay frame đầu.
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    CallkitService.I.flushPendingActions();
-  });
-
-  // Ðang ký listener CallKit càng s?m càng t?t d? không miss s? ki?n ANSWER khi app du?c m? t? CallKit (cold start).
-  await CallkitService.I.init();
+  ZegoUIKitPrebuiltCallInvitationService().setNavigatorKey(navigatorKey);
+  try {
+    await ZegoUIKitPrebuiltCallInvitationService().useSystemCallingUI(
+      [ZegoUIKitSignalingPlugin()],
+    );
+  } catch (e) {
+    debugPrint('[ZEGO] useSystemCallingUI failed: $e');
+  }
 
   await _setHighRefreshRate();
 
@@ -789,26 +346,12 @@ Future<void> main() async {
     }
   }
 
-  // ==== SOCIAL FCM / CALL WIRING ====
-  // 1) Local notifications (cho Android heads-up khi c?n)
-  SocialCallPushHandler.I.initLocalNotifications();
-
-  // 2) Listener foreground cho call_invite qua FCM (n?u b?n dùng)
-  CallInviteForegroundListener.start();
-
-  // 3) FCM chat
+  // ==== SOCIAL FCM WIRING ====
+  // 1) FCM chat
   FcmChatHandler.initialize();
-
-  // SocialCallPushHandler.I.bindForegroundListener(); // KH?NG c?n d?ng n?a
 
   // =================== APP LIFECYCLE OBSERVER ===================
   WidgetsBinding.instance.addObserver(AppLifecycleObserver());
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    // Khi app v?a d?ng frame d?u tiên (k? c? m? t? CallKit) thì flush action pending
-    CallkitService.I.flushPendingActions();
-    CallkitService.I.recoverActiveCalls();
-    _handleInitialAndroidCallkitIntent();
-  });
 
   assert(() {
     FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
@@ -832,6 +375,7 @@ Future<void> main() async {
 
   await FlutterDownloader.initialize(debug: true, ignoreSsl: true);
   await di.init();
+  await ZegoCallService.I.tryInitFromPrefs();
 
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     await FirebaseTokenUpdater.update();
@@ -842,11 +386,6 @@ Future<void> main() async {
   });
   // === ADD (tru?c khi t?o channel) ===
   await _ensureAndroidNotificationPermission();
-  // t?o k?nh heads-up cho call_invite (cu, d?ng chung plugin global n?u c?n)
-  await flutterLocalNotificationsPlugin
-      .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
-      ?.createNotificationChannel(_callInviteChannel);
 
   const androidInit = AndroidInitializationSettings('notification_icon');
   const iosInit = DarwinInitializationSettings();
@@ -862,17 +401,7 @@ Future<void> main() async {
       try {
         final Map<String, dynamic> map = (jsonDecode(payload) as Map)
             .map((k, v) => MapEntry(k.toString(), v));
-
-        if ((map['type'] ?? '') == 'call_invite') {
-          _handleCallInviteOpen(map);
-          return;
-        }
-
-        // GROUP
-        if ((map['type'] ?? '') == 'call_invite_group') {
-          _handleGroupCallInviteOpen(map);
-          return;
-        }
+        // Legacy `call_invite` notifications are ignored (migrated to ZEGOCLOUD).
 
         //  di?u hu?ng social
         if ((map['type'] ?? '') == 'interact') {
@@ -896,21 +425,10 @@ Future<void> main() async {
         await FirebaseMessaging.instance.getInitialMessage();
     if (initialMessage != null) {
       final t = (initialMessage.data['type'] ?? '').toString();
-      final hasGroupIds = initialMessage.data.containsKey('call_id') &&
-          initialMessage.data.containsKey('group_id');
-      final isGroupInvite = t == 'call_invite_group' ||
-          ((t.isEmpty || t == 'call_invite') && hasGroupIds);
-
-      if (t == 'call_group_end') {
-        final gid = (initialMessage.data['group_id'] ?? '').toString();
-        final cid =
-            int.tryParse('${initialMessage.data['call_id'] ?? ''}') ?? 0;
-        await CallkitService.I.handleRemoteGroupEnded(gid, cid);
-        await _markGroupEndedNow(gid);
-      } else if (isGroupInvite) {
-        await _scheduleGroupCallInviteOpen(initialMessage.data);
-      } else if (t == 'call_invite') {
-        await _scheduleCallInviteOpen(initialMessage.data);
+      if (t == 'call_invite' ||
+          t == 'call_invite_group' ||
+          t == 'call_group_end') {
+        // ignore legacy WebRTC call notifications
       } else if (initialMessage.data['api_status'] != null ||
           initialMessage.data['type'] != null) {
         await handlePushNavigation(initialMessage);
@@ -926,45 +444,17 @@ Future<void> main() async {
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
       print('?? onMessageOpenedApp (main): ${message.data}');
       final t = (message.data['type'] ?? '').toString();
-      final hasGroupIds = message.data.containsKey('call_id') &&
-          message.data.containsKey('group_id');
-      final isGroupInvite = t == 'call_invite_group' ||
-          ((t.isEmpty || t == 'call_invite') && hasGroupIds);
-
-      if (t == 'call_group_end') {
-        final gid = (message.data['group_id'] ?? '').toString();
-        final cid = int.tryParse('${message.data['call_id'] ?? ''}') ?? 0;
-        await CallkitService.I.handleRemoteGroupEnded(gid, cid);
-        await _markGroupEndedNow(gid);
-        return;
+      if (t == 'call_invite' ||
+          t == 'call_invite_group' ||
+          t == 'call_group_end') {
+        return; // ignore legacy WebRTC call notifications
       }
-      if (isGroupInvite) {
-        _handleGroupCallInviteOpen(message.data);
-        return;
-      }
-      if (t == 'call_invite') {
-        _handleCallInviteOpen(message.data);
-        return;
-      }
-
       await handlePushNavigation(message);
     });
 
     FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
       final data = message.data;
       debugPrint('?? onMessage(foreground) data= $data');
-
-      if ((data['type'] ?? '') == 'call_signal') {
-        await _handleCallSignal(data);
-        return;
-      }
-      if ((data['type'] ?? '') == 'call_group_end') {
-        final gid = (data['group_id'] ?? '').toString();
-        final cid = int.tryParse('${data['call_id'] ?? ''}') ?? 0;
-        await CallkitService.I.handleRemoteGroupEnded(gid, cid);
-        await _markGroupEndedNow(gid);
-        return;
-      }
 
       // ---- B? QUA T?T C? TH?NG ?I?P LI?N QUAN ??N CU?C G?I ----
       final type = (data['type'] ?? '').toString();
@@ -1106,32 +596,6 @@ Future<void> main() async {
         create: (_) => SocialNotificationsController(
           repo: SocialNotificationsRepository(),
         ),
-      ),
-
-      // 1-1 call
-      ChangeNotifierProvider(
-        create: (_) => CallController(
-          signaling: WebRTCSignalingRepository(
-            baseUrl: AppConstants.socialBaseUrl,
-            serverKey: AppConstants.socialServerKey,
-            accessTokenKey: AppConstants.socialAccessToken,
-          ),
-        )..init(),
-      ),
-
-      // Group call
-      ChangeNotifierProvider(
-        create: (_) {
-          final repo = WebRTCGroupSignalingRepositoryImpl(
-            baseUrl: AppConstants.socialBaseUrl,
-            serverKey: AppConstants.socialServerKey,
-            getAccessToken: () async {
-              final sp = await SharedPreferences.getInstance();
-              return sp.getString(AppConstants.socialAccessToken);
-            },
-          );
-          return GroupCallController(signaling: repo)..init();
-        },
       ),
     ],
     child: MyApp(body: body),

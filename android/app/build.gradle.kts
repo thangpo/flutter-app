@@ -60,7 +60,7 @@ android {
             isShrinkResources = false
 
             // Nếu có file proguard thì bật dòng sau
-            // proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
 
         getByName("debug") {

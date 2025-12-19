@@ -1,4 +1,4 @@
-﻿// G:\flutter-app\lib\features\social\screens\group_chat_screen.dart
+// G:\flutter-app\lib\features\social\screens\group_chat_screen.dart
 import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
@@ -13,23 +13,18 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_chat_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/group_chat_message_bubble.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/add_group_members_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_call_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/group_call_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_chat_repository.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/push/callkit_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/call/zego_call_service.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
+import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
-
-
 
 class GroupChatScreen extends StatefulWidget {
   final String groupId;
@@ -104,12 +99,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // Không autoOpen; dùng dialog Chấp nhận/Từ chối qua onIncoming
-      _bindIncomingWatcher();
-
       await _initRecorder();
       await _draftPlayer.openPlayer();
-      await _draftPlayer.setSubscriptionDuration(const Duration(milliseconds: 200));
+      await _draftPlayer
+          .setSubscriptionDuration(const Duration(milliseconds: 200));
       _draftSub = _draftPlayer.onProgress?.listen((e) {
         if (!mounted) return;
         setState(() => _draftPos = e.position ?? Duration.zero);
@@ -149,88 +142,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     });
   }
 
-  // Gắn watcher inbox cho group này & thiết lập onIncoming
-  void _bindIncomingWatcher() {
-    final gcc = context.read<GroupCallController>();
-    final gchat = context.read<GroupChatController>();
-
-    // Ngắt watcher cũ (nếu có) trước khi gắn mới
-    gcc.stopWatchingInbox();
-
-    // Không auto mở phòng; chỉ callback cho UI
-    gcc.watchGroupInbox(widget.groupId, autoOpen: false);
-
-    // Khi có cuộc gọi đến -> hiện dialog Chấp nhận / Từ chối
-    gcc.onIncoming = (call) async {
-      if (!mounted) return;
-      if (_ringingDialogOpen) return; // tránh trùng lặp
-
-      // Dữ liệu call từ API inbox
-      final callId = (call['call_id'] ?? call['id']) is int
-          ? (call['call_id'] ?? call['id']) as int
-          : int.tryParse('${call['call_id'] ?? call['id'] ?? 0}') ?? 0;
-      final media = (call['media'] ?? 'audio').toString();
-      final joined = call['joined'] == true;
-
-      // user hiện tại & creator
-      final meId = int.tryParse('${gchat.currentUserId}') ?? 0;
-      final creatorId = int.tryParse('${call['creator_id'] ?? 0}') ?? 0;
-
-      // ⛔️ Không hiển thị dialog nếu:
-      // - đã join rồi (bao gồm creator vì create() đã mark joined_at)
-      // - mình chính là creator (caller)
-      // - controller đang ở đúng call này (đang trên màn call)
-      if (joined ||
-          creatorId == meId ||
-          (gcc.currentCallId != null && gcc.currentCallId == callId)) {
-        return;
-      }
-
-      _ringingDialogOpen = true;
-      final gName = _finalTitle(context.read<GroupChatController>());
-      if (Platform.isIOS) {
-        await CallkitService.I.showIncomingGroupCall({
-          'call_id': callId,
-          'group_id': widget.groupId,
-          'group_name': gName,
-          'media': media,
-        });
-        _ringingDialogOpen = false;
-        return;
-      }
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          fullscreenDialog: true,
-          builder: (ctx) => _GroupIncomingCallPage(
-            groupId: widget.groupId,
-            groupName: gName,
-            media: media,
-            callId: callId,
-            onDecline: () async {
-              try {
-                await gcc.leaveRoom(callId);
-              } catch (_) {}
-              if (ctx.mounted) Navigator.of(ctx).pop();
-            },
-            onAccept: () {
-              Navigator.of(ctx).pushReplacement(
-                MaterialPageRoute(
-                  builder: (_) => GroupCallScreen(
-                    groupId: widget.groupId,
-                    mediaType: media,
-                    callId: callId,
-                    groupName: gName,
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      );
-      _ringingDialogOpen = false;
-    };
-  }
-
   // ====== REALTIME POLLING ======
   void _startRealtimePolling() {
     _pollTimer?.cancel();
@@ -260,8 +171,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   void didUpdateWidget(covariant GroupChatScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.groupId != widget.groupId) {
-      // ✅ Nếu chuyển sang group khác, gắn watcher mới (không autoOpen)
-      _bindIncomingWatcher();
       _startRealtimePolling();
       setState(() {
         _replyTo = null;
@@ -271,11 +180,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
   @override
   void dispose() {
-    // ✅ Dừng watcher inbox khi rời màn và bỏ callback
-    final gcc = context.read<GroupCallController>();
-    gcc.stopWatchingInbox();
-    gcc.onIncoming = null;
-
     _stopRealtimePolling();
 
     _recorder.closeRecorder();
@@ -320,7 +224,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     if (!_recording) {
       try {
         final dir = await getTemporaryDirectory();
-        final path = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        final path =
+            '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
         _recPath = path;
 
         await _recorder.startRecorder(
@@ -396,7 +301,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
     List<XFile> picked = [];
     try {
-      picked = await _picker.pickMultipleMedia(requestFullMetadata: false) ?? [];
+      picked =
+          await _picker.pickMultipleMedia(requestFullMetadata: false) ?? [];
     } catch (_) {
       // fallback nếu image_picker version cũ
       final imgs = await _picker.pickMultiImage(imageQuality: 85);
@@ -408,16 +314,25 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     setState(() {
       _pendingAttachments.addAll(
         picked.map((x) => _PendingAttachment(
-          path: x.path,
-          type: _detectAttachmentType(x.path),
-        )),
+              path: x.path,
+              type: _detectAttachmentType(x.path),
+            )),
       );
     });
   }
 
   _AttachmentType _detectAttachmentType(String path) {
     final ext = p.extension(path).toLowerCase();
-    const img = {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.heic', '.heif'};
+    const img = {
+      '.png',
+      '.jpg',
+      '.jpeg',
+      '.webp',
+      '.gif',
+      '.bmp',
+      '.heic',
+      '.heif'
+    };
     const vid = {'.mp4', '.mov', '.m4v', '.mkv', '.avi', '.webm', '.wmv'};
     if (img.contains(ext)) return _AttachmentType.image;
     if (vid.contains(ext)) return _AttachmentType.video;
@@ -593,24 +508,36 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         }
       }
 
-      // ✅ Thu thập invitees và truyền sang GroupCallScreen
-      final invitees = await _collectInvitees();
+      final inviteeIds = await _collectInvitees();
+      final inviteeUsers = inviteeIds
+          .map((id) => ZegoCallUser(id.toString(), id.toString()))
+          .toList();
 
-      // 🔇 Tắt watcher để caller KHÔNG thấy dialog "tham gia"
-      final gcc = context.read<GroupCallController>();
-      gcc.stopWatchingInbox();
+      final groupName = _finalTitle(context.read<GroupChatController>());
+      final callId = ZegoCallService.I.newGroupCallId(widget.groupId);
 
-      if (!mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => GroupCallScreen(
-            groupId: widget.groupId,
-            mediaType: isVideo ? 'video' : 'audio',
-            invitees: invitees, // server sẽ bắn FCM cho thành viên
-            groupName: _finalTitle(context.read<GroupChatController>()),
-          ),
-        ),
+      final ok = await ZegoCallService.I.startGroup(
+        invitees: inviteeUsers,
+        isVideoCall: isVideo,
+        callID: callId,
+        customData: {
+          'group_id': widget.groupId,
+          'group_name': groupName,
+        },
       );
+      if (!ok) throw 'Không gửi được lời mời gọi nhóm';
+
+      await context.read<GroupChatController>().sendMessage(
+            widget.groupId,
+            jsonEncode({
+              'type': 'zego_call_log',
+              'call_id': callId,
+              'media': isVideo ? 'video' : 'audio',
+              'group_id': widget.groupId,
+              'group_name': groupName,
+              'ts': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            }),
+          );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -618,8 +545,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         );
       }
     } finally {
-      // 🔔 Bật lại watcher khi quay về màn chat
-      if (mounted) _bindIncomingWatcher();
       _launchingCall = false;
     }
   }
@@ -785,7 +710,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         return;
       }
 
-     
       final uri = Uri.parse(
         '${AppConstants.socialBaseUrl}/api/group_chat?access_token=$token',
       );
@@ -872,12 +796,12 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     setState(() => _sending = true);
     try {
       await context.read<GroupChatController>().sendMessage(
-        widget.groupId,
-        '',
-        file: File(_voiceDraftPath!),
-        type: 'voice',
-        replyTo: _replyTo,
-      );
+            widget.groupId,
+            '',
+            file: File(_voiceDraftPath!),
+            type: 'voice',
+            replyTo: _replyTo,
+          );
 
       await _draftPlayer.stopPlayer();
 
@@ -904,7 +828,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   }
 
   Widget _buildVoiceDraftPreview() {
-    final dur = _voiceDraftDuration > Duration.zero ? _voiceDraftDuration : _draftPos;
+    final dur =
+        _voiceDraftDuration > Duration.zero ? _voiceDraftDuration : _draftPos;
     final maxMs = dur.inMilliseconds > 0 ? dur.inMilliseconds.toDouble() : 1.0;
     final valMs = _draftPos.inMilliseconds.clamp(0, maxMs.toInt()).toDouble();
 
@@ -917,7 +842,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       child: Row(
         children: [
           IconButton(
-            icon: Icon(_draftPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled),
+            icon: Icon(_draftPlaying
+                ? Icons.pause_circle_filled
+                : Icons.play_circle_filled),
             onPressed: _toggleDraftPlay,
           ),
           Expanded(
@@ -1189,7 +1116,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                       },
                       itemBuilder: (ctx) {
                         final items = <PopupMenuEntry<String>>[
-                          
                           // Nếu là chủ nhóm thì hiện "Đổi ảnh" và "Đổi tên", nếu không thì ẩn
                           if (isOwner) ...[
                             PopupMenuItem(
@@ -1455,14 +1381,18 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                 top: 4,
                 right: 4,
                 child: GestureDetector(
-                  onTap: _sending ? null : () => setState(() => _pendingAttachments.removeAt(index)),
+                  onTap: _sending
+                      ? null
+                      : () =>
+                          setState(() => _pendingAttachments.removeAt(index)),
                   child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: const BoxDecoration(
                       color: Colors.black54,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.close, size: 16, color: Colors.white),
+                    child:
+                        const Icon(Icons.close, size: 16, color: Colors.white),
                   ),
                 ),
               ),
@@ -1486,7 +1416,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           fit: StackFit.expand,
           children: [
             Container(color: Colors.black12),
-            const Center(child: Icon(Icons.play_circle_fill, size: 34, color: Colors.white70)),
+            const Center(
+                child: Icon(Icons.play_circle_fill,
+                    size: 34, color: Colors.white70)),
           ],
         );
       default:
@@ -2120,166 +2052,176 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                                 },
                               )
                             : ListView.builder(
-                          controller: _scroll,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                          itemCount: items.length,
-                          itemBuilder: (ctx, i) {
-                            final msg = items[i];
-                            final isMe = ctrl.isMyMessage(msg);
-                            final isSystem = msg['is_system'] == true;
+                                controller: _scroll,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                itemCount: items.length,
+                                itemBuilder: (ctx, i) {
+                                  final msg = items[i];
+                                  final isMe = ctrl.isMyMessage(msg);
+                                  final isSystem = msg['is_system'] == true;
 
-                            if (isSystem) {
-                              return Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 6),
-                                child: Center(
-                                  child: ChatMessageBubble(
-                                    key: ValueKey(
-                                        '${msg['id'] ?? msg.hashCode}'),
-                                    message: msg,
-                                    isMe: false,
-                                  ),
-                                ),
-                              );
-                            }
-
-                            final userData =
-                                (msg['user_data'] ?? {}) as Map? ?? {};
-                            final avatarUrl =
-                                '${userData['avatar'] ?? ''}'.trim();
-
-                            final hasReply = _hasReplyTag(msg);
-                            final replyMsg = hasReply
-                                ? _findRepliedMessage(msg, items)
-                                : null;
-
-                            if (!isMe) {
-                              return Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 4.0),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  mainAxisAlignment: MainAxisAlignment.start,
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 16,
-                                      backgroundImage: avatarUrl.isNotEmpty
-                                          ? NetworkImage(avatarUrl)
-                                          : null,
-                                      child: avatarUrl.isEmpty
-                                          ? const Icon(Icons.person, size: 18)
-                                          : null,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Flexible(
-                                      child: ConstrainedBox(
-                                        constraints: BoxConstraints(
-                                          maxWidth: MediaQuery.of(context)
-                                                  .size
-                                                  .width *
-                                              0.78,
-                                        ),
-                                        child: _SwipeReplyWrapper(
+                                  if (isSystem) {
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 6),
+                                      child: Center(
+                                        child: ChatMessageBubble(
+                                          key: ValueKey(
+                                              '${msg['id'] ?? msg.hashCode}'),
+                                          message: msg,
                                           isMe: false,
-                                          onReply: () {
-                                            setState(() {
-                                              _replyTo = msg;
-                                            });
-                                          },
-                                          child: GestureDetector(
-                                            behavior: HitTestBehavior.opaque,
-                                            onLongPress: () =>
-                                                _onMessageLongPress(msg, isMe),
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                if (hasReply)
-                                                  _buildReplyHeader(
-                                                    message: msg,
-                                                    replyMsg: replyMsg,
-                                                    isMe: false,
+                                        ),
+                                      ),
+                                    );
+                                  }
+
+                                  final userData =
+                                      (msg['user_data'] ?? {}) as Map? ?? {};
+                                  final avatarUrl =
+                                      '${userData['avatar'] ?? ''}'.trim();
+
+                                  final hasReply = _hasReplyTag(msg);
+                                  final replyMsg = hasReply
+                                      ? _findRepliedMessage(msg, items)
+                                      : null;
+
+                                  if (!isMe) {
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 4.0),
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.end,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.start,
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 16,
+                                            backgroundImage:
+                                                avatarUrl.isNotEmpty
+                                                    ? NetworkImage(avatarUrl)
+                                                    : null,
+                                            child: avatarUrl.isEmpty
+                                                ? const Icon(Icons.person,
+                                                    size: 18)
+                                                : null,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Flexible(
+                                            child: ConstrainedBox(
+                                              constraints: BoxConstraints(
+                                                maxWidth: MediaQuery.of(context)
+                                                        .size
+                                                        .width *
+                                                    0.78,
+                                              ),
+                                              child: _SwipeReplyWrapper(
+                                                isMe: false,
+                                                onReply: () {
+                                                  setState(() {
+                                                    _replyTo = msg;
+                                                  });
+                                                },
+                                                child: GestureDetector(
+                                                  behavior:
+                                                      HitTestBehavior.opaque,
+                                                  onLongPress: () =>
+                                                      _onMessageLongPress(
+                                                          msg, isMe),
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      if (hasReply)
+                                                        _buildReplyHeader(
+                                                          message: msg,
+                                                          replyMsg: replyMsg,
+                                                          isMe: false,
+                                                        ),
+                                                      if (replyMsg != null)
+                                                        _buildReplyQuote(
+                                                          replyMsg,
+                                                          isMe: false,
+                                                        ),
+                                                      ChatMessageBubble(
+                                                        key: ValueKey(
+                                                            '${msg['id'] ?? msg.hashCode}'),
+                                                        message: msg,
+                                                        isMe: false,
+                                                      ),
+                                                    ],
                                                   ),
-                                                if (replyMsg != null)
-                                                  _buildReplyQuote(
-                                                    replyMsg,
-                                                    isMe: false,
-                                                  ),
-                                                ChatMessageBubble(
-                                                  key: ValueKey(
-                                                      '${msg['id'] ?? msg.hashCode}'),
-                                                  message: msg,
-                                                  isMe: false,
                                                 ),
-                                              ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }
+
+                                  // tin nhắn của chính mình
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 4.0),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.end,
+                                      children: [
+                                        Flexible(
+                                          child: ConstrainedBox(
+                                            constraints: BoxConstraints(
+                                              maxWidth: MediaQuery.of(context)
+                                                      .size
+                                                      .width *
+                                                  0.78,
+                                            ),
+                                            child: _SwipeReplyWrapper(
+                                              isMe: true,
+                                              onReply: () {
+                                                setState(() {
+                                                  _replyTo = msg;
+                                                });
+                                              },
+                                              child: GestureDetector(
+                                                behavior:
+                                                    HitTestBehavior.opaque,
+                                                onLongPress: () =>
+                                                    _onMessageLongPress(
+                                                        msg, isMe),
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.end,
+                                                  children: [
+                                                    if (hasReply)
+                                                      _buildReplyHeader(
+                                                        message: msg,
+                                                        replyMsg: replyMsg,
+                                                        isMe: true,
+                                                      ),
+                                                    if (replyMsg != null)
+                                                      _buildReplyQuote(
+                                                        replyMsg,
+                                                        isMe: true,
+                                                      ),
+                                                    ChatMessageBubble(
+                                                      key: ValueKey(
+                                                          '${msg['id'] ?? msg.hashCode}'),
+                                                      message: msg,
+                                                      isMe: true,
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ),
-                                      ),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                              );
-                            }
-
-                            // tin nhắn của chính mình
-                            return Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 4.0),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  Flexible(
-                                    child: ConstrainedBox(
-                                      constraints: BoxConstraints(
-                                        maxWidth:
-                                            MediaQuery.of(context).size.width *
-                                                0.78,
-                                      ),
-                                      child: _SwipeReplyWrapper(
-                                        isMe: true,
-                                        onReply: () {
-                                          setState(() {
-                                            _replyTo = msg;
-                                          });
-                                        },
-                                        child: GestureDetector(
-                                          behavior: HitTestBehavior.opaque,
-                                          onLongPress: () =>
-                                              _onMessageLongPress(msg, isMe),
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.end,
-                                            children: [
-                                              if (hasReply)
-                                                _buildReplyHeader(
-                                                  message: msg,
-                                                  replyMsg: replyMsg,
-                                                  isMe: true,
-                                                ),
-                                              if (replyMsg != null)
-                                                _buildReplyQuote(
-                                                  replyMsg,
-                                                  isMe: true,
-                                                ),
-                                              ChatMessageBubble(
-                                                key: ValueKey(
-                                                    '${msg['id'] ?? msg.hashCode}'),
-                                                message: msg,
-                                                isMe: true,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                                  );
+                                },
                               ),
-                            );
-                          },
-                        ),
                       ),
               ),
 
@@ -2311,7 +2253,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
                     // ✅ Row chỉ còn input + send
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 6),
                       child: Row(
                         children: [
                           Expanded(
@@ -2322,7 +2265,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                               maxLines: 4,
                               textInputAction: TextInputAction.newline,
                               decoration: InputDecoration(
-                                hintText: _sending ? 'Đang gửi...' : 'Nhập tin nhắn...',
+                                hintText: _sending
+                                    ? 'Đang gửi...'
+                                    : 'Nhập tin nhắn...',
                                 isDense: true,
                                 filled: true,
                                 fillColor: Colors.white,
@@ -2353,64 +2298,80 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                           IconButton(
                             tooltip: 'Gửi',
                             icon: const Icon(Icons.send),
-                            onPressed: _sending ? null : () async {
-                              final text = _textCtrl.text.trim();
-                              final hasText = text.isNotEmpty;
-                              final hasAtt = _pendingAttachments.isNotEmpty;
-                              final hasVoice = _voiceDraftPath != null;
+                            onPressed: _sending
+                                ? null
+                                : () async {
+                                    final text = _textCtrl.text.trim();
+                                    final hasText = text.isNotEmpty;
+                                    final hasAtt =
+                                        _pendingAttachments.isNotEmpty;
+                                    final hasVoice = _voiceDraftPath != null;
 
-                              if (!hasText && !hasAtt && !hasVoice) return;
+                                    if (!hasText && !hasAtt && !hasVoice)
+                                      return;
 
-                              final replying = _replyTo;
+                                    final replying = _replyTo;
 
-                              _textCtrl.clear();
-                              setState(() => _sending = true);
+                                    _textCtrl.clear();
+                                    setState(() => _sending = true);
 
-                              try {
-                                if (hasText) {
-                                  await context.read<GroupChatController>().sendMessage(
-                                    widget.groupId,
-                                    text,
-                                    replyTo: replying,
-                                  );
-                                }
+                                    try {
+                                      if (hasText) {
+                                        await context
+                                            .read<GroupChatController>()
+                                            .sendMessage(
+                                              widget.groupId,
+                                              text,
+                                              replyTo: replying,
+                                            );
+                                      }
 
-                                if (hasAtt) {
-                                  final items = List<_PendingAttachment>.from(_pendingAttachments);
-                                  for (final att in items) {
-                                    final type = att.type == _AttachmentType.image
-                                        ? 'image'
-                                        : att.type == _AttachmentType.video
-                                        ? 'video'
-                                        : 'file';
+                                      if (hasAtt) {
+                                        final items =
+                                            List<_PendingAttachment>.from(
+                                                _pendingAttachments);
+                                        for (final att in items) {
+                                          final type =
+                                              att.type == _AttachmentType.image
+                                                  ? 'image'
+                                                  : att.type ==
+                                                          _AttachmentType.video
+                                                      ? 'video'
+                                                      : 'file';
 
-                                    await context.read<GroupChatController>().sendMessage(
-                                      widget.groupId,
-                                      '',
-                                      file: File(att.path),
-                                      type: type,
-                                      replyTo: replying,
-                                    );
-                                  }
-                                  if (mounted) setState(() => _pendingAttachments.clear());
-                                }
+                                          await context
+                                              .read<GroupChatController>()
+                                              .sendMessage(
+                                                widget.groupId,
+                                                '',
+                                                file: File(att.path),
+                                                type: type,
+                                                replyTo: replying,
+                                              );
+                                        }
+                                        if (mounted)
+                                          setState(() =>
+                                              _pendingAttachments.clear());
+                                      }
 
-                                if (hasVoice) {
-                                  // gửi voice draft và tự clear reply trong _sendVoiceDraft()
-                                  // nên tắt sending trước để _sendVoiceDraft() chạy đúng:
-                                  if (mounted) setState(() => _sending = false);
-                                  await _sendVoiceDraft();
-                                  return;
-                                }
+                                      if (hasVoice) {
+                                        // gửi voice draft và tự clear reply trong _sendVoiceDraft()
+                                        // nên tắt sending trước để _sendVoiceDraft() chạy đúng:
+                                        if (mounted)
+                                          setState(() => _sending = false);
+                                        await _sendVoiceDraft();
+                                        return;
+                                      }
 
-                                if (mounted) {
-                                  setState(() => _replyTo = null);
-                                }
-                                _scrollToBottom();
-                              } finally {
-                                if (mounted) setState(() => _sending = false);
-                              }
-                            },
+                                      if (mounted) {
+                                        setState(() => _replyTo = null);
+                                      }
+                                      _scrollToBottom();
+                                    } finally {
+                                      if (mounted)
+                                        setState(() => _sending = false);
+                                    }
+                                  },
                           ),
                         ],
                       ),
@@ -2541,12 +2502,7 @@ class _SwipeReplyWrapperState extends State<_SwipeReplyWrapper> {
       ),
     );
   }
-
-
-
-  
 }
-
 
 class _GroupMediaTab extends StatefulWidget {
   final String groupId;
@@ -2632,7 +2588,6 @@ class _GroupMediaTabState extends State<_GroupMediaTab> {
         }
       }
 
-
       if (!mounted) return;
       setState(() {
         _items = result;
@@ -2712,8 +2667,7 @@ class _GroupMediaTabState extends State<_GroupMediaTab> {
   }
 
   // Theo list bố đưa
-  bool _isImageExt(String ext) =>
-      ['jpg', 'jpeg', 'png', 'gif'].contains(ext);
+  bool _isImageExt(String ext) => ['jpg', 'jpeg', 'png', 'gif'].contains(ext);
 
   bool _isVideoExt(String ext) =>
       ['mkv', 'mp4', 'flv', 'mov', 'avi', 'webm', 'mpeg'].contains(ext);
@@ -3081,7 +3035,6 @@ class _EmptyActionButton extends StatelessWidget {
   }
 }
 
-
 class _FullScreenImagePage extends StatelessWidget {
   final String url;
 
@@ -3207,149 +3160,6 @@ class _FullScreenVideoPageState extends State<_FullScreenVideoPage> {
   }
 }
 
-/// Fullscreen incoming UI cho cuộc gọi nhóm (nhận / từ chối)
-class _GroupIncomingCallPage extends StatelessWidget {
-  final String groupId;
-  final String groupName;
-  final String media;
-  final int callId;
-  final VoidCallback onAccept;
-  final Future<void> Function() onDecline;
-
-  const _GroupIncomingCallPage({
-    required this.groupId,
-    required this.groupName,
-    required this.media,
-    required this.callId,
-    required this.onAccept,
-    required this.onDecline,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isVideo = media == 'video';
-    return Scaffold(
-      backgroundColor: Colors.black87,
-      body: SafeArea(
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                children: [
-                  const SizedBox(height: 12),
-                  Text(
-                    isVideo ? 'Cuộc gọi nhóm video' : 'Cuộc gọi nhóm thoại',
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    groupName.isNotEmpty ? groupName : 'Nhóm $groupId',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Call ID: $callId',
-                    style: const TextStyle(color: Colors.white38, fontSize: 12),
-                  ),
-                ],
-              ),
-              Icon(
-                isVideo ? Icons.videocam : Icons.call,
-                size: 96,
-                color: isVideo ? Colors.lightBlueAccent : Colors.greenAccent,
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _IncomingButton(
-                    label: 'Từ chối',
-                    color: Colors.redAccent,
-                    icon: Icons.call_end,
-                    onTap: () async {
-                      await onDecline();
-                    },
-                  ),
-                  _IncomingButton(
-                    label: 'Nghe',
-                    color: Colors.green,
-                    icon: isVideo ? Icons.videocam : Icons.call,
-                    onTap: onAccept,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _IncomingButton extends StatelessWidget {
-  final String label;
-  final Color color;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _IncomingButton({
-    required this.label,
-    required this.color,
-    required this.icon,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(36),
-          child: Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: color.withOpacity(0.4),
-                  blurRadius: 16,
-                  spreadRadius: 2,
-                ),
-              ],
-            ),
-            child: Icon(icon, color: Colors.white, size: 30),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          label,
-          style: const TextStyle(color: Colors.white, fontSize: 14),
-        ),
-      ],
-    );
-  }
-}
 enum _AttachmentType { image, video, file }
 
 class _PendingAttachment {

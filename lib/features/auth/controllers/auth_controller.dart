@@ -37,6 +37,7 @@ import 'package:provider/provider.dart';
 // import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/firebase_token_updater.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/pushkit_token_sync.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/call/zego_call_service.dart';
 
 class AuthController with ChangeNotifier {
   final AuthServiceInterface authServiceInterface;
@@ -313,6 +314,10 @@ class AuthController with ChangeNotifier {
         await Provider.of<SocialController>(Get.context!, listen: false)
             .loadCurrentUser(force: true);
       } catch (_) {}
+      try {
+        await ZegoCallService.I
+            .initIfPossible(userId: socialUserId, userName: socialUserId);
+      } catch (_) {}
       // 🔴 CẬP NHẬT FCM TOKEN CHO USER SOCIAL VỪA ĐĂNG KÝ
       try {
         await FirebaseTokenUpdater.update();
@@ -410,6 +415,9 @@ class AuthController with ChangeNotifier {
       } finally {
         await authServiceInterface.clearSocialAccessToken();
         await authServiceInterface.clearSocialUserId();
+        try {
+          await ZegoCallService.I.uninit();
+        } catch (_) {}
         try {
           Provider.of<SocialController>(Get.context!, listen: false)
               .clearAuthState();
@@ -577,6 +585,10 @@ class AuthController with ChangeNotifier {
       try {
         await Provider.of<SocialController>(Get.context!, listen: false)
             .loadCurrentUser(force: true);
+      } catch (_) {}
+      try {
+        await ZegoCallService.I
+            .initIfPossible(userId: socialUserId, userName: socialUserId);
       } catch (_) {}
       // 🔴 CẬP NHẬT FCM TOKEN CHO USER SOCIAL VỪA LOGIN
       try {
