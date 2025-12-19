@@ -47,6 +47,7 @@ class AppConstants {
   static const String socialGenerateAgoraTokenUri = '/api/generate_agora_token';
   static const String socialGenerateZegoTokenUri = '/api/zego_token';
   static const String socialAgoraAppId = '554e80e2bcfe401cbde32aaf13d48ce5';
+  static const int socialZegoAppId = 1649787820; // AppID Zego cho Prebuilt Call
   static const String socialCreateGroupUri = '/api/create-group';
   static const String socialGetPostColorsUri = '/api/get-post-colors';
   static const String socialGetPostColorByIdUri = '/api/get-post-color';

@@ -1,8 +1,10 @@
+import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
+
 class ZegoCallConfig {
   const ZegoCallConfig._();
 
-  /// Prefer set via `--dart-define=ZEGO_APP_ID=...`
-  static const int appID = int.fromEnvironment('ZEGO_APP_ID', defaultValue: 0);
+  /// Lấy trực tiếp từ AppConstants, không cần dart-define
+  static const int appID = AppConstants.socialZegoAppId;
 
   /// Optional (for offline call invitation / ringtone).
   /// Set via `--dart-define=ZEGO_CALL_RESOURCE_ID=...`

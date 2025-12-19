@@ -215,9 +215,14 @@ PODS:
     - Flutter
   - flutter_local_notifications (0.0.1):
     - Flutter
+  - flutter_logs_yoer (0.0.1):
+    - Flutter
+    - ZIPFoundation
   - flutter_native_video_trimmer (1.0.0):
     - Flutter
   - flutter_pdfview (1.0.2):
+    - Flutter
+  - flutter_ringtone_player (0.0.1):
     - Flutter
   - flutter_secure_storage (6.0.0):
     - Flutter
@@ -225,6 +230,8 @@ PODS:
     - Flutter
     - flutter_sound_core (= 9.29.13)
   - flutter_sound_core (9.29.13)
+  - flutter_volume_controller (0.0.1):
+    - Flutter
   - flutter_webrtc (1.2.0):
     - Flutter
     - WebRTC-SDK (= 137.7151.04)
@@ -343,6 +350,7 @@ PODS:
   - local_auth_darwin (0.0.1):
     - Flutter
     - FlutterMacOS
+  - Masonry (1.1.0)
   - mobile_scanner (7.0.0):
     - Flutter
     - FlutterMacOS
@@ -351,6 +359,8 @@ PODS:
     - nanopb/encode (= 3.30910.0)
   - nanopb/decode (3.30910.0)
   - nanopb/encode (3.30910.0)
+  - native_device_orientation (0.0.1):
+    - Flutter
   - open_file_manager (0.0.1):
     - Flutter
   - open_filex (0.0.2):
@@ -366,7 +376,11 @@ PODS:
   - pointer_interceptor_ios (0.0.1):
     - Flutter
   - PromisesObjC (2.4.0)
+  - proximity_sensor (0.0.1):
+    - Flutter
   - RecaptchaInterop (101.0.0)
+  - screen_brightness_ios (0.1.0):
+    - Flutter
   - SDWebImage (5.21.3):
     - SDWebImage/Core (= 5.21.3)
   - SDWebImage/Core (5.21.3)
@@ -408,6 +422,8 @@ PODS:
     - Flutter
   - url_launcher_ios (0.0.1):
     - Flutter
+  - vibration (3.0.0):
+    - Flutter
   - video_player_avfoundation (0.0.1):
     - Flutter
     - FlutterMacOS
@@ -417,6 +433,29 @@ PODS:
   - webview_flutter_wkwebview (0.0.1):
     - Flutter
     - FlutterMacOS
+  - zego_callkit (1.0.0):
+    - Flutter
+  - zego_express_engine (3.22.1):
+    - Flutter
+  - zego_uikit (2.28.37):
+    - Flutter
+    - Masonry
+    - zego_express_engine
+    - ZegoUIKitReport (= 0.2.10)
+  - zego_uikit_prebuilt_call (4.22.2):
+    - Flutter
+  - zego_uikit_signaling_plugin (2.8.19):
+    - Flutter
+  - zego_zim (2.25.0):
+    - Flutter
+    - ZIM (= 2.25.0)
+  - zego_zpns (2.6.0):
+    - Flutter
+    - ZPNs (= 2.6.0)
+  - ZegoUIKitReport (0.2.10)
+  - ZIM (2.25.0)
+  - ZIPFoundation (0.9.20)
+  - ZPNs (2.6.0)
 
 DEPENDENCIES:
   - adaptive_platform_ui (from `.symlinks/plugins/adaptive_platform_ui/ios`)
@@ -439,10 +478,13 @@ DEPENDENCIES:
   - flutter_inappwebview_ios (from `.symlinks/plugins/flutter_inappwebview_ios/ios`)
   - flutter_keyboard_visibility (from `.symlinks/plugins/flutter_keyboard_visibility/ios`)
   - flutter_local_notifications (from `.symlinks/plugins/flutter_local_notifications/ios`)
+  - flutter_logs_yoer (from `.symlinks/plugins/flutter_logs_yoer/ios`)
   - flutter_native_video_trimmer (from `.symlinks/plugins/flutter_native_video_trimmer/ios`)
   - flutter_pdfview (from `.symlinks/plugins/flutter_pdfview/ios`)
+  - flutter_ringtone_player (from `.symlinks/plugins/flutter_ringtone_player/ios`)
   - flutter_secure_storage (from `.symlinks/plugins/flutter_secure_storage/ios`)
   - flutter_sound (from `.symlinks/plugins/flutter_sound/ios`)
+  - flutter_volume_controller (from `.symlinks/plugins/flutter_volume_controller/ios`)
   - flutter_webrtc (from `.symlinks/plugins/flutter_webrtc/ios`)
   - fluttertoast (from `.symlinks/plugins/fluttertoast/ios`)
   - geocoding_ios (from `.symlinks/plugins/geocoding_ios/ios`)
@@ -455,21 +497,32 @@ DEPENDENCIES:
   - just_audio (from `.symlinks/plugins/just_audio/darwin`)
   - local_auth_darwin (from `.symlinks/plugins/local_auth_darwin/darwin`)
   - mobile_scanner (from `.symlinks/plugins/mobile_scanner/darwin`)
+  - native_device_orientation (from `.symlinks/plugins/native_device_orientation/ios`)
   - open_file_manager (from `.symlinks/plugins/open_file_manager/ios`)
   - open_filex (from `.symlinks/plugins/open_filex/ios`)
   - package_info_plus (from `.symlinks/plugins/package_info_plus/ios`)
   - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
   - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
   - pointer_interceptor_ios (from `.symlinks/plugins/pointer_interceptor_ios/ios`)
+  - proximity_sensor (from `.symlinks/plugins/proximity_sensor/ios`)
+  - screen_brightness_ios (from `.symlinks/plugins/screen_brightness_ios/ios`)
   - share_plus (from `.symlinks/plugins/share_plus/ios`)
   - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
   - sqflite_darwin (from `.symlinks/plugins/sqflite_darwin/darwin`)
   - sqlite3_flutter_libs (from `.symlinks/plugins/sqlite3_flutter_libs/darwin`)
   - syncfusion_flutter_pdfviewer (from `.symlinks/plugins/syncfusion_flutter_pdfviewer/ios`)
   - url_launcher_ios (from `.symlinks/plugins/url_launcher_ios/ios`)
+  - vibration (from `.symlinks/plugins/vibration/ios`)
   - video_player_avfoundation (from `.symlinks/plugins/video_player_avfoundation/darwin`)
   - wakelock_plus (from `.symlinks/plugins/wakelock_plus/ios`)
   - webview_flutter_wkwebview (from `.symlinks/plugins/webview_flutter_wkwebview/darwin`)
+  - zego_callkit (from `.symlinks/plugins/zego_callkit/ios`)
+  - zego_express_engine (from `.symlinks/plugins/zego_express_engine/ios`)
+  - zego_uikit (from `.symlinks/plugins/zego_uikit/ios`)
+  - zego_uikit_prebuilt_call (from `.symlinks/plugins/zego_uikit_prebuilt_call/ios`)
+  - zego_uikit_signaling_plugin (from `.symlinks/plugins/zego_uikit_signaling_plugin/ios`)
+  - zego_zim (from `.symlinks/plugins/zego_zim/ios`)
+  - zego_zpns (from `.symlinks/plugins/zego_zpns/ios`)
 
 SPEC REPOS:
   trunk:
@@ -506,6 +559,7 @@ SPEC REPOS:
     - GTMAppAuth
     - GTMSessionFetcher
     - libwebp
+    - Masonry
     - nanopb
     - OrderedSet
     - PromisesObjC
@@ -514,6 +568,10 @@ SPEC REPOS:
     - sqlite3
     - SwiftyGif
     - WebRTC-SDK
+    - ZegoUIKitReport
+    - ZIM
+    - ZIPFoundation
+    - ZPNs
 
 EXTERNAL SOURCES:
   adaptive_platform_ui:
@@ -556,14 +614,20 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/flutter_keyboard_visibility/ios"
   flutter_local_notifications:
     :path: ".symlinks/plugins/flutter_local_notifications/ios"
+  flutter_logs_yoer:
+    :path: ".symlinks/plugins/flutter_logs_yoer/ios"
   flutter_native_video_trimmer:
     :path: ".symlinks/plugins/flutter_native_video_trimmer/ios"
   flutter_pdfview:
     :path: ".symlinks/plugins/flutter_pdfview/ios"
+  flutter_ringtone_player:
+    :path: ".symlinks/plugins/flutter_ringtone_player/ios"
   flutter_secure_storage:
     :path: ".symlinks/plugins/flutter_secure_storage/ios"
   flutter_sound:
     :path: ".symlinks/plugins/flutter_sound/ios"
+  flutter_volume_controller:
+    :path: ".symlinks/plugins/flutter_volume_controller/ios"
   flutter_webrtc:
     :path: ".symlinks/plugins/flutter_webrtc/ios"
   fluttertoast:
@@ -588,6 +652,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/local_auth_darwin/darwin"
   mobile_scanner:
     :path: ".symlinks/plugins/mobile_scanner/darwin"
+  native_device_orientation:
+    :path: ".symlinks/plugins/native_device_orientation/ios"
   open_file_manager:
     :path: ".symlinks/plugins/open_file_manager/ios"
   open_filex:
@@ -600,6 +666,10 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/permission_handler_apple/ios"
   pointer_interceptor_ios:
     :path: ".symlinks/plugins/pointer_interceptor_ios/ios"
+  proximity_sensor:
+    :path: ".symlinks/plugins/proximity_sensor/ios"
+  screen_brightness_ios:
+    :path: ".symlinks/plugins/screen_brightness_ios/ios"
   share_plus:
     :path: ".symlinks/plugins/share_plus/ios"
   shared_preferences_foundation:
@@ -612,12 +682,28 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/syncfusion_flutter_pdfviewer/ios"
   url_launcher_ios:
     :path: ".symlinks/plugins/url_launcher_ios/ios"
+  vibration:
+    :path: ".symlinks/plugins/vibration/ios"
   video_player_avfoundation:
     :path: ".symlinks/plugins/video_player_avfoundation/darwin"
   wakelock_plus:
     :path: ".symlinks/plugins/wakelock_plus/ios"
   webview_flutter_wkwebview:
     :path: ".symlinks/plugins/webview_flutter_wkwebview/darwin"
+  zego_callkit:
+    :path: ".symlinks/plugins/zego_callkit/ios"
+  zego_express_engine:
+    :path: ".symlinks/plugins/zego_express_engine/ios"
+  zego_uikit:
+    :path: ".symlinks/plugins/zego_uikit/ios"
+  zego_uikit_prebuilt_call:
+    :path: ".symlinks/plugins/zego_uikit_prebuilt_call/ios"
+  zego_uikit_signaling_plugin:
+    :path: ".symlinks/plugins/zego_uikit_signaling_plugin/ios"
+  zego_zim:
+    :path: ".symlinks/plugins/zego_zim/ios"
+  zego_zpns:
+    :path: ".symlinks/plugins/zego_zpns/ios"
 
 SPEC CHECKSUMS:
   adaptive_platform_ui: f54f620666d1797636f9ef06f49137ef2cc13611
@@ -640,7 +726,7 @@ SPEC CHECKSUMS:
   FBSDKCoreKit_Basics: eb530cd6a79030dbb11df460aafb2767bcad9028
   FBSDKLoginKit: 6a70798793e499335a98fab1a758d7da34af196e
   ffmpeg_kit_flutter_new_https_gpl: 1087ae6df705f4c305d7642081a265a566536d2a
-  file_picker: 9b3292d7c8bc68c8a7bf8eb78f730e49c8efc517
+  file_picker: a0560bc09d61de87f12d246fc47d2119e6ef37be
   Firebase: d99ac19b909cd2c548339c2241ecd0d1599ab02e
   firebase_analytics: 0e25ca1d4001ccedd40b4e5b74c0ec34e18f6425
   firebase_auth: 50af8366c87bb88c80ebeae62eb60189c7246b9b
@@ -662,11 +748,14 @@ SPEC CHECKSUMS:
   flutter_inappwebview_ios: b89ba3482b96fb25e00c967aae065701b66e9b99
   flutter_keyboard_visibility: 4625131e43015dbbe759d9b20daaf77e0e3f6619
   flutter_local_notifications: a5a732f069baa862e728d839dd2ebb904737effb
+  flutter_logs_yoer: 4b6ed7705cc0e5306d9ecce1d5be5568045e0e73
   flutter_native_video_trimmer: 11f6c679971dc3844519b485b9c878df8675ae3a
   flutter_pdfview: 32bf27bda6fd85b9dd2c09628a824df5081246cf
+  flutter_ringtone_player: a77c42464250845611eaa44c27e8714acc800138
   flutter_secure_storage: 1ed9476fba7e7a782b22888f956cce43e2c62f13
   flutter_sound: 5a4642e6651e035b38fa9306e06de73b3a5860db
   flutter_sound_core: 91cb43e3cae0a24278fe1db0a4a5049a92c0a5f0
+  flutter_volume_controller: c2be490cb0487e8b88d0d9fc2b7e1c139a4ebccb
   flutter_webrtc: c3e21fc0dcd9d8eb246ae4d5256fcbeb2f5ecd22
   fluttertoast: 2c67e14dce98bbdb200df9e1acf610d7a6264ea1
   geocoding_ios: 33776c9ebb98d037b5e025bb0e7537f6dd19646e
@@ -688,8 +777,10 @@ SPEC CHECKSUMS:
   just_audio: 4e391f57b79cad2b0674030a00453ca5ce817eed
   libwebp: 02b23773aedb6ff1fd38cec7a77b81414c6842a8
   local_auth_darwin: c3ee6cce0a8d56be34c8ccb66ba31f7f180aaebb
+  Masonry: 678fab65091a9290e40e2832a55e7ab731aad201
   mobile_scanner: 9157936403f5a0644ca3779a38ff8404c5434a93
   nanopb: fad817b59e0457d11a5dfbde799381cd727c1275
+  native_device_orientation: f3ba5f2ddbab3deee23a5f6693b4f97b02dafea2
   open_file_manager: bf25fc851c29c26b0db51a52f0224ef74f33f387
   open_filex: 432f3cd11432da3e39f47fcc0df2b1603854eff1
   OrderedSet: e539b66b644ff081c73a262d24ad552a69be3a94
@@ -698,7 +789,9 @@ SPEC CHECKSUMS:
   permission_handler_apple: 4ed2196e43d0651e8ff7ca3483a069d469701f2d
   pointer_interceptor_ios: da06a662d5bfd329602b45b2ab41bc0fb5fdb0f0
   PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
+  proximity_sensor: 2aef59f90cf0382935faf58ad0a79e1e860773bd
   RecaptchaInterop: 11e0b637842dfb48308d242afc3f448062325aba
+  screen_brightness_ios: 5ed898fa50fa82a26171c086ca5e28228f932576
   SDWebImage: 16309af6d214ba3f77a7c6f6fdda888cb313a50a
   share_plus: 50da8cb520a8f0f65671c6c6a99b3617ed10a58a
   shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
@@ -708,10 +801,22 @@ SPEC CHECKSUMS:
   SwiftyGif: 706c60cf65fa2bc5ee0313beece843c8eb8194d4
   syncfusion_flutter_pdfviewer: dfb514751af5b6b71e504c9c04a2e4ddbc1dd895
   url_launcher_ios: 7a95fa5b60cc718a708b8f2966718e93db0cef1b
+  vibration: ca8104a8875b9c493e15b21b04e456befd0ff6eb
   video_player_avfoundation: dd410b52df6d2466a42d28550e33e4146928280a
   wakelock_plus: e29112ab3ef0b318e58cfa5c32326458be66b556
   WebRTC-SDK: 40d4f5ba05cadff14e4db5614aec402a633f007e
   webview_flutter_wkwebview: 8ebf4fded22593026f7dbff1fbff31ea98573c8d
+  zego_callkit: 8e3bc2e9fc6895cff1b27841b1de1100344d2613
+  zego_express_engine: 2c33d9ea93665061330aad01cb41f8d3202136fc
+  zego_uikit: 6064a39817a431fa567c112fd5b722aa737cd82a
+  zego_uikit_prebuilt_call: be5d85deb992269ed89736b02f07dca47da56360
+  zego_uikit_signaling_plugin: ffced40608c89b1ac0241a6194dacb9bc5af19b7
+  zego_zim: 51534d092fcbaf994e8fd8cbc1269f00c7ead6fd
+  zego_zpns: e2ef9b972e9b6be00b78b32b71c550c426584752
+  ZegoUIKitReport: a993f7ccc5d243998a7e601a60e16fcd6c084417
+  ZIM: 75fde45d5cb5802f9dedba9c3de0798fde559643
+  ZIPFoundation: dfd3d681c4053ff7e2f7350bc4e53b5dba3f5351
+  ZPNs: 73bad0046a74e37315201053f9a0e7ac625d9436
 
 PODFILE CHECKSUM: 43221c058269b0cd50c3ee6c1508709c4eeba442
 
