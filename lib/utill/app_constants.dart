@@ -57,8 +57,6 @@ class AppConstants {
   static const String socialNotificationsUri = '/api/notifications';
   static const String socialGetMyGroupsUri = '/api/get-my-groups';
   static const String socialGetCommunityUri = '/api/get-community';
-  static const String socialUserAvatar = 'social_user_avatar';
-  static const String socialUserName = 'social_user_name';
   static const String socialGetGroupMembersUri = '/api/get_group_members';
   static const String socialGetNotInGroupMembersUri =
       '/api/not_in_group_member';
@@ -324,6 +322,8 @@ class AppConstants {
   static const String userLoginToken = 'user_login_token';
   static const String socialAccessToken = 'social_access_token';
   static const String socialUserId = 'social_user_id';
+  static const String socialUserAvatar = 'social_user_avatar';
+  static const String socialUserName = 'social_user_name';
 
   static const String guestId = 'guestId';
   static const String user = 'user';

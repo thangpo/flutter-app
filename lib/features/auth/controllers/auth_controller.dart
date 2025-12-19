@@ -419,6 +419,9 @@ class AuthController with ChangeNotifier {
       } finally {
         await authServiceInterface.clearSocialAccessToken();
         await authServiceInterface.clearSocialUserId();
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(AppConstants.socialUserName);
+        await prefs.remove(AppConstants.socialUserAvatar);
         try {
           await ZegoCallService.I.uninit();
         } catch (_) {}

@@ -132,6 +132,32 @@ class ZegoCallService {
     ZegoUIKitPrebuiltCallConfig config,
     ZegoCallInvitationData data,
   ) {
+    config.audioVideoView.foregroundBuilder =
+        (BuildContext context, Size size, ZegoUIKitUser? user, Map extraInfo) {
+      final uid = user?.id ?? '';
+      final p = _profiles[uid];
+      final name = p?.name ?? uid;
+      return Positioned(
+        right: 8,
+        bottom: 8,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.6),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            name,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      );
+    };
+
     config.avatarBuilder =
         (BuildContext context, Size size, ZegoUIKitUser? user, Map extraInfo) {
       final uid = user?.id ?? '';

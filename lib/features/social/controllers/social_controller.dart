@@ -1602,6 +1602,18 @@ class SocialController with ChangeNotifier {
       if (user != null) {
         _currentUser = user;
         _syncCurrentUserStoryFrom(_stories);
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final display =
+              (user.displayName ?? user.userName ?? user.id).toString().trim();
+          await prefs.setString(
+            AppConstants.socialUserName,
+            display.isNotEmpty ? display : user.id,
+          );
+          if (user.avatarUrl != null && user.avatarUrl!.isNotEmpty) {
+            await prefs.setString(AppConstants.socialUserAvatar, user.avatarUrl!);
+          }
+        } catch (_) {}
         notifyListeners();
       }
     } catch (e) {
