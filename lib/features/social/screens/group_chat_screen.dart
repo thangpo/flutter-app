@@ -559,6 +559,17 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
       final groupName = _finalTitle(context.read<GroupChatController>());
       final callId = ZegoCallService.I.newGroupCallId(widget.groupId);
+      final meta = jsonEncode({
+        'type': 'zego_call_log',
+        'media': isVideo ? 'video' : 'audio',
+        'group_id': widget.groupId,
+        'group_name': groupName,
+        'call_id': callId,
+        'ts': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      });
+      final hiddenMeta = '\u2063$meta'; // zero-width prefix để push không lộ JSON
+      final friendlyText =
+          'Cuộc gọi ${isVideo ? 'video' : 'thoại'} nhóm ${groupName.isNotEmpty ? groupName : ''}'.trim();
 
       final ok = await ZegoCallService.I.startGroup(
         invitees: inviteeUsers,
@@ -577,17 +588,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       );
       if (!ok) throw 'Không gửi được lời mời gọi nhóm';
 
-      await context.read<GroupChatController>().sendMessage(
-            widget.groupId,
-            jsonEncode({
-              'type': 'zego_call_log',
-              'media': isVideo ? 'video' : 'audio',
-              'group_id': widget.groupId,
-              'group_name': groupName,
-              'call_id': callId,
-              'ts': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-            }),
-          );
+      await context
+          .read<GroupChatController>()
+          .sendMessage(widget.groupId, '$friendlyText$hiddenMeta');
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

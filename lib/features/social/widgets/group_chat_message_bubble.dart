@@ -146,11 +146,14 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
   }
 
   Map<String, dynamic>? _tryParseZegoCallLog(String raw) {
-    var s = raw.trim();
+    var s = raw.replaceAll(RegExp(r'[\u2063\u200b\u200c\u200d]'), '').trim();
     if (s.contains('&quot;')) {
       s = s.replaceAll('&quot;', '"').replaceAll('&amp;', '&');
     }
-    if (!s.startsWith('{') || !s.endsWith('}')) return null;
+    final start = s.indexOf('{');
+    final end = s.lastIndexOf('}');
+    if (start == -1 || end <= start) return null;
+    s = s.substring(start, end + 1);
     try {
       final decoded = jsonDecode(s);
       if (decoded is! Map) return null;

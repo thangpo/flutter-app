@@ -131,7 +131,9 @@ class ZegoCallService {
   String? _parsedGroupId(ZegoCallInvitationData data) {
     try {
       if (data.customData.isNotEmpty) {
-        final parsed = jsonDecode(data.customData);
+        final parsed = data.customData is Map
+            ? Map<String, dynamic>.from(data.customData as Map)
+            : jsonDecode(data.customData);
         if (parsed is Map && parsed['group_id'] != null) {
           return parsed['group_id'].toString();
         }
@@ -350,8 +352,14 @@ class ZegoCallService {
       'scope': 'social',
       'mode': 'group',
       'is_video': isVideoCall,
-      'caller_name': callerName ?? _userName ?? _userId ?? '',
-      'caller_avatar': callerAvatar ?? await _myAvatarFromPrefs(),
+      // Dùng tên/ảnh nhóm làm "caller" để CallKit/popup hiển thị nhóm thay vì host.
+      'caller_name': groupName?.isNotEmpty == true
+          ? groupName
+          : (callerName ?? _userName ?? _userId ?? ''),
+      'caller_avatar': groupAvatar?.isNotEmpty == true
+          ? groupAvatar
+          : (callerAvatar ?? await _myAvatarFromPrefs()),
+      'group_id': groupId,
       'group_name': groupName ?? '',
       'group_avatar': groupAvatar ?? '',
       if (customData != null) ...customData,
@@ -360,11 +368,14 @@ class ZegoCallService {
     return ZegoUIKitPrebuiltCallInvitationService().send(
       invitees: invitees,
       isVideoCall: isVideoCall,
-      callID: callID,
+      callID: callID ?? newGroupCallId(groupId),
       resourceID: ZegoCallConfig.callResourceID.isEmpty
           ? null
           : ZegoCallConfig.callResourceID,
       customData: jsonEncode(data),
+      notificationTitle: groupName ?? 'Cuộc gọi nhóm',
+      notificationMessage:
+          isVideoCall ? 'Cuộc gọi video nhóm' : 'Cuộc gọi thoại nhóm',
     );
   }
 }
