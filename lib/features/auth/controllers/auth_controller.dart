@@ -316,8 +316,11 @@ class AuthController with ChangeNotifier {
         await _cacheSocialProfileFromController();
       } catch (_) {}
       try {
+        final prefs = await SharedPreferences.getInstance();
+        final display =
+            prefs.getString(AppConstants.socialUserName) ?? socialUserId;
         await ZegoCallService.I
-            .initIfPossible(userId: socialUserId, userName: socialUserId);
+            .initIfPossible(userId: socialUserId, userName: display);
       } catch (_) {}
       // 🔴 CẬP NHẬT FCM TOKEN CHO USER SOCIAL VỪA ĐĂNG KÝ
       try {
@@ -589,8 +592,11 @@ class AuthController with ChangeNotifier {
         await _cacheSocialProfileFromController();
       } catch (_) {}
       try {
+        final prefs = await SharedPreferences.getInstance();
+        final display =
+            prefs.getString(AppConstants.socialUserName) ?? socialUserId;
         await ZegoCallService.I
-            .initIfPossible(userId: socialUserId, userName: socialUserId);
+            .initIfPossible(userId: socialUserId, userName: display);
       } catch (_) {}
       // 🔴 CẬP NHẬT FCM TOKEN CHO USER SOCIAL VỪA LOGIN
       try {

@@ -176,7 +176,8 @@ class ZegoCallService {
     final userId = prefs.getString(AppConstants.socialUserId);
     if (userId == null || userId.isEmpty) return;
 
-    await initIfPossible(userId: userId, userName: userId);
+    final display = prefs.getString(AppConstants.socialUserName) ?? userId;
+    await initIfPossible(userId: userId, userName: display);
   }
 
   Future<String?> _getValidToken({required String userId}) async {
