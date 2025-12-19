@@ -128,16 +128,33 @@ class ZegoCallService {
     }
   }
 
+  String? _parsedGroupId(ZegoCallInvitationData data) {
+    try {
+      if (data.customData.isNotEmpty) {
+        final parsed = jsonDecode(data.customData);
+        if (parsed is Map && parsed['group_id'] != null) {
+          return parsed['group_id'].toString();
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
   void _applyAvatarAndText(
     ZegoUIKitPrebuiltCallConfig config,
     ZegoCallInvitationData data,
   ) {
+    final groupId = _parsedGroupId(data);
+    final groupProfile = groupId != null ? _profiles[groupId] : null;
+
     config.audioVideoView.foregroundBuilder =
         (BuildContext context, Size size, ZegoUIKitUser? user, Map extraInfo) {
       final uid = user?.id ?? '';
       final p = _profiles[uid];
       final name = p?.name ?? uid;
-      return Positioned(
+      final widgets = <Widget>[];
+
+      widgets.add(Positioned(
         right: 8,
         bottom: 8,
         child: Container(
@@ -155,7 +172,31 @@ class ZegoCallService {
             ),
           ),
         ),
-      );
+      ));
+
+      if (groupProfile != null && groupProfile.name != null) {
+        widgets.add(Positioned(
+          left: 8,
+          bottom: 8,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.6),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              groupProfile.name!,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ));
+      }
+
+      return Stack(children: widgets);
     };
 
     config.avatarBuilder =
@@ -204,6 +245,11 @@ class ZegoCallService {
 
     final display = prefs.getString(AppConstants.socialUserName) ?? userId;
     await initIfPossible(userId: userId, userName: display);
+  }
+
+  /// Cho phép cache thủ công profile (vd: thành viên nhóm) trước khi gọi.
+  void cacheProfile(String id, {String? name, String? avatar}) {
+    _setProfile(id, name, avatar);
   }
 
   Future<String?> _getValidToken({required String userId}) async {

@@ -446,9 +446,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     );
   }
 
-  // Thu thập danh sách userId thành viên nhóm (trừ mình) để mời vào cuộc gọi
-  Future<List<int>> _collectInvitees() async {
-    final ids = <int>{};
+  // Thu thập danh sách thành viên nhóm (trừ mình) để mời vào cuộc gọi
+  Future<List<_MemberProfile>> _collectInvitees() async {
+    final membersOut = <_MemberProfile>[];
     try {
       final gc = context.read<GroupChatController>();
 
@@ -463,15 +463,28 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       final meStr = gc.currentUserId?.toString();
       final meId = meStr != null ? int.tryParse(meStr) : null;
 
-      // 1) Lấy từ danh sách thành viên
-      for (final m in members) {
+      void addMember(Map<String, dynamic> m) {
         final v = m['user_id'] ?? m['id'] ?? m['uid'];
         int? id;
         if (v is int) id = v;
         if (v is String) id = int.tryParse(v);
-        if (id != null && (meId == null || id != meId)) {
-          ids.add(id);
-        }
+        if (id == null || (meId != null && id == meId)) return;
+        final name = (m['name'] ??
+                m['username'] ??
+                m['user_name'] ??
+                m['display_name'])
+            ?.toString();
+        final avatar = (m['avatar_full'] ?? m['avatar'] ?? '').toString();
+        membersOut.add(_MemberProfile(
+          id: id.toString(),
+          name: (name == null || name.isEmpty) ? id.toString() : name,
+          avatar: avatar,
+        ));
+      }
+
+      // 1) Lấy từ danh sách thành viên
+      for (final m in members) {
+        addMember(m);
       }
 
       // 2) UNION với người từng nhắn trong nhóm
@@ -481,21 +494,33 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         int? id;
         if (v is int) id = v;
         if (v is String) id = int.tryParse(v);
-        if (id != null && (meId == null || id != meId)) {
-          ids.add(id);
-        }
+        if (id == null || (meId != null && id == meId)) continue;
+        membersOut.add(_MemberProfile(
+          id: id.toString(),
+          name: id.toString(),
+          avatar: '',
+        ));
       }
 
-      if (ids.isEmpty) {
+      if (membersOut.isEmpty) {
         debugPrint('⚠️ _collectInvitees: không tìm thấy ai để mời.');
+      }
+      // Cache profile cho từng thành viên (để Zego hiển thị tên/ảnh)
+      for (final m in membersOut) {
+        ZegoCallService.I.cacheProfile(m.id, name: m.name, avatar: m.avatar);
       }
     } catch (e) {
       debugPrint('⚠️ _collectInvitees error: $e');
     }
 
-    final list = ids.toList()..sort();
-    debugPrint('[GROUP CALL] Invitees (final) => $list');
-    return list;
+    // unique by id
+    final seen = <String>{};
+    final dedup = <_MemberProfile>[];
+    for (final m in membersOut) {
+      if (seen.add(m.id)) dedup.add(m);
+    }
+    debugPrint('[GROUP CALL] Invitees (final) => ${dedup.map((e) => e.id).toList()}');
+    return dedup;
   }
 
   // ====== GỌI NHÓM: xin quyền + điều hướng vào GroupCallRoom ======
@@ -527,9 +552,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         }
       }
 
-      final inviteeIds = await _collectInvitees();
-      final inviteeUsers = inviteeIds
-          .map((id) => ZegoCallUser(id.toString(), id.toString()))
+      final invitees = await _collectInvitees();
+      final inviteeUsers = invitees
+          .map((m) => ZegoCallUser(m.id, m.name ?? m.id))
           .toList();
 
       final groupName = _finalTitle(context.read<GroupChatController>());
@@ -3192,4 +3217,11 @@ class _PendingAttachment {
   final _AttachmentType type;
 
   const _PendingAttachment({required this.path, required this.type});
+}
+
+class _MemberProfile {
+  final String id;
+  final String? name;
+  final String? avatar;
+  _MemberProfile({required this.id, this.name, this.avatar});
 }
