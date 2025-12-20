@@ -49,6 +49,33 @@ class ZegoCallService {
       return;
     }
 
+    final isProd = kReleaseMode || kProfileMode;
+    final notificationConfig = ZegoCallInvitationNotificationConfig(
+      iOSNotificationConfig: ZegoCallIOSNotificationConfig(
+        appName: AppConstants.appName,
+        isSandboxEnvironment: !isProd,
+      ),
+      androidNotificationConfig: ZegoCallAndroidNotificationConfig(
+        callIDVisibility: true,
+        showOnLockedScreen: true,
+        showOnFullScreen: true,
+        callChannel: ZegoCallAndroidNotificationChannelConfig(
+          channelID: 'zego_incoming_call',
+          channelName: 'Incoming Calls',
+          icon: 'notification_icon',
+          sound: '',
+          vibrate: true,
+        ),
+        missedCallChannel: ZegoCallAndroidNotificationChannelConfig(
+          channelID: 'zego_missed_call',
+          channelName: 'Missed Calls',
+          icon: 'notification_icon',
+          sound: '',
+          vibrate: false,
+        ),
+      ),
+    );
+
     _userId = userId;
     _userName = userName;
 
@@ -60,6 +87,12 @@ class ZegoCallService {
         userID: userId,
         userName: userName,
         plugins: [ZegoUIKitSignalingPlugin()],
+        config: ZegoCallInvitationConfig(
+          offline: ZegoCallInvitationOfflineConfig(
+            autoEnterAcceptedOfflineCall: true,
+          ),
+        ),
+        notificationConfig: notificationConfig,
         requireConfig: (ZegoCallInvitationData data) {
           _ingestCustomProfiles(data);
           final isVideo = data.type == ZegoCallType.videoCall;

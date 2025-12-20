@@ -90,6 +90,7 @@ import 'package:zego_uikit_signaling_plugin/zego_uikit_signaling_plugin.dart';
 
 import 'di_container.dart' as di;
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_page_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/push/callkit_service.dart';
 
 // === ADD (n?u chua có bi?n này) ===
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
@@ -236,6 +237,9 @@ class AppLifecycleObserver extends WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       // App v?o foreground
       AnalyticsHelper.logUserActive();
+      // Flush pending navigation actions after CallKit accept (lock-screen) and recover active calls.
+      unawaited(CallkitService.I.flushPendingActions());
+      unawaited(CallkitService.I.recoverActiveCalls());
     } else if (state == AppLifecycleState.paused) {
       // App v?o background
       analytics.logEvent(
@@ -292,6 +296,8 @@ Future<void> main() async {
   HttpOverrides.global = MyHttpOverrides();
   WidgetsFlutterBinding.ensureInitialized();
   ZegoUIKitPrebuiltCallInvitationService().setNavigatorKey(navigatorKey);
+  // Init Zego càng sớm càng tốt để xử lý accept từ CallKit (cold start).
+  await ZegoCallService.I.tryInitFromPrefs();
   try {
     await ZegoUIKitPrebuiltCallInvitationService().useSystemCallingUI(
       [ZegoUIKitSignalingPlugin()],
@@ -375,7 +381,6 @@ Future<void> main() async {
 
   await FlutterDownloader.initialize(debug: true, ignoreSsl: true);
   await di.init();
-  await ZegoCallService.I.tryInitFromPrefs();
 
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     await FirebaseTokenUpdater.update();
@@ -452,60 +457,18 @@ Future<void> main() async {
       await handlePushNavigation(message);
     });
 
+    // Foreground notifications đã được NotificationHelper xử lý (tránh double notify).
     FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
       final data = message.data;
       debugPrint('?? onMessage(foreground) data= $data');
 
-      // ---- B? QUA T?T C? TH?NG ?I?P LI?N QUAN ??N CU?C G?I ----
+      // Bỏ qua toàn bộ xử lý hiển thị ở đây để tránh trùng; CallInviteForegroundListener + NotificationHelper lo phần còn lại.
       final type = (data['type'] ?? '').toString();
-      final hasCallId = data.containsKey('call_id');
-
-      final isOneToOneCall = type == 'call_invite' ||
-          (hasCallId &&
-              data.containsKey('media') &&
-              !data.containsKey('group_id'));
-
-      final isGroupCall = type == 'call_invite_group' ||
-          (hasCallId && data.containsKey('group_id'));
-
-      if (isOneToOneCall || isGroupCall) {
-        // Incoming call d? du?c x? l? b?i CallInviteForegroundListener,
-        // kh?ng c?n show notification thu?ng n?a.
+      if (type == 'call_invite' ||
+          type == 'call_invite_group' ||
+          data.containsKey('call_id')) {
         return;
       }
-
-      // ---- C?C TH?NG B?O B?NH THU?NG (ORDER, SOCIAL, ...) ----
-      String? title = message.notification?.title;
-      String? bodyText = message.notification?.body;
-      title ??= (data['title'] ?? data['notification_title'] ?? 'VNShop247')
-          .toString();
-      bodyText ??=
-          (data['body'] ?? data['notification_body'] ?? 'B?n c? th?ng b?o m?i')
-              .toString();
-
-      if (title.isEmpty && bodyText.isEmpty) {
-        debugPrint('?? No displayable title/body. Skip showing local notif.');
-        return;
-      }
-
-      const androidDetails = AndroidNotificationDetails(
-        'high_importance_channel',
-        'Th?ng b?o VNShop247',
-        importance: Importance.max,
-        priority: Priority.high,
-        playSound: true,
-        icon: 'notification_icon',
-        sound: RawResourceAndroidNotificationSound('notification'),
-      );
-      const details = NotificationDetails(android: androidDetails);
-
-      await flutterLocalNotificationsPlugin.show(
-        DateTime.now().millisecondsSinceEpoch ~/ 1000,
-        title,
-        bodyText,
-        details,
-        payload: jsonEncode(data),
-      );
     });
 
     const AndroidNotificationChannel channel = AndroidNotificationChannel(

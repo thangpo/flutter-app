@@ -1527,6 +1527,21 @@ class CallkitService {
     String? groupName,
   }) {
     if (_routingToCall) return;
+    // iOS lock-screen: đừng điều hướng khi app chưa RESUMED (push route sẽ không hiện).
+    final life = WidgetsBinding.instance.lifecycleState;
+    if (life != AppLifecycleState.resumed) {
+      _pendingActions.add((readyCtx) async {
+        _openGroupCallScreen(
+          readyCtx,
+          groupId,
+          mediaType,
+          callId,
+          groupName: groupName,
+        );
+      });
+      return;
+    }
+
     _routingToCall = true;
 
     final route = MaterialPageRoute(
@@ -1620,6 +1635,21 @@ class CallkitService {
     String? peerAvatar,
   }) {
     if (_routingToCall) return;
+    // iOS lock-screen: đừng điều hướng khi app chưa RESUMED (push route sẽ không hiện).
+    final life = WidgetsBinding.instance.lifecycleState;
+    if (life != AppLifecycleState.resumed) {
+      _pendingActions.add((readyCtx) async {
+        _openCallScreen(
+          readyCtx,
+          callId,
+          mediaType,
+          peerName: peerName,
+          peerAvatar: peerAvatar,
+        );
+      });
+      return;
+    }
+
     _routingToCall = true;
 
     unawaited(RemoteRtcLog.send(

@@ -85,7 +85,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:theme="@style/LaunchTheme"
-            android:launchMode="singleTop"
+            android:launchMode="singleInstance"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize"
@@ -162,26 +162,6 @@
             android:value="vnshop247_channel" />
 
         <!-- FCM receiver riêng cho call_invite (Android background/killed) -->
-        <receiver
-            android:name=".CallInviteMessagingReceiver"
-            android:exported="true"
-            android:permission="com.google.android.c2dm.permission.SEND">
-            <intent-filter>
-                <action android:name="com.google.android.c2dm.intent.RECEIVE" />
-                <category android:name="${applicationId}" />
-            </intent-filter>
-        </receiver>
-
-        <!-- Bridge CallKit ACCEPT -> open app (killed-state) -->
-        <receiver
-            android:name=".CallkitActionReceiver"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="${applicationId}.com.hiennv.flutter_callkit_incoming.ACTION_CALL_ACCEPT" />
-                <action android:name="${applicationId}.com.hiennv.flutter_callkit_incoming.ACTION_CALL_START" />
-            </intent-filter>
-        </receiver>
-
         <!--
           GỠ BỎ Khai báo sai dịch vụ FCM:
           Bạn đang khai báo trực tiếp com.google.firebase.messaging.FirebaseMessagingService (lớp base/abstract).
