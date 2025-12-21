@@ -100,7 +100,9 @@ class ZegoCallService {
               'user_id': userId,
             }));
             // Đảm bảo mở UI cuộc gọi đã accept (offline) sau khi bấm Nghe từ CallKit.
-            _enterAcceptedOfflineCallWithLog(source: 'accept_button');
+            unawaited(
+              _enterAcceptedOfflineCallWithLog(source: 'accept_button'),
+            );
           },
           onIncomingCallReceived: (
             String callID,
@@ -116,7 +118,9 @@ class ZegoCallService {
               'callees': callees.map((e) => e.id).toList(),
             }));
             // Backup: khi app vừa được wake từ push, thử mở UI nếu đã có accept.
-            _enterAcceptedOfflineCallWithLog(source: 'incoming_received');
+            unawaited(
+              _enterAcceptedOfflineCallWithLog(source: 'incoming_received'),
+            );
           },
         ),
         config: ZegoCallInvitationConfig(
@@ -396,7 +400,7 @@ class ZegoCallService {
     return 'cg_${groupId}_${me}_$ts';
   }
 
-  void _enterAcceptedOfflineCallWithLog({required String source}) {
+  Future<void> _enterAcceptedOfflineCallWithLog({required String source}) async {
     try {
       ZegoUIKitPrebuiltCallInvitationService().enterAcceptedOfflineCall();
       unawaited(_remoteLogger.log('enter_offline_call', {
@@ -414,7 +418,7 @@ class ZegoCallService {
 
   /// Gọi sau khi navigator đã sẵn sàng (post-frame) để chắc chắn vào màn hình gọi.
   Future<void> ensureEnterAcceptedOfflineCall({String source = 'post_frame'}) async {
-    _enterAcceptedOfflineCallWithLog(source: source);
+    await _enterAcceptedOfflineCallWithLog(source: source);
   }
 
   Future<bool> startOneOnOne({

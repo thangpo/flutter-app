@@ -292,6 +292,7 @@ Future<void> _ensureAndroidNotificationPermission() async {
 Future<void> main() async {
   HttpOverrides.global = MyHttpOverrides();
   WidgetsFlutterBinding.ensureInitialized();
+  // Đăng ký navigator key cho Zego invitation để CallKit có context push trang gọi.
   ZegoUIKitPrebuiltCallInvitationService().setNavigatorKey(navigatorKey);
   // Init Zego càng sớm càng tốt để xử lý accept từ CallKit (cold start).
   await ZegoCallService.I.tryInitFromPrefs();
