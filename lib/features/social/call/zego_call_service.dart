@@ -44,7 +44,8 @@ class ZegoCallService {
       return;
     }
 
-    debugPrint('[ZEGO] Init requested for user=$userId appID=${ZegoCallConfig.appID}');
+    debugPrint(
+        '[ZEGO] Init requested for user=$userId appID=${ZegoCallConfig.appID}');
     unawaited(_remoteLogger.log('init_requested', {
       'user_id': userId,
       'user_name': userName,
@@ -134,12 +135,12 @@ class ZegoCallService {
           final isVideo = data.type == ZegoCallInvitationType.videoCall;
           final isGroup = data.invitees.length > 1;
           final config = isGroup
-            ? (isVideo
-                ? ZegoUIKitPrebuiltCallConfig.groupVideoCall()
-                : ZegoUIKitPrebuiltCallConfig.groupVoiceCall())
-            : (isVideo
-                ? ZegoUIKitPrebuiltCallConfig.oneOnOneVideoCall()
-                : ZegoUIKitPrebuiltCallConfig.oneOnOneVoiceCall());
+              ? (isVideo
+                  ? ZegoUIKitPrebuiltCallConfig.groupVideoCall()
+                  : ZegoUIKitPrebuiltCallConfig.groupVoiceCall())
+              : (isVideo
+                  ? ZegoUIKitPrebuiltCallConfig.oneOnOneVideoCall()
+                  : ZegoUIKitPrebuiltCallConfig.oneOnOneVoiceCall());
           unawaited(_remoteLogger.log('require_config', {
             'call_id': data.callID,
             'invitation_id': data.invitationID,
@@ -322,6 +323,7 @@ class ZegoCallService {
 
     // translationText của prebuilt không có setter cho title gọi, bỏ qua.
   }
+
   Future<void> uninit() async {
     if (!_inited) return;
     ZegoUIKitPrebuiltCallInvitationService().uninit();
@@ -400,25 +402,54 @@ class ZegoCallService {
     return 'cg_${groupId}_${me}_$ts';
   }
 
-  Future<void> _enterAcceptedOfflineCallWithLog({required String source}) async {
+  Future<void> _enterAcceptedOfflineCallWithLog(
+      {required String source}) async {
     try {
       ZegoUIKitPrebuiltCallInvitationService().enterAcceptedOfflineCall();
       unawaited(_remoteLogger.log('enter_offline_call', {
         'source': source,
         'user_id': _userId ?? '',
+        'inited': _inited,
       }));
     } catch (e) {
       unawaited(_remoteLogger.log('enter_offline_call_failed', {
         'source': source,
         'user_id': _userId ?? '',
+        'inited': _inited,
         'error': e.toString(),
       }));
     }
   }
 
   /// Gọi sau khi navigator đã sẵn sàng (post-frame) để chắc chắn vào màn hình gọi.
-  Future<void> ensureEnterAcceptedOfflineCall({String source = 'post_frame'}) async {
-    await _enterAcceptedOfflineCallWithLog(source: source);
+  /// ✅ FIX: cold start cần đảm bảo init xong mới enter + retry vài nhịp
+  Future<void> ensureEnterAcceptedOfflineCall(
+      {String source = 'post_frame'}) async {
+    const int maxAttempts = 12; // ~ 12 * 250ms = 3s
+    for (int i = 0; i < maxAttempts; i++) {
+      try {
+        if (!_inited) {
+          await tryInitFromPrefs(); // ✅ quan trọng
+        }
+        if (_inited) {
+          await _enterAcceptedOfflineCallWithLog(source: '$source#${i + 1}');
+          return;
+        }
+      } catch (e) {
+        unawaited(_remoteLogger.log('ensure_enter_offline_call_err', {
+          'source': source,
+          'attempt': i + 1,
+          'error': e.toString(),
+        }));
+      }
+      await Future.delayed(const Duration(milliseconds: 250));
+    }
+
+    unawaited(_remoteLogger.log('ensure_enter_offline_call_giveup', {
+      'source': source,
+      'user_id': _userId ?? '',
+      'inited': _inited,
+    }));
   }
 
   Future<bool> startOneOnOne({
