@@ -19,6 +19,7 @@ class AppConstants {
       'f6e69c898ddd643154c9bd4b152555842e26a868-d195c100005dddb9f1a30a67a5ae42d4-19845955';
   static const String socialApiUpdateFcmTokenUri=
       'api/update_fcm_token';
+  static const String socialZegoDebugLogUri = '/api/zego_debug_log';
   static const String socialAuthUri = '/api/auth';
   static const String socialCreateAccountUri = '/api/create-account';
   static const String socialDeleteAccessTokenUri = '/api/delete-access-token';

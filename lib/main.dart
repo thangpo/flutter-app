@@ -90,7 +90,6 @@ import 'package:zego_uikit_signaling_plugin/zego_uikit_signaling_plugin.dart';
 
 import 'di_container.dart' as di;
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_page_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/push/callkit_service.dart';
 
 // === ADD (n?u chua có bi?n này) ===
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
@@ -238,8 +237,6 @@ class AppLifecycleObserver extends WidgetsBindingObserver {
       // App v?o foreground
       AnalyticsHelper.logUserActive();
       // Flush pending navigation actions after CallKit accept (lock-screen) and recover active calls.
-      unawaited(CallkitService.I.flushPendingActions());
-      unawaited(CallkitService.I.recoverActiveCalls());
     } else if (state == AppLifecycleState.paused) {
       // App v?o background
       analytics.logEvent(
@@ -577,49 +574,79 @@ class MyApp extends StatelessWidget {
     ];
 
     return Consumer<ThemeController>(builder: (context, themeController, _) {
-      return MaterialApp(
-        title: AppConstants.appName,
-        navigatorKey: navigatorKey,
+      return _CallkitResumeWrapper(
+        child: MaterialApp(
+          title: AppConstants.appName,
+          navigatorKey: navigatorKey,
 
-        // =================== TH?M ANALYTICS OBSERVER ===================
-        navigatorObservers: [observer],
+          // =================== TH?M ANALYTICS OBSERVER ===================
+          navigatorObservers: [observer],
 
-        debugShowCheckedModeBanner: false,
-        theme: themeController.darkTheme
-            ? dark
-            : light(
-                primaryColor: themeController.selectedPrimaryColor,
-                secondaryColor: themeController.selectedPrimaryColor,
+          debugShowCheckedModeBanner: false,
+          theme: themeController.darkTheme
+              ? dark
+              : light(
+                  primaryColor: themeController.selectedPrimaryColor,
+                  secondaryColor: themeController.selectedPrimaryColor,
+                ),
+          locale: Provider.of<LocalizationController>(context).locale,
+          // KH?NG d?t const v? c? delegate runtime
+          localizationsDelegates: [
+            AppLocalization.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+            FallbackLocalizationDelegate(),
+          ],
+          builder: (context, child) {
+            return MediaQuery(
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: TextScaler.noScaling),
+              child: SafeArea(
+                top: false,
+                bottom: false,
+                child: child!,
               ),
-        locale: Provider.of<LocalizationController>(context).locale,
-        // KH?NG d?t const v? c? delegate runtime
-        localizationsDelegates: [
-          AppLocalization.delegate,
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-          FallbackLocalizationDelegate(),
-        ],
-        builder: (context, child) {
-          return MediaQuery(
-            data: MediaQuery.of(context)
-                .copyWith(textScaler: TextScaler.noScaling),
-            child: SafeArea(
-              top: false,
-              bottom: false,
-              child: child!,
-            ),
-          );
-        },
-        supportedLocales: locals,
-        home: SplashScreen(body: body),
-        routes: {
-          '/login': (context) => const LoginScreen(),
-          '/booking-confirm': (context) => const BookingConfirmScreen(),
-          '/notifications': (context) => const NotificationScreen(),
-        },
+            );
+          },
+          supportedLocales: locals,
+          home: SplashScreen(body: body),
+          routes: {
+            '/login': (context) => const LoginScreen(),
+            '/booking-confirm': (context) => const BookingConfirmScreen(),
+            '/notifications': (context) => const NotificationScreen(),
+          },
+        ),
       );
     });
+  }
+}
+
+/// Đảm bảo sau khi UI dựng xong (post-frame) sẽ thử mở UI cuộc gọi offline.
+class _CallkitResumeWrapper extends StatefulWidget {
+  final Widget child;
+  const _CallkitResumeWrapper({required this.child});
+
+  @override
+  State<_CallkitResumeWrapper> createState() => _CallkitResumeWrapperState();
+}
+
+class _CallkitResumeWrapperState extends State<_CallkitResumeWrapper> {
+  bool _didResume = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_didResume) return;
+      _didResume = true;
+      ZegoCallService.I.ensureEnterAcceptedOfflineCall(source: 'post_frame');
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return widget.child;
   }
 }
 

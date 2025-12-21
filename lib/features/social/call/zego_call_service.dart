@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -9,6 +10,7 @@ import 'package:zego_uikit/zego_uikit.dart';
 
 import '../../../utill/app_constants.dart';
 import 'zego_call_config.dart';
+import 'zego_remote_logger.dart';
 import 'zego_token_repository.dart';
 
 class ZegoCallService {
@@ -20,6 +22,7 @@ class ZegoCallService {
   static const _prefExpireKey = 'zego_call_token_expire_at';
 
   final ZegoTokenRepository _tokenRepo = ZegoTokenRepository();
+  final ZegoRemoteLogger _remoteLogger = ZegoRemoteLogger.I;
 
   bool _inited = false;
   String? _userId;
@@ -42,6 +45,10 @@ class ZegoCallService {
     }
 
     debugPrint('[ZEGO] Init requested for user=$userId appID=${ZegoCallConfig.appID}');
+    unawaited(_remoteLogger.log('init_requested', {
+      'user_id': userId,
+      'user_name': userName,
+    }));
 
     final token = await _getValidToken(userId: userId);
     if (token == null || token.isEmpty) {
@@ -87,6 +94,31 @@ class ZegoCallService {
         userID: userId,
         userName: userName,
         plugins: [ZegoUIKitSignalingPlugin()],
+        invitationEvents: ZegoUIKitPrebuiltCallInvitationEvents(
+          onIncomingCallAcceptButtonPressed: () {
+            unawaited(_remoteLogger.log('incoming_accept_pressed', {
+              'user_id': userId,
+            }));
+            // Đảm bảo mở UI cuộc gọi đã accept (offline) sau khi bấm Nghe từ CallKit.
+            _enterAcceptedOfflineCallWithLog(source: 'accept_button');
+          },
+          onIncomingCallReceived: (
+            String callID,
+            ZegoCallUser caller,
+            ZegoCallInvitationType callType,
+            List<ZegoCallUser> callees,
+            String customData,
+          ) {
+            unawaited(_remoteLogger.log('incoming_received', {
+              'call_id': callID,
+              'caller_id': caller.id,
+              'call_type': callType.name,
+              'callees': callees.map((e) => e.id).toList(),
+            }));
+            // Backup: khi app vừa được wake từ push, thử mở UI nếu đã có accept.
+            _enterAcceptedOfflineCallWithLog(source: 'incoming_received');
+          },
+        ),
         config: ZegoCallInvitationConfig(
           offline: ZegoCallInvitationOfflineConfig(
             autoEnterAcceptedOfflineCall: true,
@@ -95,7 +127,7 @@ class ZegoCallService {
         notificationConfig: notificationConfig,
         requireConfig: (ZegoCallInvitationData data) {
           _ingestCustomProfiles(data);
-          final isVideo = data.type == ZegoCallType.videoCall;
+          final isVideo = data.type == ZegoCallInvitationType.videoCall;
           final isGroup = data.invitees.length > 1;
           final config = isGroup
             ? (isVideo
@@ -104,17 +136,43 @@ class ZegoCallService {
             : (isVideo
                 ? ZegoUIKitPrebuiltCallConfig.oneOnOneVideoCall()
                 : ZegoUIKitPrebuiltCallConfig.oneOnOneVoiceCall());
+          unawaited(_remoteLogger.log('require_config', {
+            'call_id': data.callID,
+            'invitation_id': data.invitationID,
+            'is_group': isGroup,
+            'is_video': isVideo,
+            'invitees': data.invitees.map((e) => e.id).toList(),
+            'inviter': data.inviter?.id ?? '',
+          }));
           _applyAvatarAndText(config, data);
           return config;
         },
       );
     } catch (e) {
       debugPrint('[ZEGO] Lỗi init service: $e');
+      unawaited(_remoteLogger.log('init_failed', {
+        'user_id': userId,
+        'error': e.toString(),
+      }));
       return;
     }
 
     _inited = true;
     debugPrint('[ZEGO] Call invitation service inited for user=$userId');
+    unawaited(_remoteLogger.log('init_success', {
+      'user_id': userId,
+      'user_name': userName,
+    }));
+
+    // Extra attempt: khi app được mở lại từ CallKit (cold start) cố gắng vào UI gọi.
+    Future.delayed(const Duration(milliseconds: 600), () {
+      try {
+        ZegoUIKitPrebuiltCallInvitationService().enterAcceptedOfflineCall();
+        unawaited(_remoteLogger.log('enter_offline_after_init', {
+          'user_id': userId,
+        }));
+      } catch (_) {}
+    });
   }
 
   Future<String?> _myAvatarFromPrefs() async {
@@ -130,10 +188,8 @@ class ZegoCallService {
   void _ingestCustomProfiles(ZegoCallInvitationData data) {
     Map<String, dynamic>? parsed;
     try {
-      if (data.customData is String && (data.customData as String).isNotEmpty) {
-        parsed = jsonDecode(data.customData as String);
-      } else if (data.customData is Map) {
-        parsed = Map<String, dynamic>.from(data.customData as Map);
+      if (data.customData.isNotEmpty) {
+        parsed = jsonDecode(data.customData);
       }
     } catch (_) {}
 
@@ -164,9 +220,7 @@ class ZegoCallService {
   String? _parsedGroupId(ZegoCallInvitationData data) {
     try {
       if (data.customData.isNotEmpty) {
-        final parsed = data.customData is Map
-            ? Map<String, dynamic>.from(data.customData as Map)
-            : jsonDecode(data.customData);
+        final parsed = jsonDecode(data.customData);
         if (parsed is Map && parsed['group_id'] != null) {
           return parsed['group_id'].toString();
         }
@@ -279,6 +333,10 @@ class ZegoCallService {
     if (userId == null || userId.isEmpty) return;
 
     final display = prefs.getString(AppConstants.socialUserName) ?? userId;
+    unawaited(_remoteLogger.log('init_from_prefs', {
+      'user_id': userId,
+      'user_name': display,
+    }));
     await initIfPossible(userId: userId, userName: display);
   }
 
@@ -299,6 +357,9 @@ class ZegoCallService {
       debugPrint(
         '[ZEGO] Fetch token từ server: userId=$userId, access_token=${accessToken.substring(0, 6)}..., endpoint=${AppConstants.socialGenerateZegoTokenUri}',
       );
+      unawaited(_remoteLogger.log('token_fetch', {
+        'user_id': userId,
+      }));
       final res = await _tokenRepo.fetchToken(
         accessToken: accessToken,
         userId: userId,
@@ -308,9 +369,17 @@ class ZegoCallService {
       debugPrint(
         '[ZEGO] Lấy token mới thành công, expireAt=${res.expireAt}, len=${res.token.length}',
       );
+      unawaited(_remoteLogger.log('token_success', {
+        'user_id': userId,
+        'expire_at': res.expireAt,
+      }));
       return res.token;
     } catch (e) {
       debugPrint('[ZEGO] Lỗi fetch token: $e');
+      unawaited(_remoteLogger.log('token_failed', {
+        'user_id': userId,
+        'error': e.toString(),
+      }));
       return null;
     }
   }
@@ -325,6 +394,27 @@ class ZegoCallService {
     final me = _userId ?? '0';
     final ts = DateTime.now().millisecondsSinceEpoch;
     return 'cg_${groupId}_${me}_$ts';
+  }
+
+  void _enterAcceptedOfflineCallWithLog({required String source}) {
+    try {
+      ZegoUIKitPrebuiltCallInvitationService().enterAcceptedOfflineCall();
+      unawaited(_remoteLogger.log('enter_offline_call', {
+        'source': source,
+        'user_id': _userId ?? '',
+      }));
+    } catch (e) {
+      unawaited(_remoteLogger.log('enter_offline_call_failed', {
+        'source': source,
+        'user_id': _userId ?? '',
+        'error': e.toString(),
+      }));
+    }
+  }
+
+  /// Gọi sau khi navigator đã sẵn sàng (post-frame) để chắc chắn vào màn hình gọi.
+  Future<void> ensureEnterAcceptedOfflineCall({String source = 'post_frame'}) async {
+    _enterAcceptedOfflineCallWithLog(source: source);
   }
 
   Future<bool> startOneOnOne({

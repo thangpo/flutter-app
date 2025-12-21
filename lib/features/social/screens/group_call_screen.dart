@@ -5,7 +5,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
-import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -15,7 +14,6 @@ import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart' show naviga
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_call_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_chat_controller.dart';
 import '../utils/ice_server_config.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/push/callkit_service.dart';
 
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 class GroupCallScreen extends StatefulWidget {
@@ -568,13 +566,8 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   }
 
   Future<void> _forceCloseUi(int? callId) async {
-    // Kết thúc CallKit/ConnectionService nếu còn kẹt
-    try {
-      if (callId != null && callId > 0) {
-        await CallkitService.I.endCallForServerId(callId);
-      }
-      await FlutterCallkitIncoming.endAllCalls();
-    } catch (_) {}
+    // Kết thúc CallKit/ConnectionService nếu còn kẹt (legacy CallKit đã gỡ, best-effort)
+    try {} catch (_) {}
 
     // Pop mạnh tay: thử nhiều lần để chắc chắn
     await _popScreen();

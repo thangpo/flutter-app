@@ -36,7 +36,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 // import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/firebase_token_updater.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/utils/pushkit_token_sync.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/call/zego_call_service.dart';
 
 class AuthController with ChangeNotifier {
@@ -380,7 +379,7 @@ class AuthController with ChangeNotifier {
         if (socialToken != null && socialToken.isNotEmpty) {
           // Thu hồi pushkit_token trên server (iOS) TRƯỚC khi gọi socialLogout
           try {
-            await PushkitTokenSync.clear(accessTokenOverride: socialToken);
+            // PushKit token sync removed (CallKit legacy).
           } catch (e) {
             debugPrint('[PUSHKIT] clear on logout failed: $e');
           }
@@ -609,7 +608,7 @@ class AuthController with ChangeNotifier {
       }
       // 🔔 Đồng bộ PushKit token (iOS)
       try {
-        await PushkitTokenSync.sync();
+        // PushKit token sync removed (CallKit legacy).
       } catch (e) {
         debugPrint('[PUSHKIT] sync after social login failed: $e');
       }

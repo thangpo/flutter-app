@@ -161,15 +161,6 @@
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="vnshop247_channel" />
 
-        <!-- FCM receiver riêng cho call_invite (Android background/killed) -->
-        <!--
-          GỠ BỎ Khai báo sai dịch vụ FCM:
-          Bạn đang khai báo trực tiếp com.google.firebase.messaging.FirebaseMessagingService (lớp base/abstract).
-          Nếu bạn có subclass riêng (VD: .MyFirebaseMessagingService) thì KHAI BÁO subclass đó thay vì lớp base.
-          Vì hiện mã nguồn bạn không gửi subclass, mình xoá service này để tránh crash/ANR.
-        -->
-        <!-- (đã xoá block <service android:name="com.google.firebase.messaging.FirebaseMessagingService" ... />) -->
-
     </application>
 
 </manifest>
