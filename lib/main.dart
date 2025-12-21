@@ -638,17 +638,24 @@ class _CallkitResumeWrapperState extends State<_CallkitResumeWrapper> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (_didResume) return;
       _didResume = true;
-      ZegoCallService.I.ensureEnterAcceptedOfflineCall(source: 'post_frame');
+
+      // ✅ Nhịp 1: ngay sau frame đầu
+      ZegoCallService.I.ensureEnterAcceptedOfflineCall(source: 'post_frame#1');
+
+      // ✅ Nhịp 2..5: cold start iOS có thể nhận event trễ → gọi lại vài nhịp
+      for (int i = 2; i <= 5; i++) {
+        await Future.delayed(const Duration(milliseconds: 600));
+        ZegoCallService.I.ensureEnterAcceptedOfflineCall(source: 'post_frame#$i');
+      }
     });
   }
 
   @override
-  Widget build(BuildContext context) {
-    return widget.child;
-  }
+  Widget build(BuildContext context) => widget.child;
 }
 
 class MyHttpOverrides extends HttpOverrides {

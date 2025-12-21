@@ -126,7 +126,7 @@ class ZegoCallService {
         ),
         config: ZegoCallInvitationConfig(
           offline: ZegoCallInvitationOfflineConfig(
-            autoEnterAcceptedOfflineCall: true,
+            autoEnterAcceptedOfflineCall: false,
           ),
         ),
         notificationConfig: notificationConfig,
