@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/chat_page_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/group_chats_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/chat_preview_helper.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_list_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/social_page_chat.dart';
 import 'package:flutter_sixvalley_ecommerce/features/dashboard/screens/dashboard_chat_screen.dart';
@@ -21,7 +22,6 @@ class PageMessagesScreen extends StatefulWidget {
 
 class _PageMessagesScreenState extends State<PageMessagesScreen> {
   int _tabIndex = 0;
-  final TextEditingController _searchCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -35,23 +35,126 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
   @override
   void dispose() {
     context.read<SocialPageController>().stopPageChatListPolling();
-    _searchCtrl.dispose();
     super.dispose();
+  }
+
+  int _normalizedTimestamp(int ts) {
+    if (ts <= 0) return 0;
+    return ts > 2000000000 ? (ts ~/ 1000) : ts;
+  }
+
+  int _pageTimestamp(PageChatThread t) {
+    final raw = t.lastMessageTime.trim();
+    if (raw.isEmpty) return 0;
+
+    final numeric = int.tryParse(raw);
+    if (numeric != null) return _normalizedTimestamp(numeric);
+
+    try {
+      final dt = DateTime.parse(raw);
+      return dt.millisecondsSinceEpoch ~/ 1000;
+    } catch (_) {}
+
+    final parts = raw.split(':');
+    if (parts.length == 2) {
+      final now = DateTime.now();
+      final h = int.tryParse(parts[0]);
+      final m = int.tryParse(parts[1]);
+      if (h != null && m != null) {
+        return DateTime(now.year, now.month, now.day, h, m)
+            .millisecondsSinceEpoch ~/
+            1000;
+      }
+    }
+    return 0;
+  }
+
+  String _formatTimestampLabel(int ts) {
+    if (ts <= 0) return '';
+    final dt = DateTime.fromMillisecondsSinceEpoch(ts * 1000);
+    final now = DateTime.now();
+    final diff = now.difference(dt);
+    String two(int n) => n.toString().padLeft(2, '0');
+
+    final sameDay = dt.year == now.year && dt.month == now.month && dt.day == now.day;
+    if (sameDay) return '${two(dt.hour)}:${two(dt.minute)}';
+    if (diff.inDays < 7) return '${diff.inDays}d';
+    final sameYear = dt.year == now.year;
+    return '${two(dt.day)}/${two(dt.month)}${sameYear ? '' : '/${dt.year}'}';
+  }
+
+  String _pagePreview(PageChatThread t, BuildContext context) {
+    final rawText = t.lastMessage.trim();
+    final type = (t.lastMessageType ?? '').toString().toLowerCase().trim();
+
+    // 1) Nếu có text -> normalize như bình thường
+    if (rawText.isNotEmpty) {
+      final normalized = normalizeChatPreview(rawText, context).trim();
+
+      // Có trường hợp text là HTML/placeholder bị helper strip sạch => fallback theo raw/type
+      if (normalized.isNotEmpty) return normalized;
+    }
+
+    // 2) Fallback theo type (nếu có)
+    String tag = _tagFromType(type);
+
+    // 3) Nếu type cũng rỗng -> đoán từ rawText (kể cả rawText rỗng thì vẫn thử)
+    tag = tag.isNotEmpty ? tag : _tagFromRaw(rawText);
+
+    // 4) Nếu vẫn không đoán được -> message trống
+    if (tag.isEmpty) {
+      return getTranslated('no_messages_yet', context) ?? 'Bắt đầu đoạn chat';
+    }
+
+    return normalizeChatPreview(tag, context);
+  }
+
+  String _tagFromType(String type) {
+    switch (type) {
+      case 'image':
+      case 'photo':
+      case 'gif':
+        return '[Image]';
+      case 'video':
+        return '[Video]';
+      case 'voice':
+      case 'audio':
+        return '[Voice]';
+      case 'file':
+      case 'document':
+        return '[File]';
+      case 'sticker':
+        return '[Sticker]';
+      default:
+        return type.isNotEmpty ? '[$type]' : '';
+    }
+  }
+
+  String _tagFromRaw(String raw) {
+    final s = raw.toLowerCase();
+
+    if (s.contains('<img') || s.contains('upload/photos') || s.contains('.jpg') || s.contains('.jpeg') || s.contains('.png') || s.contains('.webp') || s.contains('.gif')) {
+      return '[Image]';
+    }
+    if (s.contains('upload/videos') || s.contains('.mp4') || s.contains('.mov') || s.contains('.mkv') || s.contains('.webm')) {
+      return '[Video]';
+    }
+    if (s.contains('upload/audio') || s.contains('upload/voice') || s.contains('.mp3') || s.contains('.aac') || s.contains('.m4a') || s.contains('.wav') || s.contains('.ogg')) {
+      return '[Voice]';
+    }
+    if (s.contains('upload/files') || s.contains('.pdf') || s.contains('.doc') || s.contains('.docx') || s.contains('.xls') || s.contains('.xlsx') || s.contains('.zip') || s.contains('.rar')) {
+      return '[File]';
+    }
+
+    return '';
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final bottomInset = MediaQuery.of(context).padding.bottom;
-
     final pageCtrl = context.watch<SocialPageController>();
-    final List<PageChatThread> origin = pageCtrl.pageChatList;
-    final List<PageChatThread> threads = origin.where((item) {
-      if (_searchCtrl.text.isEmpty) return true;
-      final q = _searchCtrl.text.toLowerCase();
-      return item.pageTitle.toLowerCase().contains(q) ||
-          item.pageName.toLowerCase().contains(q);
-    }).toList();
+    final List<PageChatThread> threads = pageCtrl.pageChatList;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -67,103 +170,18 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [cs.primary.withOpacity(.15), cs.surfaceVariant],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: cs.primary.withOpacity(.18),
-                          shape: BoxShape.circle,
-                        ),
-                        child:
-                            Icon(Icons.chat_bubble_outline, color: cs.primary),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              getTranslated('page_messages', context) ??
-                                  'Tin nhắn Page',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 15,
-                              ),
-                            ),
-                            Text(
-                              getTranslated(
-                                      'page_messages_subtitle', context) ??
-                                  'Theo dõi hội thoại khách hàng và Page của bạn',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: cs.onSurface.withOpacity(.65),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _searchCtrl,
-                  onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(
-                    hintText:
-                        getTranslated('search_page_conversation', context) ??
-                            'Tìm kiếm hội thoại hoặc tên Page',
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: _searchCtrl.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.close),
-                            onPressed: () {
-                              _searchCtrl.clear();
-                              setState(() {});
-                            },
-                          )
-                        : null,
-                    filled: true,
-                    fillColor: cs.surfaceVariant.withOpacity(.35),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    _MiniTabChip(
-                      label: getTranslated('all', context) ?? 'Tất cả',
-                      selected: _tabIndex == 0,
-                      onTap: () => setState(() => _tabIndex = 0),
-                    ),
-                    const SizedBox(width: 8),
-                    _MiniTabChip(
-                      label:
-                          getTranslated('my_pages', context) ?? 'Page của tôi',
-                      selected: _tabIndex == 1,
-                      onTap: () => setState(() => _tabIndex = 1),
-                    ),
+                _SegmentedTabs(
+                  index: _tabIndex,
+                  labels: [
+                    getTranslated('all', context) ?? 'All',
+                    getTranslated('my_pages', context) ?? 'My Pages',
                   ],
-                )
+                  onChanged: (i) => setState(() => _tabIndex = i),
+                ),
               ],
             ),
           ),
@@ -210,6 +228,9 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                             item.isMyPage && item.peerAvatar.isNotEmpty
                                 ? item.peerAvatar
                                 : item.avatar;
+                        final ts = _pageTimestamp(item);
+                        final timeLabel = _formatTimestampLabel(ts);
+                        final preview = _pagePreview(item, context);
 
                         return InkWell(
                           onTap: () {
@@ -313,7 +334,7 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                                             ),
                                           ),
                                           Text(
-                                            item.lastMessageTime,
+                                            timeLabel.isNotEmpty ? timeLabel : item.lastMessageTime,
                                             style: TextStyle(
                                               fontSize: 12,
                                               color: Theme.of(context)
@@ -337,7 +358,7 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
                                       ),
                                       const SizedBox(height: 6),
                                       Text(
-                                        item.lastMessage,
+                                        preview.isNotEmpty ? preview : item.lastMessage,
                                         style: TextStyle(
                                           fontSize: 14,
                                           fontWeight: item.unreadCount > 0
@@ -419,6 +440,85 @@ class _PageMessagesScreenState extends State<PageMessagesScreen> {
               ),
             )
           : null,
+    );
+  }
+}
+
+class _SegmentedTabs extends StatelessWidget {
+  final int index;
+  final List<String> labels;
+  final ValueChanged<int> onChanged;
+
+  const _SegmentedTabs({
+    required this.index,
+    required this.labels,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final bg = isDark ? const Color(0xFF1F1F1F) : const Color(0xFFEDEDED);
+    final border = isDark ? Colors.white12 : Colors.black12;
+    final active = isDark ? const Color(0xFF2A2A2A) : Colors.white;
+    final activeText = isDark ? Colors.white : Colors.black87;
+    final inactiveText = isDark ? Colors.white70 : Colors.black54;
+
+    return LayoutBuilder(
+      builder: (ctx, c) {
+        final w = c.maxWidth;
+        final itemW = w / labels.length;
+
+        return Container(
+          height: 40,
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: border, width: 1),
+          ),
+          child: Stack(
+            children: [
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                left: itemW * index,
+                top: 0,
+                bottom: 0,
+                width: itemW,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: active,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              Row(
+                children: List.generate(labels.length, (i) {
+                  final selected = i == index;
+                  return Expanded(
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: () => onChanged(i),
+                      child: Center(
+                        child: Text(
+                          labels[i],
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: selected ? activeText : inactiveText,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

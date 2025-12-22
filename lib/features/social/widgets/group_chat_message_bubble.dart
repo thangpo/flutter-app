@@ -1,9 +1,8 @@
-// G:\flutter-app\lib\features\social\widgets\group_chat_message_bubble.dart
 import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
 import 'dart:typed_data';
-
+import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -44,7 +43,7 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
     with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
-
+  late final List<double> _waveSamples;
   Map<String, dynamic> get message => widget.message;
   bool get isMe => widget.isMe;
 
@@ -297,6 +296,15 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
   @override
   void initState() {
     super.initState();
+
+    final seed = (message['id'] ??
+        message['message_id'] ??
+        message['msg_id'] ??
+        message.hashCode)
+        .toString();
+
+    _waveSamples = _generateWaveform(seed, count: 42);
+
     if (_isAudio) _initVoice();
   }
 
@@ -372,6 +380,38 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
     }
 
     return result;
+  }
+
+  List<double> _generateWaveform(String seed, {int count = 48}) {
+    final rnd = math.Random(seed.hashCode);
+    final list = <double>[];
+    for (var i = 0; i < count; i++) {
+      final base = 0.25 + 0.75 * rnd.nextDouble();
+      final wave = 0.65 + 0.35 * math.sin((i / count) * math.pi * 2);
+      list.add((base * wave).clamp(0.12, 1.0));
+    }
+    return list;
+  }
+
+  String _timeLabel() {
+    final v = (message['time_text'] ??
+        message['created_at'] ??
+        message['time'] ??
+        '')
+        .toString()
+        .trim();
+    if (v.isEmpty) return '';
+
+    // nếu là unix seconds
+    if (RegExp(r'^\d{9,}$').hasMatch(v)) {
+      final n = int.tryParse(v);
+      if (n != null) {
+        final dt = DateTime.fromMillisecondsSinceEpoch(n * 1000, isUtc: true).toLocal();
+        String two(int x) => x.toString().padLeft(2, '0');
+        return '${two(dt.hour)}:${two(dt.minute)}';
+      }
+    }
+    return v;
   }
 
   Widget _buildReactionsStrip() {
@@ -682,100 +722,123 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
   }
 
   Widget _buildVoice() {
-    final bg = isMe ? const Color(0xFF0084FF) : const Color(0xFFE4E6EB);
-    final textColor = isMe ? Colors.white : Colors.black87;
+    final src = _resolveMediaUrl(_media);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      width: 230,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (_vLoading)
-            LinearProgressIndicator(
-              minHeight: 2,
-              backgroundColor: bg.withOpacity(0.4),
-              valueColor: AlwaysStoppedAnimation<Color>(
-                isMe ? Colors.white : Colors.black87,
-              ),
-            ),
-          Row(
+    // style giống ảnh 2
+    final bubbleBg = isMe ? const Color(0xFFEAF2FF) : Colors.white;
+    final border = Colors.black12;
+    final playBg = const Color(0xFF4C6FFF);
+    final waveActive = const Color(0xFF4C6FFF);
+    final waveInactive = Colors.black12;
+
+    final progress = (_dur.inMilliseconds > 0)
+        ? (_pos.inMilliseconds / _dur.inMilliseconds).clamp(0.0, 1.0)
+        : 0.0;
+
+    final timeText = _timeLabel();
+
+    return Column(
+      crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 280,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: bubbleBg,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: border, width: 1),
+          ),
+          child: Row(
             children: [
+              // Waveform + duration
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      height: 30,
+                      child: _WaveformSeekBar(
+                        samples: _waveSamples,
+                        progress: progress,
+                        activeColor: waveActive,
+                        inactiveColor: waveInactive,
+                        height: 30,
+                        onSeek: (p) async {
+                          if (_ap == null) return;
+                          if (_dur.inMilliseconds <= 0) return;
+                          final ms = (p * _dur.inMilliseconds).toInt();
+                          await _ap!.seek(Duration(milliseconds: ms));
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _fmt(_dur),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.black54,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(width: 12),
+
+              // Play button tròn bên phải
               InkWell(
-                onTap: _ap == null
-                    ? null
-                    : () async {
-                        if (_vPlaying) {
-                          await _ap!.pause();
-                        } else {
-                          if (_ap!.audioSource == null) await _initVoice();
-                          await _ap!.play();
-                        }
-                      },
+                onTap: () async {
+                  if (_ap == null) return;
+
+                  if (_vPlaying) {
+                    await _ap!.pause();
+                  } else {
+                    if (_ap!.audioSource == null) await _initVoice();
+                    // nếu chưa load xong thì tránh bấm play quá sớm
+                    if (_vLoading) return;
+                    await _ap!.play();
+                  }
+                },
+                customBorder: const CircleBorder(),
                 child: Container(
-                  width: 32,
-                  height: 32,
+                  width: 44,
+                  height: 44,
                   decoration: const BoxDecoration(
-                    color: Colors.white,
+                    color: Color(0xFF4C6FFF),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
+                  alignment: Alignment.center,
+                  child: _vLoading
+                      ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                      : Icon(
                     _vPlaying ? Icons.pause : Icons.play_arrow,
-                    color: bg,
-                    size: 20,
+                    color: Colors.white,
+                    size: 26,
                   ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: SizedBox(
-                  height: 26,
-                  child: SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      trackHeight: 3,
-                      thumbShape:
-                          const RoundSliderThumbShape(enabledThumbRadius: 7),
-                      overlayShape:
-                          const RoundSliderOverlayShape(overlayRadius: 12),
-                      activeTrackColor: Colors.white,
-                      inactiveTrackColor: Colors.white24,
-                      thumbColor: Colors.white,
-                      overlayColor: Colors.white30,
-                    ),
-                    child: Slider(
-                      value: _pos.inMilliseconds
-                          .clamp(0, _dur.inMilliseconds)
-                          .toDouble(),
-                      max: (_dur.inMilliseconds == 0 ? 1 : _dur.inMilliseconds)
-                          .toDouble(),
-                      onChanged: _ap == null
-                          ? null
-                          : (v) async {
-                              await _ap!
-                                  .seek(Duration(milliseconds: v.toInt()));
-                            },
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                _fmt(_dur),
-                style: TextStyle(
-                  color: textColor,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
                 ),
               ),
             ],
           ),
+        ),
+
+        if (timeText.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            timeText,
+            style: const TextStyle(fontSize: 11, color: Colors.black38),
+          ),
         ],
-      ),
+      ],
     );
   }
 
@@ -860,5 +923,99 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble>
       i++;
     }
     return '${v.toStringAsFixed(v < 10 && i > 0 ? 1 : 0)} ${units[i]}';
+  }
+}
+class _WaveformSeekBar extends StatelessWidget {
+  final List<double> samples;
+  final double progress; // 0..1
+  final Color activeColor;
+  final Color inactiveColor;
+  final double height;
+  final ValueChanged<double> onSeek;
+
+  const _WaveformSeekBar({
+    required this.samples,
+    required this.progress,
+    required this.activeColor,
+    required this.inactiveColor,
+    required this.height,
+    required this.onSeek,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (_, c) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (d) => _seek(d.localPosition.dx, c.maxWidth),
+        onPanUpdate: (d) => _seek(d.localPosition.dx, c.maxWidth),
+        child: CustomPaint(
+          size: Size(double.infinity, height),
+          painter: _WaveformPainter(
+            samples: samples,
+            progress: progress,
+            activeColor: activeColor,
+            inactiveColor: inactiveColor,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _seek(double dx, double width) {
+    if (width <= 0) return;
+    onSeek((dx / width).clamp(0.0, 1.0));
+  }
+}
+
+class _WaveformPainter extends CustomPainter {
+  final List<double> samples;
+  final double progress;
+  final Color activeColor;
+  final Color inactiveColor;
+
+  _WaveformPainter({
+    required this.samples,
+    required this.progress,
+    required this.activeColor,
+    required this.inactiveColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (samples.isEmpty) return;
+
+    final count = samples.length;
+    final barW = (size.width / (count * 1.35)).clamp(2.0, 5.0);
+    final gap = barW * 0.35;
+
+    final totalW = count * barW + (count - 1) * gap;
+    double x = (size.width - totalW) / 2;
+    if (x.isNaN) x = 0;
+
+    final activeUntil = (progress.clamp(0.0, 1.0) * count);
+
+    for (int i = 0; i < count; i++) {
+      final amp = samples[i].clamp(0.08, 1.0);
+      final h = amp * size.height;
+      final y = (size.height - h) / 2;
+
+      final paint = Paint()
+        ..color = (i + 1) <= activeUntil ? activeColor : inactiveColor
+        ..strokeWidth = barW
+        ..strokeCap = StrokeCap.round;
+
+      canvas.drawLine(
+        Offset(x + barW / 2, y),
+        Offset(x + barW / 2, y + h),
+        paint,
+      );
+      x += barW + gap;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _WaveformPainter old) {
+    return old.progress != progress || old.samples != samples;
   }
 }

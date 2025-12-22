@@ -1,8 +1,10 @@
-import 'dart:convert';
-import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'dart:async';
 import 'flight_list_item.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../services/flight_service.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
+import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
 
 class FlightListWidget extends StatefulWidget {
   final List<dynamic>? flights;
@@ -22,16 +24,19 @@ class _FlightListWidgetState extends State<FlightListWidget> {
   List<dynamic> flights = [];
   bool isLoading = true;
 
+  bool _headerVisible = true;
+  double _lastPixels = 0;
+  DateTime _lastNotiAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  bool get _isUsingExternalData => widget.flights != null;
+
   @override
   void initState() {
     super.initState();
-
-    // Nếu bên ngoài đã truyền kết quả search vào thì dùng luôn
-    if (widget.flights != null && widget.flights!.isNotEmpty) {
-      flights = widget.flights!;
+    if (_isUsingExternalData) {
+      flights = widget.flights ?? [];
       isLoading = widget.isLoading;
     } else {
-      // Không có dữ liệu truyền vào -> gọi Duffel để load gợi ý
       fetchFlights();
     }
   }
@@ -40,147 +45,76 @@ class _FlightListWidgetState extends State<FlightListWidget> {
   void didUpdateWidget(covariant FlightListWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    // Khi parent truyền flights mới hoặc trạng thái loading mới
-    if (widget.flights != oldWidget.flights ||
-        widget.isLoading != oldWidget.isLoading) {
-      setState(() {
-        flights = widget.flights ?? [];
-        isLoading = widget.isLoading;
-      });
+    final oldUsingExternal = oldWidget.flights != null;
+    final newUsingExternal = widget.flights != null;
+
+    if (oldUsingExternal != newUsingExternal) {
+      if (newUsingExternal) {
+        setState(() {
+          flights = widget.flights ?? [];
+          isLoading = widget.isLoading;
+        });
+      } else {
+        fetchFlights();
+      }
+      return;
+    }
+
+    if (newUsingExternal) {
+      if (widget.flights != oldWidget.flights ||
+          widget.isLoading != oldWidget.isLoading) {
+        setState(() {
+          flights = widget.flights ?? [];
+          isLoading = widget.isLoading;
+        });
+      }
+      return;
     }
   }
-
-  Future<void> fetchFlights() async {
-    const apiKey =
-        'duffel_test_lkVeDLi9UBt6AvHi8BuQ4CwXBj6HEhE5idyn3nz9hrb';
-
-    final now = DateTime.now().add(const Duration(days: 2));
-    final departureDate =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-
-    if (!mounted) return;
-    setState(() => isLoading = true);
-
-    try {
-      // 1. Tạo offer request
-      final requestUrl = Uri.parse('https://api.duffel.com/air/offer_requests');
-      final requestRes = await http.post(
-        requestUrl,
-        headers: const {
-          'Authorization': 'Bearer $apiKey',
-          'Duffel-Version': 'v2',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'data': {
-            'slices': [
-              {
-                'origin': 'SGN',
-                'destination': 'HAN',
-                'departure_date': departureDate,
-              }
-            ],
-            'passengers': [
-              {'type': 'adult'}
-            ],
-            'cabin_class': 'economy',
-          }
-        }),
-      );
-
-      if (requestRes.statusCode != 201) {
-        throw Exception('Offer request failed: ${requestRes.body}');
-      }
-
-      final requestData = jsonDecode(requestRes.body);
-      final offerRequestId = requestData['data']['id'];
-
-      // 2. Lấy danh sách offers từ offer_request_id
-      final offersUrl = Uri.parse(
-        'https://api.duffel.com/air/offers?offer_request_id=$offerRequestId&limit=20',
-      );
-
-      final offersRes = await http.get(
-        offersUrl,
-        headers: const {
-          'Authorization': 'Bearer $apiKey',
-          'Duffel-Version': 'v2',
-          'Content-Type': 'application/json',
-        },
-      );
-
-      if (offersRes.statusCode != 200) {
-        throw Exception('Get offers failed: ${offersRes.body}');
-      }
-
-      final offersData = jsonDecode(offersRes.body);
-      final List offers = (offersData['data'] ?? []) as List;
-
-      // Lọc các hãng VN
-      const vnAirlines = ['Vietnam Airlines', 'VietJet Air', 'Bamboo Airways'];
-
-      final filtered = offers
-          .where((f) =>
-      f['owner'] != null &&
-          vnAirlines.contains(f['owner']['name'] ?? ''))
-          .take(10)
-          .toList();
-
-      if (!mounted) return;
-      setState(() {
-        flights = filtered;
-        isLoading = false;
-      });
-    } catch (e) {
-      debugPrint('Error: $e');
-      if (!mounted) return;
-      setState(() {
-        flights = [];
-        isLoading = false;
-      });
-    }
-  }
-
-  // ======= Helpers đa ngôn ngữ =======
 
   String tr(BuildContext context, String key, String fallback) {
     return getTranslated(key, context) ?? fallback;
   }
 
-  String _translateBaggageType(BuildContext context, String type) {
-    switch (type) {
-      case 'checked':
-        return tr(context, 'flight_baggage_checked', 'Ký gửi');
-      case 'carry_on':
-        return tr(context, 'flight_baggage_carry_on', 'Xách tay');
-      default:
-        return type;
+  void _handleScrollNotification(ScrollNotification n) {
+    if (!mounted) return;
+    if (n.metrics.axis != Axis.vertical) return;
+
+    // throttle nhẹ để tránh setState quá dày
+    final now = DateTime.now();
+    if (now.difference(_lastNotiAt).inMilliseconds < 50) return;
+    _lastNotiAt = now;
+
+    final pixels = n.metrics.pixels;
+    final delta = pixels - _lastPixels;
+
+    if (delta > 10 && _headerVisible) {
+      setState(() => _headerVisible = false);
+    } else if (delta < -10 && !_headerVisible) {
+      setState(() => _headerVisible = true);
     }
+
+    _lastPixels = pixels;
   }
 
-  // ======= Skeleton loading =======
-
-  Widget _buildLoadingSkeleton(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    final baseColor =
-    isDark ? const Color(0xFF111827) : Colors.grey.shade200;
-    final highlightColor =
-    isDark ? const Color(0xFF1F2937) : Colors.grey.shade300;
+  Widget _buildLoadingSkeleton(BuildContext context, {required bool isDark}) {
+    final baseColor = isDark ? const Color(0xFF111827) : const Color(0xFFF1F5F9);
+    final highlightColor = isDark ? const Color(0xFF1F2937) : const Color(0xFFE2E8F0);
 
     return Column(
       children: List.generate(4, (index) {
         return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          margin: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: baseColor,
             borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.06),
+            ),
           ),
           child: Row(
             children: [
-              // Avatar hãng bay
               Container(
                 width: 40,
                 height: 40,
@@ -190,7 +124,6 @@ class _FlightListWidgetState extends State<FlightListWidget> {
                 ),
               ),
               const SizedBox(width: 12),
-              // Text skeleton
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -225,7 +158,6 @@ class _FlightListWidgetState extends State<FlightListWidget> {
                 ),
               ),
               const SizedBox(width: 12),
-              // Chip giá
               Container(
                 height: 18,
                 width: 60,
@@ -241,98 +173,234 @@ class _FlightListWidgetState extends State<FlightListWidget> {
     );
   }
 
-  // ======= Build =======
+  Future<void> fetchFlights() async {
+    if (!mounted) return;
+
+    setState(() => isLoading = true);
+
+    try {
+      final res = await FlightService.getFlights(params: {
+        "limit": 20,
+        "page": 1,
+      });
+
+      final data = (res["data"] as Map<String, dynamic>?);
+      final rows = (data?["rows"] as List<dynamic>?) ?? <dynamic>[];
+
+      if (!mounted) return;
+      setState(() {
+        flights = rows;
+        isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('FlightListWidget fetchFlights error: $e');
+      if (!mounted) return;
+      setState(() {
+        flights = [];
+        isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final isDark = Provider.of<ThemeController>(context, listen: true).darkTheme;
 
+    final textMain = isDark ? Colors.white : const Color(0xFF0F172A);
+    final textSub = isDark ? Colors.white70 : Colors.black54;
+
+    final header = AnimatedSlide(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+      offset: _headerVisible ? Offset.zero : const Offset(0, -0.25),
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 180),
+        opacity: _headerVisible ? 1 : 0,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  tr(context, 'flight_recommended_title', 'Chuyến bay gợi ý'),
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: textMain,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.04),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: isDark ? Colors.white.withOpacity(0.10) : Colors.black.withOpacity(0.06),
+                  ),
+                ),
+                child: Text(
+                  "${flights.length}",
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: textSub,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    Widget body;
     if (isLoading) {
-      return _buildLoadingSkeleton(context);
-    }
-
-    if (flights.isEmpty) {
-      return Padding(
+      body = _buildLoadingSkeleton(context, isDark: isDark);
+    } else if (flights.isEmpty) {
+      body = Padding(
         padding: const EdgeInsets.all(16),
         child: Center(
           child: Text(
-            tr(
-              context,
-              'flight_no_result',
-              'Không tìm thấy chuyến bay nào.',
-            ),
+            tr(context, 'flight_no_result', 'Không tìm thấy chuyến bay nào.'),
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: isDark ? Colors.white70 : Colors.grey[700],
+              color: textSub,
               fontSize: 14,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
       );
+    } else {
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          header,
+          ...List.generate(flights.length, (i) {
+            final f = flights[i];
+
+            final id = (f["id"] ?? "").toString();
+
+            final airline = (f["airline"] is Map)
+                ? ((f["airline"]["name"] ?? "Hãng bay").toString())
+                : "Hãng bay";
+
+            final logoUrl = (f["image"] ?? "").toString();
+
+            final from = (f["airport_form"] is Map)
+                ? ((f["airport_form"]["name"] ?? "").toString())
+                : "";
+
+            final to = (f["airport_to"] is Map)
+                ? ((f["airport_to"]["name"] ?? "").toString())
+                : "";
+
+            final departure = (f["departure_time"] ?? "").toString();
+            final arrival = (f["arrival_time"] ?? "").toString();
+            final price = (f["price"] ?? f["min_price"] ?? "").toString();
+
+            final cabinClass = "Economy";
+            final baggage = tr(context, 'flight_baggage_none', 'Không có');
+            final canBook = f["can_book"];
+            final availability = (canBook is bool && canBook == false)
+                ? tr(context, 'flight_seat_unavailable', 'Hết chỗ')
+                : tr(context, 'flight_seat_available', 'Còn chỗ');
+
+            return _StaggeredFadeSlide(
+              index: i,
+              child: FlightListItem(
+                flightId: id,
+                airline: airline,
+                from: from,
+                to: to,
+                departure: departure,
+                arrival: arrival,
+                price: price,
+                cabinClass: cabinClass,
+                baggage: baggage,
+                availability: availability,
+                logoUrl: logoUrl,
+              ),
+            );
+          }),
+        ],
+      );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Text(
-            tr(context, 'flight_recommended_title', 'Chuyến bay gợi ý'),
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: isDark ? Colors.white : const Color(0xFF111827),
-            ),
-          ),
+    return NotificationListener<ScrollNotification>(
+      onNotification: (n) {
+        _handleScrollNotification(n);
+        return false;
+      },
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        switchInCurve: Curves.easeOut,
+        switchOutCurve: Curves.easeIn,
+        child: Container(
+          key: ValueKey<String>("state_${isLoading}_${flights.length}"),
+          child: body,
         ),
-        ...flights.map((f) {
-          final id = f['id'];
-          final airline = f['owner']?['name'] ?? 'Hãng bay';
-          final logoUrl = f['owner']?['logo_symbol_url'];
+      ),
+    );
+  }
+}
 
-          final slice = (f['slices'] as List).first;
-          final from = slice['origin']?['iata_code'] ?? '';
-          final to = slice['destination']?['iata_code'] ?? '';
+class _StaggeredFadeSlide extends StatefulWidget {
+  final int index;
+  final Widget child;
 
-          final segment = (slice['segments'] as List).first;
-          final departure = segment['departing_at'];
-          final arrival = segment['arriving_at'];
+  const _StaggeredFadeSlide({
+    required this.index,
+    required this.child,
+  });
 
-          final price = '${f["total_amount"]} ${f["total_currency"]}';
-          final cabinClass = f['cabin_class'] ?? 'Economy';
+  @override
+  State<_StaggeredFadeSlide> createState() => _StaggeredFadeSlideState();
+}
 
-          final baggage = (segment['passengers'] != null &&
-              segment['passengers'].isNotEmpty &&
-              segment['passengers'][0]['baggages'] != null)
-              ? (segment['passengers'][0]['baggages'] as List)
-              .map((b) =>
-          '${b["quantity"]} ${_translateBaggageType(context, b["type"])}')
-              .join(', ')
-              : tr(context, 'flight_baggage_none', 'Không có');
+class _StaggeredFadeSlideState extends State<_StaggeredFadeSlide>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+  late final Animation<double> _opacity;
+  late final Animation<Offset> _slide;
+  Timer? _timer;
 
-          final availability = (f['total_amount'] != null &&
-              f['total_amount'].toString().isNotEmpty)
-              ? tr(context, 'flight_seat_available', 'Còn chỗ')
-              : tr(context, 'flight_seat_unavailable', 'Hết chỗ');
+  @override
+  void initState() {
+    super.initState();
 
-          return FlightListItem(
-            flightId: id,
-            airline: airline,
-            from: from,
-            to: to,
-            departure: departure,
-            arrival: arrival,
-            price: price,
-            cabinClass: cabinClass,
-            baggage: baggage,
-            availability: availability,
-            logoUrl: logoUrl,
-          );
-        }).toList(),
-      ],
+    _c = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+    );
+
+    _opacity = CurvedAnimation(parent: _c, curve: Curves.easeOut);
+    _slide = Tween<Offset>(
+      begin: const Offset(0, 0.06),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _c, curve: Curves.easeOut));
+
+    _timer = Timer(Duration(milliseconds: 45 * widget.index), () {
+      if (mounted) _c.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacity,
+      child: SlideTransition(
+        position: _slide,
+        child: widget.child,
+      ),
     );
   }
 }

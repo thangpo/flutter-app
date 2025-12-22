@@ -42,7 +42,7 @@ class _FlightDetailScreenState extends State<FlightDetailScreen> {
       final data = detail["data"];
       if (data != null && data["offer_request_id"] != null) {
         final offerRequestId = data["offer_request_id"];
-        final offers = await FlightService.getOffers(offerRequestId);
+        final offers = await FlightService.getOffers();
 
         setState(() {
           flightDetail = detail;
