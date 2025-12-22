@@ -237,6 +237,10 @@ class AppLifecycleObserver extends WidgetsBindingObserver {
       // App v?o foreground
       AnalyticsHelper.logUserActive();
       // Flush pending navigation actions after CallKit accept (lock-screen) and recover active calls.
+      unawaited(
+        ZegoCallService.I
+            .ensureEnterAcceptedOfflineCall(source: 'lifecycle_resumed'),
+      );
     } else if (state == AppLifecycleState.paused) {
       // App v?o background
       analytics.logEvent(
@@ -294,8 +298,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Đăng ký navigator key cho Zego invitation để CallKit có context push trang gọi.
   ZegoUIKitPrebuiltCallInvitationService().setNavigatorKey(navigatorKey);
-  // Init Zego càng sớm càng tốt để xử lý accept từ CallKit (cold start).
-  await ZegoCallService.I.tryInitFromPrefs();
+  // Bật CallKit/ConnectionService TRƯỚC khi init để cold-start nhận sự kiện accept.
   try {
     await ZegoUIKitPrebuiltCallInvitationService().useSystemCallingUI(
       [ZegoUIKitSignalingPlugin()],
@@ -303,6 +306,8 @@ Future<void> main() async {
   } catch (e) {
     debugPrint('[ZEGO] useSystemCallingUI failed: $e');
   }
+  // Init Zego càng sớm càng tốt để xử lý accept từ CallKit (cold start).
+  await ZegoCallService.I.tryInitFromPrefs();
 
   await _setHighRefreshRate();
 
