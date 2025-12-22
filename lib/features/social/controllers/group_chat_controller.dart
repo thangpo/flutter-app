@@ -73,6 +73,42 @@ class GroupChatController extends ChangeNotifier {
     }
   }
 
+  void _patchLocalByHash(String groupId, String msgHash, Map<String, dynamic> patch) {
+    final list = _messagesByGroup[groupId];
+    if (list == null) return;
+
+    final idx = list.indexWhere((m) => '${m['message_hash_id'] ?? ''}' == msgHash);
+    if (idx == -1) return;
+
+    list[idx] = {...list[idx], ...patch};
+    _setMessages(groupId, List<Map<String, dynamic>>.from(list));
+    notifyListeners();
+  }
+
+  String? _guessTypeFromLocal(Map<String, dynamic> m) {
+    if (m['is_image'] == true) return 'image';
+    if (m['is_video'] == true) return 'video';
+    if (m['is_audio'] == true || (m['type_two'] ?? '').toString() == 'voice') return 'voice';
+    if (m['is_file'] == true) return 'file';
+
+    // fallback theo extension nếu cần
+    final media = (m['media'] ?? '').toString();
+    final path = media.startsWith('file://') ? Uri.parse(media).toFilePath() : media;
+    final ext = p.extension(path).toLowerCase();
+    if ({'.jpg', '.jpeg', '.png', '.gif', '.webp'}.contains(ext)) return 'image';
+    if ({'.mp4', '.mov', '.mkv', '.webm', '.avi'}.contains(ext)) return 'video';
+    if ({'.mp3', '.m4a', '.aac', '.wav', '.ogg'}.contains(ext)) return 'voice';
+    return 'file';
+  }
+
+  File? _fileFromLocalMedia(Map<String, dynamic> m) {
+    final media = (m['media'] ?? '').toString().trim();
+    if (media.isEmpty) return null;
+    final path = media.startsWith('file://') ? Uri.parse(media).toFilePath() : media;
+    final f = File(path);
+    return f.existsSync() ? f : null;
+  }
+
   // ---------- Messages & pagination ----------
   final Map<String, List<Map<String, dynamic>>> _messagesByGroup = {};
   final Map<String, bool> _messagesLoadingByGroup = {};
@@ -183,9 +219,11 @@ class GroupChatController extends ChangeNotifier {
       'is_video': isVideo,
       'is_audio': isAudio,
       'is_file': isFile,
-      'is_local': m['is_local'] == true,
-      'uploading': m['uploading'] == true,
+      'is_local': false,
+      'uploading': false,
+      'sending': false,
       'failed': m['failed'] == true,
+
       if (msgHash != null && msgHash.isNotEmpty) 'message_hash_id': msgHash,
     };
   }
@@ -254,6 +292,115 @@ class GroupChatController extends ChangeNotifier {
     }
   }
 
+  Future<void> sendMessageOptimistic(
+      String groupId,
+      String text, {
+        File? file,
+        String? type, // 'text' | 'image' | 'video' | 'voice' | 'file'
+        Map<String, dynamic>? replyTo,
+      }) async {
+    lastError = null;
+
+    // reply id (nếu có)
+    String? replyId;
+    if (replyTo != null) {
+      final rawId = replyTo['id'] ?? replyTo['message_id'];
+      if (rawId != null && '$rawId'.isNotEmpty) replyId = '$rawId';
+    }
+
+    // 1) tạo message local + add vào UI ngay
+    final msgHash = _tempHash();
+    final local = _makeLocalMessage(
+      groupId: groupId,
+      text: text,
+      file: file,
+      type: (type ?? (file == null ? 'text' : 'file')),
+      msgHash: msgHash,
+      replyTo: replyTo,
+    );
+
+    final current = List<Map<String, dynamic>>.from(messagesOf(groupId));
+    current.add(local);
+    _setMessages(groupId, current);
+    notifyListeners();
+
+    // 2) gọi API
+    try {
+      await repo.sendMessage(
+        groupId: groupId,
+        text: text,
+        file: file,
+        type: type,
+        messageHashId: msgHash,          // <-- quan trọng để merge
+        replyToMessageId: replyId,
+      );
+
+      // 3) kéo lại server để replace local (merge theo hash/id trong loadMessages)
+      await loadMessages(groupId);
+
+      // 4) nếu vì lý do nào đó server không trả hash, ít nhất tắt sending để UI không treo
+      _patchLocalByHash(groupId, msgHash, {
+        'sending': false,
+        'uploading': false,
+        'failed': false,
+        'is_local': false, // nếu merge được thì field này cũng sẽ bị server override
+      });
+    } catch (e) {
+      lastError = e.toString();
+      _patchLocalByHash(groupId, msgHash, {
+        'sending': false,
+        'uploading': false,
+        'failed': true,
+        'error': lastError,
+      });
+    }
+  }
+
+  Future<void> retryLocalMessage(String groupId, Map<String, dynamic> localMsg) async {
+    final msgHash = (localMsg['message_hash_id'] ?? '').toString();
+    if (msgHash.isEmpty) return;
+
+    final type = _guessTypeFromLocal(localMsg);
+    final file = _fileFromLocalMedia(localMsg);
+    final text = (localMsg['text'] ?? '').toString();
+
+    // bật lại trạng thái sending
+    _patchLocalByHash(groupId, msgHash, {
+      'sending': true,
+      'failed': false,
+      'error': '',
+      'uploading': file != null,
+    });
+
+    try {
+      await repo.sendMessage(
+        groupId: groupId,
+        text: text,
+        file: file,
+        type: type,
+        messageHashId: msgHash, // giữ nguyên hash để match local
+        replyToMessageId: (localMsg['reply_id'] ?? '').toString().isEmpty ? null : '${localMsg['reply_id']}',
+      );
+
+      await loadMessages(groupId);
+
+      _patchLocalByHash(groupId, msgHash, {
+        'sending': false,
+        'uploading': false,
+        'failed': false,
+        'is_local': false,
+      });
+    } catch (e) {
+      lastError = e.toString();
+      _patchLocalByHash(groupId, msgHash, {
+        'sending': false,
+        'uploading': false,
+        'failed': true,
+        'error': lastError,
+      });
+    }
+  }
+
   Future<void> loadOlderMessages(String groupId, String beforeMessageId) async {
     if (messagesLoading(groupId)) return;
     lastError = null;
@@ -266,19 +413,25 @@ class GroupChatController extends ChangeNotifier {
 
       final normalized = older.map(_normalizeServerMessage).toList();
       final current = List<Map<String, dynamic>>.from(messagesOf(groupId));
-
-      // chèn vào đầu, tránh trùng id
       final existingIds = current
-          .map((m) => '${m['id'] ?? ''}')
+          .map((m) => '${m['id'] ?? m['message_id'] ?? ''}')
+          .where((s) => s.isNotEmpty)
+          .toSet();
+      final existingHashes = current
+          .map((m) => '${m['message_hash_id'] ?? ''}')
           .where((s) => s.isNotEmpty)
           .toSet();
 
       final toAdd = <Map<String, dynamic>>[];
       for (final m in normalized) {
-        final idStr = '${m['id'] ?? ''}';
-        if (idStr.isEmpty || !existingIds.contains(idStr)) {
-          toAdd.add(m);
-        }
+        final idStr = '${m['id'] ?? m['message_id'] ?? ''}';
+        final hashStr = '${m['message_hash_id'] ?? ''}';
+
+        final duplicated =
+            (idStr.isNotEmpty && existingIds.contains(idStr)) ||
+                (hashStr.isNotEmpty && existingHashes.contains(hashStr));
+
+        if (!duplicated) toAdd.add(m);
       }
 
       _setMessages(groupId, [...toAdd, ...current]);
@@ -378,7 +531,7 @@ class GroupChatController extends ChangeNotifier {
     }
   }
 
-  
+
 
 
 
@@ -490,6 +643,8 @@ class GroupChatController extends ChangeNotifier {
       'text': text,
       'display_text': text,
       'media': mediaUri,
+      'local_path': file?.path,
+      'sending': true,
       'mediaFileName': file == null ? null : p.basename(file.path),
       'type_two': isAudio ? 'voice' : null,
       'is_image': isImage,
@@ -502,7 +657,6 @@ class GroupChatController extends ChangeNotifier {
       'time': nowSec,
       'message_hash_id': msgHash,
       'user_data': {'user_id': currentUserId},
-      // reaction mặc định
       'my_reaction': null,
       'reactions_count': 0,
       'reaction': null,
@@ -512,45 +666,21 @@ class GroupChatController extends ChangeNotifier {
   }
 
   Future<void> sendMessage(
-    String groupId,
-    String text, {
-    File? file,
-    String? type,
-    Map<String, dynamic>? replyTo,
-  }) async {
-    lastError = null;
-
-    try {
-      String? replyId;
-      if (replyTo != null) {
-        final rawId = replyTo['id'] ?? replyTo['message_id'];
-        if (rawId != null && '$rawId'.isNotEmpty) {
-          replyId = '$rawId';
-        }
-      }
-
-      // Gửi lên server, KHÔNG dùng optimistic local để tránh x2
-      await repo.sendMessage(
-        groupId: groupId,
-        text: text,
-        file: file,
-        type: type,
-        messageHashId: null,
-        replyToMessageId: replyId,
-      );
-
-      // Sau khi gửi xong: reload lại từ server cho chắc ăn
-      await loadMessages(groupId);
-    } catch (e) {
-      lastError = e.toString();
-      notifyListeners();
-    }
+      String groupId,
+      String text, {
+        File? file,
+        String? type,
+        Map<String, dynamic>? replyTo,
+      }) async {
+    await sendMessageOptimistic(
+      groupId,
+      text,
+      file: file,
+      type: type,
+      replyTo: replyTo,
+    );
   }
 
-  // ---------- Reaction ----------
-  /// Bật/tắt reaction cho 1 message trong group
-  ///
-  /// [reactionKey] là key bên WoWonder (vd: "Like", "Love", "Sad"...)
   Future<void> reactToMessage({
     required String groupId,
     required String messageId,

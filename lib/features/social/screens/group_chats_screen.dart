@@ -4,6 +4,7 @@ import '../controllers/group_chat_controller.dart';
 import 'group_chat_screen.dart';
 import 'create_group_screen.dart';
 import 'dart:io' show Platform;
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
@@ -11,6 +12,8 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/friends_list
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_page_mess.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/wowonder_text.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/utils/chat_preview_helper.dart';
+
 
 class GroupChatsScreen extends StatefulWidget {
   final String accessToken;
@@ -25,17 +28,25 @@ class GroupChatsScreen extends StatefulWidget {
 class _GroupChatsScreenState extends State<GroupChatsScreen> {
   final Map<String, String> _previewCache = {};
   final Map<String, int> _timeCache = {};
+  final Map<String, bool> _localUnread = {};
+  Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<GroupChatController>().loadGroups();
+    });
+
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      _refreshLatestGroups();
     });
   }
 
   @override
   void dispose() {
+    _pollTimer?.cancel();
     super.dispose();
   }
 
@@ -53,47 +64,101 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
     return v;
   }
 
-  String _formatTime(dynamic ts) {
-    final sec = _normalizedTs(ts);
-    if (sec == null) return '';
-    final dt = DateTime.fromMillisecondsSinceEpoch(sec * 1000);
+  int? _asInt(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v is String) return int.tryParse(v);
+    return null;
+  }
+
+  String _formatTimestampLabel(int ts) {
+    if (ts <= 0) return '';
+    final dt = DateTime.fromMillisecondsSinceEpoch(ts * 1000);
     final now = DateTime.now();
-    final sameDay =
-        dt.year == now.year && dt.month == now.month && dt.day == now.day;
-    if (sameDay) {
-      return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-    }
-    return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}';
+    final diff = now.difference(dt);
+
+    String two(int n) => n.toString().padLeft(2, '0');
+
+    final sameDay = dt.year == now.year && dt.month == now.month && dt.day == now.day;
+    if (sameDay) return '${two(dt.hour)}:${two(dt.minute)}';
+
+    if (diff.inDays < 7) return '${diff.inDays}d';
+
+    final sameYear = dt.year == now.year;
+    return '${two(dt.day)}/${two(dt.month)}${sameYear ? '' : '/${dt.year}'}';
   }
 
   Future<void> _ensureLatestPreview(
-      Map<String, dynamic> g, GroupChatController ctrl) async {
+      Map<String, dynamic> g,
+      GroupChatController ctrl,
+      ) async {
     final groupId = (g['group_id'] ?? g['id'] ?? '').toString();
     if (groupId.isEmpty) return;
+
+    // đã có cache thì thôi
     if (_previewCache.containsKey(groupId)) return;
     _previewCache[groupId] = '';
 
     try {
       final msgs = await ctrl.repo.fetchMessages(groupId, limit: 1);
-      if (msgs.isNotEmpty) {
-        final m = msgs.last;
-        String txt = (m['display_text'] ?? '').toString().trim();
-        if (txt.isEmpty) {
-          txt = pickWoWonderText(m);
-        }
-        int? ts;
-        final rawTime = m['time'] ?? m['time_text'] ?? m['timestamp'];
-        if (rawTime is num) ts = rawTime.toInt();
-        if (rawTime is String) ts = int.tryParse(rawTime);
+      if (msgs.isEmpty) return;
 
-        if (!mounted) return;
-        setState(() {
-          _previewCache[groupId] = txt;
-          if (ts != null) _timeCache[groupId] = ts;
-        });
-      }
+      final m = Map<String, dynamic>.from(msgs.last);
+
+      final preview = _previewFromMessage(m);
+
+      final rawTime = m['time'] ?? m['time_text'] ?? m['timestamp'];
+      final ts = _asInt(rawTime);
+
+      final fromMe = _isOutgoingMessage(m);
+      if (!fromMe) _localUnread[groupId] = true;
+
+      if (!mounted) return;
+      setState(() {
+        _previewCache[groupId] = preview;
+        if (ts != null) _timeCache[groupId] = ts;
+      });
     } catch (_) {
+      // ignore
+    }
+  }
 
+  Future<void> _refreshLatestGroups() async {
+    final ctrl = context.read<GroupChatController>();
+    final groups = List<Map<String, dynamic>>.from(ctrl.groups);
+
+    for (final g in groups) {
+      final groupId = (g['group_id'] ?? g['id'] ?? '').toString();
+      if (groupId.isEmpty) continue;
+
+      try {
+        final msgs = await ctrl.repo.fetchMessages(groupId, limit: 1);
+        if (msgs.isEmpty) continue;
+
+        final m = Map<String, dynamic>.from(msgs.last);
+
+        final preview = _previewFromMessage(m);
+
+        final rawTime = m['time'] ?? m['time_text'] ?? m['timestamp'];
+        final ts = _asInt(rawTime) ?? 0;
+
+        final normalizedTs = _normalizedTs(ts) ?? 0;
+        final currentTs = _normalizedTs(_timeCache[groupId]) ?? 0;
+
+        // chỉ update UI khi có msg mới hơn cache
+        if (normalizedTs > currentTs) {
+          final fromMe = _isOutgoingMessage(m);
+          if (!fromMe) _localUnread[groupId] = true;
+
+          if (!mounted) return;
+          setState(() {
+            _previewCache[groupId] = preview;
+            _timeCache[groupId] = ts;
+          });
+        }
+      } catch (_) {
+        // ignore
+      }
     }
   }
 
@@ -110,7 +175,6 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
     if (lastMap != null) {
       String txt = (lastMap['display_text'] ?? '').toString().trim();
       if (txt.isEmpty) {
-        // try text/message fields
         txt = (lastMap['text'] ??
                 lastMap['message'] ??
                 lastMap['textDecoded'] ??
@@ -122,7 +186,8 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
         txt = pickWoWonderText(lastMap);
       }
       if (txt.isNotEmpty) {
-        return sender.isNotEmpty ? '$sender: $txt' : txt;
+        final normalized = _previewFromMessage(lastMap);
+        return sender.isNotEmpty ? '$sender: $normalized' : normalized;
       }
     }
 
@@ -133,7 +198,7 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
         g['last_msg'] ??
         '';
     if (text is String && text.trim().isNotEmpty) {
-      final t = text.replaceAll('\n', ' ').trim();
+      final t = normalizeChatPreview(text.replaceAll('\n', ' ').trim(), context);
       return sender.isNotEmpty ? '$sender: $t' : t;
     }
 
@@ -202,6 +267,68 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
     if (v is bool) return v;
     if (v == null) return false;
     return v.toString() == '1' || v.toString().toLowerCase() == 'true';
+  }
+
+  bool _looksLikeToken(String s) {
+    final t = s.trim();
+    if (t.length < 16) return false;
+    final re = RegExp(r'^[A-Za-z0-9+/]+={0,2}$');
+    return re.hasMatch(t) && (t.endsWith('=') || t.length > 24);
+  }
+
+  bool _isOutgoingMessage(Map<String, dynamic> m) {
+    final pos = (m['position'] ?? m['msg_position'] ?? m['direction'] ?? '')
+        .toString()
+        .toLowerCase();
+    if (pos == 'right' || pos == 'out' || pos == 'sent') return true;
+
+    final owner = m['onwer'] ?? m['owner'] ?? m['is_owner'];
+    if (owner == 1 || owner == true || owner.toString() == '1') return true;
+
+    final fromMe = m['from_me'] ?? m['is_my_message'];
+    if (fromMe == 1 || fromMe == true || fromMe.toString() == '1') return true;
+
+    return false;
+  }
+
+  String _tagByType(String type) {
+    final t = type.toLowerCase();
+    switch (t) {
+      case 'image':
+      case 'photo':
+        return '🖼 ${getTranslated('photo', context) ?? 'Photo'}';
+      case 'video':
+        return '🎥 ${getTranslated('video', context) ?? 'Video'}';
+      case 'voice':
+      case 'audio':
+        return '🎤 ${getTranslated('voice_message', context) ?? 'Voice message'}';
+      case 'file':
+        return '📎 ${getTranslated('attachment', context) ?? 'File'}';
+      default:
+        return '';
+    }
+  }
+
+  String _previewFromMessage(Map<String, dynamic> m) {
+    String txt =
+    (m['display_text'] ?? m['text'] ?? m['message'] ?? '').toString().trim();
+    if (txt.isEmpty) txt = pickWoWonderText(m);
+
+    final type = (m['type'] ??
+        m['message_type'] ??
+        m['media_type'] ??
+        m['file_type'] ??
+        '')
+        .toString()
+        .toLowerCase();
+
+    if (_looksLikeToken(txt)) {
+      final tag = _tagByType(type);
+      if (tag.isNotEmpty) return tag;
+      return '📎 ${getTranslated('attachment', context) ?? 'File'}';
+    }
+
+    return normalizeChatPreview(txt, context).trim();
   }
 
   @override
@@ -283,36 +410,30 @@ class _GroupChatsScreenState extends State<GroupChatsScreen> {
                     itemBuilder: (_, i) {
                       final g = groups[i];
                       _ensureLatestPreview(g, ctrl);
-                      final groupId =
-                          (g['group_id'] ?? g['id'] ?? '').toString();
-                      final groupName =
-                          (g['group_name'] ?? g['name'] ?? 'Không tên')
-                              .toString();
-                      final avatar =
-                          (g['avatar'] ?? g['image'] ?? '').toString();
-                      final time = _formatTime(
-                        _timeCache[groupId] ??
-                            g['last_time'] ??
-                            g['time'] ??
-                            g['last_message_time'],
-                      );
-                      final cachedText = _previewCache[groupId] ?? '';
-                      final preview =
-                          cachedText.isNotEmpty ? cachedText : _previewText(g);
-                      final unread = _unread(g);
+                      final groupId = (g['group_id'] ?? g['id'] ?? '').toString();
+                      final groupName = (g['group_name'] ?? g['name'] ?? 'Không tên').toString();
+                      final avatar = (g['avatar'] ?? g['image'] ?? '').toString();
+                      final backendUnread = _unread(g);
+                      final hasUnread = backendUnread > 0 || (_localUnread[groupId] ?? false);
+                      final unreadUi = hasUnread ? (backendUnread > 0 ? backendUnread : 1) : 0;
                       final muted = _isMuted(g);
                       final online = _isOnline(g);
+                      final ts = _lastTsFor(g);
+                      final timeText = _formatTimestampLabel(ts);
+                      final cachedText = _previewCache[groupId] ?? '';
+                      final preview = cachedText.isNotEmpty ? cachedText : _previewText(g);
 
                       return _GroupTile(
                         cs: cs,
                         avatarUrl: avatar,
                         title: groupName,
                         subtitle: preview,
-                        timeText: time,
-                        unread: unread,
+                        timeText: timeText,
+                        unread: unreadUi,
                         muted: muted,
                         online: online,
                         onTap: () {
+                          setState(() => _localUnread[groupId] = false);
                           Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -419,22 +540,36 @@ class _GroupTile extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Stack(
+              clipBehavior: Clip.none,
               children: [
                 CircleAvatar(
                   radius: 26,
                   backgroundColor: cs.surfaceVariant,
                   backgroundImage:
-                      avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+                  avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
                   child: avatarUrl.isEmpty
                       ? Text(
-                          initial,
-                          style: TextStyle(
-                            color: cs.onSurface,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        )
+                    initial,
+                    style: TextStyle(
+                      color: cs.onSurface,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  )
                       : null,
                 ),
+                if (hasUnread)
+                  Positioned(
+                    right: -4,
+                    top: -4,
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: const BoxDecoration(
+                        color: Colors.blue,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
               ],
             ),
             const SizedBox(width: 12),
