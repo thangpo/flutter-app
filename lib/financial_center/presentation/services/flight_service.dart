@@ -2,67 +2,108 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class FlightService {
-  static const String baseUrl = "https://api.duffel.com/air";
-  static const String apiKey =
-      "Bearer duffel_test_lkVeDLi9UBt6AvHi8BuQ4CwXBj6HEhE5idyn3nz9hrb";
+  static const String baseUrl = "https://vietnamtoure.com/api";
+  static String? bearerToken;
 
-  static Future<Map<String, dynamic>> getFlightDetail(String flightId) async {
-    final url = Uri.parse("$baseUrl/offers/$flightId");
+  static Map<String, String> _headers() {
+    final headers = <String, String>{
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+    };
+    if (bearerToken != null && bearerToken!.isNotEmpty) {
+      headers["Authorization"] = "Bearer $bearerToken";
+    }
+    return headers;
+  }
 
-    final response = await http.get(
-      url,
-      headers: {
-        "Authorization": apiKey,
-        "Accept": "application/json",
-        "Duffel-Version": "v2",
-      },
-    );
+  static Map<String, dynamic> _decodeJson(http.Response response) {
+    return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  static void _ensureOk(Map<String, dynamic> body) {
+    if (body["status"] != 1) {
+      throw Exception(body["message"] ?? "API error");
+    }
+  }
+
+  static Future<Map<String, dynamic>> getFlights({
+    Map<String, dynamic>? params,
+  }) async {
+    final qp = <String, String>{};
+
+    if (params != null) {
+      params.forEach((key, value) {
+        if (value == null) return;
+        qp[key] = value.toString();
+      });
+    }
+
+    final url = Uri.parse("$baseUrl/flights").replace(queryParameters: qp);
+    final response = await http.get(url, headers: _headers());
+    final body = _decodeJson(response);
 
     if (response.statusCode == 200) {
-      return jsonDecode(response.body) as Map<String, dynamic>;
+      _ensureOk(body);
+      return body;
     } else {
-      throw Exception("Lỗi khi lấy chi tiết chuyến bay: ${response.body}");
+      throw Exception("Lỗi khi lấy danh sách flights: ${response.statusCode} - ${response.body}");
     }
+  }
+
+  static Future<Map<String, dynamic>> getFlightDetail(String flightId) async {
+    final url = Uri.parse("$baseUrl/flights/$flightId");
+
+    final response = await http.get(url, headers: _headers());
+    final body = _decodeJson(response);
+
+    if (response.statusCode == 200) {
+      _ensureOk(body);
+      return body;
+    } else {
+      throw Exception("Lỗi khi lấy chi tiết chuyến bay: ${response.statusCode} - ${response.body}");
+    }
+  }
+
+  static Future<Map<String, dynamic>> getFlightData(String flightId) async {
+    final url = Uri.parse("$baseUrl/flights/$flightId/data");
+
+    final response = await http.get(url, headers: _headers());
+    final body = _decodeJson(response);
+
+    if (response.statusCode == 200) {
+      _ensureOk(body);
+      return body;
+    } else {
+      throw Exception("Lỗi khi lấy flight data: ${response.statusCode} - ${response.body}");
+    }
+  }
+
+  static Future<List<dynamic>> getOffers({
+    int limit = 9,
+    int page = 1,
+    Map<String, dynamic>? extraParams,
+  }) async {
+    final params = <String, dynamic>{
+      "limit": limit,
+      "page": page,
+    };
+
+    if (extraParams != null) {
+      params.addAll(extraParams);
+    }
+
+    final res = await getFlights(params: params);
+    final data = res["data"] as Map<String, dynamic>;
+    return (data["rows"] as List<dynamic>);
   }
 
   static Future<List<dynamic>> getSeatMaps(String flightId) async {
-    final url = Uri.parse("$baseUrl/seat_maps?offer_id=$flightId");
+    final res = await getFlightDetail(flightId);
+    final data = res["data"] as Map<String, dynamic>;
+    final flight = data["flight"] as Map<String, dynamic>;
+    final seats = flight["flight_seat"];
+    if (seats is List) return seats;
 
-    final response = await http.get(
-      url,
-      headers: {
-        "Authorization": apiKey,
-        "Accept": "application/json",
-        "Duffel-Version": "v2",
-      },
-    );
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      return data["data"] as List<dynamic>;
-    } else {
-      throw Exception("Lỗi khi lấy seat maps: ${response.body}");
-    }
-  }
-
-  static Future<List<dynamic>> getOffers(String offerRequestId) async {
-    final url =
-    Uri.parse("$baseUrl/offers?offer_request_id=$offerRequestId");
-
-    final response = await http.get(
-      url,
-      headers: {
-        "Authorization": apiKey,
-        "Accept": "application/json",
-        "Duffel-Version": "v2",
-      },
-    );
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      return data["data"] as List<dynamic>;
-    } else {
-      throw Exception("Lỗi khi lấy offers: ${response.body}");
-    }
+    return <dynamic>[];
   }
 }
