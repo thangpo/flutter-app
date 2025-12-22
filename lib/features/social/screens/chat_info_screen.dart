@@ -1,12 +1,10 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/chat_media_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/controllers/call_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/push/callkit_service.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/call_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/call/zego_call_service.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_chat_repository.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_screen.dart';
 
@@ -26,29 +24,30 @@ class ChatInfoScreen extends StatelessWidget {
 
   // ==== LOGIC GỌI THOẠI / VIDEO – Y NHƯ CHAT SCREEN ====
   Future<void> _startCall(BuildContext context, String mediaType) async {
-    final call = context.read<CallController>();
     final repo = SocialChatRepository();
 
     try {
-      if (!call.ready) {
-        await call.init();
+      final mic = await Permission.microphone.request();
+      if (!mic.isGranted) throw 'Cần quyền Micro để thực hiện cuộc gọi';
+
+      final isVideo = mediaType == 'video';
+      if (isVideo) {
+        final cam = await Permission.camera.request();
+        if (!cam.isGranted) throw 'Cần quyền Camera để gọi video';
       }
 
-      final calleeId = int.tryParse(peerId) ?? 0;
-      if (calleeId <= 0) {
-        throw 'peerId không hợp lệ';
-      }
-
-      final callId = await call.startCall(
-        calleeId: calleeId,
-        mediaType: mediaType,
+      final callId = ZegoCallService.I.newOneOnOneCallId(peerId);
+      final ok = await ZegoCallService.I.startOneOnOne(
+        peerId: peerId,
+        peerName: peerName,
+        isVideoCall: isVideo,
+        callID: callId,
       );
-      // Caller tự đánh dấu call_id đã xử lý để không nhận lại CallKit
-      CallkitService.I.markServerCallHandled(callId);
+      if (!ok) throw 'Không gửi được lời mời gọi';
 
       final payload = {
-        'type': 'call_invite',
-        'call_id': callId,
+        'type': 'zego_call_log',
+        'call_id': callId, // string
         'media': mediaType,
         'ts': DateTime.now().millisecondsSinceEpoch ~/ 1000,
       };
@@ -57,19 +56,6 @@ class ChatInfoScreen extends StatelessWidget {
         token: accessToken,
         peerUserId: peerId,
         text: jsonEncode(payload),
-      );
-
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => CallScreen(
-            isCaller: true,
-            callId: callId,
-            mediaType: mediaType,
-            peerName: peerName,
-            peerAvatar: peerAvatar,
-          ),
-        ),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -148,39 +134,33 @@ class ChatInfoScreen extends StatelessWidget {
           const SizedBox(height: 24),
 
           // ========== HÀNG NÚT NHANH ==========
-          Consumer<CallController>(
-            builder: (ctx, call, _) {
-              final enabled = call.ready;
-
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _roundButton(
-                    icon: Icons.call,
-                    text: "Gọi thoại",
-                    onTap: enabled ? () => _startCall(context, 'audio') : null,
-                  ),
-                  _roundButton(
-                    icon: Icons.videocam,
-                    text: "Gọi video",
-                    onTap: enabled ? () => _startCall(context, 'video') : null,
-                  ),
-                  _roundButton(
-                    icon: Icons.person,
-                    text: "Trang cá nhân",
-                    onTap: () {
-                      // 👉 Mở trang cá nhân của người này
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ProfileScreen(targetUserId: peerId),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              );
-            },
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _roundButton(
+                icon: Icons.call,
+                text: "Gọi thoại",
+                onTap: () => _startCall(context, 'audio'),
+              ),
+              _roundButton(
+                icon: Icons.videocam,
+                text: "Gọi video",
+                onTap: () => _startCall(context, 'video'),
+              ),
+              _roundButton(
+                icon: Icons.person,
+                text: "Trang cá nhân",
+                onTap: () {
+                  // 👉 Mở trang cá nhân của người này
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ProfileScreen(targetUserId: peerId),
+                    ),
+                  );
+                },
+              ),
+            ],
           ),
 
           const SizedBox(height: 24),

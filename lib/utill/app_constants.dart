@@ -19,6 +19,7 @@ class AppConstants {
       'f6e69c898ddd643154c9bd4b152555842e26a868-d195c100005dddb9f1a30a67a5ae42d4-19845955';
   static const String socialApiUpdateFcmTokenUri=
       'api/update_fcm_token';
+  static const String socialZegoDebugLogUri = '/api/zego_debug_log';
   static const String socialAuthUri = '/api/auth';
   static const String socialCreateAccountUri = '/api/create-account';
   static const String socialDeleteAccessTokenUri = '/api/delete-access-token';
@@ -45,7 +46,11 @@ class AppConstants {
   static const String socialCommentsUri = '/api/comments';
   static const String socialLiveUri = '/api/live';
   static const String socialGenerateAgoraTokenUri = '/api/generate_agora_token';
+  static const String socialGenerateZegoTokenUri = '/api/zego_token';
   static const String socialAgoraAppId = '554e80e2bcfe401cbde32aaf13d48ce5';
+  static const int socialZegoAppId = 1649787820; // AppID Zego cho Prebuilt Call
+  // Resource ID offline push (ZEGOCLOUD console) cho Call Kit
+  static const String socialZegoResourceId = 'voip_callkit';
   static const String socialCreateGroupUri = '/api/create-group';
   static const String socialGetPostColorsUri = '/api/get-post-colors';
   static const String socialGetPostColorByIdUri = '/api/get-post-color';
@@ -320,6 +325,10 @@ class AppConstants {
   static const String userLoginToken = 'user_login_token';
   static const String socialAccessToken = 'social_access_token';
   static const String socialUserId = 'social_user_id';
+  static const String socialUserAvatar = 'social_user_avatar';
+  static const String socialUserName = 'social_user_name';
+  static const String zegoToken = 'zego_token';
+  static const String zegoTokenExpireAt = 'zego_token_expire_at'; // epoch seconds
 
   static const String guestId = 'guestId';
   static const String user = 'user';

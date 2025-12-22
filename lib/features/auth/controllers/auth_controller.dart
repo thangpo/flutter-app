@@ -36,7 +36,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 // import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/firebase_token_updater.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/utils/pushkit_token_sync.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/call/zego_call_service.dart';
 
 class AuthController with ChangeNotifier {
   final AuthServiceInterface authServiceInterface;
@@ -312,6 +312,14 @@ class AuthController with ChangeNotifier {
       try {
         await Provider.of<SocialController>(Get.context!, listen: false)
             .loadCurrentUser(force: true);
+        await _cacheSocialProfileFromController();
+      } catch (_) {}
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final display =
+            prefs.getString(AppConstants.socialUserName) ?? socialUserId;
+        await ZegoCallService.I
+            .initIfPossible(userId: socialUserId, userName: display);
       } catch (_) {}
       // 🔴 CẬP NHẬT FCM TOKEN CHO USER SOCIAL VỪA ĐĂNG KÝ
       try {
@@ -371,7 +379,7 @@ class AuthController with ChangeNotifier {
         if (socialToken != null && socialToken.isNotEmpty) {
           // Thu hồi pushkit_token trên server (iOS) TRƯỚC khi gọi socialLogout
           try {
-            await PushkitTokenSync.clear(accessTokenOverride: socialToken);
+            // PushKit token sync removed (CallKit legacy).
           } catch (e) {
             debugPrint('[PUSHKIT] clear on logout failed: $e');
           }
@@ -410,6 +418,12 @@ class AuthController with ChangeNotifier {
       } finally {
         await authServiceInterface.clearSocialAccessToken();
         await authServiceInterface.clearSocialUserId();
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(AppConstants.socialUserName);
+        await prefs.remove(AppConstants.socialUserAvatar);
+        try {
+          await ZegoCallService.I.uninit();
+        } catch (_) {}
         try {
           Provider.of<SocialController>(Get.context!, listen: false)
               .clearAuthState();
@@ -577,6 +591,14 @@ class AuthController with ChangeNotifier {
       try {
         await Provider.of<SocialController>(Get.context!, listen: false)
             .loadCurrentUser(force: true);
+        await _cacheSocialProfileFromController();
+      } catch (_) {}
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final display =
+            prefs.getString(AppConstants.socialUserName) ?? socialUserId;
+        await ZegoCallService.I
+            .initIfPossible(userId: socialUserId, userName: display);
       } catch (_) {}
       // 🔴 CẬP NHẬT FCM TOKEN CHO USER SOCIAL VỪA LOGIN
       try {
@@ -586,7 +608,7 @@ class AuthController with ChangeNotifier {
       }
       // 🔔 Đồng bộ PushKit token (iOS)
       try {
-        await PushkitTokenSync.sync();
+        // PushKit token sync removed (CallKit legacy).
       } catch (e) {
         debugPrint('[PUSHKIT] sync after social login failed: $e');
       }
@@ -1469,6 +1491,24 @@ class AuthController with ChangeNotifier {
   void toggleRememberMe() {
     _isActiveRememberMe = !_isActiveRememberMe;
     notifyListeners();
+  }
+
+  Future<void> _cacheSocialProfileFromController() async {
+    try {
+      final sc = Provider.of<SocialController>(Get.context!, listen: false);
+      final user = sc.currentUser;
+      if (user == null) return;
+      final prefs = await SharedPreferences.getInstance();
+      final display =
+          (user.displayName ?? user.userName ?? user.id).toString().trim();
+      await prefs.setString(
+        AppConstants.socialUserName,
+        display.isNotEmpty ? display : user.id,
+      );
+      if (user.avatarUrl != null && user.avatarUrl!.isNotEmpty) {
+        await prefs.setString(AppConstants.socialUserAvatar, user.avatarUrl!);
+      }
+    } catch (_) {}
   }
 
   void clearVerificationMessage() {

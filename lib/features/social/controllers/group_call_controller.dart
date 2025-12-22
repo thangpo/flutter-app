@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/webrtc_group_signaling_repository.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/push/callkit_service.dart';
 
 enum CallStatus { idle, ringing, ongoing, ended }
 
@@ -413,7 +412,7 @@ class GroupCallController extends ChangeNotifier {
   void _markEndedForCall(int callId, {String? groupId}) {
     final gid = groupId ?? currentGroupId;
     if (gid == null || gid.isEmpty) return;
-    CallkitService.I.endGroupCall(gid, callId);
+    // Legacy CallKit removed.
   }
 
   @override

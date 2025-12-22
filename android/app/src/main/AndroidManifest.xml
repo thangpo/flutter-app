@@ -36,10 +36,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
-<!--    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />-->
-    <uses-permission
-        android:name="android.permission.USE_FULL_SCREEN_INTENT"
-        tools:node="remove" />
 
     <!-- Android 13+: phải xin quyền thông báo runtime -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -88,7 +84,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:theme="@style/LaunchTheme"
-            android:launchMode="singleTop"
+            android:launchMode="singleInstance"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize"
@@ -163,14 +159,6 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="vnshop247_channel" />
-
-        <!--
-          GỠ BỎ Khai báo sai dịch vụ FCM:
-          Bạn đang khai báo trực tiếp com.google.firebase.messaging.FirebaseMessagingService (lớp base/abstract).
-          Nếu bạn có subclass riêng (VD: .MyFirebaseMessagingService) thì KHAI BÁO subclass đó thay vì lớp base.
-          Vì hiện mã nguồn bạn không gửi subclass, mình xoá service này để tránh crash/ANR.
-        -->
-        <!-- (đã xoá block <service android:name="com.google.firebase.messaging.FirebaseMessagingService" ... />) -->
 
     </application>
 

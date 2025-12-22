@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
@@ -13,22 +13,18 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_chat_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/group_chat_message_bubble.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/add_group_members_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_call_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/group_call_screen.dart';
-import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_chat_repository.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/push/callkit_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/call/zego_call_service.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
+import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
-
-
 
 class GroupChatScreen extends StatefulWidget {
   final String groupId;
@@ -63,6 +59,12 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   String? _avatarOverridePath;
   bool _launchingCall = false;
   bool _ringingDialogOpen = false;
+
+  String? _myUserId;
+  String? _myUserName;
+  String? _myAvatar;
+
+  // NEW: reply preview
   Map<String, dynamic>? _replyTo;
   List<_PendingAttachment> _pendingAttachments = [];
   final FlutterSoundPlayer _draftPlayer = FlutterSoundPlayer();
@@ -85,15 +87,30 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     return _ComposerMode.idle;
   }
 
+  Future<void> _loadSelf() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _myUserId = prefs.getString(AppConstants.socialUserId);
+      _myUserName =
+          prefs.getString(AppConstants.socialUserName) ?? _myUserId ?? '';
+      _myAvatar = prefs.getString(AppConstants.socialUserAvatar);
+    });
+  }
+
+  String _myName() => _myUserName ?? _myUserId ?? '';
+  String? _myAvatarUrl() => _myAvatar;
+
   @override
   void initState() {
     super.initState();
+    _loadSelf();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      _bindIncomingWatcher();
       await _initRecorder();
       await _draftPlayer.openPlayer();
-      await _draftPlayer.setSubscriptionDuration(const Duration(milliseconds: 200));
+      await _draftPlayer
+          .setSubscriptionDuration(const Duration(milliseconds: 200));
       _draftSub = _draftPlayer.onProgress?.listen((e) {
         if (!mounted) return;
         setState(() {
@@ -131,72 +148,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     });
   }
 
-  void _bindIncomingWatcher() {
-    final gcc = context.read<GroupCallController>();
-    final gchat = context.read<GroupChatController>();
-    gcc.stopWatchingInbox();
-    gcc.watchGroupInbox(widget.groupId, autoOpen: false);
-    gcc.onIncoming = (call) async {
-      if (!mounted) return;
-      if (_ringingDialogOpen) return;
-      final callId = (call['call_id'] ?? call['id']) is int
-          ? (call['call_id'] ?? call['id']) as int
-          : int.tryParse('${call['call_id'] ?? call['id'] ?? 0}') ?? 0;
-      final media = (call['media'] ?? 'audio').toString();
-      final joined = call['joined'] == true;
-      final meId = int.tryParse('${gchat.currentUserId}') ?? 0;
-      final creatorId = int.tryParse('${call['creator_id'] ?? 0}') ?? 0;
-      if (joined ||
-          creatorId == meId ||
-          (gcc.currentCallId != null && gcc.currentCallId == callId)) {
-        return;
-      }
-
-      _ringingDialogOpen = true;
-      final gName = _finalTitle(context.read<GroupChatController>());
-      if (Platform.isIOS) {
-        await CallkitService.I.showIncomingGroupCall({
-          'call_id': callId,
-          'group_id': widget.groupId,
-          'group_name': gName,
-          'media': media,
-        });
-        _ringingDialogOpen = false;
-        return;
-      }
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          fullscreenDialog: true,
-          builder: (ctx) => _GroupIncomingCallPage(
-            groupId: widget.groupId,
-            groupName: gName,
-            media: media,
-            callId: callId,
-            onDecline: () async {
-              try {
-                await gcc.leaveRoom(callId);
-              } catch (_) {}
-              if (ctx.mounted) Navigator.of(ctx).pop();
-            },
-            onAccept: () {
-              Navigator.of(ctx).pushReplacement(
-                MaterialPageRoute(
-                  builder: (_) => GroupCallScreen(
-                    groupId: widget.groupId,
-                    mediaType: media,
-                    callId: callId,
-                    groupName: gName,
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      );
-      _ringingDialogOpen = false;
-    };
-  }
-
   void _startRealtimePolling() {
     _pollTimer?.cancel();
     _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
@@ -224,7 +175,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   void didUpdateWidget(covariant GroupChatScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.groupId != widget.groupId) {
-      _bindIncomingWatcher();
       _startRealtimePolling();
       setState(() {
         _replyTo = null;
@@ -234,10 +184,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
   @override
   void dispose() {
-    final gcc = context.read<GroupCallController>();
-    gcc.stopWatchingInbox();
-    gcc.onIncoming = null;
-
     _stopRealtimePolling();
 
     _recorder.closeRecorder();
@@ -433,7 +379,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
     List<XFile> picked = [];
     try {
-      picked = await _picker.pickMultipleMedia(requestFullMetadata: false) ?? [];
+      picked =
+          await _picker.pickMultipleMedia(requestFullMetadata: false) ?? [];
     } catch (_) {
       // fallback nếu image_picker version cũ
       final imgs = await _picker.pickMultiImage(imageQuality: 85);
@@ -445,16 +392,25 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     setState(() {
       _pendingAttachments.addAll(
         picked.map((x) => _PendingAttachment(
-          path: x.path,
-          type: _detectAttachmentType(x.path),
-        )),
+              path: x.path,
+              type: _detectAttachmentType(x.path),
+            )),
       );
     });
   }
 
   _AttachmentType _detectAttachmentType(String path) {
     final ext = p.extension(path).toLowerCase();
-    const img = {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.heic', '.heif'};
+    const img = {
+      '.png',
+      '.jpg',
+      '.jpeg',
+      '.webp',
+      '.gif',
+      '.bmp',
+      '.heic',
+      '.heif'
+    };
     const vid = {'.mp4', '.mov', '.m4v', '.mkv', '.avi', '.webm', '.wmv'};
     if (img.contains(ext)) return _AttachmentType.image;
     if (vid.contains(ext)) return _AttachmentType.video;
@@ -605,8 +561,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     );
   }
 
-  Future<List<int>> _collectInvitees() async {
-    final ids = <int>{};
+  // Thu thập danh sách thành viên nhóm (trừ mình) để mời vào cuộc gọi
+  Future<List<_MemberProfile>> _collectInvitees() async {
+    final membersOut = <_MemberProfile>[];
     try {
       final gc = context.read<GroupChatController>();
 
@@ -621,15 +578,28 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       final meStr = gc.currentUserId?.toString();
       final meId = meStr != null ? int.tryParse(meStr) : null;
 
-      // 1) Lấy từ danh sách thành viên
-      for (final m in members) {
+      void addMember(Map<String, dynamic> m) {
         final v = m['user_id'] ?? m['id'] ?? m['uid'];
         int? id;
         if (v is int) id = v;
         if (v is String) id = int.tryParse(v);
-        if (id != null && (meId == null || id != meId)) {
-          ids.add(id);
-        }
+        if (id == null || (meId != null && id == meId)) return;
+        final name = (m['name'] ??
+                m['username'] ??
+                m['user_name'] ??
+                m['display_name'])
+            ?.toString();
+        final avatar = (m['avatar_full'] ?? m['avatar'] ?? '').toString();
+        membersOut.add(_MemberProfile(
+          id: id.toString(),
+          name: (name == null || name.isEmpty) ? id.toString() : name,
+          avatar: avatar,
+        ));
+      }
+
+      // 1) Lấy từ danh sách thành viên
+      for (final m in members) {
+        addMember(m);
       }
 
       // 2) UNION với người từng nhắn trong nhóm
@@ -639,21 +609,33 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         int? id;
         if (v is int) id = v;
         if (v is String) id = int.tryParse(v);
-        if (id != null && (meId == null || id != meId)) {
-          ids.add(id);
-        }
+        if (id == null || (meId != null && id == meId)) continue;
+        membersOut.add(_MemberProfile(
+          id: id.toString(),
+          name: id.toString(),
+          avatar: '',
+        ));
       }
 
-      if (ids.isEmpty) {
+      if (membersOut.isEmpty) {
         debugPrint('⚠️ _collectInvitees: không tìm thấy ai để mời.');
+      }
+      // Cache profile cho từng thành viên (để Zego hiển thị tên/ảnh)
+      for (final m in membersOut) {
+        ZegoCallService.I.cacheProfile(m.id, name: m.name, avatar: m.avatar);
       }
     } catch (e) {
       debugPrint('⚠️ _collectInvitees error: $e');
     }
 
-    final list = ids.toList()..sort();
-    debugPrint('[GROUP CALL] Invitees (final) => $list');
-    return list;
+    // unique by id
+    final seen = <String>{};
+    final dedup = <_MemberProfile>[];
+    for (final m in membersOut) {
+      if (seen.add(m.id)) dedup.add(m);
+    }
+    debugPrint('[GROUP CALL] Invitees (final) => ${dedup.map((e) => e.id).toList()}');
+    return dedup;
   }
 
   Future<void> _startGroupCall({required bool isVideo}) async {
@@ -684,24 +666,45 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         }
       }
 
-      // ✅ Thu thập invitees và truyền sang GroupCallScreen
       final invitees = await _collectInvitees();
+      final inviteeUsers = invitees
+          .map((m) => ZegoCallUser(m.id, m.name ?? m.id))
+          .toList();
 
-      // 🔇 Tắt watcher để caller KHÔNG thấy dialog "tham gia"
-      final gcc = context.read<GroupCallController>();
-      gcc.stopWatchingInbox();
+      final groupName = _finalTitle(context.read<GroupChatController>());
+      final callId = ZegoCallService.I.newGroupCallId(widget.groupId);
+      final meta = jsonEncode({
+        'type': 'zego_call_log',
+        'media': isVideo ? 'video' : 'audio',
+        'group_id': widget.groupId,
+        'group_name': groupName,
+        'call_id': callId,
+        'ts': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      });
+      final hiddenMeta = '\u2063$meta'; // zero-width prefix để push không lộ JSON
+      final friendlyText =
+          'Cuộc gọi ${isVideo ? 'video' : 'thoại'} nhóm ${groupName.isNotEmpty ? groupName : ''}'.trim();
 
-      if (!mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => GroupCallScreen(
-            groupId: widget.groupId,
-            mediaType: isVideo ? 'video' : 'audio',
-            invitees: invitees, // server sẽ bắn FCM cho thành viên
-            groupName: _finalTitle(context.read<GroupChatController>()),
-          ),
-        ),
+      final ok = await ZegoCallService.I.startGroup(
+        invitees: inviteeUsers,
+        isVideoCall: isVideo,
+        groupId: widget.groupId,
+        callID: callId,
+        customData: {
+          'group_id': widget.groupId,
+          'group_name': groupName,
+          'group_avatar': widget.groupAvatar ?? '',
+        },
+        callerName: _myName(),
+        callerAvatar: _myAvatarUrl(),
+        groupName: groupName,
+        groupAvatar: widget.groupAvatar,
       );
+      if (!ok) throw 'Không gửi được lời mời gọi nhóm';
+
+      await context
+          .read<GroupChatController>()
+          .sendMessage(widget.groupId, '$friendlyText$hiddenMeta');
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -709,8 +712,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         );
       }
     } finally {
-      // 🔔 Bật lại watcher khi quay về màn chat
-      if (mounted) _bindIncomingWatcher();
       _launchingCall = false;
     }
   }
@@ -873,7 +874,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         return;
       }
 
-     
       final uri = Uri.parse(
         '${AppConstants.socialBaseUrl}/api/group_chat?access_token=$token',
       );
@@ -960,12 +960,12 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     setState(() => _sending = true);
     try {
       await context.read<GroupChatController>().sendMessage(
-        widget.groupId,
-        '',
-        file: File(_voiceDraftPath!),
-        type: 'voice',
-        replyTo: _replyTo,
-      );
+            widget.groupId,
+            '',
+            file: File(_voiceDraftPath!),
+            type: 'voice',
+            replyTo: _replyTo,
+          );
 
       await _draftPlayer.stopPlayer();
 
@@ -992,7 +992,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   }
 
   Widget _buildVoiceDraftPreview() {
-    final dur = _voiceDraftDuration > Duration.zero ? _voiceDraftDuration : _draftPos;
+    final dur =
+        _voiceDraftDuration > Duration.zero ? _voiceDraftDuration : _draftPos;
     final maxMs = dur.inMilliseconds > 0 ? dur.inMilliseconds.toDouble() : 1.0;
     final valMs = _draftPos.inMilliseconds.clamp(0, maxMs.toInt()).toDouble();
 
@@ -1005,7 +1006,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       child: Row(
         children: [
           IconButton(
-            icon: Icon(_draftPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled),
+            icon: Icon(_draftPlaying
+                ? Icons.pause_circle_filled
+                : Icons.play_circle_filled),
             onPressed: _toggleDraftPlay,
           ),
           Expanded(
@@ -1276,7 +1279,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                       },
                       itemBuilder: (ctx) {
                         final items = <PopupMenuEntry<String>>[
-                          
                           // Nếu là chủ nhóm thì hiện "Đổi ảnh" và "Đổi tên", nếu không thì ẩn
                           if (isOwner) ...[
                             PopupMenuItem(
@@ -1542,14 +1544,18 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                 top: 4,
                 right: 4,
                 child: GestureDetector(
-                  onTap: _sending ? null : () => setState(() => _pendingAttachments.removeAt(index)),
+                  onTap: _sending
+                      ? null
+                      : () =>
+                          setState(() => _pendingAttachments.removeAt(index)),
                   child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: const BoxDecoration(
                       color: Colors.black54,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.close, size: 16, color: Colors.white),
+                    child:
+                        const Icon(Icons.close, size: 16, color: Colors.white),
                   ),
                 ),
               ),
@@ -1573,7 +1579,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           fit: StackFit.expand,
           children: [
             Container(color: Colors.black12),
-            const Center(child: Icon(Icons.play_circle_fill, size: 34, color: Colors.white70)),
+            const Center(
+                child: Icon(Icons.play_circle_fill,
+                    size: 34, color: Colors.white70)),
           ],
         );
       default:
@@ -2539,165 +2547,176 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                                 },
                               )
                             : ListView.builder(
-                          controller: _scroll,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                          itemCount: items.length,
-                          itemBuilder: (ctx, i) {
-                            final msg = items[i];
-                            final isMe = ctrl.isMyMessage(msg);
-                            final isSystem = msg['is_system'] == true;
+                                controller: _scroll,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                itemCount: items.length,
+                                itemBuilder: (ctx, i) {
+                                  final msg = items[i];
+                                  final isMe = ctrl.isMyMessage(msg);
+                                  final isSystem = msg['is_system'] == true;
 
-                            if (isSystem) {
-                              return Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 6),
-                                child: Center(
-                                  child: ChatMessageBubble(
-                                    key: ValueKey(
-                                        '${msg['id'] ?? msg.hashCode}'),
-                                    message: msg,
-                                    isMe: false,
-                                  ),
-                                ),
-                              );
-                            }
-
-                            final userData =
-                                (msg['user_data'] ?? {}) as Map? ?? {};
-                            final avatarUrl =
-                                '${userData['avatar'] ?? ''}'.trim();
-
-                            final hasReply = _hasReplyTag(msg);
-                            final replyMsg = hasReply
-                                ? _findRepliedMessage(msg, items)
-                                : null;
-
-                            if (!isMe) {
-                              return Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 4.0),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  mainAxisAlignment: MainAxisAlignment.start,
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 16,
-                                      backgroundImage: avatarUrl.isNotEmpty
-                                          ? NetworkImage(avatarUrl)
-                                          : null,
-                                      child: avatarUrl.isEmpty
-                                          ? const Icon(Icons.person, size: 18)
-                                          : null,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Flexible(
-                                      child: ConstrainedBox(
-                                        constraints: BoxConstraints(
-                                          maxWidth: MediaQuery.of(context)
-                                                  .size
-                                                  .width *
-                                              0.78,
-                                        ),
-                                        child: _SwipeReplyWrapper(
+                                  if (isSystem) {
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 6),
+                                      child: Center(
+                                        child: ChatMessageBubble(
+                                          key: ValueKey(
+                                              '${msg['id'] ?? msg.hashCode}'),
+                                          message: msg,
                                           isMe: false,
-                                          onReply: () {
-                                            setState(() {
-                                              _replyTo = msg;
-                                            });
-                                          },
-                                          child: GestureDetector(
-                                            behavior: HitTestBehavior.opaque,
-                                            onLongPress: () =>
-                                                _onMessageLongPress(msg, isMe),
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                if (hasReply)
-                                                  _buildReplyHeader(
-                                                    message: msg,
-                                                    replyMsg: replyMsg,
-                                                    isMe: false,
+                                        ),
+                                      ),
+                                    );
+                                  }
+
+                                  final userData =
+                                      (msg['user_data'] ?? {}) as Map? ?? {};
+                                  final avatarUrl =
+                                      '${userData['avatar'] ?? ''}'.trim();
+
+                                  final hasReply = _hasReplyTag(msg);
+                                  final replyMsg = hasReply
+                                      ? _findRepliedMessage(msg, items)
+                                      : null;
+
+                                  if (!isMe) {
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 4.0),
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.end,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.start,
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 16,
+                                            backgroundImage:
+                                                avatarUrl.isNotEmpty
+                                                    ? NetworkImage(avatarUrl)
+                                                    : null,
+                                            child: avatarUrl.isEmpty
+                                                ? const Icon(Icons.person,
+                                                    size: 18)
+                                                : null,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Flexible(
+                                            child: ConstrainedBox(
+                                              constraints: BoxConstraints(
+                                                maxWidth: MediaQuery.of(context)
+                                                        .size
+                                                        .width *
+                                                    0.78,
+                                              ),
+                                              child: _SwipeReplyWrapper(
+                                                isMe: false,
+                                                onReply: () {
+                                                  setState(() {
+                                                    _replyTo = msg;
+                                                  });
+                                                },
+                                                child: GestureDetector(
+                                                  behavior:
+                                                      HitTestBehavior.opaque,
+                                                  onLongPress: () =>
+                                                      _onMessageLongPress(
+                                                          msg, isMe),
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      if (hasReply)
+                                                        _buildReplyHeader(
+                                                          message: msg,
+                                                          replyMsg: replyMsg,
+                                                          isMe: false,
+                                                        ),
+                                                      if (replyMsg != null)
+                                                        _buildReplyQuote(
+                                                          replyMsg,
+                                                          isMe: false,
+                                                        ),
+                                                      ChatMessageBubble(
+                                                        key: ValueKey(
+                                                            '${msg['id'] ?? msg.hashCode}'),
+                                                        message: msg,
+                                                        isMe: false,
+                                                      ),
+                                                    ],
                                                   ),
-                                                if (replyMsg != null)
-                                                  _buildReplyQuote(
-                                                    replyMsg,
-                                                    isMe: false,
-                                                  ),
-                                                ChatMessageBubble(
-                                                  key: ValueKey(
-                                                      '${msg['id'] ?? msg.hashCode}'),
-                                                  message: msg,
-                                                  isMe: false,
                                                 ),
-                                              ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }
+
+                                  // tin nhắn của chính mình
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 4.0),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.end,
+                                      children: [
+                                        Flexible(
+                                          child: ConstrainedBox(
+                                            constraints: BoxConstraints(
+                                              maxWidth: MediaQuery.of(context)
+                                                      .size
+                                                      .width *
+                                                  0.78,
+                                            ),
+                                            child: _SwipeReplyWrapper(
+                                              isMe: true,
+                                              onReply: () {
+                                                setState(() {
+                                                  _replyTo = msg;
+                                                });
+                                              },
+                                              child: GestureDetector(
+                                                behavior:
+                                                    HitTestBehavior.opaque,
+                                                onLongPress: () =>
+                                                    _onMessageLongPress(
+                                                        msg, isMe),
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.end,
+                                                  children: [
+                                                    if (hasReply)
+                                                      _buildReplyHeader(
+                                                        message: msg,
+                                                        replyMsg: replyMsg,
+                                                        isMe: true,
+                                                      ),
+                                                    if (replyMsg != null)
+                                                      _buildReplyQuote(
+                                                        replyMsg,
+                                                        isMe: true,
+                                                      ),
+                                                    ChatMessageBubble(
+                                                      key: ValueKey(
+                                                          '${msg['id'] ?? msg.hashCode}'),
+                                                      message: msg,
+                                                      isMe: true,
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ),
-                                      ),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                              );
-                            }
-
-                            return Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 4.0),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  Flexible(
-                                    child: ConstrainedBox(
-                                      constraints: BoxConstraints(
-                                        maxWidth:
-                                            MediaQuery.of(context).size.width *
-                                                0.78,
-                                      ),
-                                      child: _SwipeReplyWrapper(
-                                        isMe: true,
-                                        onReply: () {
-                                          setState(() {
-                                            _replyTo = msg;
-                                          });
-                                        },
-                                        child: GestureDetector(
-                                          behavior: HitTestBehavior.opaque,
-                                          onLongPress: () =>
-                                              _onMessageLongPress(msg, isMe),
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.end,
-                                            children: [
-                                              if (hasReply)
-                                                _buildReplyHeader(
-                                                  message: msg,
-                                                  replyMsg: replyMsg,
-                                                  isMe: true,
-                                                ),
-                                              if (replyMsg != null)
-                                                _buildReplyQuote(
-                                                  replyMsg,
-                                                  isMe: true,
-                                                ),
-                                              ChatMessageBubble(
-                                                key: ValueKey(
-                                                    '${msg['id'] ?? msg.hashCode}'),
-                                                message: msg,
-                                                isMe: true,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                                  );
+                                },
                               ),
-                            );
-                          },
-                        ),
                       ),
               ),
 
@@ -2849,12 +2868,7 @@ class _SwipeReplyWrapperState extends State<_SwipeReplyWrapper> {
       ),
     );
   }
-
-
-
-  
 }
-
 
 class _GroupMediaTab extends StatefulWidget {
   final String groupId;
@@ -2933,7 +2947,6 @@ class _GroupMediaTabState extends State<_GroupMediaTab> {
           result.add(m);
         }
       }
-
 
       if (!mounted) return;
       setState(() {
@@ -3375,7 +3388,6 @@ class _EmptyActionButton extends StatelessWidget {
   }
 }
 
-
 class _FullScreenImagePage extends StatelessWidget {
   final String url;
 
@@ -3501,149 +3513,6 @@ class _FullScreenVideoPageState extends State<_FullScreenVideoPage> {
   }
 }
 
-/// Fullscreen incoming UI cho cuộc gọi nhóm (nhận / từ chối)
-class _GroupIncomingCallPage extends StatelessWidget {
-  final String groupId;
-  final String groupName;
-  final String media;
-  final int callId;
-  final VoidCallback onAccept;
-  final Future<void> Function() onDecline;
-
-  const _GroupIncomingCallPage({
-    required this.groupId,
-    required this.groupName,
-    required this.media,
-    required this.callId,
-    required this.onAccept,
-    required this.onDecline,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isVideo = media == 'video';
-    return Scaffold(
-      backgroundColor: Colors.black87,
-      body: SafeArea(
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                children: [
-                  const SizedBox(height: 12),
-                  Text(
-                    isVideo ? 'Cuộc gọi nhóm video' : 'Cuộc gọi nhóm thoại',
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    groupName.isNotEmpty ? groupName : 'Nhóm $groupId',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Call ID: $callId',
-                    style: const TextStyle(color: Colors.white38, fontSize: 12),
-                  ),
-                ],
-              ),
-              Icon(
-                isVideo ? Icons.videocam : Icons.call,
-                size: 96,
-                color: isVideo ? Colors.lightBlueAccent : Colors.greenAccent,
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _IncomingButton(
-                    label: 'Từ chối',
-                    color: Colors.redAccent,
-                    icon: Icons.call_end,
-                    onTap: () async {
-                      await onDecline();
-                    },
-                  ),
-                  _IncomingButton(
-                    label: 'Nghe',
-                    color: Colors.green,
-                    icon: isVideo ? Icons.videocam : Icons.call,
-                    onTap: onAccept,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _IncomingButton extends StatelessWidget {
-  final String label;
-  final Color color;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _IncomingButton({
-    required this.label,
-    required this.color,
-    required this.icon,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(36),
-          child: Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: color.withOpacity(0.4),
-                  blurRadius: 16,
-                  spreadRadius: 2,
-                ),
-              ],
-            ),
-            child: Icon(icon, color: Colors.white, size: 30),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          label,
-          style: const TextStyle(color: Colors.white, fontSize: 14),
-        ),
-      ],
-    );
-  }
-}
 enum _AttachmentType { image, video, file }
 
 class _PendingAttachment {
@@ -3653,6 +3522,12 @@ class _PendingAttachment {
   const _PendingAttachment({required this.path, required this.type});
 }
 
+class _MemberProfile {
+  final String id;
+  final String? name;
+  final String? avatar;
+  _MemberProfile({required this.id, this.name, this.avatar});
+}
 class _MicPressButton extends StatelessWidget {
   final Color color;
   final bool disabled;

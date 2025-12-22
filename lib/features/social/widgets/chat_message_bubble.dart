@@ -232,8 +232,12 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
 
   @override
   Widget build(BuildContext context) {
-    // 🔔 Nếu nội dung là JSON lời mời gọi 1-1 => render bubble đặc biệt
+    // 🔔 Nếu nội dung là JSON log cuộc gọi => render bubble đặc biệt
     final plain = _getPlainTextForInvite();
+    final zegoLog = plain != null ? _tryParseZegoCallLog(plain) : null;
+    if (zegoLog != null) {
+      return _buildZegoCallLogBubble(zegoLog);
+    }
     final invite = plain != null ? CallInvite.tryParse(plain) : null;
 
     if (invite != null) {
@@ -278,7 +282,7 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
               ),
             ),
 
-              // ====== VIDEO ======
+          // ====== VIDEO ======
           if (_isVideo && _mediaUrl.isNotEmpty)
             SizedBox(
               width: maxBubbleWidth,
@@ -533,8 +537,8 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
                     onSeekPercent: !_audioInited
                         ? null
                         : (p) async {
-                            final target = Duration(
-                                seconds: (p * dur.toDouble()).toInt());
+                            final target =
+                                Duration(seconds: (p * dur.toDouble()).toInt());
                             await _audio.seek(target);
                           },
                   ),
@@ -554,6 +558,94 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
     final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
     final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$m:$s';
+  }
+
+  Map<String, dynamic>? _tryParseZegoCallLog(String raw) {
+    var s = raw.replaceAll(RegExp(r'[\u2063\u200b\u200c\u200d]'), '').trim();
+    if (s.contains('&quot;')) {
+      s = s.replaceAll('&quot;', '"').replaceAll('&amp;', '&');
+    }
+    final start = s.indexOf('{');
+    final end = s.lastIndexOf('}');
+    if (start == -1 || end <= start) return null;
+    s = s.substring(start, end + 1);
+    try {
+      final decoded = jsonDecode(s);
+      if (decoded is! Map) return null;
+      final map = decoded.map((k, v) => MapEntry(k.toString(), v));
+      if ((map['type'] ?? '').toString() != 'zego_call_log') return null;
+      final media = (map['media'] ?? '').toString().toLowerCase();
+      if (media != 'audio' && media != 'video') return null;
+      return map;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Widget _buildZegoCallLogBubble(Map<String, dynamic> log) {
+    final media = (log['media'] ?? 'audio').toString();
+    final isVideo = media == 'video';
+    final bg = widget.isMe ? const Color(0xFF2F80ED) : const Color(0xFFEFEFEF);
+    final fg = widget.isMe ? Colors.white : Colors.black87;
+
+    final groupName = (log['group_name'] ?? '').toString().trim();
+
+    final title = widget.isMe
+        ? (isVideo ? 'Bạn đã gọi video' : 'Bạn đã gọi thoại')
+        : (isVideo ? 'Cuộc gọi video' : 'Cuộc gọi thoại');
+
+    final subtitle =
+        groupName.isNotEmpty ? 'Nhóm: $groupName' : 'ZEGOCLOUD Call';
+
+    final content = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(isVideo ? Icons.videocam : Icons.call, color: fg),
+        const SizedBox(width: 10),
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: fg,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: TextStyle(color: fg.withOpacity(0.7), fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    final double maxBubbleWidth = MediaQuery.of(context).size.width * 0.66;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      child: Row(
+        mainAxisAlignment:
+            widget.isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        children: [
+          ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxBubbleWidth),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: content,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -614,8 +706,8 @@ class _WaveformSeekBar extends StatelessWidget {
     return LayoutBuilder(
       builder: (ctx, constraints) {
         final List<double> pattern = samples ?? _basePattern;
-        final double totalWidth = (_barWidth * pattern.length) +
-            _barSpacing * (pattern.length - 1);
+        final double totalWidth =
+            (_barWidth * pattern.length) + _barSpacing * (pattern.length - 1);
         final double available =
             constraints.maxWidth.isFinite ? constraints.maxWidth : totalWidth;
         final double scale = available / totalWidth;
@@ -636,8 +728,7 @@ class _WaveformSeekBar extends StatelessWidget {
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),
-              if (i != pattern.length - 1)
-                SizedBox(width: _barSpacing * scale),
+              if (i != pattern.length - 1) SizedBox(width: _barSpacing * scale),
             ],
           ],
         );

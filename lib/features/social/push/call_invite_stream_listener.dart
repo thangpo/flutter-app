@@ -17,7 +17,6 @@ import '../controllers/call_controller.dart';
 import '../controllers/group_call_controller.dart';
 import '../domain/models/call_invite.dart';
 import '../fcm/fcm_chat_handler.dart';
-import 'callkit_service.dart';
 import '../screens/group_call_screen.dart';
 
 /// Listen FCM foreground để mở UI nghe/từ chối ngay (1-1 & group).
@@ -459,27 +458,9 @@ class CallInviteForegroundListener {
     String? callerName,
     String? callerAvatar,
   }) async {
-    if (_isActiveCallOnThisDevice(inv.callId)) {
-      _log('skip_invite_active_call', {
-        'call_id': inv.callId,
-        'media': inv.mediaType,
-      });
-      return;
-    }
-
-    if (_routing) return;
-
-    _routing = true;
-    try {
-      await CallkitService.I.showIncomingCall({
-        'call_id': inv.callId,
-        'media': inv.mediaType,
-        if (callerName != null) 'caller_name': callerName,
-        if (callerAvatar != null) 'caller_avatar': callerAvatar,
-      });
-    } finally {
-      _routing = false;
-    }
+    // CallKit legacy removed; rely on Zego invitation UI (no-op here).
+    _routing = false;
+    return;
   }
 
   // =====================================================
@@ -491,14 +472,9 @@ class CallInviteForegroundListener {
     required String media,
     String? groupName,
   }) {
-    if (_routing) return;
-    _routing = true;
-    CallkitService.I.showIncomingGroupCall({
-      'call_id': callId,
-      'group_id': groupId,
-      'media': media,
-      'group_name': groupName,
-    }).whenComplete(() => _routing = false);
+    // CallKit legacy removed; rely on Zego invitation UI (no-op).
+    _routing = false;
+    return;
   }
 
   static bool _isActiveCallOnThisDevice(int callId) {

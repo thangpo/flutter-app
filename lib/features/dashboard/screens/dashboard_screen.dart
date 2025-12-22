@@ -29,6 +29,7 @@ import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screen
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_notifications_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/features/search_product/controllers/search_product_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/app_exit_guard.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/call/zego_call_service.dart';
 
 class DashBoardScreen extends StatefulWidget {
   const DashBoardScreen({super.key});
@@ -40,9 +41,11 @@ class DashBoardScreenState extends State<DashBoardScreen> {
   int _pageIndex = 1;
   late List<NavigationModel> _screens;
   final PageStorageBucket bucket = PageStorageBucket();
-  final GlobalKey<SocialFeedScreenState> _socialFeedKey = GlobalKey<SocialFeedScreenState>();
+  final GlobalKey<SocialFeedScreenState> _socialFeedKey =
+      GlobalKey<SocialFeedScreenState>();
   int? _socialTabIndex;
   bool _showBottomNav = true;
+  bool _didTryEnterOfflineCall = false;
 
   // iOS major version (26, 17, 16, ...)
   int? _iosMajor;
@@ -56,20 +59,29 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       _iosMajor = _detectIOSMajor();
     }
 
-    Provider.of<FlashDealController>(context, listen: false).getFlashDealList(true, true);
-    Provider.of<SplashController>(context, listen: false).getBusinessPagesList('default');
-    Provider.of<SplashController>(context, listen: false).getBusinessPagesList('pages');
+    Provider.of<FlashDealController>(context, listen: false)
+        .getFlashDealList(true, true);
+    Provider.of<SplashController>(context, listen: false)
+        .getBusinessPagesList('default');
+    Provider.of<SplashController>(context, listen: false)
+        .getBusinessPagesList('pages');
     if (Provider.of<AuthController>(context, listen: false).isLoggedIn()) {
       Provider.of<CartController>(context, listen: false).mergeGuestCart();
       Provider.of<WishListController>(context, listen: false).getWishList();
-      Provider.of<ChatController>(context, listen: false).getChatList(1, reload: false, userType: 0);
-      Provider.of<ChatController>(context, listen: false).getChatList(1, reload: false, userType: 1);
-      Provider.of<RestockController>(context, listen: false).getRestockProductList(1, getAll: true);
+      Provider.of<ChatController>(context, listen: false)
+          .getChatList(1, reload: false, userType: 0);
+      Provider.of<ChatController>(context, listen: false)
+          .getChatList(1, reload: false, userType: 1);
+      Provider.of<RestockController>(context, listen: false)
+          .getRestockProductList(1, getAll: true);
     }
 
-    final SplashController splashController = Provider.of<SplashController>(context, listen: false);
-    Provider.of<SearchProductController>(context, listen: false).getAuthorList(null);
-    Provider.of<SearchProductController>(context, listen: false).getPublishingHouseList(null);
+    final SplashController splashController =
+        Provider.of<SplashController>(context, listen: false);
+    Provider.of<SearchProductController>(context, listen: false)
+        .getAuthorList(null);
+    Provider.of<SearchProductController>(context, listen: false)
+        .getPublishingHouseList(null);
 
     if (splashController.configModel!.activeTheme == "default") {
       HomePage.loadData(false);
@@ -107,15 +119,36 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         screen: (splashController.configModel!.activeTheme == "default")
             ? const HomePage()
             : (splashController.configModel!.activeTheme == "theme_aster")
-            ? const AsterThemeHomeScreen()
-            : const FashionThemeHomePage(),
+                ? const AsterThemeHomeScreen()
+                : const FashionThemeHomePage(),
       ),
-      NavigationModel(name: 'notifications', icon: Images.notification, screen: const NotificationsScreen(isBackButtonExist: false)),
-      NavigationModel(name: 'more', icon: Images.moreImage, screen: const MoreScreen()),
+      NavigationModel(
+          name: 'notifications',
+          icon: Images.notification,
+          screen: const NotificationsScreen(isBackButtonExist: false)),
+      NavigationModel(
+          name: 'more', icon: Images.moreImage, screen: const MoreScreen()),
     ];
 
-    _socialTabIndex = _screens.indexWhere((element) => element.name == 'social');
+    _socialTabIndex =
+        _screens.indexWhere((element) => element.name == 'social');
     NetworkInfo.checkConnectivity(context);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || _didTryEnterOfflineCall) return;
+      _didTryEnterOfflineCall = true;
+
+      // ✅ chờ route settle 1 chút (cold start + TravelScreen load)
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (!mounted) return;
+
+      for (int i = 1; i <= 10; i++) {
+        if (!mounted) return;
+        ZegoCallService.I
+            .ensureEnterAcceptedOfflineCall(source: 'dashboard_post_frame#$i');
+        await Future.delayed(const Duration(milliseconds: 350));
+      }
+    });
   }
 
   // Parse Platform.operatingSystemVersion để lấy major version iOS
@@ -128,7 +161,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     } catch (_) {}
     return null;
   }
-  
+
   void _handleTravelScroll(bool showNav) {
     if (_showBottomNav == showNav) return;
 
@@ -143,10 +176,13 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     final cs = theme.colorScheme;
     final platformBrightness = MediaQuery.platformBrightnessOf(context);
     final bool isIOSPlatform = !kIsWeb && Platform.isIOS;
-    final bool hideNav = (_socialTabIndex != null && _pageIndex == _socialTabIndex && !_showBottomNav);
+    final bool hideNav = (_socialTabIndex != null &&
+        _pageIndex == _socialTabIndex &&
+        !_showBottomNav);
 
-    final int unreadNotifications = context.select<SocialNotificationsController, int>(
-          (ctrl) => ctrl.notifications.where((n) => n.seen == "0").length,
+    final int unreadNotifications =
+        context.select<SocialNotificationsController, int>(
+      (ctrl) => ctrl.notifications.where((n) => n.seen == "0").length,
     );
 
     String t(String key) => getTranslated(key, context) ?? key;
@@ -193,7 +229,8 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       ),
       AdaptiveNavigationDestination(
         icon: _sf('ellipsis.circle.fill', CupertinoIcons.ellipsis_circle_fill),
-        selectedIcon: _sf('ellipsis.circle.fill', CupertinoIcons.ellipsis_circle_fill),
+        selectedIcon:
+            _sf('ellipsis.circle.fill', CupertinoIcons.ellipsis_circle_fill),
         label: t('more'),
       ),
     ];
@@ -203,7 +240,10 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       _AndroidNavItem(icon: Icons.travel_explore_outlined, label: t('travel')),
       _AndroidNavItem(icon: Icons.public, label: t('social')),
       _AndroidNavItem(icon: Icons.storefront_outlined, label: t('shop')),
-      _AndroidNavItem(icon: Icons.notifications_none, label: t('notifications'), badgeCount: unreadNotifications),
+      _AndroidNavItem(
+          icon: Icons.notifications_none,
+          label: t('notifications'),
+          badgeCount: unreadNotifications),
       _AndroidNavItem(icon: Icons.more_horiz, label: t('more')),
     ];
 
@@ -236,40 +276,41 @@ class DashBoardScreenState extends State<DashBoardScreen> {
         bottomNavigationBar: hideNav || !isIOSPlatform
             ? null
             : AdaptiveBottomNavigationBar(
-          items: iosDestinations,
-          selectedIndex: _pageIndex,
-          onTap: (index) => _handleNavigationTap(_screens[index], index),
-          useNativeBottomBar: isIOSPlatform,
-          selectedItemColor: navActiveColor,
-        ),
+                items: iosDestinations,
+                selectedIndex: _pageIndex,
+                onTap: (index) => _handleNavigationTap(_screens[index], index),
+                useNativeBottomBar: isIOSPlatform,
+                selectedItemColor: navActiveColor,
+              ),
         body: isIOSPlatform
             ? PageStorage(
-          key: ValueKey<int>(_pageIndex),
-          bucket: bucket,
-          child: _screens[_pageIndex].screen,
-        )
+                key: ValueKey<int>(_pageIndex),
+                bucket: bucket,
+                child: _screens[_pageIndex].screen,
+              )
             : Stack(
-          children: [
-            PageStorage(
-              key: ValueKey<int>(_pageIndex),
-              bucket: bucket,
-              child: _screens[_pageIndex].screen,
-            ),
+                children: [
+                  PageStorage(
+                    key: ValueKey<int>(_pageIndex),
+                    bucket: bucket,
+                    child: _screens[_pageIndex].screen,
+                  ),
 
-            // ⬇⬇⬇ SỬA DÒNG NÀY ⬇⬇⬇
-            if (!hideNav && _showBottomNav)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: AndroidMovingCircleBottomBar(
-                  items: androidItems,
-                  currentIndex: _pageIndex,
-                  onTap: (index) => _handleNavigationTap(_screens[index], index),
-                ),
+                  // ⬇⬇⬇ SỬA DÒNG NÀY ⬇⬇⬇
+                  if (!hideNav && _showBottomNav)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: AndroidMovingCircleBottomBar(
+                        items: androidItems,
+                        currentIndex: _pageIndex,
+                        onTap: (index) =>
+                            _handleNavigationTap(_screens[index], index),
+                      ),
+                    ),
+                ],
               ),
-          ],
-        ),
       ),
     );
   }
@@ -293,7 +334,8 @@ class DashBoardScreenState extends State<DashBoardScreen> {
   }
 
   void _handleNavigationTap(NavigationModel item, int index) {
-    final bool isSocialTab = _socialTabIndex != null && index == _socialTabIndex;
+    final bool isSocialTab =
+        _socialTabIndex != null && index == _socialTabIndex;
     final bool isCurrent = _pageIndex == index;
     if (isSocialTab && isCurrent) {
       final SocialFeedScreenState? state = _socialFeedKey.currentState;
@@ -344,7 +386,8 @@ class AndroidMovingCircleBottomBar extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final Color barColor = isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE8EBF0);
+    final Color barColor =
+        isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE8EBF0);
     final Color scaffoldBg = theme.scaffoldBackgroundColor;
 
     return SafeArea(
@@ -387,7 +430,7 @@ class AndroidMovingCircleBottomBar extends StatelessWidget {
                       child: Row(
                         children: List.generate(
                           items.length,
-                              (index) => Expanded(
+                          (index) => Expanded(
                             child: _AndroidNavItemWidget(
                               item: items[index],
                               selected: index == currentIndex,
@@ -459,7 +502,8 @@ class _AndroidNavItemWidget extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
-    final Color iconColor = selected ? cs.primary : cs.onSurface.withOpacity(0.7);
+    final Color iconColor =
+        selected ? cs.primary : cs.onSurface.withOpacity(0.7);
     final FontWeight labelWeight = selected ? FontWeight.w600 : FontWeight.w400;
 
     Widget iconArea;
@@ -476,7 +520,8 @@ class _AndroidNavItemWidget extends StatelessWidget {
               top: -4,
               child: Container(
                 padding: const EdgeInsets.all(2),
-                decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
+                decoration: const BoxDecoration(
+                    color: Colors.redAccent, shape: BoxShape.circle),
                 constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
                 child: Center(
                   child: Text(

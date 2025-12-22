@@ -9,7 +9,6 @@ import '../domain/models/ice_candidate_lite.dart';
 import '../controllers/call_controller.dart';
 import '../utils/ice_server_config.dart';
 import 'dart:io' show Platform;
-import '../push/callkit_service.dart';
 
 class CallScreen extends StatefulWidget {
   final bool isCaller; // true: caller, false: callee
@@ -518,11 +517,6 @@ class _CallScreenState extends State<CallScreen> {
             .timeout(const Duration(seconds: 2), onTimeout: () {});
       } catch (_) {}
     }));
-
-    // iOS: end CallKit ngay khi user ấn Kết thúc trong app
-    if (Platform.isIOS) {
-      unawaited(CallkitService.I.endCallForServerId(widget.callId));
-    }
 
     await _detachController();
     _disposeRTC();

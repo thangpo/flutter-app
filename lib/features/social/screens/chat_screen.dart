@@ -24,11 +24,9 @@ import 'package:flutter_sixvalley_ecommerce/features/social/controllers/group_ch
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/widgets/chat_message_bubble.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/repositories/social_chat_repository.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/controllers/call_controller.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/push/callkit_service.dart';
-import 'package:flutter_sixvalley_ecommerce/features/social/screens/call_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/domain/models/call_invite.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/fcm/fcm_chat_handler.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/call/zego_call_service.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -79,7 +77,6 @@ class _ChatScreenState extends State<ChatScreen> {
   List<_PendingAttachment> _pendingAttachments = [];
   bool _showScrollToBottom = false;
   int _lastItemCount = 0;
-  final Set<int> _handledIncoming = {};
   StreamSubscription? _fcmStream;
   Timer? _pollTimer;
   bool _pollInFlight = false;
@@ -477,7 +474,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
     setState(() {
       _voiceDraftPath = path;
-      _voiceDraftDuration = recorded > Duration.zero ? recorded : _voiceDraftDuration;
+      _voiceDraftDuration =
+          recorded > Duration.zero ? recorded : _voiceDraftDuration;
       _recElapsed = Duration.zero;
     });
 
@@ -503,7 +501,7 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() {
         _voiceDraftPath = path;
         _voiceDraftDuration =
-        recorded > Duration.zero ? recorded : _voiceDraftDuration;
+            recorded > Duration.zero ? recorded : _voiceDraftDuration;
         _recElapsed = Duration.zero;
       });
     } else {
@@ -934,8 +932,8 @@ class _ChatScreenState extends State<ChatScreen> {
             ? _voiceDraftDuration
             : _voicePreviewPos);
     final double progress = (effectiveDur.inMilliseconds > 0)
-        ? (_voicePreviewPos.inMilliseconds.clamp(
-                0, effectiveDur.inMilliseconds) /
+        ? (_voicePreviewPos.inMilliseconds
+                .clamp(0, effectiveDur.inMilliseconds) /
             effectiveDur.inMilliseconds)
         : 0;
     final theme = Theme.of(context);
@@ -969,8 +967,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 _WaveformSeekBar(
                   progress: progress,
                   activeColor: theme.colorScheme.onSurface,
-                  inactiveColor:
-                      theme.colorScheme.onSurface.withOpacity(0.25),
+                  inactiveColor: theme.colorScheme.onSurface.withOpacity(0.25),
                   maxHeight: 30,
                   samples:
                       _generateWaveform(_voiceDraftPath ?? 'voice_preview'),
@@ -995,7 +992,7 @@ class _ChatScreenState extends State<ChatScreen> {
               ],
             ),
           ),
-            IconButton(
+          IconButton(
             tooltip: _tr('remove', 'Xóa'),
             onPressed: () async {
               await _voicePreviewPlayer.stop();
@@ -1098,7 +1095,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   child: IconButton(
                     padding: EdgeInsets.zero,
                     iconSize: 22,
-                    onPressed: _sending ? null : () => _finishRecording(sendNow: false),
+                    onPressed: _sending
+                        ? null
+                        : () => _finishRecording(sendNow: false),
                     icon: const Icon(Icons.pause, color: Colors.black87),
                   ),
                 ),
@@ -1135,11 +1134,14 @@ class _ChatScreenState extends State<ChatScreen> {
 
     final Duration effectiveDur = _voicePreviewDur > Duration.zero
         ? _voicePreviewDur
-        : (_voiceDraftDuration > Duration.zero ? _voiceDraftDuration : _voicePreviewPos);
+        : (_voiceDraftDuration > Duration.zero
+            ? _voiceDraftDuration
+            : _voicePreviewPos);
 
     final double progress = (effectiveDur.inMilliseconds > 0)
-        ? (_voicePreviewPos.inMilliseconds.clamp(0, effectiveDur.inMilliseconds) /
-        effectiveDur.inMilliseconds)
+        ? (_voicePreviewPos.inMilliseconds
+                .clamp(0, effectiveDur.inMilliseconds) /
+            effectiveDur.inMilliseconds)
         : 0;
 
     final cardBg = isDark ? const Color(0xFF2C2C2C) : const Color(0xFFF0F0F0);
@@ -1157,14 +1159,14 @@ class _ChatScreenState extends State<ChatScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-          _tr('voice_seek_hint', 'Trượt ngón tay trên bản ghi âm để phát từ bất kỳ điểm nào.'),
+            _tr('voice_seek_hint',
+                'Trượt ngón tay trên bản ghi âm để phát từ bất kỳ điểm nào.'),
             style: TextStyle(
               fontSize: 12,
               color: (isDark ? Colors.white70 : Colors.black54),
             ),
           ),
           const SizedBox(height: 10),
-
           Container(
             height: 52,
             decoration: BoxDecoration(
@@ -1186,11 +1188,13 @@ class _ChatScreenState extends State<ChatScreen> {
                     activeColor: Colors.white,
                     inactiveColor: Colors.white24,
                     maxHeight: 26,
-                    samples: _generateWaveform(_voiceDraftPath ?? 'voice_preview'),
+                    samples:
+                        _generateWaveform(_voiceDraftPath ?? 'voice_preview'),
                     onSeekPercent: (p) async {
                       if (effectiveDur.inMilliseconds > 0) {
                         final ms = (p * effectiveDur.inMilliseconds).toInt();
-                        await _voicePreviewPlayer.seek(Duration(milliseconds: ms));
+                        await _voicePreviewPlayer
+                            .seek(Duration(milliseconds: ms));
                       }
                     },
                   ),
@@ -1214,7 +1218,6 @@ class _ChatScreenState extends State<ChatScreen> {
               ],
             ),
           ),
-
           const SizedBox(height: 12),
           Row(
             children: [
@@ -1241,12 +1244,14 @@ class _ChatScreenState extends State<ChatScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: theme.colorScheme.primary,
                   shape: const StadiumBorder(),
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(_tr('send', 'Gửi'), style: const TextStyle(fontWeight: FontWeight.w700)),
+                    Text(_tr('send', 'Gửi'),
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
                     const SizedBox(width: 10),
                     const Icon(Icons.send, size: 18),
                   ],
@@ -1424,46 +1429,32 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _startCall(String mediaType) async {
-    final call = context.read<CallController>();
-
     try {
-      if (!call.ready) await call.init();
+      final mic = await Permission.microphone.request();
+      if (!mic.isGranted) throw 'Cần quyền Micro để thực hiện cuộc gọi';
 
-      final calleeId = int.tryParse(_peerId) ?? 0;
-      if (calleeId <= 0) throw 'peerUserId không hợp lệ';
+      final isVideo = mediaType == 'video';
+      if (isVideo) {
+        final cam = await Permission.camera.request();
+        if (!cam.isGranted) throw 'Cần quyền Camera để gọi video';
+      }
 
-      final callId = await call.startCall(
-        calleeId: calleeId,
-        mediaType: mediaType,
+      if (_peerId.isEmpty) throw 'peerUserId không hợp lệ';
+
+      final callId = ZegoCallService.I.newOneOnOneCallId(_peerId);
+      final ok = await ZegoCallService.I.startOneOnOne(
+        peerId: _peerId,
+        peerName: (widget.peerName ?? _peerId),
+        isVideoCall: isVideo,
+        callID: callId,
+        peerAvatar: widget.peerAvatar, // new
       );
-      CallkitService.I.markServerCallHandled(callId);
-
-      final payload = {
-        'type': 'call_invite',
-        'call_id': callId,
-        'media': mediaType,
-        'ts': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      };
+      if (!ok) throw 'Không gửi được lời mời gọi';
 
       await repo.sendMessage(
         token: widget.accessToken,
         peerUserId: _peerId,
-        text: jsonEncode(payload),
-      );
-
-      if (!mounted) return;
-
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => CallScreen(
-            isCaller: true,
-            callId: callId,
-            mediaType: mediaType,
-            peerName: widget.peerName,
-            peerAvatar: widget.peerAvatar,
-          ),
-        ),
+        text: isVideo ? 'Cuộc gọi video' : 'Cuộc gọi thoại',
       );
     } catch (e) {
       if (!mounted) return;
@@ -1589,9 +1580,7 @@ class _ChatScreenState extends State<ChatScreen> {
     return Padding(
       padding: const EdgeInsets.only(top: 2, bottom: 2),
       child: Align(
-        alignment: isMe
-            ? Alignment.centerRight
-            : Alignment.centerLeft,
+        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1742,8 +1731,7 @@ class _ChatScreenState extends State<ChatScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                  content: Text(
-                      _tr('copied_message', 'Đã sao chép tin nhắn'))),
+                  content: Text(_tr('copied_message', 'Đã sao chép tin nhắn'))),
             );
           }
         }
@@ -2070,10 +2058,11 @@ class _ChatScreenState extends State<ChatScreen> {
       _lastItemCount = _messages.length;
     }
 
-    final isDark = Provider.of<ThemeController>(context, listen: true).darkTheme;
+    final isDark =
+        Provider.of<ThemeController>(context, listen: true).darkTheme;
 
     final barColor = isDark ? const Color(0xFF1F1F1F) : Colors.white;
-    final fgColor  = isDark ? Colors.white : Colors.black;
+    final fgColor = isDark ? Colors.white : Colors.black;
 
     final overlay = SystemUiOverlayStyle(
       statusBarColor: barColor,
@@ -2081,10 +2070,10 @@ class _ChatScreenState extends State<ChatScreen> {
       statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
     );
 
-    final pageBg   = isDark ? const Color(0xFF0F0F0F) : const Color(0xFFF6F6F6);
-    final barBg    = isDark ? const Color(0xFF141414) : Colors.transparent;
+    final pageBg = isDark ? const Color(0xFF0F0F0F) : const Color(0xFFF6F6F6);
+    final barBg = isDark ? const Color(0xFF141414) : Colors.transparent;
 
-    final inputFill   = isDark ? const Color(0xFF2A2A2A) : Colors.white;
+    final inputFill = isDark ? const Color(0xFF2A2A2A) : Colors.white;
     final borderColor = isDark ? Colors.white24 : Colors.blue.shade200;
     final focusBorder = isDark ? Colors.white38 : Colors.blue.shade400;
 
@@ -2095,141 +2084,123 @@ class _ChatScreenState extends State<ChatScreen> {
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: overlay,
-        child: WillPopScope(
-          onWillPop: () async {
-            Navigator.pop(context, _hasNewMessage);
-            return false;
-          },
-          child: Scaffold(
-            backgroundColor: pageBg,
-            appBar: AppBar(
-              backgroundColor: barColor,
-              foregroundColor: fgColor,
-              iconTheme: IconThemeData(color: fgColor),
-              titleTextStyle: TextStyle(
-                color: fgColor,
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-              ),
-              surfaceTintColor: Colors.transparent,
-              scrolledUnderElevation: 0,
-              elevation: 0,
-              systemOverlayStyle: overlay,
-
-              centerTitle: false,
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () => Navigator.pop(context, _hasNewMessage),
-              ),
-          title: GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onTap: () {
-              _openProfile();
-            },
-            child: Row(
-              children: [
-                if (peerAvatar.isNotEmpty)
-                  CircleAvatar(
-                    radius: 20,
-                    backgroundImage: NetworkImage(peerAvatar),
-                  ),
-                if (peerAvatar.isNotEmpty) const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                  ],
-                ),
-              ],
+      child: WillPopScope(
+        onWillPop: () async {
+          Navigator.pop(context, _hasNewMessage);
+          return false;
+        },
+        child: Scaffold(
+          backgroundColor: pageBg,
+          appBar: AppBar(
+            backgroundColor: barColor,
+            foregroundColor: fgColor,
+            iconTheme: IconThemeData(color: fgColor),
+            titleTextStyle: TextStyle(
+              color: fgColor,
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
             ),
-          ),
-          actions: [
-            Consumer<CallController>(
-              builder: (ctx, call, _) {
-                final enabled = call.ready;
-                return Row(
-                  children: [
-                    IconButton(
-                      tooltip: _tr('audio_call', 'Gọi thoại'),
-                      icon: const Icon(Icons.call),
-                      onPressed: enabled ? () => _startCall('audio') : null,
-                    ),
-                    IconButton(
-                      tooltip: _tr('video_call', 'Gọi video'),
-                      icon: const Icon(Icons.videocam),
-                      onPressed: enabled ? () => _startCall('video') : null,
-                    ),
-                  ],
-                );
+            surfaceTintColor: Colors.transparent,
+            scrolledUnderElevation: 0,
+            elevation: 0,
+            systemOverlayStyle: overlay,
+            centerTitle: false,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () => Navigator.pop(context, _hasNewMessage),
+            ),
+            title: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () {
+                _openProfile();
               },
-            ),
-            const SizedBox(width: 4),
-          ],
-        ),
-        body: GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onTap: () => FocusScope.of(context).unfocus(),
-          child: Stack(
-            children: [
-              Column(
+              child: Row(
                 children: [
-                  if (_loading && _messages.isEmpty)
-                    const LinearProgressIndicator(minHeight: 2),
-                  Expanded(
-                    child: RefreshIndicator(
-                      onRefresh: _onRefresh,
-                      child: _messages.isEmpty
-                          ? LayoutBuilder(
-                              builder: (context, constraints) {
-                                return SingleChildScrollView(
-                                  physics:
-                                      const AlwaysScrollableScrollPhysics(),
-                                  child: ConstrainedBox(
-                                    constraints: BoxConstraints(
-                                        minHeight: constraints.maxHeight),
-                                    child: _buildEmptyChatState(
-                                      peerAvatar: peerAvatar,
-                                      title: title,
+                  if (peerAvatar.isNotEmpty)
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundImage: NetworkImage(peerAvatar),
+                    ),
+                  if (peerAvatar.isNotEmpty) const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              Row(
+                children: [
+                  IconButton(
+                    tooltip: _tr('audio_call', 'Gọi thoại'),
+                    icon: const Icon(Icons.call),
+                    onPressed: () => _startCall('audio'),
+                  ),
+                  IconButton(
+                    tooltip: _tr('video_call', 'Gọi video'),
+                    icon: const Icon(Icons.videocam),
+                    onPressed: () => _startCall('video'),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 4),
+            ],
+          ),
+          body: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () => FocusScope.of(context).unfocus(),
+            child: Stack(
+              children: [
+                Column(
+                  children: [
+                    if (_loading && _messages.isEmpty)
+                      const LinearProgressIndicator(minHeight: 2),
+                    Expanded(
+                      child: RefreshIndicator(
+                        onRefresh: _onRefresh,
+                        child: _messages.isEmpty
+                            ? LayoutBuilder(
+                                builder: (context, constraints) {
+                                  return SingleChildScrollView(
+                                    physics:
+                                        const AlwaysScrollableScrollPhysics(),
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                          minHeight: constraints.maxHeight),
+                                      child: _buildEmptyChatState(
+                                        peerAvatar: peerAvatar,
+                                        title: title,
+                                      ),
                                     ),
-                                  ),
-                                );
-                              },
-                            )
-                          : ListView.builder(
-                              controller: _scroll,
-                              keyboardDismissBehavior:
-                                  ScrollViewKeyboardDismissBehavior.onDrag,
-                              padding:
-                                  const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                              itemCount: _messages.length,
-                              itemBuilder: (ctx, i) {
-                                final m = _messages[i];
-                                final isMe = (m['position'] == 'right');
+                                  );
+                                },
+                              )
+                            : ListView.builder(
+                                controller: _scroll,
+                                keyboardDismissBehavior:
+                                    ScrollViewKeyboardDismissBehavior.onDrag,
+                                padding:
+                                    const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                                itemCount: _messages.length,
+                                itemBuilder: (ctx, i) {
+                                  final m = _messages[i];
+                                  final isMe = (m['position'] == 'right');
 
-                                final plain = _plainTextOf(m);
-                                final inv = CallInvite.tryParse(plain);
-
-                                if (inv != null && !inv.isExpired()) {
-                                  final callId = inv.callId;
-                                  final cc = Provider.of<CallController>(
-                                      context,
-                                      listen: false);
-                                  final alreadyHandled =
-                                      _handledIncoming.contains(callId) ||
-                                          cc.isCallHandled(callId);
-
-                                  if (!isMe && !alreadyHandled) {
-                                    _handledIncoming.add(callId);
-                                    cc.markCallHandled(callId);
-                                  }
+                                  final reactionId = _getReactionForMessage(m);
+                                  final hasReply = _hasReplyTag(m);
+                                  final replyMsg =
+                                      hasReply ? _findRepliedMessage(m) : null;
 
                                   if (!isMe) {
                                     final msgAvatar =
@@ -2258,8 +2229,58 @@ class _ChatScreenState extends State<ChatScreen> {
                                           ),
                                           const SizedBox(width: 8),
                                           Flexible(
-                                            child: _buildCallInviteTile(inv,
-                                                isMe: false),
+                                            child: _SwipeReplyWrapper(
+                                              isMe: false,
+                                              onReply: () {
+                                                setState(() {
+                                                  _replyingToMessage = m;
+                                                });
+                                              },
+                                              child: GestureDetector(
+                                                behavior:
+                                                    HitTestBehavior.opaque,
+                                                onLongPress: () =>
+                                                    _onLongPressMessage(
+                                                        m, false),
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    if (hasReply)
+                                                      _buildReplyHeader(
+                                                        message: m,
+                                                        replyMsg: replyMsg,
+                                                        isMe: false,
+                                                      ),
+                                                    if (replyMsg != null)
+                                                      _buildReplyPreview(
+                                                          replyMsg,
+                                                          isMe: false),
+                                                    Stack(
+                                                      clipBehavior: Clip.none,
+                                                      children: [
+                                                        ChatMessageBubble(
+                                                          key: ValueKey(
+                                                              '${m['id'] ?? m.hashCode}'),
+                                                          message: m,
+                                                          isMe: false,
+                                                        ),
+                                                        if (reactionId != 0)
+                                                          Positioned(
+                                                            bottom: -14,
+                                                            left: 8,
+                                                            child:
+                                                                _buildReactionBadge(
+                                                                    reactionId,
+                                                                    isMe:
+                                                                        false),
+                                                          ),
+                                                      ],
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
                                           ),
                                         ],
                                       ),
@@ -2335,7 +2356,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                         const SizedBox(width: 8),
                                         Flexible(
                                           child: _SwipeReplyWrapper(
-                                            isMe: false,
+                                            isMe: true,
                                             onReply: () {
                                               setState(() {
                                                 _replyingToMessage = m;
@@ -2344,20 +2365,20 @@ class _ChatScreenState extends State<ChatScreen> {
                                             child: GestureDetector(
                                               behavior: HitTestBehavior.opaque,
                                               onLongPress: () =>
-                                                  _onLongPressMessage(m, false),
+                                                  _onLongPressMessage(m, true),
                                               child: Column(
                                                 crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
+                                                    CrossAxisAlignment.end,
                                                 children: [
                                                   if (hasReply)
                                                     _buildReplyHeader(
                                                       message: m,
                                                       replyMsg: replyMsg,
-                                                      isMe: false,
+                                                      isMe: true,
                                                     ),
                                                   if (replyMsg != null)
                                                     _buildReplyPreview(replyMsg,
-                                                        isMe: false),
+                                                        isMe: true),
                                                   Stack(
                                                     clipBehavior: Clip.none,
                                                     children: [
@@ -2365,16 +2386,16 @@ class _ChatScreenState extends State<ChatScreen> {
                                                         key: ValueKey(
                                                             '${m['id'] ?? m.hashCode}'),
                                                         message: m,
-                                                        isMe: false,
+                                                        isMe: true,
                                                       ),
                                                       if (reactionId != 0)
                                                         Positioned(
                                                           bottom: -14,
-                                                          left: 8,
+                                                          right: 8,
                                                           child:
                                                               _buildReactionBadge(
                                                                   reactionId,
-                                                                  isMe: false),
+                                                                  isMe: true),
                                                         ),
                                                     ],
                                                   ),
@@ -2386,13 +2407,102 @@ class _ChatScreenState extends State<ChatScreen> {
                                       ],
                                     ),
                                   );
-                                }
-
-                                return Padding(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 8.0),
+                                },
+                              ),
+                      ),
+                    ),
+                    if (_replyingToMessage != null)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 3,
+                              height: 32,
+                              margin: const EdgeInsets.only(right: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.blue,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                            Expanded(
+                              child: Text(
+                                _plainTextOf(_replyingToMessage!),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close, size: 18),
+                              onPressed: () {
+                                setState(() {
+                                  _replyingToMessage = null;
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (_pendingAttachments.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
+                        child: _buildPendingAttachments(),
+                      ),
+                    if (_recOn)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.fiber_manual_record,
+                              size: 16,
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${_tr('recording', 'Đang thu âm')} ${_formatDuration(_recElapsed)}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(context).colorScheme.error,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    // if (_voiceDraftPath != null && !_recOn)
+                    //   Padding(
+                    //     padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                    //     child: _buildVoicePreview(context),
+                    //   ),
+                    SafeArea(
+                      top: false,
+                      minimum: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+                      child: _recOn
+                          ? _buildRecordingBar(isDark: isDark)
+                          : (_voiceDraftPath != null
+                              ? _buildVoiceDraftCard(isDark: isDark)
+                              : Container(
+                                  decoration: BoxDecoration(
+                                    color: barBg,
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
                                   child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.end,
                                     children: [
                                       Flexible(
                                         child: _SwipeReplyWrapper(
@@ -2437,94 +2547,76 @@ class _ChatScreenState extends State<ChatScreen> {
                                                 _localStatusLine(m),
                                               ],
                                             ),
+                                            enabledBorder: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(18),
+                                              borderSide: BorderSide(
+                                                  color: borderColor, width: 1),
+                                            ),
+                                            focusedBorder: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(18),
+                                              borderSide: BorderSide(
+                                                  color: focusBorder,
+                                                  width: 1.5),
+                                            ),
+                                            contentPadding:
+                                                const EdgeInsets.symmetric(
+                                                    vertical: 10,
+                                                    horizontal: 8),
+                                          ),
+                                          onSubmitted: (_) => _sendText(),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Material(
+                                        color: sendBg,
+                                        shape: const CircleBorder(),
+                                        child: InkWell(
+                                          customBorder: const CircleBorder(),
+                                          onTap: _sending ? null : _sendText,
+                                          child: const Padding(
+                                            padding: EdgeInsets.all(10),
+                                            child: Icon(Icons.send,
+                                                color: Colors.white),
                                           ),
                                         ),
                                       ),
                                     ],
                                   ),
-                                );
-                              },
-                            ),
-                    ),
-                  ),
-                  if (_replyingToMessage != null)
-                    Container(
-                      width: double.infinity,
-                      margin: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 3,
-                            height: 32,
-                            margin: const EdgeInsets.only(right: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.blue,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                          Expanded(
-                            child: Text(
-                              _plainTextOf(_replyingToMessage!),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                color: Colors.black87,
-                              ),
+                                )),
+                    )
+                  ],
+                ),
+                if (_showScrollToBottom)
+                  Positioned(
+                    right: 12,
+                    bottom: 76,
+                    child: Builder(
+                      builder: (context) {
+                        final isDark =
+                            Provider.of<ThemeController>(context, listen: true)
+                                .darkTheme;
+
+                        final bg =
+                            isDark ? const Color(0xFF2A2A2A) : Colors.white;
+                        final fg = isDark ? Colors.white : Colors.black87;
+
+                        return Material(
+                          color: bg,
+                          shape: const CircleBorder(),
+                          elevation: 3,
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: _scrollToBottom,
+                            child: Padding(
+                              padding: const EdgeInsets.all(10),
+                              child: Icon(Icons.arrow_downward, color: fg),
                             ),
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.close, size: 18),
-                            onPressed: () {
-                              setState(() {
-                                _replyingToMessage = null;
-                              });
-                            },
-                          ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
-                  if (_pendingAttachments.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
-                      child: _buildPendingAttachments(),
-                    ),
-                  if (_recOn)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.fiber_manual_record,
-                            size: 16,
-                            color: Theme.of(context).colorScheme.error,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '${_tr('recording', 'Đang thu âm')} ${_formatDuration(_recElapsed)}',
-                            style:
-                                Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color:
-                                          Theme.of(context).colorScheme.error,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  // if (_voiceDraftPath != null && !_recOn)
-                  //   Padding(
-                  //     padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                  //     child: _buildVoicePreview(context),
-                  //   ),
                   SafeArea(
                     top: false,
                     minimum: const EdgeInsets.fromLTRB(8, 6, 8, 8),
@@ -2626,12 +2718,11 @@ class _ChatScreenState extends State<ChatScreen> {
                       );
                     },
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
-        ),
     );
   }
 
@@ -2779,8 +2870,8 @@ class _WaveformSeekBar extends StatelessWidget {
     return LayoutBuilder(
       builder: (ctx, constraints) {
         final List<double> pattern = samples ?? _basePattern;
-        final double totalWidth = (_barWidth * pattern.length) +
-            _barSpacing * (pattern.length - 1);
+        final double totalWidth =
+            (_barWidth * pattern.length) + _barSpacing * (pattern.length - 1);
         final double available =
             constraints.maxWidth.isFinite ? constraints.maxWidth : totalWidth;
         final double scale = available / totalWidth;
@@ -2801,8 +2892,7 @@ class _WaveformSeekBar extends StatelessWidget {
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),
-              if (i != pattern.length - 1)
-                SizedBox(width: _barSpacing * scale),
+              if (i != pattern.length - 1) SizedBox(width: _barSpacing * scale),
             ],
           ],
         );
@@ -2892,8 +2982,7 @@ class _SwipeReplyWrapperState extends State<_SwipeReplyWrapper> {
       effectiveDx = _dragDx.clamp(0, _maxShift);
     }
 
-    final progress =
-        (effectiveDx.abs() / _maxShift).clamp(0.0, 1.0);
+    final progress = (effectiveDx.abs() / _maxShift).clamp(0.0, 1.0);
 
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
@@ -2903,8 +2992,7 @@ class _SwipeReplyWrapperState extends State<_SwipeReplyWrapper> {
         });
       },
       onHorizontalDragEnd: (_) {
-        final threshold =
-            _maxShift * 0.6;
+        final threshold = _maxShift * 0.6;
 
         bool trigger = false;
         if (widget.isMe) {
@@ -3234,7 +3322,6 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
               ],
             ),
           ),
-
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: TextField(
@@ -3255,7 +3342,6 @@ class _ForwardMessageScreenState extends State<_ForwardMessageScreen> {
                 style: const TextStyle(color: Colors.red, fontSize: 12),
               ),
             ),
-
           const SizedBox(height: 4),
           Expanded(
             child: _loadingList

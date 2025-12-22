@@ -35,7 +35,7 @@ dependencies:
   shimmer: ^3.0.0
   url_launcher: ^6.3.2
   image_picker: ^1.0.7
-  share_plus: ^11.0.0
+  share_plus: ^12.0.0
   photo_view: ^0.14.0
   firebase_core: ^3.15.2
   firebase_messaging: ^15.2.10
@@ -55,7 +55,7 @@ dependencies:
   flutter_widget_from_html: ^0.17.0
   flutter_widget_from_html_core: ^0.17.0
   fluttertoast: ^8.0.9
-  permission_handler: ^11.1.0
+  permission_handler: ^12.0.1
   flutter_downloader: ^1.11.7
   flutter_inappwebview: ^6.1.5
   path: ^1.8.3
@@ -71,7 +71,7 @@ dependencies:
   substring_highlight: ^1.0.33
   card_swiper: ^3.0.1
   emoji_picker_flutter: ^3.1.0
-  file_picker: 8.1.4
+  file_picker: ^10.3.8
   carousel_slider: 5.1.1
   webview_flutter_android: ^3.13.2
   webview_flutter_wkwebview: ^3.10.1
@@ -81,7 +81,6 @@ dependencies:
   open_filex: ^4.4.0
   flutter_pdfview: ^1.2.7
   readmore: ^3.0.0
-  flutter_callkit_incoming: ^2.0.4
   open_file_manager: ^1.0.2
   audioplayers: ^6.5.0
   flutter_cache_manager: ^3.3.1
@@ -116,6 +115,8 @@ dependencies:
   flutter_webrtc: ^1.2.0
   html_unescape: ^2.0.0
   liquid_glass_renderer: ^0.2.0-dev.4
+  zego_uikit_prebuilt_call: ^4.22.2
+  zego_uikit_signaling_plugin: ^2.8.20
 
 #dependency_overrides:
 #  firebase_core_platform_interface: ^5.4.0
