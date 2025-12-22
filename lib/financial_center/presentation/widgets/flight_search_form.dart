@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../models/airport_models.dart';
+import '../screens/airport_picker_screen.dart';
+import '../screens/flight_date_picker_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
-import 'package:provider/provider.dart';
 
 class FlightSearchCriteria {
   final bool isRoundTrip;
@@ -48,17 +51,16 @@ class FlightSearchForm extends StatefulWidget {
 }
 
 class _FlightSearchFormState extends State<FlightSearchForm> {
+  AirportItem? _fromAirport;
+  AirportItem? _toAirport;
   String fromCity = "Hồ Chí Minh";
   String fromCode = "SGN";
   String toCity = "Huế";
   String toCode = "HUI";
-
   DateTime? departureDate;
-
   int adults = 1;
   int children = 0;
   int infants = 0;
-
   String cabinClass = "Economy";
 
   String tr(String key, String fallback) {
@@ -77,6 +79,26 @@ class _FlightSearchFormState extends State<FlightSearchForm> {
     );
   }
 
+  void _applyFrom(AirportItem? a) {
+    if (a == null) {
+      fromCity = tr('flight_select_from', 'Chọn điểm đi');
+      fromCode = '';
+      return;
+    }
+    fromCity = a.location?.name ?? a.name;
+    fromCode = a.code;
+  }
+
+  void _applyTo(AirportItem? a) {
+    if (a == null) {
+      toCity = tr('flight_select_to', 'Chọn điểm đến');
+      toCode = '';
+      return;
+    }
+    toCity = a.location?.name ?? a.name;
+    toCode = a.code;
+  }
+
   String _fmtDate(DateTime? d) {
     if (d == null) return tr('flight_select_date', 'Chọn ngày');
     final y = d.year.toString().padLeft(4, '0');
@@ -85,27 +107,73 @@ class _FlightSearchFormState extends State<FlightSearchForm> {
     return "$y-$m-$day";
   }
 
+  Future<void> _pickFromAirport() async {
+    final picked = await Navigator.push<AirportItem>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AirportPickerScreen(
+          title: tr('flight_pick_from', 'Chọn sân bay đi'),
+          selected: _fromAirport,
+          disabledAirportId: _toAirport?.id,
+        ),
+      ),
+    );
+
+    if (picked == null) return;
+
+    setState(() {
+      _fromAirport = picked;
+      fromCity = picked.location?.name ?? picked.name;
+      fromCode = picked.code;
+
+      if (_toAirport?.id == picked.id) {
+        _toAirport = null;
+        toCity = tr('flight_select_to', 'Chọn điểm đến');
+        toCode = '';
+      }
+    });
+  }
+
+  Future<void> _pickToAirport() async {
+    final picked = await Navigator.push<AirportItem>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AirportPickerScreen(
+          title: tr('flight_pick_to', 'Chọn sân bay đến'),
+          selected: _toAirport,
+          disabledAirportId: _fromAirport?.id,
+        ),
+      ),
+    );
+
+    if (picked == null) return;
+
+    setState(() {
+      _toAirport = picked;
+      toCity = picked.location?.name ?? picked.name;
+      toCode = picked.code;
+
+      if (_fromAirport?.id == picked.id) {
+        _fromAirport = null;
+        fromCity = tr('flight_select_from', 'Chọn điểm đi');
+        fromCode = '';
+      }
+    });
+  }
+
   Future<void> _pickDepartureDate() async {
-    final isDark = Provider.of<ThemeController>(context, listen: false).darkTheme;
     final now = DateTime.now();
 
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: departureDate ?? now,
-      firstDate: now,
-      lastDate: now.add(const Duration(days: 365)),
-      builder: (ctx, child) {
-        final base = Theme.of(ctx);
-        final scheme = (isDark ? const ColorScheme.dark() : const ColorScheme.light())
-            .copyWith(primary: widget.headerBlue);
-        return Theme(
-          data: base.copyWith(
-            colorScheme: scheme,
-            dialogBackgroundColor: isDark ? const Color(0xFF0B1220) : Colors.white,
-          ),
-          child: child!,
-        );
-      },
+    final picked = await Navigator.of(context, rootNavigator: true).push<DateTime>(
+      MaterialPageRoute(
+        builder: (_) => FlightDatePickerScreen(
+          title: tr('flight_departure_date', 'Departure'),
+          accentColor: widget.headerBlue,
+          initialDate: departureDate,
+          firstDate: now,
+          lastDate: now.add(const Duration(days: 365)),
+        ),
+      ),
     );
 
     if (picked == null) return;
@@ -115,123 +183,198 @@ class _FlightSearchFormState extends State<FlightSearchForm> {
   void _showPassengersSheet() {
     final isDark = Provider.of<ThemeController>(context, listen: false).darkTheme;
 
+    final bg = isDark ? const Color(0xFF0B1220) : Colors.white;
+    final surface = isDark ? const Color(0xFF111827) : const Color(0xFFF8FAFC);
+    final border = isDark ? Colors.white.withOpacity(0.10) : Colors.black.withOpacity(0.08);
+
+    final textMain = isDark ? Colors.white : const Color(0xFF0F172A);
+    final textSub = isDark ? Colors.white70 : Colors.black54;
+
     showModalBottomSheet(
       context: context,
-      backgroundColor: isDark ? const Color(0xFF0B1220) : Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: isDark ? Colors.black54 : Colors.black26,
       builder: (_) {
-        Widget row(
-            String label,
-            int value,
-            VoidCallback onMinus,
-            VoidCallback onPlus,
-            ) {
-          final textMain = isDark ? Colors.white : const Color(0xFF0F172A);
-          final iconColor = isDark ? Colors.white70 : Colors.black54;
-
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
+        Widget counterRow({
+          required String label,
+          required int value,
+          required VoidCallback onMinus,
+          required VoidCallback onPlus,
+        }) {
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            decoration: BoxDecoration(
+              color: surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: border),
+            ),
             child: Row(
               children: [
                 Expanded(
                   child: Text(
                     label,
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: textMain),
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: textMain,
+                    ),
                   ),
                 ),
-                IconButton(
-                  onPressed: onMinus,
-                  icon: Icon(Icons.remove_circle_outline, color: iconColor),
+
+                // minus
+                _RoundIconButton(
+                  icon: Icons.remove,
+                  onTap: onMinus,
+                  isDark: isDark,
                 ),
+
+                const SizedBox(width: 10),
+
                 SizedBox(
-                  width: 30,
+                  width: 34,
                   child: Text(
                     value.toString().padLeft(2, '0'),
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: textMain),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: textMain,
+                    ),
                   ),
                 ),
-                IconButton(
-                  onPressed: onPlus,
-                  icon: Icon(Icons.add_circle_outline, color: iconColor),
+
+                const SizedBox(width: 10),
+
+                // plus
+                _RoundIconButton(
+                  icon: Icons.add,
+                  onTap: onPlus,
+                  isDark: isDark,
                 ),
               ],
             ),
           );
         }
 
-        return StatefulBuilder(
-          builder: (ctx, setModal) {
-            final textMain = isDark ? Colors.white : const Color(0xFF0F172A);
-
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 44,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.white24 : Colors.black12,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    tr('flight_passengers', 'Hành khách'),
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: textMain),
-                  ),
-                  const SizedBox(height: 10),
-
-                  row(
-                    tr('flight_adults', 'Người lớn'),
-                    adults,
-                        () => setModal(() {
-                      if (adults > 1) adults--;
-                    }),
-                        () => setModal(() => adults++),
-                  ),
-                  row(
-                    tr('flight_children', 'Trẻ em'),
-                    children,
-                        () => setModal(() {
-                      if (children > 0) children--;
-                    }),
-                        () => setModal(() => children++),
-                  ),
-                  row(
-                    tr('flight_infants', 'Em bé'),
-                    infants,
-                        () => setModal(() {
-                      if (infants > 0) infants--;
-                    }),
-                        () => setModal(() => infants++),
-                  ),
-
-                  const SizedBox(height: 10),
-
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        setState(() {});
-                        Navigator.pop(context);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: widget.headerBlue,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      child: Text(tr('flight_done', 'Xong')),
-                    ),
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: 12,
+              right: 12,
+              bottom: 12 + MediaQuery.of(context).viewInsets.bottom,
+            ),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: border),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(isDark ? 0.35 : 0.12),
+                    blurRadius: 22,
+                    offset: const Offset(0, 10),
                   ),
                 ],
               ),
-            );
-          },
+              child: StatefulBuilder(
+                builder: (ctx, setModal) {
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white24 : Colors.black12,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      Text(
+                        tr('flight_passengers', 'Passengers'),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: textMain,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        tr('flight_passengers_hint', 'Choose number of passengers'),
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: textSub,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      counterRow(
+                        label: tr('flight_adults', 'Adults'),
+                        value: adults,
+                        onMinus: () => setModal(() {
+                          if (adults > 1) adults--;
+                        }),
+                        onPlus: () => setModal(() => adults++),
+                      ),
+                      const SizedBox(height: 10),
+
+                      counterRow(
+                        label: tr('flight_children', 'Children'),
+                        value: children,
+                        onMinus: () => setModal(() {
+                          if (children > 0) children--;
+                        }),
+                        onPlus: () => setModal(() => children++),
+                      ),
+                      const SizedBox(height: 10),
+
+                      counterRow(
+                        label: tr('flight_infants', 'Infants'),
+                        value: infants,
+                        onMinus: () => setModal(() {
+                          if (infants > 0) infants--;
+                        }),
+                        onPlus: () => setModal(() => infants++),
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            setState(() {}); // cập nhật số lượng ra form
+                            Navigator.pop(context);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: widget.headerBlue,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: Text(
+                            tr('flight_done', 'Done'),
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
         );
       },
     );
@@ -239,42 +382,277 @@ class _FlightSearchFormState extends State<FlightSearchForm> {
 
   Future<void> _showClassDialog() async {
     final isDark = Provider.of<ThemeController>(context, listen: false).darkTheme;
-    final classes = ["Economy", "Premium Economy", "Business", "First Class"];
 
-    final selected = await showDialog<String>(
+    final classes = const ["Economy", "Premium Economy", "Business", "First Class"];
+
+    final bg = isDark ? const Color(0xFF0B1220) : Colors.white;
+    final surface = isDark ? const Color(0xFF111827) : const Color(0xFFF8FAFC);
+    final border = isDark ? Colors.white.withOpacity(0.10) : Colors.black.withOpacity(0.08);
+
+    final textMain = isDark ? Colors.white : const Color(0xFF0F172A);
+    final textSub = isDark ? Colors.white70 : Colors.black54;
+
+    final picked = await showModalBottomSheet<String>(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: isDark ? Colors.black54 : Colors.black26,
       builder: (_) {
-        final textMain = isDark ? Colors.white : const Color(0xFF0F172A);
+        String temp = cabinClass;
 
-        return AlertDialog(
-          backgroundColor: isDark ? const Color(0xFF0B1220) : Colors.white,
-          title: Text(tr('flight_class', 'Hạng vé'), style: TextStyle(color: textMain)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: classes
-                .map(
-                  (c) => RadioListTile<String>(
-                value: c,
-                groupValue: cabinClass,
-                activeColor: widget.headerBlue,
-                onChanged: (v) => Navigator.pop(context, v),
-                title: Text(c, style: TextStyle(color: textMain)),
+        Widget optionTile(String value) {
+          final selected = temp == value;
+
+          final tileBg = selected ? widget.headerBlue.withOpacity(isDark ? 0.22 : 0.12) : surface;
+          final tileBorder = selected ? widget.headerBlue.withOpacity(0.40) : border;
+
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOut,
+            decoration: BoxDecoration(
+              color: tileBg,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: tileBorder),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () {
+                  // setState của StatefulBuilder ở dưới
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  child: Row(
+                    children: [
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 160),
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? widget.headerBlue
+                              : (isDark ? Colors.white.withOpacity(0.08) : Colors.white),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: selected
+                                ? Colors.transparent
+                                : (isDark ? Colors.white.withOpacity(0.12) : Colors.black.withOpacity(0.08)),
+                          ),
+                        ),
+                        child: Icon(
+                          selected ? Icons.check : Icons.work_outline,
+                          size: 18,
+                          color: selected ? Colors.white : (isDark ? Colors.white70 : Colors.black.withOpacity(0.65)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          value,
+                          style: TextStyle(
+                            color: textMain,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      AnimatedOpacity(
+                        duration: const Duration(milliseconds: 120),
+                        opacity: selected ? 1 : 0,
+                        child: Icon(Icons.check_circle, color: widget.headerBlue, size: 20),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            )
-                .toList(),
-          ),
+            ),
+          );
+        }
+
+        return StatefulBuilder(
+          builder: (ctx, setModal) {
+            Widget optionTileBound(String value) {
+              final selected = temp == value;
+
+              final tileBg = selected ? widget.headerBlue.withOpacity(isDark ? 0.22 : 0.12) : surface;
+              final tileBorder = selected ? widget.headerBlue.withOpacity(0.40) : border;
+
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                curve: Curves.easeOut,
+                decoration: BoxDecoration(
+                  color: tileBg,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: tileBorder),
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () => setModal(() => temp = value),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      child: Row(
+                        children: [
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 160),
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: selected
+                                  ? widget.headerBlue
+                                  : (isDark ? Colors.white.withOpacity(0.08) : Colors.white),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: selected
+                                    ? Colors.transparent
+                                    : (isDark ? Colors.white.withOpacity(0.12) : Colors.black.withOpacity(0.08)),
+                              ),
+                            ),
+                            child: Icon(
+                              selected ? Icons.check : Icons.work_outline,
+                              size: 18,
+                              color: selected ? Colors.white : (isDark ? Colors.white70 : Colors.black.withOpacity(0.65)),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              value,
+                              style: TextStyle(
+                                color: textMain,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          AnimatedOpacity(
+                            duration: const Duration(milliseconds: 120),
+                            opacity: selected ? 1 : 0,
+                            child: Icon(Icons.check_circle, color: widget.headerBlue, size: 20),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            return SafeArea(
+              top: false,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 12,
+                  right: 12,
+                  bottom: 12 + MediaQuery.of(context).viewInsets.bottom,
+                ),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                  decoration: BoxDecoration(
+                    color: bg,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: border),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(isDark ? 0.35 : 0.12),
+                        blurRadius: 22,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white24 : Colors.black12,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              tr('flight_class', 'Cabin class'),
+                              style: TextStyle(
+                                color: textMain,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: Icon(Icons.close, color: textSub),
+                          ),
+                        ],
+                      ),
+
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          tr('flight_class_hint', 'Choose your cabin class'),
+                          style: TextStyle(
+                            color: textSub,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      ...classes.map((c) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: optionTileBound(c),
+                      )),
+
+                      const SizedBox(height: 6),
+
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.pop(context, temp),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: widget.headerBlue,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: Text(
+                            tr('flight_done', 'Done'),
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
         );
       },
     );
 
-    if (selected == null) return;
-    setState(() => cabinClass = selected);
+    if (picked == null) return;
+    setState(() => cabinClass = picked);
   }
 
   Widget _swapButton({required VoidCallback onTap}) {
     final isDark = Provider.of<ThemeController>(context, listen: false).darkTheme;
-
-    // Nút nổi rõ ở cả dark/light
     return Container(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
@@ -315,7 +693,6 @@ class _FlightSearchFormState extends State<FlightSearchForm> {
     final bg = isDark ? const Color(0xFF111827) : const Color(0xFFF1F3F6);
     final titleColor = isDark ? Colors.white70 : Colors.black.withOpacity(0.55);
     final valueColor = isDark ? Colors.white : Colors.black.withOpacity(0.85);
-
     final iconBoxBg = isDark ? Colors.white.withOpacity(0.08) : Colors.white.withOpacity(0.9);
     final iconColor = isDark ? Colors.white70 : Colors.black.withOpacity(0.70);
 
@@ -324,62 +701,74 @@ class _FlightSearchFormState extends State<FlightSearchForm> {
       color: titleColor,
       fontWeight: FontWeight.w600,
     );
+
     final valueStyle = TextStyle(
       fontSize: compact ? 13 : 14,
       color: valueColor,
       fontWeight: FontWeight.w800,
     );
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: EdgeInsets.fromLTRB(
-          12,
-          compact ? 12 : 14,
-          rightPadding,
-          compact ? 12 : 14,
-        ),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: iconBoxBg,
-                borderRadius: BorderRadius.circular(12),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Ink(
+          padding: EdgeInsets.fromLTRB(
+            12,
+            compact ? 12 : 14,
+            rightPadding,
+            compact ? 12 : 14,
+          ),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: iconBoxBg,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                alignment: Alignment.center,
+                child: Icon(icon, size: 18, color: iconColor),
               ),
-              alignment: Alignment.center,
-              child: Icon(icon, size: 18, color: iconColor),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: titleStyle),
-                  const SizedBox(height: 4),
-                  Text(
-                    value,
-                    style: valueStyle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: titleStyle),
+                    const SizedBox(height: 4),
+                    Text(
+                      value,
+                      style: valueStyle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
   Future<void> _submit() async {
-    if (fromCode == toCode) {
+    if (_fromAirport == null) {
+      _showWarning(tr('flight_warning_from_required', 'Vui lòng chọn sân bay đi.'));
+      return;
+    }
+    if (_toAirport == null) {
+      _showWarning(tr('flight_warning_to_required', 'Vui lòng chọn sân bay đến.'));
+      return;
+    }
+    if (_fromAirport!.id == _toAirport!.id) {
       _showWarning(tr('flight_warning_diff_airport', 'Vui lòng chọn điểm đi và điểm đến khác nhau.'));
       return;
     }
@@ -408,7 +797,6 @@ class _FlightSearchFormState extends State<FlightSearchForm> {
   @override
   Widget build(BuildContext context) {
     final isDark = Provider.of<ThemeController>(context, listen: true).darkTheme;
-
     final cardBg = isDark ? const Color(0xFF0B1220) : Colors.white;
     final border = isDark ? Colors.white10 : Colors.transparent;
     final shadow = isDark
@@ -432,7 +820,6 @@ class _FlightSearchFormState extends State<FlightSearchForm> {
       ),
       child: Column(
         children: [
-          // FROM/TO + SWAP (nút nằm giữa 2 tile và đẩy sang trái)
           Stack(
             children: [
               Column(
@@ -440,36 +827,38 @@ class _FlightSearchFormState extends State<FlightSearchForm> {
                   _tile(
                     icon: Icons.flight_takeoff,
                     title: tr('flight_from', 'From'),
-                    value: "$fromCity, $fromCode",
-                    onTap: () {
-                      // TODO: chọn sân bay đi
-                    },
+                    value: _fromAirport == null
+                        ? tr('flight_select_from', 'Chọn điểm đi')
+                        : _fromAirport!.displayTitle,
+                    onTap: _pickFromAirport,
                   ),
-                  const SizedBox(height: 10),
+
+                  const SizedBox(height: 8),
+
                   _tile(
                     icon: Icons.flight_land,
                     title: tr('flight_to', 'To'),
-                    value: "$toCity, $toCode",
-                    onTap: () {
-                      // TODO: chọn sân bay đến
-                    },
+                    value: _toAirport == null
+                        ? tr('flight_select_to', 'Chọn điểm đến')
+                        : _toAirport!.displayTitle,
+                    onTap: _pickToAirport,
                   ),
                 ],
               ),
 
-              // Nút swap: đè lên giữa 2 tile, và "qua trái" theo icon box
               Positioned(
                 top: 52,
-                right: 26, // Bố chỉnh 20~40 tuỳ thích
+                right: 26,
                 child: _swapButton(
                   onTap: () {
+                    if (_fromAirport == null || _toAirport == null) return;
                     setState(() {
-                      final tmpCity = fromCity;
-                      final tmpCode = fromCode;
-                      fromCity = toCity;
-                      fromCode = toCode;
-                      toCity = tmpCity;
-                      toCode = tmpCode;
+                      final tmp = _fromAirport;
+                      _fromAirport = _toAirport;
+                      _toAirport = tmp;
+
+                      _applyFrom(_fromAirport);
+                      _applyTo(_toAirport);
                     });
                   },
                 ),
@@ -479,13 +868,19 @@ class _FlightSearchFormState extends State<FlightSearchForm> {
 
           const SizedBox(height: 12),
 
-          _tile(
-            icon: Icons.calendar_month,
-            title: tr('flight_departure_date', 'Departure'),
-            value: departureDate == null
-                ? tr('flight_select_date', 'Select date')
-                : _fmtDate(departureDate),
-            onTap: _pickDepartureDate,
+          Listener(
+            onPointerDown: (_) => debugPrint('Pointer down on calendar tile'),
+            child: _tile(
+              icon: Icons.calendar_month,
+              title: tr('flight_departure_date', 'Departure'),
+              value: departureDate == null
+                  ? tr('flight_select_date', 'Select date')
+                  : _fmtDate(departureDate),
+              onTap: () {
+                debugPrint('Tapped departure tile');
+                _pickDepartureDate();
+              },
+            ),
           ),
 
           const SizedBox(height: 12),
@@ -539,6 +934,43 @@ class _FlightSearchFormState extends State<FlightSearchForm> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _RoundIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool isDark;
+
+  const _RoundIconButton({
+    required this.icon,
+    required this.onTap,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = isDark ? Colors.white.withOpacity(0.10) : Colors.black.withOpacity(0.06);
+    final border = isDark ? Colors.white.withOpacity(0.14) : Colors.black.withOpacity(0.10);
+    final fg = isDark ? Colors.white : const Color(0xFF0F172A);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Ink(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: bg,
+            shape: BoxShape.circle,
+            border: Border.all(color: border),
+          ),
+          child: Icon(icon, size: 18, color: fg),
+        ),
       ),
     );
   }

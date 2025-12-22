@@ -2,7 +2,7 @@ name: flutter_sixvalley_ecommerce
 description: A new Flutter setup application for starting a project.
 
 publish_to: 'none'
-version: 9.0.0+9
+version: 10.0.0+10
 
 environment:
   sdk: ^3.6.2

@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../screens/flight_detail_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
 
-class FlightListItem extends StatelessWidget {
+class FlightListItem extends StatefulWidget {
   final String flightId;
   final String airline;
   final String from;
@@ -31,7 +34,12 @@ class FlightListItem extends StatelessWidget {
     this.logoUrl,
   });
 
-  // ===== Helpers =====
+  @override
+  State<FlightListItem> createState() => _FlightListItemState();
+}
+
+class _FlightListItemState extends State<FlightListItem> {
+  bool _pressed = false;
 
   String _formatMoneyVND(String raw) {
     try {
@@ -73,8 +81,8 @@ class FlightListItem extends StatelessWidget {
   }
 
   String _durationText() {
-    final dep = _parseDate(departure);
-    final arr = _parseDate(arrival);
+    final dep = _parseDate(widget.departure);
+    final arr = _parseDate(widget.arrival);
     if (dep == null || arr == null) return '';
     final diff = arr.difference(dep);
     if (diff.isNegative) return '';
@@ -119,205 +127,213 @@ class FlightListItem extends StatelessWidget {
   }
 
   bool _isRecommended() {
-    final a = availability.toLowerCase();
+    final a = widget.availability.toLowerCase();
     return a.contains('còn') || a.contains('available');
   }
 
-  // ===== UI =====
-
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = Provider.of<ThemeController>(context, listen: true).darkTheme;
 
-    final bg = isDark ? const Color(0xFF0B1220) : const Color(0xFFF5F7FB);
+    // Palette
+    final cardBg = isDark ? const Color(0xFF0F172A) : Colors.white;
+    final border = isDark ? Colors.white.withOpacity(0.10) : Colors.black.withOpacity(0.08);
+    final textMain = isDark ? Colors.white : const Color(0xFF0F172A);
+    final textSub = isDark ? Colors.white70 : const Color(0xFF64748B);
 
-    // card ticket style (giống ảnh 2: nền trắng)
-    final cardBg = Colors.white;
-    final textMain = const Color(0xFF0F172A);
-    final textSub = const Color(0xFF64748B);
+    final priceColor = isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB);
 
-    final fromCode = _shortCodeFromName(from);
-    final toCode = _shortCodeFromName(to);
+    final dashed = isDark ? Colors.white.withOpacity(0.12) : Colors.black12;
+    final line = isDark ? Colors.white.withOpacity(0.14) : Colors.black12;
 
-    final depTime = _hhmm(departure);
-    final arrTime = _hhmm(arrival);
+    final fromCode = _shortCodeFromName(widget.from);
+    final toCode = _shortCodeFromName(widget.to);
+    final depTime = _hhmm(widget.departure);
+    final arrTime = _hhmm(widget.arrival);
     final dur = _durationText();
+
+    final badgeBg = isDark ? const Color(0xFF052E1A) : const Color(0xFFE8F7EE);
+    final badgeFg = isDark ? const Color(0xFF4ADE80) : const Color(0xFF16A34A);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => FlightDetailScreen(flightId: flightId),
-            ),
-          );
-        },
-        child: PhysicalShape(
-          // ✅ khoét 2 hõm (notches)
-          clipper: TicketClipper(
-            radius: 12,
-            notchRadius: 12,
-            notchYFactor: 0.70, // vị trí hõm (0.0-1.0). 0.70 giống ảnh
-          ),
-          color: cardBg,
-          elevation: isDark ? 0 : 5,
-          shadowColor: Colors.black.withOpacity(0.18),
-          child: Container(
-            decoration: BoxDecoration(
-              color: cardBg,
-              border: Border.all(color: Colors.black12),
-            ),
-            child: Column(
-              children: [
-                // ===== TOP =====
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-                  child: Row(
-                    children: [
-                      _LogoCircle(url: logoUrl),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          airline.isNotEmpty ? airline : 'Airline',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF0F172A),
-                          ),
-                        ),
-                      ),
-                      if (_isRecommended())
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFE8F7EE),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: const Text(
-                            'Recommended',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF16A34A),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
+      child: AnimatedScale(
+        scale: _pressed ? 0.985 : 1.0,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onHighlightChanged: (v) => setState(() => _pressed = v),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => FlightDetailScreen(flightId: widget.flightId),
                 ),
-
-                // ===== MID =====
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _CodeBlock(
-                          code: fromCode,
-                          place: from,
-                          time: depTime,
-                          alignEnd: false,
-                          textMain: textMain,
-                          textSub: textSub,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Column(
+              );
+            },
+            child: PhysicalShape(
+              clipper: TicketClipper(
+                radius: 12,
+                notchRadius: 12,
+                notchYFactor: 0.70,
+              ),
+              color: cardBg,
+              elevation: isDark ? 0 : 5,
+              shadowColor: Colors.black.withOpacity(0.18),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: cardBg,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: border),
+                ),
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+                      child: Row(
                         children: [
-                          Text(
-                            dur.isNotEmpty ? dur : ' ',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                              color: textSub,
+                          _LogoCircle(url: widget.logoUrl, isDark: isDark),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              widget.airline.isNotEmpty ? widget.airline : 'Airline',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w900,
+                                color: textMain,
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Container(
-                                width: 32,
-                                height: 1,
-                                color: Colors.black12,
+                          if (_isRecommended())
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: badgeBg,
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(
+                                  color: isDark ? Colors.white.withOpacity(0.12) : Colors.transparent,
+                                ),
                               ),
-                              const SizedBox(width: 6),
-                              const Icon(Icons.flight, size: 16, color: Color(0xFF334155)),
-                              const SizedBox(width: 6),
-                              Container(
-                                width: 32,
-                                height: 1,
-                                color: Colors.black12,
+                              child: Text(
+                                'Recommended',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                  color: badgeFg,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _CodeBlock(
+                              code: fromCode,
+                              place: widget.from,
+                              time: depTime,
+                              alignEnd: false,
+                              textMain: textMain,
+                              textSub: textSub,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Column(
+                            children: [
+                              Text(
+                                dur.isNotEmpty ? dur : ' ',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                  color: textSub,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Container(width: 32, height: 1, color: line),
+                                  const SizedBox(width: 6),
+                                  Icon(
+                                    Icons.flight,
+                                    size: 16,
+                                    color: isDark ? Colors.white70 : const Color(0xFF334155),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(width: 32, height: 1, color: line),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Non-stop',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  color: textSub,
+                                ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Non-stop',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: textSub,
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _CodeBlock(
+                              code: toCode,
+                              place: widget.to,
+                              time: arrTime,
+                              alignEnd: true,
+                              textMain: textMain,
+                              textSub: textSub,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _CodeBlock(
-                          code: toCode,
-                          place: to,
-                          time: arrTime,
-                          alignEnd: true,
-                          textMain: textMain,
-                          textSub: textSub,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                    ),
 
-                // ===== dashed separator (nằm đúng chỗ hõm) =====
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  child: DashedLine(color: Colors.black12),
-                ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      child: DashedLine(color: dashed),
+                    ),
 
-                // ===== BOTTOM =====
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-                  child: Row(
-                    children: [
-                      Icon(Icons.event_seat, size: 16, color: textSub),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          availability.isNotEmpty ? availability : 'Available',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: textSub,
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+                      child: Row(
+                        children: [
+                          Icon(Icons.event_seat, size: 16, color: textSub),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              widget.availability.isNotEmpty ? widget.availability : 'Available',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: textSub,
+                              ),
+                            ),
                           ),
-                        ),
+                          Text(
+                            _formatMoneyVND(widget.price),
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w900,
+                              color: priceColor,
+                            ),
+                          ),
+                        ],
                       ),
-                      Text(
-                        _formatMoneyVND(price),
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF2563EB), // xanh giống ảnh 2
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -326,11 +342,11 @@ class FlightListItem extends StatelessWidget {
   }
 }
 
-// ===== Components =====
-
 class _LogoCircle extends StatelessWidget {
   final String? url;
-  const _LogoCircle({required this.url});
+  final bool isDark;
+
+  const _LogoCircle({required this.url, required this.isDark});
 
   @override
   Widget build(BuildContext context) {
@@ -356,12 +372,16 @@ class _LogoCircle extends StatelessWidget {
       child = const Icon(Icons.flight, size: 18);
     }
 
+    final bg = isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05);
+    final border = isDark ? Colors.white.withOpacity(0.10) : Colors.black.withOpacity(0.06);
+
     return Container(
       width: 32,
       height: 32,
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.05),
+        color: bg,
         shape: BoxShape.circle,
+        border: Border.all(color: border),
       ),
       alignment: Alignment.center,
       child: ClipOval(child: child),
@@ -409,7 +429,7 @@ class _CodeBlock extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: 11,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
             color: textSub,
           ),
         ),
@@ -418,7 +438,7 @@ class _CodeBlock extends StatelessWidget {
           time,
           style: TextStyle(
             fontSize: 12,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w900,
             color: textMain,
           ),
         ),
@@ -427,12 +447,10 @@ class _CodeBlock extends StatelessWidget {
   }
 }
 
-// ===== Ticket clipper: bo góc + khoét 2 hõm =====
-
 class TicketClipper extends CustomClipper<Path> {
-  final double radius;       // bo góc
-  final double notchRadius;  // bán kính hõm
-  final double notchYFactor; // vị trí hõm theo chiều cao (0..1)
+  final double radius;
+  final double notchRadius;
+  final double notchYFactor;
 
   TicketClipper({
     this.radius = 16,
@@ -448,40 +466,30 @@ class TicketClipper extends CustomClipper<Path> {
 
     final p = Path();
 
-    // start top-left (after rounding)
     p.moveTo(r, 0);
-
-    // top edge
     p.lineTo(size.width - r, 0);
     p.quadraticBezierTo(size.width, 0, size.width, r);
 
-    // right edge down to notch
     p.lineTo(size.width, notchY - nr);
-    // notch (right) inward
     p.arcToPoint(
       Offset(size.width, notchY + nr),
       radius: Radius.circular(nr),
       clockwise: false,
     );
 
-    // continue right edge to bottom-right
     p.lineTo(size.width, size.height - r);
     p.quadraticBezierTo(size.width, size.height, size.width - r, size.height);
 
-    // bottom edge
     p.lineTo(r, size.height);
     p.quadraticBezierTo(0, size.height, 0, size.height - r);
 
-    // left edge up to notch
     p.lineTo(0, notchY + nr);
-    // notch (left) inward
     p.arcToPoint(
       Offset(0, notchY - nr),
       radius: Radius.circular(nr),
       clockwise: false,
     );
 
-    // continue left edge to top-left
     p.lineTo(0, r);
     p.quadraticBezierTo(0, 0, r, 0);
 
@@ -496,8 +504,6 @@ class TicketClipper extends CustomClipper<Path> {
         oldClipper.notchYFactor != notchYFactor;
   }
 }
-
-// ===== Dashed line =====
 
 class DashedLine extends StatelessWidget {
   final Color color;
@@ -532,6 +538,51 @@ class DashedLine extends StatelessWidget {
           }),
         );
       },
+    );
+  }
+}
+
+class FlightReveal extends StatefulWidget {
+  final int index;
+  final Widget child;
+
+  const FlightReveal({super.key, required this.index, required this.child});
+
+  @override
+  State<FlightReveal> createState() => _FlightRevealState();
+}
+
+class _FlightRevealState extends State<FlightReveal> with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+  late final Animation<double> _opacity;
+  late final Animation<Offset> _slide;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 260));
+    _opacity = CurvedAnimation(parent: _c, curve: Curves.easeOut);
+    _slide = Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _c, curve: Curves.easeOut));
+
+    _timer = Timer(Duration(milliseconds: 45 * widget.index), () {
+      if (mounted) _c.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacity,
+      child: SlideTransition(position: _slide, child: widget.child),
     );
   }
 }
