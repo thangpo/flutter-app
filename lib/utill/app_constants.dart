@@ -327,6 +327,8 @@ class AppConstants {
   static const String socialUserId = 'social_user_id';
   static const String socialUserAvatar = 'social_user_avatar';
   static const String socialUserName = 'social_user_name';
+  static const String zegoToken = 'zego_token';
+  static const String zegoTokenExpireAt = 'zego_token_expire_at'; // epoch seconds
 
   static const String guestId = 'guestId';
   static const String user = 'user';

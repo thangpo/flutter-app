@@ -100,10 +100,9 @@ class ZegoCallService {
             unawaited(_remoteLogger.log('incoming_accept_pressed', {
               'user_id': userId,
             }));
-            // Đảm bảo mở UI cuộc gọi đã accept (offline) sau khi bấm Nghe từ CallKit.
-            unawaited(
-              _enterAcceptedOfflineCallWithLog(source: 'accept_button'),
-            );
+
+            // ✅ Quan trọng: đảm bảo init xong rồi mới enter
+            unawaited(ensureEnterAcceptedOfflineCall(source: 'callkit_accept'));
           },
           onIncomingCallReceived: (
             String callID,
@@ -126,7 +125,7 @@ class ZegoCallService {
         ),
         config: ZegoCallInvitationConfig(
           offline: ZegoCallInvitationOfflineConfig(
-            autoEnterAcceptedOfflineCall: false,
+            autoEnterAcceptedOfflineCall: true,
           ),
         ),
         notificationConfig: notificationConfig,
@@ -353,41 +352,43 @@ class ZegoCallService {
 
   Future<String?> _getValidToken({required String userId}) async {
     final prefs = await SharedPreferences.getInstance();
+
+    // ✅ 1) dùng cache trước
+    final cached = prefs.getString(AppConstants.zegoToken) ?? '';
+    final exp = prefs.getInt(AppConstants.zegoTokenExpireAt) ?? 0;
+    final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+    if (cached.isNotEmpty && exp > (nowSec + 60)) {
+      unawaited(_remoteLogger.log('token_cache_hit', {
+        'user_id': userId,
+        'expire_at': exp,
+        'now': nowSec,
+      }));
+      return cached;
+    }
+
+    // ✅ 2) fallback fetch server
     final accessToken = prefs.getString(AppConstants.socialAccessToken) ?? '';
     if (accessToken.isEmpty) {
       debugPrint('[ZEGO] Không có social access_token để xin token');
       return null;
     }
 
-    try {
-      debugPrint(
-        '[ZEGO] Fetch token từ server: userId=$userId, access_token=${accessToken.substring(0, 6)}..., endpoint=${AppConstants.socialGenerateZegoTokenUri}',
-      );
-      unawaited(_remoteLogger.log('token_fetch', {
-        'user_id': userId,
-      }));
-      final res = await _tokenRepo.fetchToken(
-        accessToken: accessToken,
-        userId: userId,
-      );
-      await prefs.setString(_prefTokenKey, res.token);
-      await prefs.setInt(_prefExpireKey, res.expireAt);
-      debugPrint(
-        '[ZEGO] Lấy token mới thành công, expireAt=${res.expireAt}, len=${res.token.length}',
-      );
-      unawaited(_remoteLogger.log('token_success', {
-        'user_id': userId,
-        'expire_at': res.expireAt,
-      }));
-      return res.token;
-    } catch (e) {
-      debugPrint('[ZEGO] Lỗi fetch token: $e');
-      unawaited(_remoteLogger.log('token_failed', {
-        'user_id': userId,
-        'error': e.toString(),
-      }));
-      return null;
-    }
+    final res = await _tokenRepo.fetchToken(
+      accessToken: accessToken,
+      userId: userId,
+    );
+
+    // ✅ 3) save cache
+    await prefs.setString(AppConstants.zegoToken, res.token);
+    await prefs.setInt(AppConstants.zegoTokenExpireAt, res.expireAt);
+
+    unawaited(_remoteLogger.log('token_cache_saved', {
+      'user_id': userId,
+      'expire_at': res.expireAt,
+    }));
+
+    return res.token;
   }
 
   String newOneOnOneCallId(String peerId) {
