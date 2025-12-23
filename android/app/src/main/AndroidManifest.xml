@@ -160,6 +160,15 @@
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="vnshop247_channel" />
 
+        <!-- Forward FCM data to ZEGOCLOUD Call Kit for offline (app killed) call invites -->
+        <service
+            android:name=".ZegoMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
     </application>
 
 </manifest>
