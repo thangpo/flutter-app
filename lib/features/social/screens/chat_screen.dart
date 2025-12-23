@@ -2187,228 +2187,167 @@ class _ChatScreenState extends State<ChatScreen> {
                                 },
                               )
                             : ListView.builder(
-                                controller: _scroll,
-                                keyboardDismissBehavior:
-                                    ScrollViewKeyboardDismissBehavior.onDrag,
-                                padding:
-                                    const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                                itemCount: _messages.length,
-                                itemBuilder: (ctx, i) {
-                                  final m = _messages[i];
-                                  final isMe = (m['position'] == 'right');
+                          controller: _scroll,
+                          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                          itemCount: _messages.length,
+                          itemBuilder: (ctx, i) {
+                            final m = _messages[i];
+                            final isMe = (m['position'] == 'right');
 
-                                  final reactionId = _getReactionForMessage(m);
-                                  final hasReply = _hasReplyTag(m);
-                                  final replyMsg =
-                                      hasReply ? _findRepliedMessage(m) : null;
+                            final isLocal = _isLocalMsg(m);
+                            final status = (m['local_status'] ?? '').toString();
 
-                                  if (!isMe) {
-                                    final msgAvatar =
-                                        (m['user_data']?['avatar'] ?? '')
-                                            .toString();
-                                    final leftAvatar = msgAvatar.isNotEmpty
-                                        ? msgAvatar
-                                        : peerAvatar;
+                            final reactionId = _getReactionForMessage(m);
+                            final hasReply = _hasReplyTag(m);
+                            final replyMsg = hasReply ? _findRepliedMessage(m) : null;
 
-                                    return Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 8.0),
-                                      child: Row(
-                                        crossAxisAlignment: CrossAxisAlignment.end,
-                                        children: [
-                                          CircleAvatar(
-                                            radius: 16,
-                                            backgroundImage:
-                                                leftAvatar.isNotEmpty
-                                                    ? NetworkImage(leftAvatar)
-                                                    : null,
-                                            child: leftAvatar.isEmpty
-                                                ? const Icon(Icons.person,
-                                                    size: 18)
-                                                : null,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Flexible(
-                                            child: _SwipeReplyWrapper(
-                                              isMe: false,
-                                              onReply: () {
-                                                setState(() {
-                                                  _replyingToMessage = m;
-                                                });
-                                              },
-                                              child: GestureDetector(
-                                                behavior:
-                                                    HitTestBehavior.opaque,
-                                                onLongPress: () =>
-                                                    _onLongPressMessage(
-                                                        m, false),
-                                                child: Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    if (hasReply)
-                                                      _buildReplyHeader(
-                                                        message: m,
-                                                        replyMsg: replyMsg,
-                                                        isMe: false,
-                                                      ),
-                                                    if (replyMsg != null)
-                                                      _buildReplyPreview(
-                                                          replyMsg,
-                                                          isMe: false),
-                                                    Stack(
-                                                      clipBehavior: Clip.none,
-                                                      children: [
-                                                        ChatMessageBubble(
-                                                          key: ValueKey(
-                                                              '${m['id'] ?? m.hashCode}'),
-                                                          message: m,
-                                                          isMe: false,
-                                                        ),
-                                                        if (reactionId != 0)
-                                                          Positioned(
-                                                            bottom: -14,
-                                                            left: 8,
-                                                            child:
-                                                                _buildReactionBadge(
-                                                                    reactionId,
-                                                                    isMe:
-                                                                        false),
-                                                          ),
-                                                      ],
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  }
+                            // Parse call invite (nếu message text là invite)
+                            final inv = CallInvite.tryParse(_plainTextOf(m));
 
-                                  return Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 8.0),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.end,
-                                      children: [
-                                        Flexible(
-                                          child: _buildCallInviteTile(inv,
-                                              isMe: true),
+                            // 1) Call invite tile
+                            if (inv != null) {
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                child: Row(
+                                  mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+                                  children: [
+                                    Flexible(child: _buildCallInviteTile(inv, isMe: isMe)),
+                                  ],
+                                ),
+                              );
+                            }
+
+                            // 2) Local pending bubble (chỉ phía mình gửi)
+                            if (isMe && isLocal) {
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    Flexible(
+                                      child: GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onTap: () async {
+                                          if (status == 'failed') {
+                                            await _retryLocalMessage(m);
+                                          }
+                                        },
+                                        onLongPress: () => _onLongPressMessage(m, true),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.end,
+                                          children: [
+                                            if (hasReply) _buildReplyHeader(message: m, replyMsg: replyMsg, isMe: true),
+                                            if (replyMsg != null) _buildReplyPreview(replyMsg, isMe: true),
+                                            _buildLocalBubble(m, isDark: isDark),
+                                            _localStatusLine(m),
+                                          ],
                                         ),
-                                      ],
+                                      ),
                                     ),
-                                  );
-                                }
-                                final isLocal = _isLocalMsg(m);
-                                final status = (m['local_status'] ?? '').toString();
+                                  ],
+                                ),
+                              );
+                            }
 
-                                final reactionId = _getReactionForMessage(m);
-                                final hasReply = _hasReplyTag(m);
-                                final replyMsg = hasReply ? _findRepliedMessage(m) : null;
+                            // 3) Message từ người kia (bên trái)
+                            if (!isMe) {
+                              final msgAvatar = (m['user_data']?['avatar'] ?? '').toString();
+                              final leftAvatar = msgAvatar.isNotEmpty ? msgAvatar : peerAvatar;
 
-                                if (isMe && isLocal) {
-                                  return Padding(
-                                    padding: const EdgeInsets.symmetric(vertical: 8.0),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.end,
-                                      children: [
-                                        Flexible(
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 16,
+                                      backgroundImage: leftAvatar.isNotEmpty ? NetworkImage(leftAvatar) : null,
+                                      child: leftAvatar.isEmpty ? const Icon(Icons.person, size: 18) : null,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Flexible(
+                                      child: _SwipeReplyWrapper(
+                                        isMe: false,
+                                        onReply: () => setState(() => _replyingToMessage = m),
+                                        child: GestureDetector(
+                                          behavior: HitTestBehavior.opaque,
+                                          onLongPress: () => _onLongPressMessage(m, false),
                                           child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.end,
+                                            crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
-                                              _buildLocalBubble(m, isDark: isDark),
-                                              _localStatusLine(m),
+                                              if (hasReply) _buildReplyHeader(message: m, replyMsg: replyMsg, isMe: false),
+                                              if (replyMsg != null) _buildReplyPreview(replyMsg, isMe: false),
+                                              Stack(
+                                                clipBehavior: Clip.none,
+                                                children: [
+                                                  ChatMessageBubble(
+                                                    key: ValueKey('${m['id'] ?? m.hashCode}'),
+                                                    message: m,
+                                                    isMe: false,
+                                                  ),
+                                                  if (reactionId != 0)
+                                                    Positioned(
+                                                      bottom: -14,
+                                                      left: 8,
+                                                      child: _buildReactionBadge(reactionId, isMe: false),
+                                                    ),
+                                                ],
+                                              ),
                                             ],
                                           ),
                                         ),
-                                      ],
+                                      ),
                                     ),
-                                  );
-                                }
+                                  ],
+                                ),
+                              );
+                            }
 
-                                if (!isMe) {
-                                  final msgAvatar =
-                                      (m['user_data']?['avatar'] ?? '')
-                                          .toString();
-                                  final leftAvatar = msgAvatar.isNotEmpty
-                                      ? msgAvatar
-                                      : peerAvatar;
-
-                                  return Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 8.0),
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.end,
-                                      children: [
-                                        CircleAvatar(
-                                          radius: 16,
-                                          backgroundImage: leftAvatar.isNotEmpty
-                                              ? NetworkImage(leftAvatar)
-                                              : null,
-                                          child: leftAvatar.isEmpty
-                                              ? const Icon(Icons.person,
-                                                  size: 18)
-                                              : null,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Flexible(
-                                          child: _SwipeReplyWrapper(
-                                            isMe: true,
-                                            onReply: () {
-                                              setState(() {
-                                                _replyingToMessage = m;
-                                              });
-                                            },
-                                            child: GestureDetector(
-                                              behavior: HitTestBehavior.opaque,
-                                              onLongPress: () =>
-                                                  _onLongPressMessage(m, true),
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.end,
-                                                children: [
-                                                  if (hasReply)
-                                                    _buildReplyHeader(
-                                                      message: m,
-                                                      replyMsg: replyMsg,
-                                                      isMe: true,
-                                                    ),
-                                                  if (replyMsg != null)
-                                                    _buildReplyPreview(replyMsg,
-                                                        isMe: true),
-                                                  Stack(
-                                                    clipBehavior: Clip.none,
-                                                    children: [
-                                                      ChatMessageBubble(
-                                                        key: ValueKey(
-                                                            '${m['id'] ?? m.hashCode}'),
-                                                        message: m,
-                                                        isMe: true,
-                                                      ),
-                                                      if (reactionId != 0)
-                                                        Positioned(
-                                                          bottom: -14,
-                                                          right: 8,
-                                                          child:
-                                                              _buildReactionBadge(
-                                                                  reactionId,
-                                                                  isMe: true),
-                                                        ),
-                                                    ],
+                            // 4) Message của mình (bên phải - non-local)
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8.0),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  Flexible(
+                                    child: _SwipeReplyWrapper(
+                                      isMe: true,
+                                      onReply: () => setState(() => _replyingToMessage = m),
+                                      child: GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onLongPress: () => _onLongPressMessage(m, true),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.end,
+                                          children: [
+                                            if (hasReply) _buildReplyHeader(message: m, replyMsg: replyMsg, isMe: true),
+                                            if (replyMsg != null) _buildReplyPreview(replyMsg, isMe: true),
+                                            Stack(
+                                              clipBehavior: Clip.none,
+                                              children: [
+                                                ChatMessageBubble(
+                                                  key: ValueKey('${m['id'] ?? m.hashCode}'),
+                                                  message: m,
+                                                  isMe: true,
+                                                ),
+                                                if (reactionId != 0)
+                                                  Positioned(
+                                                    bottom: -14,
+                                                    right: 8,
+                                                    child: _buildReactionBadge(reactionId, isMe: true),
                                                   ),
-                                                ],
-                                              ),
+                                              ],
                                             ),
-                                          ),
+                                          ],
                                         ),
-                                      ],
+                                      ),
                                     ),
-                                  );
-                                },
+                                  ),
+                                ],
                               ),
+                            );
+                          },
+                        )
                       ),
                     ),
                     if (_replyingToMessage != null)
@@ -2485,138 +2424,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           ],
                         ),
                       ),
-                    // if (_voiceDraftPath != null && !_recOn)
-                    //   Padding(
-                    //     padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                    //     child: _buildVoicePreview(context),
-                    //   ),
-                    SafeArea(
-                      top: false,
-                      minimum: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-                      child: _recOn
-                          ? _buildRecordingBar(isDark: isDark)
-                          : (_voiceDraftPath != null
-                              ? _buildVoiceDraftCard(isDark: isDark)
-                              : Container(
-                                  decoration: BoxDecoration(
-                                    color: barBg,
-                                    borderRadius: BorderRadius.circular(18),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Flexible(
-                                        child: _SwipeReplyWrapper(
-                                          isMe: true,
-                                          onReply: () {
-                                            setState(() {
-                                              _replyingToMessage = m;
-                                            });
-                                          },
-                                          child: GestureDetector(
-                                            behavior: HitTestBehavior.opaque,
-                                            onTap: () async {
-                                              if (isLocal && status == 'failed') {
-                                                await _retryLocalMessage(m);
-                                              }
-                                            },
-                                            onLongPress: () => _onLongPressMessage(m, true),
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.end,
-                                              children: [
-                                                if (hasReply)
-                                                  _buildReplyHeader(message: m, replyMsg: replyMsg, isMe: true),
-                                                if (replyMsg != null) _buildReplyPreview(replyMsg, isMe: true),
 
-                                                Stack(
-                                                  clipBehavior: Clip.none,
-                                                  children: [
-                                                    ChatMessageBubble(
-                                                      key: ValueKey('${m['id'] ?? m.hashCode}'),
-                                                      message: m,
-                                                      isMe: true,
-                                                    ),
-                                                    if (reactionId != 0)
-                                                      Positioned(
-                                                        bottom: -14,
-                                                        right: 8,
-                                                        child: _buildReactionBadge(reactionId, isMe: true),
-                                                      ),
-                                                  ],
-                                                ),
-
-                                                _localStatusLine(m),
-                                              ],
-                                            ),
-                                            enabledBorder: OutlineInputBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(18),
-                                              borderSide: BorderSide(
-                                                  color: borderColor, width: 1),
-                                            ),
-                                            focusedBorder: OutlineInputBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(18),
-                                              borderSide: BorderSide(
-                                                  color: focusBorder,
-                                                  width: 1.5),
-                                            ),
-                                            contentPadding:
-                                                const EdgeInsets.symmetric(
-                                                    vertical: 10,
-                                                    horizontal: 8),
-                                          ),
-                                          onSubmitted: (_) => _sendText(),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Material(
-                                        color: sendBg,
-                                        shape: const CircleBorder(),
-                                        child: InkWell(
-                                          customBorder: const CircleBorder(),
-                                          onTap: _sending ? null : _sendText,
-                                          child: const Padding(
-                                            padding: EdgeInsets.all(10),
-                                            child: Icon(Icons.send,
-                                                color: Colors.white),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                )),
-                    )
-                  ],
-                ),
-                if (_showScrollToBottom)
-                  Positioned(
-                    right: 12,
-                    bottom: 76,
-                    child: Builder(
-                      builder: (context) {
-                        final isDark =
-                            Provider.of<ThemeController>(context, listen: true)
-                                .darkTheme;
-
-                        final bg =
-                            isDark ? const Color(0xFF2A2A2A) : Colors.white;
-                        final fg = isDark ? Colors.white : Colors.black87;
-
-                        return Material(
-                          color: bg,
-                          shape: const CircleBorder(),
-                          elevation: 3,
-                          child: InkWell(
-                            customBorder: const CircleBorder(),
-                            onTap: _scrollToBottom,
-                            child: Padding(
-                              padding: const EdgeInsets.all(10),
-                              child: Icon(Icons.arrow_downward, color: fg),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
                   SafeArea(
                     top: false,
                     minimum: const EdgeInsets.fromLTRB(8, 6, 8, 8),
@@ -2691,32 +2499,33 @@ class _ChatScreenState extends State<ChatScreen> {
                   )
                 ],
               ),
-              if (_showScrollToBottom)
-                Positioned(
-                  right: 12,
-                  bottom: 76,
-                  child: Builder(
-                    builder: (context) {
-                      final isDark =
-                          Provider.of<ThemeController>(context, listen: true).darkTheme;
+                if (_showScrollToBottom)
+                  Positioned(
+                    right: 12,
+                    bottom: 76,
+                    child: Builder(
+                      builder: (context) {
+                        final isDark =
+                            Provider.of<ThemeController>(context, listen: true).darkTheme;
 
-                      final bg = isDark ? const Color(0xFF2A2A2A) : Colors.white;
-                      final fg = isDark ? Colors.white : Colors.black87;
+                        final bg = isDark ? const Color(0xFF2A2A2A) : Colors.white;
+                        final fg = isDark ? Colors.white : Colors.black87;
 
-                      return Material(
-                        color: bg,
-                        shape: const CircleBorder(),
-                        elevation: 3,
-                        child: InkWell(
-                          customBorder: const CircleBorder(),
-                          onTap: _scrollToBottom,
-                          child: Padding(
-                            padding: const EdgeInsets.all(10),
-                            child: Icon(Icons.arrow_downward, color: fg),
+                        return Material(
+                          color: bg,
+                          shape: const CircleBorder(),
+                          elevation: 3,
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: _scrollToBottom,
+                            child: Padding(
+                              padding: const EdgeInsets.all(10),
+                              child: Icon(Icons.arrow_downward, color: fg),
+                            ),
                           ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
               ],
             ),
