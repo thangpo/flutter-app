@@ -62,6 +62,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _hasNewMessage = false;
   String? _beforeId;
   late final String _peerId;
+
   final _recorder = FlutterSoundRecorder();
   bool _recReady = false;
   bool _recOn = false;
@@ -93,32 +94,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Map<String, int> _localReactions = {};
   Map<String, dynamic>? _replyingToMessage;
-
-  int _localSeq = 0;
-  int _nextLocalId() {
-    return -(DateTime.now().millisecondsSinceEpoch) - (_localSeq++);
-  }
-
-  Map<String, dynamic> _makeLocalMsg({
-    required String type,
-    String text = '',
-    String? filePath,
-    String? replyId,
-  }) {
-    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    return {
-      'local_id': _nextLocalId(),
-      'position': 'right',
-      'time': now,
-      'local_type': type,
-      'local_status': 'sending',
-      'local_text': text,
-      'local_file_path': filePath,
-      if (replyId != null) 'reply_id': replyId,
-      'text': text,
-      'display_text': text,
-    };
-  }
 
   @override
   void initState() {
@@ -262,15 +237,6 @@ class _ChatScreenState extends State<ChatScreen> {
     return 0;
   }
 
-  int _sortKey(Map<String, dynamic> m) {
-    final real = int.tryParse('${m['id'] ?? m['message_id'] ?? m['msg_id'] ?? ''}') ?? 0;
-    if (real != 0) return real;
-
-    final localId = (m['local_id'] is int) ? (m['local_id'] as int).abs() : 0;
-
-    return (1 << 60) + localId;
-  }
-
   void _applyLocalReactionsToMessages() {
     if (_localReactions.isEmpty) return;
     for (final m in _messages) {
@@ -343,7 +309,7 @@ class _ChatScreenState extends State<ChatScreen> {
         limit: 30,
       );
 
-      list.sort((a, b) => _sortKey(a).compareTo(_sortKey(b)));
+      list.sort((a, b) => (_msgId(a)).compareTo(_msgId(b)));
 
       _mergeIncoming(list, toTail: true);
       _applyLocalReactionsToMessages();
@@ -365,7 +331,7 @@ class _ChatScreenState extends State<ChatScreen> {
         limit: 30,
       );
 
-      list.sort((a, b) => _sortKey(a).compareTo(_sortKey(b)));
+      list.sort((a, b) => _msgId(a).compareTo(_msgId(b)));
       _messages = list;
       _applyLocalReactionsToMessages();
 
@@ -384,6 +350,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _fetchOlder() async {
     if (_loading || !_hasMore) return;
+
     setState(() => _loading = true);
     final oldMax = _scroll.hasClients ? _scroll.position.maxScrollExtent : 0.0;
 
@@ -396,7 +363,8 @@ class _ChatScreenState extends State<ChatScreen> {
       );
 
       if (older.isNotEmpty) {
-        older.sort((a, b) => _sortKey(a).compareTo(_sortKey(b)));
+        older.sort((a, b) => _msgId(a).compareTo(_msgId(b)));
+
         _beforeId = _msgIdStr(older.first);
         _mergeIncoming(older, toTail: false);
         _applyLocalReactionsToMessages();
@@ -538,70 +506,6 @@ class _ChatScreenState extends State<ChatScreen> {
     await _toggleRecord();
   }
 
-  Future<void> _retryLocalMessage(Map<String, dynamic> localMsg) async {
-    final localId = localMsg['local_id'];
-    if (localId is! int) return;
-
-    setState(() {
-      final idx = _messages.indexWhere((m) => (m['local_id'] ?? 0) == localId);
-      if (idx >= 0) _messages[idx]['local_status'] = 'sending';
-    });
-
-    try {
-      Map<String, dynamic>? sent;
-
-      final t = (localMsg['local_type'] ?? '').toString();
-      final file = (localMsg['local_file_path'] ?? '').toString();
-      final txt = (localMsg['local_text'] ?? '').toString();
-      final replyId = (localMsg['reply_id'] ?? '').toString().trim();
-      final replyTo = replyId.isNotEmpty && replyId != '0' ? replyId : null;
-
-      if (t == 'text') {
-        sent = await repo.sendMessage(
-          token: widget.accessToken,
-          peerUserId: _peerId,
-          text: txt,
-          replyToMessageId: replyTo,
-        );
-      } else {
-        sent = await repo.sendMessage(
-          token: widget.accessToken,
-          peerUserId: _peerId,
-          filePath: file,
-        );
-      }
-
-      if (!mounted) return;
-
-      if (sent != null) {
-        if (replyTo != null && (sent['reply_id'] == null || '${sent['reply_id']}' == '0')) {
-          sent['reply_id'] = replyTo;
-        }
-
-        setState(() {
-          _messages.removeWhere((m) => (m['local_id'] ?? 0) == localId);
-          _mergeIncoming([sent!], toTail: true);
-          _applyLocalReactionsToMessages();
-        });
-        _scrollToBottom();
-      } else {
-        setState(() {
-          final idx = _messages.indexWhere((m) => (m['local_id'] ?? 0) == localId);
-          if (idx >= 0) _messages[idx]['local_status'] = 'failed';
-        });
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        final idx = _messages.indexWhere((m) => (m['local_id'] ?? 0) == localId);
-        if (idx >= 0) {
-          _messages[idx]['local_status'] = 'failed';
-          _messages[idx]['local_error'] = '$e';
-        }
-      });
-    }
-  }
-
   Future<void> _cancelRecording() async {
     if (_recOn) {
       _stopRecordingTimer();
@@ -623,7 +527,7 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
 
-    incoming.sort((a, b) => _sortKey(a).compareTo(_sortKey(b)));
+    incoming.sort((a, b) => _msgId(a).compareTo(_msgId(b)));
 
     final exist = _messages.map(_msgIdStr).toSet();
     final filtered = incoming.where((m) {
@@ -639,36 +543,11 @@ class _ChatScreenState extends State<ChatScreen> {
       _messages.insertAll(0, filtered);
     }
 
-    _messages.sort((a, b) => _sortKey(a).compareTo(_sortKey(b)));
+    _messages.sort((a, b) => _msgId(a).compareTo(_msgId(b)));
   }
 
-  int _msgId(Map<String, dynamic> m) {
-    final real = int.tryParse('${m['id'] ?? m['message_id'] ?? m['msg_id'] ?? ''}') ?? 0;
-    if (real != 0) return real;
-    return (m['local_id'] is int) ? (m['local_id'] as int) : 0;
-  }
-
-  bool _isLocalMsg(Map<String, dynamic> m) {
-    return m.containsKey('local_id') && _msgId(m) < 0;
-  }
-
-  Widget _localStatusLine(Map<String, dynamic> m) {
-    if (!_isLocalMsg(m)) return const SizedBox.shrink();
-
-    final status = (m['local_status'] ?? '').toString();
-    final text = status == 'failed' ? 'Gửi lỗi · chạm để thử lại' : 'Đang gửi...';
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 3),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontSize: 10.5,
-          color: status == 'failed' ? Colors.redAccent : Colors.grey,
-        ),
-      ),
-    );
-  }
+  int _msgId(Map<String, dynamic> m) =>
+      int.tryParse('${m['id'] ?? m['message_id'] ?? m['msg_id'] ?? ''}') ?? 0;
 
   String _msgIdStr(Map<String, dynamic> m) =>
       '${m['id'] ?? m['message_id'] ?? m['msg_id'] ?? ''}';
@@ -692,101 +571,88 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _sendText() async {
     final text = _inputCtrl.text.trim();
-    final attachments = List<_PendingAttachment>.from(_pendingAttachments);
-    final voicePath = _voiceDraftPath;
-    if (text.isEmpty && attachments.isEmpty && voicePath == null) return;
+    final bool hasAttachments = _pendingAttachments.isNotEmpty;
+    final bool hasAudio = _voiceDraftPath != null;
+    if (_sending) return;
+    if (text.isEmpty && !hasAttachments && !hasAudio) return;
+
     final replying = _replyingToMessage;
-    final replyId = replying != null ? _msgIdStr(replying) : null;
+    String? replyId;
+    if (replying != null) {
+      replyId = _msgIdStr(replying);
+    }
 
-    _inputCtrl.clear();
     setState(() {
+      _sending = true;
       _replyingToMessage = null;
-      _pendingAttachments = [];
-      _clearVoiceDraft();
-      _hasNewMessage = true;
     });
 
-    final locals = <Map<String, dynamic>>[];
+    try {
+      if (text.isNotEmpty) {
+        final sent = await repo.sendMessage(
+          token: widget.accessToken,
+          peerUserId: _peerId,
+          text: text,
+          replyToMessageId: replyId,
+        );
 
-    if (text.isNotEmpty) {
-      locals.add(_makeLocalMsg(type: 'text', text: text, replyId: replyId));
-    }
-
-    for (final a in attachments) {
-      locals.add(_makeLocalMsg(type: a.type == _AttachmentType.image ? 'image'
-          : a.type == _AttachmentType.video ? 'video'
-          : 'file',
-        text: '',
-        filePath: a.path,
-        replyId: replyId,
-      ));
-    }
-
-    if (voicePath != null) {
-      locals.add(_makeLocalMsg(type: 'voice', filePath: voicePath, replyId: replyId));
-    }
-
-    setState(() {
-      _messages.addAll(locals);
-      _messages.sort((a, b) => _sortKey(a).compareTo(_sortKey(b)));
-    });
-    _scrollToBottom();
-
-    for (final local in locals) {
-      final localId = local['local_id'] as int;
-      try {
-        Map<String, dynamic>? sent;
-
-        final t = (local['local_type'] ?? '').toString();
-        final file = (local['local_file_path'] ?? '').toString();
-        final txt = (local['local_text'] ?? '').toString();
-
-        if (t == 'text') {
-          sent = await repo.sendMessage(
-            token: widget.accessToken,
-            peerUserId: _peerId,
-            text: txt,
-            replyToMessageId: replyId,
-          );
-        } else {
-          sent = await repo.sendMessage(
-            token: widget.accessToken,
-            peerUserId: _peerId,
-            filePath: file,
-          );
-        }
+        _inputCtrl.clear();
 
         if (sent != null) {
-          if (replyId != null && (sent['reply_id'] == null || '${sent['reply_id']}' == '0')) {
+          if (replyId != null &&
+              (sent['reply_id'] == null || '${sent['reply_id']}' == '0')) {
             sent['reply_id'] = replyId;
           }
           if (replying != null) {
             sent['reply'] ??= Map<String, dynamic>.from(replying);
           }
 
-          if (!mounted) return;
-          setState(() {
-            _messages.removeWhere((m) => (m['local_id'] ?? 0) == localId);
-            _mergeIncoming([sent!], toTail: true);
-            _applyLocalReactionsToMessages();
-          });
-          _scrollToBottom();
-        } else {
-          if (!mounted) return;
-          setState(() {
-            final idx = _messages.indexWhere((m) => (m['local_id'] ?? 0) == localId);
-            if (idx >= 0) _messages[idx]['local_status'] = 'failed';
-          });
+          _mergeIncoming([sent], toTail: true);
+          _applyLocalReactionsToMessages();
         }
-      } catch (e) {
-        if (!mounted) return;
-        setState(() {
-          final idx = _messages.indexWhere((m) => (m['local_id'] ?? 0) == localId);
-          if (idx >= 0) {
-            _messages[idx]['local_status'] = 'failed';
-            _messages[idx]['local_error'] = '$e';
+      }
+
+      if (hasAttachments) {
+        final List<_PendingAttachment> attachments =
+            List<_PendingAttachment>.from(_pendingAttachments);
+        for (final _PendingAttachment attachment in attachments) {
+          final sent = await repo.sendMessage(
+            token: widget.accessToken,
+            peerUserId: _peerId,
+            filePath: attachment.path,
+          );
+          if (sent != null) {
+            _mergeIncoming([sent], toTail: true);
+            _applyLocalReactionsToMessages();
           }
+        }
+      }
+      if (hasAudio) {
+        final sent = await repo.sendMessage(
+          token: widget.accessToken,
+          peerUserId: _peerId,
+          filePath: _voiceDraftPath!,
+        );
+        if (sent != null) {
+          _mergeIncoming([sent], toTail: true);
+          _applyLocalReactionsToMessages();
+        }
+      }
+
+      if (mounted && (hasAttachments || text.isNotEmpty || hasAudio)) {
+        if (hasAudio) {
+          await _voicePreviewPlayer.stop();
+        }
+        setState(() {
+          _hasNewMessage = true;
+          _pendingAttachments = [];
+          _clearVoiceDraft();
         });
+        _scrollToBottom();
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _sending = false);
       }
     }
   }
@@ -794,35 +660,28 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _pickAndSendFile() async {
     if (_sending) return;
 
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     final _AttachChoice? choice = await showModalBottomSheet<_AttachChoice>(
       context: context,
-      barrierColor: Colors.black54,            // nền tối phía sau
-      backgroundColor: Colors.transparent,     // trong suốt để tự vẽ
-      isScrollControlled: false,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (context) {
         return SafeArea(
-          child: Container(
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1F1F1F) : Colors.white, // nền sheet
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.insert_drive_file),
-                  title: Text(_tr('choose_file', 'Chọn tệp')),
-                  onTap: () => Navigator.pop(context, _AttachChoice.file),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.photo_library),
-                  title: Text(_tr('media_library', 'Thư viện (ảnh/video)')),
-                  onTap: () => Navigator.pop(context, _AttachChoice.galleryMedia),
-                ),
-              ],
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.insert_drive_file),
+                title: Text(_tr('choose_file', 'Chọn tệp')),
+                onTap: () => Navigator.pop(context, _AttachChoice.file),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: Text(_tr('media_library', 'Thư viện (ảnh/video)')),
+                onTap: () => Navigator.pop(context, _AttachChoice.galleryMedia),
+              ),
+            ],
           ),
         );
       },
@@ -1602,66 +1461,6 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildLocalBubble(Map<String, dynamic> m, {required bool isDark}) {
-    final t = (m['local_type'] ?? '').toString();
-    final txt = (m['local_text'] ?? m['text'] ?? '').toString();
-    final path = (m['local_file_path'] ?? '').toString();
-
-    final bg = isDark ? const Color(0xFF2F80ED) : const Color(0xFF2F80ED);
-    final fg = Colors.white;
-
-    Widget child;
-
-    if (t == 'text') {
-      child = Text(txt, style: TextStyle(color: fg, fontSize: 14));
-    } else if (t == 'image' && path.isNotEmpty) {
-      child = ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Image.file(
-          File(path),
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Text('Ảnh lỗi', style: TextStyle(color: fg)),
-        ),
-      );
-    } else if ((t == 'video' || t == 'file') && path.isNotEmpty) {
-      child = Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(t == 'video' ? Icons.videocam : Icons.insert_drive_file, color: fg, size: 18),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              p.basename(path),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: fg),
-            ),
-          ),
-        ],
-      );
-    } else if (t == 'voice' && path.isNotEmpty) {
-      child = Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.mic, color: fg, size: 18),
-          const SizedBox(width: 8),
-          Text(_tr('voice_message', 'Tin nhắn thoại'), style: TextStyle(color: fg)),
-        ],
-      );
-    } else {
-      child = Text('(Đang chuẩn bị...)', style: TextStyle(color: fg));
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: child,
-    );
-  }
-
   Widget _buildReplyPreview(
     Map<String, dynamic> replyMsg, {
     required bool isMe,
@@ -2425,80 +2224,109 @@ class _ChatScreenState extends State<ChatScreen> {
                         ),
                       ),
 
-                  SafeArea(
-                    top: false,
-                    minimum: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-                    child: _recOn
-                        ? _buildRecordingBar(isDark: isDark)
-                        : (_voiceDraftPath != null
-                        ? _buildVoiceDraftCard(isDark: isDark)
-                        : Container(
-                      decoration: BoxDecoration(
-                        color: barBg,
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _inputCtrl,
-                              enabled: true,
-                              minLines: 1,
-                              maxLines: 5,
-                              cursorColor: isDark ? Colors.white : Colors.black,
-                              style: TextStyle(color: isDark ? Colors.white : Colors.black),
-                              decoration: InputDecoration(
-                                hintText: _sending
-                                    ? _tr('sending', 'Đang gửi...')
-                                    : _tr('send_a_message', 'Nhập tin nhắn...'),
-                                hintStyle: TextStyle(color: hintColor),
-                                isDense: true,
-                                filled: true,
-                                fillColor: inputFill,
-                                prefixIcon: IconButton(
-                                  icon: Icon(Icons.attach_file, color: iconColor),
-                                  onPressed: _sending ? null : _pickAndSendFile,
-                                ),
-                                suffixIcon: IconButton(
-                                  icon: Icon(Icons.mic, color: iconColor),
-                                  onPressed: _sending ? null : _startRecording, // bắt đầu ghi âm
-                                ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(18),
-                                  borderSide: BorderSide(color: borderColor, width: 1),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(18),
-                                  borderSide: BorderSide(color: borderColor, width: 1),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(18),
-                                  borderSide: BorderSide(color: focusBorder, width: 1.5),
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                              ),
-                              onSubmitted: (_) => _sendText(),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Material(
-                            color: sendBg,
-                            shape: const CircleBorder(),
-                            child: InkWell(
-                              customBorder: const CircleBorder(),
-                              onTap: _sending ? null : _sendText,
-                              child: const Padding(
-                                padding: EdgeInsets.all(10),
-                                child: Icon(Icons.send, color: Colors.white),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    )),
-                  )
-                ],
-              ),
+                    // if (_voiceDraftPath != null && !_recOn)
+                    //   Padding(
+                    //     padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                    //     child: _buildVoicePreview(context),
+                    //   ),
+                    SafeArea(
+                      top: false,
+                      minimum: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+                      child: _recOn
+                          ? _buildRecordingBar(isDark: isDark)
+                          : (_voiceDraftPath != null
+                              ? _buildVoiceDraftCard(isDark: isDark)
+                              : Container(
+                                  decoration: BoxDecoration(
+                                    color: barBg,
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: TextField(
+                                          controller: _inputCtrl,
+                                          enabled: !_sending,
+                                          minLines: 1,
+                                          maxLines: 5,
+                                          cursorColor: isDark
+                                              ? Colors.white
+                                              : Colors.black,
+                                          style: TextStyle(
+                                              color: isDark
+                                                  ? Colors.white
+                                                  : Colors.black),
+                                          decoration: InputDecoration(
+                                            hintText: _sending
+                                                ? _tr('sending', 'Đang gửi...')
+                                                : _tr('send_a_message',
+                                                    'Nhập tin nhắn...'),
+                                            hintStyle:
+                                                TextStyle(color: hintColor),
+                                            isDense: true,
+                                            filled: true,
+                                            fillColor: inputFill,
+                                            prefixIcon: IconButton(
+                                              icon: Icon(Icons.attach_file,
+                                                  color: iconColor),
+                                              onPressed: _sending
+                                                  ? null
+                                                  : _pickAndSendFile,
+                                            ),
+                                            suffixIcon: IconButton(
+                                              icon: Icon(Icons.mic,
+                                                  color: iconColor),
+                                              onPressed: _sending
+                                                  ? null
+                                                  : _startRecording, // bắt đầu ghi âm
+                                            ),
+                                            border: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(18),
+                                              borderSide: BorderSide(
+                                                  color: borderColor, width: 1),
+                                            ),
+                                            enabledBorder: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(18),
+                                              borderSide: BorderSide(
+                                                  color: borderColor, width: 1),
+                                            ),
+                                            focusedBorder: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(18),
+                                              borderSide: BorderSide(
+                                                  color: focusBorder,
+                                                  width: 1.5),
+                                            ),
+                                            contentPadding:
+                                                const EdgeInsets.symmetric(
+                                                    vertical: 10,
+                                                    horizontal: 8),
+                                          ),
+                                          onSubmitted: (_) => _sendText(),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Material(
+                                        color: sendBg,
+                                        shape: const CircleBorder(),
+                                        child: InkWell(
+                                          customBorder: const CircleBorder(),
+                                          onTap: _sending ? null : _sendText,
+                                          child: const Padding(
+                                            padding: EdgeInsets.all(10),
+                                            child: Icon(Icons.send,
+                                                color: Colors.white),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )),
+                    )
+                  ],
+                ),
                 if (_showScrollToBottom)
                   Positioned(
                     right: 12,
@@ -2509,6 +2337,9 @@ class _ChatScreenState extends State<ChatScreen> {
                             Provider.of<ThemeController>(context, listen: true).darkTheme;
 
                         final bg = isDark ? const Color(0xFF2A2A2A) : Colors.white;
+                            Provider.of<ThemeController>(context, listen: true)
+                                .darkTheme;
+
                         final fg = isDark ? Colors.white : Colors.black87;
 
                         return Material(
