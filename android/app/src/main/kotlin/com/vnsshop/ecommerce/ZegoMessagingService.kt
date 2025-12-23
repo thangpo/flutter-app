@@ -1,33 +1,37 @@
 package com.vnsshop.ecommerce
 
+import android.content.Intent
+import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import im.zego.zpns_flutter.internal.utils.ZPNsFCMReceiver
-import io.flutter.plugins.firebasemessaging.FlutterFirebaseMessagingService
 
 /**
- * Forward FCM to ZPNs/Zego for offline call invitations while keeping default firebase_messaging behaviour.
+ * Forward FCM to ZPNs/Zego for offline call invitations (app bị kill).
+ * Dùng FirebaseMessagingService gốc để tránh phụ thuộc lớp plugin không có sẵn trên Android build.
  */
-class ZegoMessagingService : FlutterFirebaseMessagingService() {
-
-    private val zpnsReceiver = ZPNsFCMReceiver()
+class ZegoMessagingService : FirebaseMessagingService() {
 
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        // ZPNs handles push registration from Flutter; nothing extra to do here.
+        // ZPNs (zego_zpns) sẽ tự xử lý registration từ phía Flutter.
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
         super.onMessageReceived(message)
 
-        // Bridge the FCM data to ZPNs receiver so CallKit/offline invitations work when app is killed.
+        // Gửi lại data FCM sang ZPNs receiver để CallKit/offline hoạt động.
         try {
-            val intent = message.toIntent().apply {
-                action = "com.google.android.c2dm.intent.RECEIVE"
-                setPackage(packageName)
+            val intent = Intent("com.google.android.c2dm.intent.RECEIVE").apply {
+                setPackage(applicationContext.packageName)
+                for ((k, v) in message.data) {
+                    putExtra(k, v)
+                }
+                message.notification?.title?.let { putExtra("title", it) }
+                message.notification?.body?.let { putExtra("content", it) }
             }
-            zpnsReceiver.onReceive(applicationContext, intent)
+            ZPNsFCMReceiver().onReceive(applicationContext, intent)
         } catch (_: Exception) {
-            // ignore; firebase_messaging already handled the message via super
+            // ignore
         }
     }
 }
