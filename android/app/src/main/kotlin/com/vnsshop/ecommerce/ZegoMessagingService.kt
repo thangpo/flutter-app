@@ -1,21 +1,33 @@
 package com.vnsshop.ecommerce
 
-import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
-import com.zegocloud.uikit.prebuilt.call.invitation.ZegoUIKitPrebuiltCallInvitationService
+import im.zego.zpns_flutter.internal.utils.ZPNsFCMReceiver
+import io.flutter.plugins.firebasemessaging.FlutterFirebaseMessagingService
 
 /**
- * Forwards FCM messages/tokens to ZEGOCLOUD so call invitations can wake the app when killed.
+ * Forward FCM to ZPNs/Zego for offline call invitations while keeping default firebase_messaging behaviour.
  */
-class ZegoMessagingService : FirebaseMessagingService() {
+class ZegoMessagingService : FlutterFirebaseMessagingService() {
+
+    private val zpnsReceiver = ZPNsFCMReceiver()
 
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        ZegoUIKitPrebuiltCallInvitationService.onToken(token)
+        // ZPNs handles push registration from Flutter; nothing extra to do here.
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
         super.onMessageReceived(message)
-        ZegoUIKitPrebuiltCallInvitationService.onReceiveRemoteMessage(message)
+
+        // Bridge the FCM data to ZPNs receiver so CallKit/offline invitations work when app is killed.
+        try {
+            val intent = message.toIntent().apply {
+                action = "com.google.android.c2dm.intent.RECEIVE"
+                setPackage(packageName)
+            }
+            zpnsReceiver.onReceive(applicationContext, intent)
+        } catch (_: Exception) {
+            // ignore; firebase_messaging already handled the message via super
+        }
     }
 }
