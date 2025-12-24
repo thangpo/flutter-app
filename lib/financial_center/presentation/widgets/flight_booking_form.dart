@@ -40,7 +40,6 @@ class FlightBookingForm extends StatelessWidget {
     required this.onSearch,
   });
 
-  // Helper dịch
   String _tr(BuildContext context, String key, String fallback) {
     return getTranslated(key, context) ?? fallback;
   }
@@ -123,7 +122,6 @@ class FlightBookingForm extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 20),
-                  // Người lớn
                   _buildPassengerRow(
                     context: context,
                     label: _tr(context, 'flight_passenger_adult',
@@ -143,7 +141,6 @@ class FlightBookingForm extends StatelessWidget {
                     primary: primary,
                   ),
                   const SizedBox(height: 16),
-                  // Trẻ em
                   _buildPassengerRow(
                     context: context,
                     label: _tr(context, 'flight_passenger_child',
@@ -163,7 +160,6 @@ class FlightBookingForm extends StatelessWidget {
                     primary: primary,
                   ),
                   const SizedBox(height: 16),
-                  // Em bé
                   _buildPassengerRow(
                     context: context,
                     label: _tr(context, 'flight_passenger_infant',
@@ -241,8 +237,7 @@ class FlightBookingForm extends StatelessWidget {
     required VoidCallback onIncrement,
     required Color primary,
   }) {
-    final isDark =
-        Theme.of(context).brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final Color borderInactive = isDark
         ? Colors.white24
@@ -251,7 +246,6 @@ class FlightBookingForm extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        // Label + subtitle
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -277,7 +271,6 @@ class FlightBookingForm extends StatelessWidget {
         ),
         Row(
           children: [
-            // nút -
             Container(
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
@@ -320,7 +313,6 @@ class FlightBookingForm extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 16),
-            // nút +
             Container(
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
@@ -460,7 +452,6 @@ class FlightBookingForm extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // FROM
           GestureDetector(
             onTap: () async {
               final result = await Navigator.push(
@@ -529,10 +520,7 @@ class FlightBookingForm extends StatelessWidget {
               ],
             ),
           ),
-
           const SizedBox(height: 16),
-
-          // TO
           GestureDetector(
             onTap: () async {
               final result = await Navigator.push(
@@ -585,7 +573,6 @@ class FlightBookingForm extends StatelessWidget {
               ],
             ),
           ),
-
           const SizedBox(height: 16),
           Divider(
             color: isDark
@@ -593,8 +580,6 @@ class FlightBookingForm extends StatelessWidget {
                 : Colors.grey[200],
           ),
           const SizedBox(height: 16),
-
-          // Departure + round trip switch
           Row(
             children: [
               Icon(
@@ -676,7 +661,6 @@ class FlightBookingForm extends StatelessWidget {
               ],
             ),
           ],
-
           const SizedBox(height: 16),
           Divider(
             color: isDark
@@ -684,8 +668,6 @@ class FlightBookingForm extends StatelessWidget {
                 : Colors.grey[200],
           ),
           const SizedBox(height: 16),
-
-          // Passenger selector
           GestureDetector(
             onTap: () => _showPassengerSelector(context),
             child: Row(
@@ -717,10 +699,7 @@ class FlightBookingForm extends StatelessWidget {
               ],
             ),
           ),
-
           const SizedBox(height: 20),
-
-          // Search button
           SizedBox(
             width: double.infinity,
             height: 50,

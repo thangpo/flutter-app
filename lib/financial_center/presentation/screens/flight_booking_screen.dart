@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/flight_service.dart';
@@ -38,6 +39,11 @@ class _FlightBookingScreenState extends State<FlightBookingScreen> {
         backgroundRefresh: true,
       );
     });
+  }
+
+  void _logSearch(String tag, Map<String, dynamic> data) {
+    final pretty = const JsonEncoder.withIndent('  ').convert(data);
+    debugPrint('\n========== $tag ==========\n$pretty\n==========================\n');
   }
 
   String _displayNameFromSocial(SocialController sc) {
@@ -144,6 +150,15 @@ class _FlightBookingScreenState extends State<FlightBookingScreen> {
     return "$y-$m-$day";
   }
 
+  String? _mapCabinToSeatType(String cabinClass) {
+    final v = cabinClass.toLowerCase();
+    if (v.contains('premium') && v.contains('economy')) return 'premium_economy';
+    if (v.contains('economy')) return 'economy';
+    if (v.contains('business')) return 'business';
+    if (v.contains('first')) return 'first';
+    return null;
+  }
+
   Future<void> _handleSearch(FlightSearchCriteria c) async {
     setState(() {
       searchResults = [];
@@ -153,15 +168,70 @@ class _FlightBookingScreenState extends State<FlightBookingScreen> {
 
     try {
       final start = _fmtDate(c.departureDate);
-      final end =
-      c.isRoundTrip ? _fmtDate(c.returnDate!) : _fmtDate(c.departureDate);
+      final end = c.isRoundTrip && c.returnDate != null ? _fmtDate(c.returnDate!) : start;
 
-      final res = await FlightService.getFlights(params: {
-        "limit": 20,
-        "page": 1,
-        "start": start,
-        "end": end,
+      // Nếu bắt buộc location_id để search flights:
+      if (c.fromLocationId == null || c.toLocationId == null) {
+        throw Exception('Missing location_id for searching flights.');
+      }
+
+      _logSearch('FlightSearchCriteria (from form)', {
+        'fromAirportId': c.fromAirportId,
+        'toAirportId': c.toAirportId,
+        'fromLocationId': c.fromLocationId,
+        'toLocationId': c.toLocationId,
+        'fromCity': c.fromCity,
+        'fromCode': c.fromCode,
+        'toCity': c.toCity,
+        'toCode': c.toCode,
+        'departureDate': start,
+        'returnDate': c.returnDate != null ? _fmtDate(c.returnDate!) : null,
+        'isRoundTrip': c.isRoundTrip,
+        'adults': c.adults,
+        'children': c.children,
+        'infants': c.infants,
+        'cabinClass(UI only)': c.cabinClass,
       });
+
+      final paramsToSend = <String, dynamic>{
+        'limit': 20,
+        'page': 1,
+        'start': start,
+        'end': end,
+
+        // IMPORTANT: dùng location_id
+        'airport_from': c.fromLocationId.toString(),
+        'airport_to': c.toLocationId.toString(),
+
+        'adults': c.adults,
+        'children': c.children,
+        'infants': c.infants,
+        'with_seat_types': 0,
+        'with_locations': 0,
+        'with_attributes': 0,
+      };
+
+      _logSearch('GET /api/flights query params (sent)', paramsToSend);
+
+      final res = await FlightService.searchFlights(
+        limit: 20,
+        page: 1,
+        start: start,
+        end: end,
+
+        // IMPORTANT: dùng location_id
+        airportFromId: c.fromLocationId.toString(),
+        airportToId: c.toLocationId.toString(),
+
+        extraParams: {
+          'adults': c.adults,
+          'children': c.children,
+          'infants': c.infants,
+        },
+        withSeatTypes: false,
+        withLocations: false,
+        withAttributes: false,
+      );
 
       if (!mounted) return;
 
@@ -170,18 +240,17 @@ class _FlightBookingScreenState extends State<FlightBookingScreen> {
 
       setState(() {
         searchResults = rows;
-        isLoading = false;
       });
-
-      Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
-
-      setState(() => isLoading = false);
-      Navigator.of(context).pop();
-      _showWarning(
-        "${tr('flight_error_search', 'Đã xảy ra lỗi khi tìm chuyến bay:')} $e",
-      );
+      _showWarning("${tr('flight_error_search', 'Đã xảy ra lỗi khi tìm chuyến bay:')} $e");
+    } finally {
+      if (mounted) {
+        setState(() => isLoading = false);
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
+      }
     }
   }
 

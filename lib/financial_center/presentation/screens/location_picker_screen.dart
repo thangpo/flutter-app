@@ -26,8 +26,6 @@ class LocationPickerScreen extends StatelessWidget {
       {"city": "Bangkok", "code": "BKK"},
       {"city": "Singapore", "code": "SIN"},
       {"city": "Phnom Penh", "code": "PNH"},
-
-      // Các điểm quốc tế phổ biến của American Airlines
       {"city": "New York (JFK)", "code": "JFK"},
       {"city": "Los Angeles", "code": "LAX"},
       {"city": "Chicago", "code": "ORD"},

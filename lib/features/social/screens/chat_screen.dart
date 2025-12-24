@@ -699,6 +699,172 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  bool _isLocalMsg(Map<String, dynamic> m) {
+    // Local message thường chưa có id server hoặc có cờ local
+    final id = _msgId(m);
+    final localId = (m['local_id'] ?? '').toString();
+    final st = (m['local_status'] ?? '').toString();
+    if (localId.isNotEmpty) return true;
+    if (st.isNotEmpty && st != 'sent') return true;
+    // Nếu id = 0 mà có nội dung local thì coi là local
+    if (id <= 0 && ((m['local_text'] ?? '').toString().isNotEmpty || (m['local_file'] ?? '').toString().isNotEmpty)) {
+      return true;
+    }
+    return false;
+  }
+
+  Future<void> _retryLocalMessage(Map<String, dynamic> m) async {
+    if (_sending) return;
+
+    final localId = (m['local_id'] ?? '').toString();
+    if (localId.isEmpty) return;
+
+    // set status sending
+    setState(() {
+      m['local_status'] = 'sending';
+    });
+
+    try {
+      final String text = (m['local_text'] ?? '').toString().trim();
+      final String filePath = (m['local_file'] ?? '').toString().trim();
+      final String? replyId = (m['reply_id'] ?? m['reply_to_id'])?.toString();
+
+      Map<String, dynamic>? sent;
+      if (filePath.isNotEmpty) {
+        sent = await repo.sendMessage(
+          token: widget.accessToken,
+          peerUserId: _peerId,
+          filePath: filePath,
+          text: text.isNotEmpty ? text : null,
+          replyToMessageId: (replyId != null && replyId != '0' && replyId.isNotEmpty) ? replyId : null,
+        );
+      } else {
+        sent = await repo.sendMessage(
+          token: widget.accessToken,
+          peerUserId: _peerId,
+          text: text,
+          replyToMessageId: (replyId != null && replyId != '0' && replyId.isNotEmpty) ? replyId : null,
+        );
+      }
+
+      if (sent != null) {
+        // Xoá local bubble và merge server message
+        setState(() {
+          _messages.removeWhere((x) => (x['local_id'] ?? '').toString() == localId);
+        });
+        _mergeIncoming([sent], toTail: true);
+        _applyLocalReactionsToMessages();
+        if (mounted) setState(() {});
+        _scrollToBottom();
+      } else {
+        setState(() {
+          m['local_status'] = 'failed';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        m['local_status'] = 'failed';
+      });
+    }
+  }
+
+  Widget _buildLocalBubble(Map<String, dynamic> m, {required bool isDark}) {
+    final theme = Theme.of(context);
+    final bg = isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE8F0FF);
+    final fg = isDark ? Colors.white : Colors.black87;
+
+    final text = (m['local_text'] ?? m['display_text'] ?? m['text'] ?? '').toString();
+    final filePath = (m['local_file'] ?? '').toString();
+
+    Widget content;
+
+    if (filePath.isNotEmpty) {
+      // preview kiểu file đơn giản (ảnh sẽ hiển thị thumbnail)
+      final t = _detectAttachmentType(filePath);
+      if (t == _AttachmentType.image) {
+        content = ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.file(
+            File(filePath),
+            fit: BoxFit.cover,
+            height: 160,
+            width: 220,
+            errorBuilder: (_, __, ___) => _fallbackPreview(
+              _PendingAttachment(path: filePath, type: _AttachmentType.image),
+            ),
+          ),
+        );
+      } else {
+        content = _fallbackPreview(
+          _PendingAttachment(path: filePath, type: t),
+        );
+      }
+
+      // nếu có caption text
+      if (text.trim().isNotEmpty) {
+        content = Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            content,
+            const SizedBox(height: 6),
+            Text(text, style: TextStyle(color: fg)),
+          ],
+        );
+      }
+    } else {
+      content = Text(text, style: TextStyle(color: fg));
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: theme.colorScheme.onSurface.withOpacity(0.08)),
+      ),
+      child: content,
+    );
+  }
+
+  Widget _localStatusLine(Map<String, dynamic> m) {
+    final st = (m['local_status'] ?? '').toString();
+    String label;
+    IconData? icon;
+    Color color = Colors.grey;
+
+    switch (st) {
+      case 'sending':
+        label = _tr('sending', 'Đang gửi...');
+        icon = Icons.schedule;
+        color = Colors.grey;
+        break;
+      case 'failed':
+        label = _tr('send_failed_tap_retry', 'Gửi thất bại • chạm để thử lại');
+        icon = Icons.error_outline;
+        color = Colors.redAccent;
+        break;
+      default:
+      // sent / unknown -> không hiện
+        return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, right: 2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) Icon(icon, size: 14, color: color),
+          if (icon != null) const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(fontSize: 11, color: color),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _handlePickFile() async {
     final res = await FilePicker.platform.pickFiles(allowMultiple: false);
     if (res == null || res.files.isEmpty) return;
@@ -1986,168 +2152,167 @@ class _ChatScreenState extends State<ChatScreen> {
                                 },
                               )
                             : ListView.builder(
-                                controller: _scroll,
-                                keyboardDismissBehavior:
-                                    ScrollViewKeyboardDismissBehavior.onDrag,
-                                padding:
-                                    const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                                itemCount: _messages.length,
-                                itemBuilder: (ctx, i) {
-                                  final m = _messages[i];
-                                  final isMe = (m['position'] == 'right');
+                          controller: _scroll,
+                          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                          itemCount: _messages.length,
+                          itemBuilder: (ctx, i) {
+                            final m = _messages[i];
+                            final isMe = (m['position'] == 'right');
 
-                                  final reactionId = _getReactionForMessage(m);
-                                  final hasReply = _hasReplyTag(m);
-                                  final replyMsg =
-                                      hasReply ? _findRepliedMessage(m) : null;
+                            final isLocal = _isLocalMsg(m);
+                            final status = (m['local_status'] ?? '').toString();
 
-                                  if (!isMe) {
-                                    final msgAvatar =
-                                        (m['user_data']?['avatar'] ?? '')
-                                            .toString();
-                                    final leftAvatar = msgAvatar.isNotEmpty
-                                        ? msgAvatar
-                                        : peerAvatar;
+                            final reactionId = _getReactionForMessage(m);
+                            final hasReply = _hasReplyTag(m);
+                            final replyMsg = hasReply ? _findRepliedMessage(m) : null;
 
-                                    return Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 8.0),
-                                      child: Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.end,
-                                        children: [
-                                          CircleAvatar(
-                                            radius: 16,
-                                            backgroundImage:
-                                                leftAvatar.isNotEmpty
-                                                    ? NetworkImage(leftAvatar)
-                                                    : null,
-                                            child: leftAvatar.isEmpty
-                                                ? const Icon(Icons.person,
-                                                    size: 18)
-                                                : null,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Flexible(
-                                            child: _SwipeReplyWrapper(
-                                              isMe: false,
-                                              onReply: () {
-                                                setState(() {
-                                                  _replyingToMessage = m;
-                                                });
-                                              },
-                                              child: GestureDetector(
-                                                behavior:
-                                                    HitTestBehavior.opaque,
-                                                onLongPress: () =>
-                                                    _onLongPressMessage(
-                                                        m, false),
-                                                child: Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    if (hasReply)
-                                                      _buildReplyHeader(
-                                                        message: m,
-                                                        replyMsg: replyMsg,
-                                                        isMe: false,
-                                                      ),
-                                                    if (replyMsg != null)
-                                                      _buildReplyPreview(
-                                                          replyMsg,
-                                                          isMe: false),
-                                                    Stack(
-                                                      clipBehavior: Clip.none,
-                                                      children: [
-                                                        ChatMessageBubble(
-                                                          key: ValueKey(
-                                                              '${m['id'] ?? m.hashCode}'),
-                                                          message: m,
-                                                          isMe: false,
-                                                        ),
-                                                        if (reactionId != 0)
-                                                          Positioned(
-                                                            bottom: -14,
-                                                            left: 8,
-                                                            child:
-                                                                _buildReactionBadge(
-                                                                    reactionId,
-                                                                    isMe:
-                                                                        false),
-                                                          ),
-                                                      ],
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
+                            // Parse call invite (nếu message text là invite)
+                            final inv = CallInvite.tryParse(_plainTextOf(m));
+
+                            // 1) Call invite tile
+                            if (inv != null) {
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                child: Row(
+                                  mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+                                  children: [
+                                    Flexible(child: _buildCallInviteTile(inv, isMe: isMe)),
+                                  ],
+                                ),
+                              );
+                            }
+
+                            // 2) Local pending bubble (chỉ phía mình gửi)
+                            if (isMe && isLocal) {
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    Flexible(
+                                      child: GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onTap: () async {
+                                          if (status == 'failed') {
+                                            await _retryLocalMessage(m);
+                                          }
+                                        },
+                                        onLongPress: () => _onLongPressMessage(m, true),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.end,
+                                          children: [
+                                            if (hasReply) _buildReplyHeader(message: m, replyMsg: replyMsg, isMe: true),
+                                            if (replyMsg != null) _buildReplyPreview(replyMsg, isMe: true),
+                                            _buildLocalBubble(m, isDark: isDark),
+                                            _localStatusLine(m),
+                                          ],
+                                        ),
                                       ),
-                                    );
-                                  }
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
 
-                                  return Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 8.0),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.end,
-                                      children: [
-                                        Flexible(
-                                          child: _SwipeReplyWrapper(
-                                            isMe: true,
-                                            onReply: () {
-                                              setState(() {
-                                                _replyingToMessage = m;
-                                              });
-                                            },
-                                            child: GestureDetector(
-                                              behavior: HitTestBehavior.opaque,
-                                              onLongPress: () =>
-                                                  _onLongPressMessage(m, true),
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.end,
+                            // 3) Message từ người kia (bên trái)
+                            if (!isMe) {
+                              final msgAvatar = (m['user_data']?['avatar'] ?? '').toString();
+                              final leftAvatar = msgAvatar.isNotEmpty ? msgAvatar : peerAvatar;
+
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 16,
+                                      backgroundImage: leftAvatar.isNotEmpty ? NetworkImage(leftAvatar) : null,
+                                      child: leftAvatar.isEmpty ? const Icon(Icons.person, size: 18) : null,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Flexible(
+                                      child: _SwipeReplyWrapper(
+                                        isMe: false,
+                                        onReply: () => setState(() => _replyingToMessage = m),
+                                        child: GestureDetector(
+                                          behavior: HitTestBehavior.opaque,
+                                          onLongPress: () => _onLongPressMessage(m, false),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              if (hasReply) _buildReplyHeader(message: m, replyMsg: replyMsg, isMe: false),
+                                              if (replyMsg != null) _buildReplyPreview(replyMsg, isMe: false),
+                                              Stack(
+                                                clipBehavior: Clip.none,
                                                 children: [
-                                                  if (hasReply)
-                                                    _buildReplyHeader(
-                                                      message: m,
-                                                      replyMsg: replyMsg,
-                                                      isMe: true,
-                                                    ),
-                                                  if (replyMsg != null)
-                                                    _buildReplyPreview(replyMsg,
-                                                        isMe: true),
-                                                  Stack(
-                                                    clipBehavior: Clip.none,
-                                                    children: [
-                                                      ChatMessageBubble(
-                                                        key: ValueKey(
-                                                            '${m['id'] ?? m.hashCode}'),
-                                                        message: m,
-                                                        isMe: true,
-                                                      ),
-                                                      if (reactionId != 0)
-                                                        Positioned(
-                                                          bottom: -14,
-                                                          right: 8,
-                                                          child:
-                                                              _buildReactionBadge(
-                                                                  reactionId,
-                                                                  isMe: true),
-                                                        ),
-                                                    ],
+                                                  ChatMessageBubble(
+                                                    key: ValueKey('${m['id'] ?? m.hashCode}'),
+                                                    message: m,
+                                                    isMe: false,
                                                   ),
+                                                  if (reactionId != 0)
+                                                    Positioned(
+                                                      bottom: -14,
+                                                      left: 8,
+                                                      child: _buildReactionBadge(reactionId, isMe: false),
+                                                    ),
                                                 ],
                                               ),
-                                            ),
+                                            ],
                                           ),
                                         ),
-                                      ],
+                                      ),
                                     ),
-                                  );
-                                },
+                                  ],
+                                ),
+                              );
+                            }
+
+                            // 4) Message của mình (bên phải - non-local)
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8.0),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  Flexible(
+                                    child: _SwipeReplyWrapper(
+                                      isMe: true,
+                                      onReply: () => setState(() => _replyingToMessage = m),
+                                      child: GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onLongPress: () => _onLongPressMessage(m, true),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.end,
+                                          children: [
+                                            if (hasReply) _buildReplyHeader(message: m, replyMsg: replyMsg, isMe: true),
+                                            if (replyMsg != null) _buildReplyPreview(replyMsg, isMe: true),
+                                            Stack(
+                                              clipBehavior: Clip.none,
+                                              children: [
+                                                ChatMessageBubble(
+                                                  key: ValueKey('${m['id'] ?? m.hashCode}'),
+                                                  message: m,
+                                                  isMe: true,
+                                                ),
+                                                if (reactionId != 0)
+                                                  Positioned(
+                                                    bottom: -14,
+                                                    right: 8,
+                                                    child: _buildReactionBadge(reactionId, isMe: true),
+                                                  ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
+                            );
+                          },
+                        )
                       ),
                     ),
                     if (_replyingToMessage != null)
@@ -2224,6 +2389,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           ],
                         ),
                       ),
+
                     // if (_voiceDraftPath != null && !_recOn)
                     //   Padding(
                     //     padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
@@ -2334,11 +2500,12 @@ class _ChatScreenState extends State<ChatScreen> {
                     child: Builder(
                       builder: (context) {
                         final isDark =
+                            Provider.of<ThemeController>(context, listen: true).darkTheme;
+
+                        final bg = isDark ? const Color(0xFF2A2A2A) : Colors.white;
                             Provider.of<ThemeController>(context, listen: true)
                                 .darkTheme;
 
-                        final bg =
-                            isDark ? const Color(0xFF2A2A2A) : Colors.white;
                         final fg = isDark ? Colors.white : Colors.black87;
 
                         return Material(

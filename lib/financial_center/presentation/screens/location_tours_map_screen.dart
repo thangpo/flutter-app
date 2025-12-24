@@ -2,11 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
-
 import '../widgets/tour_suggestion_slider_pro.dart';
 import '../widgets/tour_expanded_card.dart';
-
-// THEME + I18N
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 
