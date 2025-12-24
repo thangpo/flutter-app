@@ -44,9 +44,12 @@ class ZegoMessagingService : FirebaseMessagingService() {
 
         // Gửi lại data FCM sang ZPNs receiver để CallKit/offline hoạt động.
         try {
-            val intent = message.toIntent().apply {
-                action = "com.google.android.c2dm.intent.RECEIVE"
+            // Chỉ forward phần data (bỏ notification) để ZPNs không bỏ qua.
+            val intent = Intent("com.google.android.c2dm.intent.RECEIVE").apply {
                 setPackage(applicationContext.packageName)
+                for ((k, v) in message.data) {
+                    putExtra(k, v)
+                }
             }
             ZPNsFCMReceiver().onReceive(applicationContext, intent)
             sendRemoteLog("native_forward_to_zpns_success", mapOf("has_data" to message.data.isNotEmpty().toString()))

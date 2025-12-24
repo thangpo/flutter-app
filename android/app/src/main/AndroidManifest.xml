@@ -170,17 +170,6 @@
             </intent-filter>
         </service>
 
-        <!-- Receiver log/forward FCM broadcast sớm để debug offline push -->
-        <receiver
-            android:name=".ZegoFCMReceiver"
-            android:exported="true"
-            android:permission="com.google.android.c2dm.permission.SEND">
-            <intent-filter>
-                <action android:name="com.google.android.c2dm.intent.RECEIVE" />
-                <category android:name="com.vnsshop.ecommerce" />
-            </intent-filter>
-        </receiver>
-
     </application>
 
 </manifest>
