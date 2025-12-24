@@ -3,11 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
-
+import '../screens/tour_detail_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
-
-import '../screens/tour_detail_screen.dart';
 
 class TourExpandedCard extends StatefulWidget {
   final Map<String, dynamic> tour;

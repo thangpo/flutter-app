@@ -2,7 +2,7 @@ name: flutter_sixvalley_ecommerce
 description: A new Flutter setup application for starting a project.
 
 publish_to: 'none'
-version: 10.0.0+10
+version: 10.0.0+12
 
 environment:
   sdk: ^3.6.2
@@ -141,6 +141,11 @@ flutter:
     - assets/svg/
     - assets/images/hoang_sa.png
     - assets/images/truong_sa.png
+    - assets/videos/checkout_1.mp4
+    - assets/videos/checkout_2.mp4
+#    - assets/videos/checkout_3.mp4
+#    - assets/videos/checkout_4.mp4
+#    - assets/videos/checkout_5.mp4
 
   fonts:
     - family: SF-Pro-Rounded-Regular
