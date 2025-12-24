@@ -8,6 +8,10 @@ import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.d
 
 class FlightSearchCriteria {
   final bool isRoundTrip;
+  final int fromAirportId;
+  final int toAirportId;
+  final int? fromLocationId;
+  final int? toLocationId;
   final String fromCity;
   final String fromCode;
   final String toCity;
@@ -21,6 +25,10 @@ class FlightSearchCriteria {
 
   const FlightSearchCriteria({
     required this.isRoundTrip,
+    required this.fromAirportId,
+    required this.toAirportId,
+    required this.fromLocationId,
+    required this.toLocationId,
     required this.fromCity,
     required this.fromCode,
     required this.toCity,
@@ -58,6 +66,7 @@ class _FlightSearchFormState extends State<FlightSearchForm> {
   String toCity = "Huế";
   String toCode = "HUI";
   DateTime? departureDate;
+  DateTime? returnDate;
   int adults = 1;
   int children = 0;
   int infants = 0;
@@ -106,6 +115,9 @@ class _FlightSearchFormState extends State<FlightSearchForm> {
     final day = d.day.toString().padLeft(2, '0');
     return "$y-$m-$day";
   }
+
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 
   Future<void> _pickFromAirport() async {
     final picked = await Navigator.push<AirportItem>(
@@ -164,20 +176,25 @@ class _FlightSearchFormState extends State<FlightSearchForm> {
   Future<void> _pickDepartureDate() async {
     final now = DateTime.now();
 
-    final picked = await Navigator.of(context, rootNavigator: true).push<DateTime>(
+    final picked = await Navigator.of(context, rootNavigator: true).push<DateTimeRange>(
       MaterialPageRoute(
         builder: (_) => FlightDatePickerScreen(
-          title: tr('flight_departure_date', 'Departure'),
+          title: tr('flight_date_range', 'Select date range'),
           accentColor: widget.headerBlue,
-          initialDate: departureDate,
           firstDate: now,
           lastDate: now.add(const Duration(days: 365)),
+          initialStart: departureDate,
+          initialEnd: returnDate,
         ),
       ),
     );
 
     if (picked == null) return;
-    setState(() => departureDate = picked);
+
+    setState(() {
+      departureDate = picked.start;
+      returnDate = picked.end;
+    });
   }
 
   void _showPassengersSheet() {
@@ -349,7 +366,7 @@ class _FlightSearchFormState extends State<FlightSearchForm> {
                         height: 52,
                         child: ElevatedButton(
                           onPressed: () {
-                            setState(() {}); // cập nhật số lượng ra form
+                            setState(() {});
                             Navigator.pop(context);
                           },
                           style: ElevatedButton.styleFrom(
@@ -777,14 +794,26 @@ class _FlightSearchFormState extends State<FlightSearchForm> {
       return;
     }
 
+    final fromLocId = _fromAirport!.location?.id;
+    final toLocId   = _toAirport!.location?.id;
+    if (fromLocId == null || toLocId == null) {
+      _showWarning('Sân bay chưa có location_id. Kiểm tra API airports trả về location.id.');
+      return;
+    }
+    final isRoundTrip = returnDate != null && !_isSameDay(departureDate!, returnDate!);
+
     final criteria = FlightSearchCriteria(
-      isRoundTrip: false,
+      isRoundTrip: isRoundTrip,
+      fromAirportId: _fromAirport!.id,
+      toAirportId: _toAirport!.id,
+      fromLocationId: fromLocId,
+      toLocationId: toLocId,
       fromCity: fromCity,
       fromCode: fromCode,
       toCity: toCity,
       toCode: toCode,
       departureDate: departureDate!,
-      returnDate: null,
+      returnDate: returnDate,
       adults: adults,
       children: children,
       infants: infants,
@@ -874,8 +903,10 @@ class _FlightSearchFormState extends State<FlightSearchForm> {
               icon: Icons.calendar_month,
               title: tr('flight_departure_date', 'Departure'),
               value: departureDate == null
-                  ? tr('flight_select_date', 'Select date')
-                  : _fmtDate(departureDate),
+                  ? tr('flight_select_date_range', 'Select date range')
+                  : (returnDate == null
+                  ? _fmtDate(departureDate)
+                  : "${_fmtDate(departureDate)} → ${_fmtDate(returnDate)}"),
               onTap: () {
                 debugPrint('Tapped departure tile');
                 _pickDepartureDate();

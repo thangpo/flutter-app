@@ -1,752 +1,829 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+
 import '../services/flight_service.dart';
+import '../models/flight_data_models.dart';
 
-class FlightDetailScreen extends StatefulWidget {
+class FlightDetailScreen extends StatelessWidget {
   final String flightId;
+  const FlightDetailScreen({super.key, required this.flightId});
 
-  const FlightDetailScreen({
-    super.key,
-    required this.flightId,
-  });
-
-  @override
-  State<FlightDetailScreen> createState() => _FlightDetailScreenState();
-}
-
-class _FlightDetailScreenState extends State<FlightDetailScreen> {
-  Map<String, dynamic>? flightDetail;
-  List<dynamic> flightSeatMaps = [];
-  List<dynamic> flightOffers = [];
-  bool isLoading = true;
-  String? error;
-  int? selectedFareIndex;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadFlightDetail();
-  }
-
-  Future<void> _loadFlightDetail() async {
-    setState(() {
-      isLoading = true;
-      error = null;
-    });
-
+  DateTime? _parseIso(String? s) {
+    if (s == null || s.trim().isEmpty) return null;
     try {
-      final detail = await FlightService.getFlightDetail(widget.flightId);
-      final seatMaps = await FlightService.getSeatMaps(widget.flightId);
-
-      // Fix: Check null before accessing offer_request_id
-      final data = detail["data"];
-      if (data != null && data["offer_request_id"] != null) {
-        final offerRequestId = data["offer_request_id"];
-        final offers = await FlightService.getOffers();
-
-        setState(() {
-          flightDetail = detail;
-          flightSeatMaps = seatMaps ?? [];
-          flightOffers = offers ?? [];
-          isLoading = false;
-        });
-      } else {
-        setState(() {
-          flightDetail = detail;
-          flightSeatMaps = seatMaps ?? [];
-          flightOffers = [];
-          isLoading = false;
-        });
-      }
-    } catch (e) {
-      setState(() {
-        error = e.toString();
-        isLoading = false;
-      });
+      return DateTime.parse(s).toLocal();
+    } catch (_) {
+      return null;
     }
   }
 
-  String formatPrice(double price) {
-    int priceVND = (price * 26000).round();
-    final formatter = NumberFormat('#,###', 'vi_VN');
-    return '${formatter.format(priceVND)}đ';
-  }
+  String _hhmm(DateTime? dt) => dt == null ? '--:--' : DateFormat('HH:mm', 'vi_VN').format(dt);
 
-  String formatTime(String dateTime) {
+  String _dateLine(DateTime? dt) => dt == null ? '' : DateFormat('EEE, dd/MM/yyyy', 'vi_VN').format(dt);
+
+  String _formatVnd(String? raw) {
+    final s = (raw ?? '').toString();
+    if (s.trim().isEmpty) return '-';
     try {
-      final dt = DateTime.parse(dateTime);
-      return DateFormat('HH:mm').format(dt);
-    } catch (e) {
-      return dateTime;
+      final value = double.parse(s);
+      return NumberFormat.currency(locale: 'vi_VN', symbol: '₫', decimalDigits: 0).format(value.round());
+    } catch (_) {
+      return s;
     }
   }
 
-  String calculateDuration(String departure, String arrival) {
-    try {
-      final dep = DateTime.parse(departure);
-      final arr = DateTime.parse(arrival);
-      final duration = arr.difference(dep);
-      final hours = duration.inHours;
-      final minutes = duration.inMinutes.remainder(60);
-      return '${hours}h ${minutes}m';
-    } catch (e) {
-      return '';
-    }
+  double? _toDouble(dynamic v) {
+    if (v == null) return null;
+    if (v is num) return v.toDouble();
+    final s = v.toString().trim();
+    if (s.isEmpty) return null;
+    return double.tryParse(s);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Chi tiết chuyến bay'),
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
-          elevation: 0,
-        ),
-        body: const Center(child: CircularProgressIndicator()),
-      );
-    }
+    return Scaffold(
+      body: FutureBuilder<Map<String, dynamic>>(
+        future: FlightService.getFlightDetail(flightId),
+        builder: (context, snap) {
+          if (snap.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snap.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text('Lỗi tải chi tiết: ${snap.error}'),
+              ),
+            );
+          }
 
-    if (error != null) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Chi tiết chuyến bay'),
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
-          elevation: 0,
-        ),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text('Lỗi: $error'),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: _loadFlightDetail,
-                child: const Text('Thử lại'),
+          final raw = snap.data ?? <String, dynamic>{};
+          final detailRes = FlightDetailResponse.fromJson(raw);
+
+          if (detailRes.status != 1) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(detailRes.message.isNotEmpty ? detailRes.message : 'Không thể tải dữ liệu.'),
+              ),
+            );
+          }
+
+          final flight = detailRes.flight;
+          if (flight == null) {
+            return const Center(child: Text('Không có dữ liệu.'));
+          }
+
+          final dep = _parseIso(flight.departureTimeIso ?? flight.departureTime);
+          final arr = _parseIso(flight.arrivalTimeIso ?? flight.arrivalTime);
+
+          final from = flight.airportFrom;
+          final to = flight.airportTo;
+
+          final fromCode = (from?.code?.trim().isNotEmpty ?? false) ? from!.code!.trim() : '---';
+          final toCode = (to?.code?.trim().isNotEmpty ?? false) ? to!.code!.trim() : '---';
+
+          final fromName = from?.name ?? '-';
+          final toName = to?.name ?? '-';
+
+          final airlineName = flight.airline?.name ?? 'Airline';
+          final coverUrl = (flight.airline?.imageUrl?.trim().isNotEmpty ?? false) ? flight.airline!.imageUrl!.trim() : null;
+
+          // Seat “đại diện” để show như boarding pass
+          final mainSeat = flight.flightSeat.isNotEmpty ? flight.flightSeat.first : null;
+          final seatClass = mainSeat?.seatType?.name ?? '—';
+
+          // Map: 2 marker + polyline
+          final fromLat = _toDouble(from?.mapLat);
+          final fromLng = _toDouble(from?.mapLng);
+          final toLat = _toDouble(to?.mapLat);
+          final toLng = _toDouble(to?.mapLng);
+
+          final canShowMap = fromLat != null && fromLng != null && toLat != null && toLng != null;
+
+          final markers = <Marker>{};
+          final polylines = <Polyline>{};
+
+          LatLng? fromPos;
+          LatLng? toPos;
+          LatLng? center;
+
+          if (canShowMap) {
+            fromPos = LatLng(fromLat!, fromLng!);
+            toPos = LatLng(toLat!, toLng!);
+
+            center = LatLng((fromLat + toLat) / 2.0, (fromLng + toLng) / 2.0);
+
+            markers.add(Marker(markerId: const MarkerId('from'), position: fromPos, infoWindow: InfoWindow(title: fromCode, snippet: fromName)));
+            markers.add(Marker(markerId: const MarkerId('to'), position: toPos, infoWindow: InfoWindow(title: toCode, snippet: toName)));
+
+            polylines.add(Polyline(
+              polylineId: const PolylineId('route'),
+              points: [fromPos, toPos],
+              width: 4,
+            ));
+          }
+
+          // Zoom “ước lượng” để nhìn được cả 2 điểm
+          double initialZoom = 3.0;
+          if (canShowMap) {
+            final dLat = (fromLat! - toLat!).abs();
+            final dLng = (fromLng! - toLng!).abs();
+            final spread = math.max(dLat, dLng);
+            // spread càng lớn -> zoom càng nhỏ
+            if (spread < 1) initialZoom = 10;
+            else if (spread < 5) initialZoom = 6.5;
+            else if (spread < 15) initialZoom = 4.5;
+            else initialZoom = 3.0;
+          }
+
+          return CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              SliverAppBar(
+                pinned: true,
+                stretch: true,
+                expandedHeight: 220,
+                elevation: 0,
+                backgroundColor: const Color(0xFF0B2D4A),
+                leading: IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () => Navigator.of(context).maybePop(),
+                ),
+                flexibleSpace: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final top = constraints.biggest.height;
+                    // collapsedHeight xấp xỉ toolbarHeight + statusBar
+                    final t = ((top - kToolbarHeight) / (220 - kToolbarHeight)).clamp(0.0, 1.0);
+
+                    // t ~ 1: expanded (ảnh 1), t ~ 0: collapsed (ảnh 2)
+                    return FlexibleSpaceBar(
+                      titlePadding: const EdgeInsetsDirectional.only(start: 56, bottom: 12, end: 16),
+                      title: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 120),
+                        opacity: 1.0 - t,
+                        child: const Text(
+                          'Boarding Pass',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                      background: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          // “world map” nền (dùng gradient + dot pattern giả lập)
+                          Container(
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [Color(0xFF0B2D4A), Color(0xFF123E62)],
+                              ),
+                            ),
+                          ),
+                          IgnorePointer(
+                            child: CustomPaint(
+                              painter: _DotWorldPainter(opacity: 0.20),
+                            ),
+                          ),
+
+                          // Header kiểu ảnh 1 (Select Flight)
+                          Positioned.fill(
+                            child: AnimatedOpacity(
+                              duration: const Duration(milliseconds: 160),
+                              opacity: t,
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(16, 52, 16, 16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    const Text(
+                                      'Select Flight',
+                                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    _RouteHeader(
+                                      fromCode: fromCode,
+                                      fromName: fromName,
+                                      toCode: toCode,
+                                      toName: toName,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _BoardingPassCard(
+                        coverUrl: coverUrl,
+                        dateLeft: _dateLine(dep),
+                        timeRight: flight.departureTimeHtml ?? _hhmm(dep),
+                        fromCode: fromCode,
+                        fromName: fromName,
+                        toCode: toCode,
+                        toName: toName,
+                        airlineName: airlineName,
+                        durationText: (flight.duration ?? '').trim().isEmpty ? null : '${flight.duration}h',
+                        flightCode: flight.code,
+                        boarding: flight.departureTimeHtml ?? _hhmm(dep),
+                        depart: flight.departureTimeHtml ?? _hhmm(dep),
+                        arrive: flight.arrivalTimeHtml ?? _hhmm(arr),
+                        gate: 'G${flight.id}', // API không có gate -> tạm theo id
+                        seat: mainSeat?.id != null ? 'S${mainSeat!.id}' : '--',
+                        seatClass: seatClass,
+                        passenger: '—', // API không có passenger
+                        priceText: _formatVnd(flight.minPrice),
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      if (flight.flightSeat.isNotEmpty) ...[
+                        const Text(
+                          'Seat classes',
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(height: 8),
+                        ...flight.flightSeat.map((s) => Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: _SeatRow(
+                            title: s.seatType?.name ?? 'Seat',
+                            price: s.priceHtml ?? _formatVnd(s.price),
+                            sub: _seatSubLine(s),
+                            right: 'Còn: ${s.maxPassengers ?? 0}',
+                          ),
+                        )),
+                      ],
+
+                      const SizedBox(height: 10),
+
+                      if (canShowMap) ...[
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Route map',
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(height: 8),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(18),
+                          child: SizedBox(
+                            height: 240,
+                            child: GoogleMap(
+                              initialCameraPosition: CameraPosition(
+                                target: center ?? const LatLng(0, 0),
+                                zoom: initialZoom,
+                              ),
+                              markers: markers,
+                              polylines: polylines,
+                              myLocationEnabled: false,
+                              myLocationButtonEnabled: false,
+                              compassEnabled: true,
+                              zoomControlsEnabled: false,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        if ((from?.address ?? '').trim().isNotEmpty || (to?.address ?? '').trim().isNotEmpty)
+                          _MapLegend(
+                            fromLabel: '$fromCode • ${from?.address ?? ''}',
+                            toLabel: '$toCode • ${to?.address ?? ''}',
+                          ),
+                      ],
+                    ],
+                  ),
+                ),
               ),
             ],
-          ),
-        ),
-      );
-    }
-
-    // Fix: Add null checks for all nested data
-    if (flightDetail == null || flightDetail!['data'] == null) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Chi tiết chuyến bay'),
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
-          elevation: 0,
-        ),
-        body: const Center(
-          child: Text('Không có dữ liệu chuyến bay'),
-        ),
-      );
-    }
-
-    final data = flightDetail!['data'];
-    final slices = data['slices'] as List?;
-
-    if (slices == null || slices.isEmpty) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Chi tiết chuyến bay'),
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
-          elevation: 0,
-        ),
-        body: const Center(
-          child: Text('Không có thông tin chuyến bay'),
-        ),
-      );
-    }
-
-    final firstSlice = slices[0];
-    final segments = firstSlice['segments'] as List?;
-
-    if (segments == null || segments.isEmpty) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Chi tiết chuyến bay'),
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
-          elevation: 0,
-        ),
-        body: const Center(
-          child: Text('Không có thông tin hành trình'),
-        ),
-      );
-    }
-
-    final firstSegment = segments[0];
-
-    // Fix: Safe access with null checks
-    final origin = firstSegment['origin'];
-    final destination = firstSegment['destination'];
-    final departureTime = firstSegment['departing_at'] ?? '';
-    final arrivalTime = firstSegment['arriving_at'] ?? '';
-    final airline = firstSegment['marketing_carrier']?['name'] ?? 'N/A';
-    final airlineLogo = firstSegment['marketing_carrier']?['logo_symbol_url'];
-    final totalAmount = double.tryParse(data['total_amount']?.toString() ?? '0') ?? 0.0;
-    final baseAmount = double.tryParse((data['base_amount'] ?? data['total_amount'])?.toString() ?? '0') ?? 0.0;
-
-    // Fix: Calculate selected price correctly from flightOffers
-    double selectedPrice = baseAmount;
-    if (selectedFareIndex != null &&
-        selectedFareIndex! >= 0 &&
-        selectedFareIndex! < flightOffers.length) {
-      final selectedOffer = flightOffers[selectedFareIndex!];
-      selectedPrice = double.tryParse(selectedOffer["total_amount"]?.toString() ?? '0') ?? baseAmount;
-    }
-
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text(
-          'Nâng hạng vé',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: Colors.black,
-          ),
-        ),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () => Navigator.pop(context),
-        ),
+          );
+        },
       ),
-      body: Column(
+    );
+  }
+
+  static String _seatSubLine(FlightSeat s) {
+    final parts = <String>[];
+    if ((s.person ?? '').trim().isNotEmpty) parts.add('Person: ${s.person}');
+    if (s.baggageCabin != null) parts.add('Cabin: ${s.baggageCabin}kg');
+    if (s.baggageCheckIn != null) parts.add('Check-in: ${s.baggageCheckIn}kg');
+    return parts.join(' • ');
+  }
+}
+
+class _RouteHeader extends StatelessWidget {
+  final String fromCode;
+  final String fromName;
+  final String toCode;
+  final String toName;
+
+  const _RouteHeader({
+    required this.fromCode,
+    required this.fromName,
+    required this.toCode,
+    required this.toName,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        // dashed curve line + plane icon (giả lập giống ảnh)
+        SizedBox(
+          height: 86,
+          child: CustomPaint(
+            painter: _RoutePainter(),
+            child: const SizedBox.expand(),
+          ),
+        ),
+        Positioned(
+          left: 0,
+          bottom: 0,
+          child: _CodeCity(code: fromCode, city: fromName, alignLeft: true),
+        ),
+        Positioned(
+          right: 0,
+          bottom: 0,
+          child: _CodeCity(code: toCode, city: toName, alignLeft: false),
+        ),
+      ],
+    );
+  }
+}
+
+class _CodeCity extends StatelessWidget {
+  final String code;
+  final String city;
+  final bool alignLeft;
+
+  const _CodeCity({required this.code, required this.city, required this.alignLeft});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: alignLeft ? CrossAxisAlignment.start : CrossAxisAlignment.end,
+      children: [
+        Text(
+          code,
+          style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 1),
+        ),
+        const SizedBox(height: 2),
+        SizedBox(
+          width: 140,
+          child: Text(
+            city,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: alignLeft ? TextAlign.left : TextAlign.right,
+            style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BoardingPassCard extends StatelessWidget {
+  final String? coverUrl;
+
+  final String dateLeft;
+  final String timeRight;
+
+  final String fromCode;
+  final String fromName;
+  final String toCode;
+  final String toName;
+
+  final String airlineName;
+  final String? durationText;
+
+  final String flightCode;
+  final String boarding;
+  final String depart;
+  final String arrive;
+  final String gate;
+  final String seat;
+  final String seatClass;
+  final String passenger;
+
+  final String priceText;
+
+  const _BoardingPassCard({
+    required this.coverUrl,
+    required this.dateLeft,
+    required this.timeRight,
+    required this.fromCode,
+    required this.fromName,
+    required this.toCode,
+    required this.toName,
+    required this.airlineName,
+    required this.durationText,
+    required this.flightCode,
+    required this.boarding,
+    required this.depart,
+    required this.arrive,
+    required this.gate,
+    required this.seat,
+    required this.seatClass,
+    required this.passenger,
+    required this.priceText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6FAFF),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [
+          BoxShadow(blurRadius: 22, spreadRadius: 0, offset: Offset(0, 10), color: Color(0x1A000000)),
+        ],
+      ),
+      child: Column(
         children: [
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[50],
-                      border: Border(
-                        bottom: BorderSide(color: Colors.grey[200]!),
+          // header strip
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    dateLeft.isEmpty ? '—' : dateLeft,
+                    style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF1B2A3A)),
+                  ),
+                ),
+                Text(
+                  timeRight,
+                  style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF1B2A3A)),
+                ),
+              ],
+            ),
+          ),
+
+          // route line
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _RouteText(code: fromCode, name: fromName, alignLeft: true),
+                ),
+                Column(
+                  children: [
+                    Icon(Icons.flight_takeoff, color: const Color(0xFF1B2A3A).withOpacity(0.8)),
+                    if (durationText != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        durationText!,
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.black54),
+                      ),
+                    ],
+                  ],
+                ),
+                Expanded(
+                  child: _RouteText(code: toCode, name: toName, alignLeft: false),
+                ),
+              ],
+            ),
+          ),
+
+          // cover (airline image) – dùng ảnh airline nếu có, không thì minh hoạ đơn giản
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: Container(
+                height: 150,
+                color: Colors.white,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (coverUrl != null)
+                      Image.network(
+                        coverUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                      ),
+                    Align(
+                      alignment: Alignment.bottomLeft,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Text(
+                          airlineName,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 14,
+                            shadows: [Shadow(blurRadius: 8, color: Colors.black54)],
+                          ),
+                        ),
                       ),
                     ),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.flight_takeoff, size: 20),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'Chuyến đi',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const Spacer(),
-                            Text(
-                              formatPrice(totalAmount),
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        Row(
-                          children: [
-                            if (airlineLogo != null && airlineLogo.isNotEmpty)
-                              Image.network(
-                                airlineLogo,
-                                width: 40,
-                                height: 40,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      color: Colors.amber[100],
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Icon(Icons.flight, color: Colors.orange),
-                                  );
-                                },
-                              )
-                            else
-                              Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: Colors.amber[100],
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Icon(Icons.flight, color: Colors.orange),
-                              ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        formatTime(departureTime),
-                                        style: const TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      Text(
-                                        calculateDuration(departureTime, arrivalTime),
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey[600],
-                                        ),
-                                      ),
-                                      Text(
-                                        formatTime(arrivalTime),
-                                        style: const TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Container(
-                                          height: 1,
-                                          color: Colors.grey[300],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        origin?['iata_code'] ?? 'N/A',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: Colors.grey[700],
-                                        ),
-                                      ),
-                                      Text(
-                                        'Bay thẳng',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey[600],
-                                        ),
-                                      ),
-                                      Text(
-                                        destination?['iata_code'] ?? 'N/A',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: Colors.grey[700],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Align(
-                          alignment: Alignment.centerLeft,
+                    Align(
+                      alignment: Alignment.topRight,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.25),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
                           child: Text(
-                            airline,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                            ),
+                            priceText,
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            'Phổ thông tiết kiệm',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: InkWell(
-                            onTap: () {
-                              // Show flight details
-                            },
-                            child: const Text(
-                              'Xem điều kiện vé',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.blue,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // info grid like boarding pass
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF123E62),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(child: _MiniField(label: 'Flight', value: flightCode)),
+                      Expanded(child: _MiniField(label: 'Boarding', value: boarding)),
+                      Expanded(child: _MiniField(label: 'Depart', value: depart)),
+                    ],
                   ),
-
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Nâng hạng vé (${flightOffers.length})',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        // Fix: Add empty state
-                        if (flightOffers.isEmpty)
-                          Container(
-                            padding: const EdgeInsets.all(20),
-                            child: Center(
-                              child: Text(
-                                'Không có hạng vé nào khác',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ),
-                          )
-                        else
-                          ...flightOffers.asMap().entries.map((entry) {
-                            final index = entry.key;
-                            final offer = entry.value;
-
-                            final cabin = offer["cabin_class_marketing_name"]?.toString() ?? "Không rõ";
-                            final amount = double.tryParse(offer["total_amount"]?.toString() ?? '0') ?? 0.0;
-
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: _buildFareOption(
-                                title: cabin,
-                                status: "Có sẵn",
-                                price: formatPrice(amount),
-                                isSelected: selectedFareIndex == index,
-                                features: [
-                                  "Hành lý xách tay 7kg",
-                                  "Hành lý ký gửi 20kg",
-                                  if (cabin.toLowerCase().contains("business")) "Phòng chờ thương gia",
-                                ],
-                                onTap: () {
-                                  setState(() {
-                                    selectedFareIndex = index;
-                                  });
-                                },
-                              ),
-                            );
-                          }),
-
-                        const SizedBox(height: 20),
-                        Text(
-                          'Chọn chỗ ngồi',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        // Fix: Add null check and empty state
-                        if (flightSeatMaps.isEmpty)
-                          Container(
-                            padding: const EdgeInsets.all(20),
-                            child: Center(
-                              child: Text(
-                                'Sơ đồ chỗ ngồi chưa có sẵn',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ),
-                          )
-                        else
-                          ...flightSeatMaps.expand((seatMap) {
-                            final seats = (seatMap["seats"] ?? []) as List<dynamic>;
-                            return seats.map((seat) {
-                              final available = seat["available"] == true;
-                              final seatNumber = seat["designator"]?.toString() ?? "N/A";
-                              return ListTile(
-                                leading: Icon(
-                                  available ? Icons.event_seat : Icons.event_busy,
-                                  color: available ? Colors.green : Colors.red,
-                                ),
-                                title: Text("Ghế $seatNumber"),
-                                subtitle: Text(available ? "Có sẵn" : "Đã đặt"),
-                                onTap: available
-                                    ? () {
-                                  print("Chọn ghế $seatNumber");
-                                }
-                                    : null,
-                              );
-                            });
-                          }),
-                      ],
-                    ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(child: _MiniField(label: 'Gate', value: gate)),
+                      Expanded(child: _MiniField(label: 'Seat', value: seat)),
+                      Expanded(child: _MiniField(label: 'Arrive', value: arrive)),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(child: _MiniField(label: 'Class', value: seatClass)),
+                      Expanded(child: _MiniField(label: 'Passenger', value: passenger)),
+                      const Spacer(),
+                    ],
                   ),
                 ],
               ),
             ),
           ),
 
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.withOpacity(0.2),
-                  blurRadius: 10,
-                  offset: const Offset(0, -5),
+          // barcode
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                height: 60,
+                color: Colors.white,
+                child: CustomPaint(
+                  painter: _BarcodePainter(),
                 ),
-              ],
-            ),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Giá vé',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          formatPrice(selectedPrice),
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          '/1 hành khách',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.orange[50],
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          Text(
-                            'Nhận ${(selectedPrice * 0.01).round()} Xu',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.orange[700],
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Icon(Icons.monetization_on, size: 14, color: Colors.orange[700]),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: selectedFareIndex != null ? () {
-                      print('Selected fare index: $selectedFareIndex');
-                    } : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      disabledBackgroundColor: Colors.grey[300],
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: Text(
-                      selectedFareIndex != null ? 'Tiếp tục' : 'Chọn hạng vé',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: selectedFareIndex != null ? Colors.white : Colors.grey[600],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildFareOption({
-    required String title,
-    String? status,
-    required String price,
-    required bool isSelected,
-    required List<String> features,
-    List<String> restrictions = const [],
-    VoidCallback? onTap,
-  }) {
-    final bool isDisabled = onTap == null;
+class _RouteText extends StatelessWidget {
+  final String code;
+  final String name;
+  final bool alignLeft;
 
-    return InkWell(
-      onTap: onTap,
-      child: Opacity(
-        opacity: isDisabled ? 0.5 : 1.0,
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: isSelected ? Colors.blue : Colors.grey[300]!,
-              width: isSelected ? 2 : 1,
-            ),
-            borderRadius: BorderRadius.circular(12),
-            color: isSelected ? Colors.blue[50] : Colors.white,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        if (status != null)
-                          Text(
-                            status,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: isDisabled ? Colors.grey : Colors.blue,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  if (isSelected)
-                    Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: Colors.blue,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.check,
-                        color: Colors.white,
-                        size: 16,
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                price,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.orange[700],
-                ),
-              ),
-              const SizedBox(height: 12),
-              ...features.map((feature) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.check_circle,
-                      size: 16,
-                      color: Colors.green[600],
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        feature,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey[800],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              )),
-              ...restrictions.map((restriction) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.warning_amber,
-                      size: 16,
-                      color: Colors.orange[700],
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        restriction,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey[800],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              )),
-            ],
-          ),
+  const _RouteText({
+    required this.code,
+    required this.name,
+    required this.alignLeft,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: alignLeft ? CrossAxisAlignment.start : CrossAxisAlignment.end,
+      children: [
+        Text(
+          code,
+          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF1B2A3A)),
         ),
+        const SizedBox(height: 2),
+        Text(
+          name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.black54),
+        ),
+      ],
+    );
+  }
+}
+
+class _MiniField extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _MiniField({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 4),
+        Text(value, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900)),
+      ],
+    );
+  }
+}
+
+class _SeatRow extends StatelessWidget {
+  final String title;
+  final String price;
+  final String sub;
+  final String right;
+
+  const _SeatRow({
+    required this.title,
+    required this.price,
+    required this.sub,
+    required this.right,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 6),
+                Text(price, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+                if (sub.trim().isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(sub, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(right, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+        ],
       ),
     );
   }
+}
+
+class _MapLegend extends StatelessWidget {
+  final String fromLabel;
+  final String toLabel;
+
+  const _MapLegend({required this.fromLabel, required this.toLabel});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(fromLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          Text(toLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+        ],
+      ),
+    );
+  }
+}
+
+/* ----------------- Painters ----------------- */
+
+class _RoutePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..color = Colors.white.withOpacity(0.65);
+
+    // dotted curve
+    final path = Path();
+    path.moveTo(size.width * 0.12, size.height * 0.58);
+    path.quadraticBezierTo(size.width * 0.50, size.height * 0.10, size.width * 0.88, size.height * 0.58);
+
+    _drawDashedPath(canvas, path, p, dash: 6, gap: 6);
+
+    // plane icon in middle
+    final plane = Paint()..color = Colors.white;
+    final center = Offset(size.width * 0.50, size.height * 0.28);
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(0.20);
+    final r = RRect.fromRectAndRadius(const Rect.fromLTWH(-10, -3, 20, 6), const Radius.circular(3));
+    canvas.drawRRect(r, plane);
+    canvas.drawCircle(const Offset(-12, 0), 3, plane);
+    canvas.drawCircle(const Offset(12, 0), 3, plane);
+    canvas.restore();
+  }
+
+  void _drawDashedPath(Canvas canvas, Path path, Paint paint, {required double dash, required double gap}) {
+    final metrics = path.computeMetrics().toList();
+    for (final m in metrics) {
+      double dist = 0;
+      while (dist < m.length) {
+        final next = dist + dash;
+        final extract = m.extractPath(dist, math.min(next, m.length));
+        canvas.drawPath(extract, paint);
+        dist = next + gap;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _DotWorldPainter extends CustomPainter {
+  final double opacity;
+  _DotWorldPainter({required this.opacity});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final dot = Paint()..color = Colors.white.withOpacity(opacity);
+    const step = 18.0;
+    for (double y = 10; y < size.height; y += step) {
+      for (double x = 10; x < size.width; x += step) {
+        // tạo pattern “world map” giả lập: vùng giữa dày hơn
+        final nx = (x / size.width - 0.5).abs();
+        final ny = (y / size.height - 0.45).abs();
+        final w = (1.0 - (nx * 1.2 + ny * 1.2)).clamp(0.0, 1.0);
+        if (w > 0.25) {
+          canvas.drawCircle(Offset(x, y), 1.2, dot);
+        }
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _BarcodePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()..color = Colors.black87;
+    double x = 6;
+    final rnd = math.Random(8);
+    while (x < size.width - 6) {
+      final w = (rnd.nextInt(3) + 1).toDouble();
+      final h = size.height * (0.65 + rnd.nextDouble() * 0.3);
+      canvas.drawRect(Rect.fromLTWH(x, (size.height - h) / 2, w, h), p);
+      x += w + (rnd.nextInt(3) + 2);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

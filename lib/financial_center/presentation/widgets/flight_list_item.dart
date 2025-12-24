@@ -134,24 +134,18 @@ class _FlightListItemState extends State<FlightListItem> {
   @override
   Widget build(BuildContext context) {
     final isDark = Provider.of<ThemeController>(context, listen: true).darkTheme;
-
-    // Palette
     final cardBg = isDark ? const Color(0xFF0F172A) : Colors.white;
     final border = isDark ? Colors.white.withOpacity(0.10) : Colors.black.withOpacity(0.08);
     final textMain = isDark ? Colors.white : const Color(0xFF0F172A);
     final textSub = isDark ? Colors.white70 : const Color(0xFF64748B);
-
     final priceColor = isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB);
-
     final dashed = isDark ? Colors.white.withOpacity(0.12) : Colors.black12;
     final line = isDark ? Colors.white.withOpacity(0.14) : Colors.black12;
-
     final fromCode = _shortCodeFromName(widget.from);
     final toCode = _shortCodeFromName(widget.to);
     final depTime = _hhmm(widget.departure);
     final arrTime = _hhmm(widget.arrival);
     final dur = _durationText();
-
     final badgeBg = isDark ? const Color(0xFF052E1A) : const Color(0xFFE8F7EE);
     final badgeFg = isDark ? const Color(0xFF4ADE80) : const Color(0xFF16A34A);
 
@@ -167,11 +161,10 @@ class _FlightListItemState extends State<FlightListItem> {
             borderRadius: BorderRadius.circular(16),
             onHighlightChanged: (v) => setState(() => _pressed = v),
             onTap: () {
+              debugPrint('OPEN DETAIL flightId=${widget.flightId}');
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => FlightDetailScreen(flightId: widget.flightId),
-                ),
+                MaterialPageRoute(builder: (_) => FlightDetailScreen(flightId: widget.flightId)),
               );
             },
             child: PhysicalShape(

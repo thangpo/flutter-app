@@ -699,6 +699,172 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  bool _isLocalMsg(Map<String, dynamic> m) {
+    // Local message thường chưa có id server hoặc có cờ local
+    final id = _msgId(m);
+    final localId = (m['local_id'] ?? '').toString();
+    final st = (m['local_status'] ?? '').toString();
+    if (localId.isNotEmpty) return true;
+    if (st.isNotEmpty && st != 'sent') return true;
+    // Nếu id = 0 mà có nội dung local thì coi là local
+    if (id <= 0 && ((m['local_text'] ?? '').toString().isNotEmpty || (m['local_file'] ?? '').toString().isNotEmpty)) {
+      return true;
+    }
+    return false;
+  }
+
+  Future<void> _retryLocalMessage(Map<String, dynamic> m) async {
+    if (_sending) return;
+
+    final localId = (m['local_id'] ?? '').toString();
+    if (localId.isEmpty) return;
+
+    // set status sending
+    setState(() {
+      m['local_status'] = 'sending';
+    });
+
+    try {
+      final String text = (m['local_text'] ?? '').toString().trim();
+      final String filePath = (m['local_file'] ?? '').toString().trim();
+      final String? replyId = (m['reply_id'] ?? m['reply_to_id'])?.toString();
+
+      Map<String, dynamic>? sent;
+      if (filePath.isNotEmpty) {
+        sent = await repo.sendMessage(
+          token: widget.accessToken,
+          peerUserId: _peerId,
+          filePath: filePath,
+          text: text.isNotEmpty ? text : null,
+          replyToMessageId: (replyId != null && replyId != '0' && replyId.isNotEmpty) ? replyId : null,
+        );
+      } else {
+        sent = await repo.sendMessage(
+          token: widget.accessToken,
+          peerUserId: _peerId,
+          text: text,
+          replyToMessageId: (replyId != null && replyId != '0' && replyId.isNotEmpty) ? replyId : null,
+        );
+      }
+
+      if (sent != null) {
+        // Xoá local bubble và merge server message
+        setState(() {
+          _messages.removeWhere((x) => (x['local_id'] ?? '').toString() == localId);
+        });
+        _mergeIncoming([sent], toTail: true);
+        _applyLocalReactionsToMessages();
+        if (mounted) setState(() {});
+        _scrollToBottom();
+      } else {
+        setState(() {
+          m['local_status'] = 'failed';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        m['local_status'] = 'failed';
+      });
+    }
+  }
+
+  Widget _buildLocalBubble(Map<String, dynamic> m, {required bool isDark}) {
+    final theme = Theme.of(context);
+    final bg = isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE8F0FF);
+    final fg = isDark ? Colors.white : Colors.black87;
+
+    final text = (m['local_text'] ?? m['display_text'] ?? m['text'] ?? '').toString();
+    final filePath = (m['local_file'] ?? '').toString();
+
+    Widget content;
+
+    if (filePath.isNotEmpty) {
+      // preview kiểu file đơn giản (ảnh sẽ hiển thị thumbnail)
+      final t = _detectAttachmentType(filePath);
+      if (t == _AttachmentType.image) {
+        content = ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.file(
+            File(filePath),
+            fit: BoxFit.cover,
+            height: 160,
+            width: 220,
+            errorBuilder: (_, __, ___) => _fallbackPreview(
+              _PendingAttachment(path: filePath, type: _AttachmentType.image),
+            ),
+          ),
+        );
+      } else {
+        content = _fallbackPreview(
+          _PendingAttachment(path: filePath, type: t),
+        );
+      }
+
+      // nếu có caption text
+      if (text.trim().isNotEmpty) {
+        content = Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            content,
+            const SizedBox(height: 6),
+            Text(text, style: TextStyle(color: fg)),
+          ],
+        );
+      }
+    } else {
+      content = Text(text, style: TextStyle(color: fg));
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: theme.colorScheme.onSurface.withOpacity(0.08)),
+      ),
+      child: content,
+    );
+  }
+
+  Widget _localStatusLine(Map<String, dynamic> m) {
+    final st = (m['local_status'] ?? '').toString();
+    String label;
+    IconData? icon;
+    Color color = Colors.grey;
+
+    switch (st) {
+      case 'sending':
+        label = _tr('sending', 'Đang gửi...');
+        icon = Icons.schedule;
+        color = Colors.grey;
+        break;
+      case 'failed':
+        label = _tr('send_failed_tap_retry', 'Gửi thất bại • chạm để thử lại');
+        icon = Icons.error_outline;
+        color = Colors.redAccent;
+        break;
+      default:
+      // sent / unknown -> không hiện
+        return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, right: 2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) Icon(icon, size: 14, color: color),
+          if (icon != null) const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(fontSize: 11, color: color),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _handlePickFile() async {
     final res = await FilePicker.platform.pickFiles(allowMultiple: false);
     if (res == null || res.files.isEmpty) return;

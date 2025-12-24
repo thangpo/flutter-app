@@ -50,9 +50,47 @@ class FlightService {
     }
   }
 
+  static Future<Map<String, dynamic>> searchFlights({
+    int limit = 9,
+    int page = 1,
+    String? start,
+    String? end,
+    String? keyword,
+    String? airportFromId,
+    String? airportToId,
+    String? airlineId,
+    String? seatType,
+    num? minPrice,
+    num? maxPrice,
+    bool withLocations = false,
+    bool withAttributes = false,
+    bool withSeatTypes = true,
+    Map<String, dynamic>? extraParams,
+  }) async {
+    final params = <String, dynamic>{
+      'limit': limit,
+      'page': page,
+      if (start != null && start.trim().isNotEmpty) 'start': start.trim(),
+      if (end != null && end.trim().isNotEmpty) 'end': end.trim(),
+      if (keyword != null && keyword.trim().isNotEmpty) 's': keyword.trim(),
+      if (airportFromId != null && airportFromId.isNotEmpty) 'airport_from': airportFromId,
+      if (airportToId != null && airportToId.isNotEmpty) 'airport_to': airportToId,
+      if (airlineId != null && airlineId.isNotEmpty) 'airline_id': airlineId,
+      if (seatType != null && seatType.isNotEmpty) 'seat_type': seatType,
+      if (minPrice != null) 'min_price': minPrice,
+      if (maxPrice != null) 'max_price': maxPrice,
+      'with_locations': withLocations ? 1 : 0,
+      'with_attributes': withAttributes ? 1 : 0,
+      'with_seat_types': withSeatTypes ? 1 : 0,
+    };
+
+    if (extraParams != null) params.addAll(extraParams);
+
+    return getFlights(params: params);
+  }
+
   static Future<Map<String, dynamic>> getFlightDetail(String flightId) async {
     final url = Uri.parse("$baseUrl/flights/$flightId");
-
     final response = await http.get(url, headers: _headers());
     final body = _decodeJson(response);
 

@@ -6,12 +6,10 @@ import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.d
 class FlightDatePickerScreen extends StatefulWidget {
   final String title;
   final Color accentColor;
-
-  final DateTime? initialDate;
   final DateTime firstDate;
   final DateTime lastDate;
-
-  // UI giống ảnh có phần time slots (tuỳ chọn)
+  final DateTime? initialStart;
+  final DateTime? initialEnd;
   final List<String> timeSlots;
   final String? initialTime;
 
@@ -21,7 +19,8 @@ class FlightDatePickerScreen extends StatefulWidget {
     required this.accentColor,
     required this.firstDate,
     required this.lastDate,
-    this.initialDate,
+    this.initialStart,
+    this.initialEnd,
     this.timeSlots = const ['11:00', '13:00', '14:00', '17:00'],
     this.initialTime,
   });
@@ -31,8 +30,11 @@ class FlightDatePickerScreen extends StatefulWidget {
 }
 
 class _FlightDatePickerScreenState extends State<FlightDatePickerScreen> {
-  late DateTime _monthCursor; // đang xem tháng nào
-  DateTime? _selectedDate;
+  late DateTime _monthCursor;
+
+  DateTime? _startDate;
+  DateTime? _endDate;
+
   String? _selectedTime;
 
   String tr(String key, String fallback) {
@@ -44,25 +46,43 @@ class _FlightDatePickerScreenState extends State<FlightDatePickerScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedDate = widget.initialDate;
+
+    _startDate = widget.initialStart;
+    _endDate = widget.initialEnd;
     _selectedTime = widget.initialTime;
 
-    final base = widget.initialDate ?? DateTime.now();
+    final base = widget.initialStart ?? DateTime.now();
     _monthCursor = DateTime(base.year, base.month, 1);
   }
 
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
+  DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
   bool _isInRange(DateTime d) {
-    final dd = DateTime(d.year, d.month, d.day);
-    final first = DateTime(widget.firstDate.year, widget.firstDate.month, widget.firstDate.day);
-    final last = DateTime(widget.lastDate.year, widget.lastDate.month, widget.lastDate.day);
+    final dd = _dateOnly(d);
+    final first = _dateOnly(widget.firstDate);
+    final last = _dateOnly(widget.lastDate);
     return !dd.isBefore(first) && !dd.isAfter(last);
   }
 
+  bool _isBetweenInclusive(DateTime d, DateTime start, DateTime end) {
+    final dd = _dateOnly(d);
+    final s = _dateOnly(start);
+    final e = _dateOnly(end);
+    return !dd.isBefore(s) && !dd.isAfter(e);
+  }
+
+  String _fmt(DateTime? d) {
+    if (d == null) return tr('flight_select_date', 'Select date');
+    final y = d.year.toString().padLeft(4, '0');
+    final m = d.month.toString().padLeft(2, '0');
+    final day = d.day.toString().padLeft(2, '0');
+    return "$y-$m-$day";
+  }
+
   String _monthTitle(DateTime m) {
-    // January 2020 style
     final months = <String>[
       tr('month_jan', 'January'),
       tr('month_feb', 'February'),
@@ -93,13 +113,11 @@ class _FlightDatePickerScreenState extends State<FlightDatePickerScreen> {
   }
 
   List<DateTime?> _buildMonthCells(DateTime month) {
-    // Monday-first: Mon..Sun (giống ảnh M T W T F S S)
     final first = DateTime(month.year, month.month, 1);
     final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
+    final leadingBlanks = first.weekday - 1;
 
-    final leadingBlanks = first.weekday - 1; // Mon=1 => 0 blank
-    final totalCells = 42; // 6 weeks * 7
-
+    const totalCells = 42;
     final cells = List<DateTime?>.filled(totalCells, null);
 
     int day = 1;
@@ -110,27 +128,71 @@ class _FlightDatePickerScreenState extends State<FlightDatePickerScreen> {
     return cells;
   }
 
+  void _onPickDay(DateTime d) {
+    if (!_isInRange(d)) return;
+
+    setState(() {
+      if (_startDate == null || (_startDate != null && _endDate != null)) {
+        _startDate = d;
+        _endDate = null;
+        return;
+      }
+      final s = _startDate!;
+      final dd = _dateOnly(d);
+      final ss = _dateOnly(s);
+
+      if (dd.isBefore(ss)) {
+        _endDate = _startDate;
+        _startDate = d;
+      } else {
+        _endDate = d;
+      }
+    });
+  }
+
   void _confirm() {
-    if (_selectedDate == null) {
+    if (_startDate == null || _endDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(tr('flight_warning_departure_required', 'Vui lòng chọn ngày đi.'))),
+        SnackBar(
+          content: Text(
+            tr('flight_warning_date_range_required', 'Vui lòng chọn ngày bắt đầu và ngày kết thúc.'),
+          ),
+        ),
       );
       return;
     }
-    Navigator.pop(context, _selectedDate);
+
+    final s = _dateOnly(_startDate!);
+    final e = _dateOnly(_endDate!);
+
+    if (e.isBefore(s)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            tr('flight_warning_end_after_start', 'Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu.'),
+          ),
+        ),
+      );
+      return;
+    }
+
+    Navigator.pop(context, DateTimeRange(start: s, end: e));
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Provider.of<ThemeController>(context, listen: true).darkTheme;
-
     final bg = isDark ? const Color(0xFF0B1220) : const Color(0xFFF6F7FB);
     final card = isDark ? const Color(0xFF111827) : Colors.white;
     final textMain = isDark ? Colors.white : const Color(0xFF0F172A);
     final textSub = isDark ? Colors.white70 : Colors.black54;
     final divider = isDark ? Colors.white10 : Colors.black12;
-
     final cells = _buildMonthCells(_monthCursor);
+    final rangeText = (_startDate == null && _endDate == null)
+        ? tr('flight_select_date_range', 'Select start & end date')
+        : (_startDate != null && _endDate == null)
+        ? '${tr('flight_start_date', 'Start')}: ${_fmt(_startDate)} • ${tr('flight_pick_end', 'Pick end date')}'
+        : '${_fmt(_startDate)} → ${_fmt(_endDate)}';
 
     return Scaffold(
       backgroundColor: bg,
@@ -143,7 +205,6 @@ class _FlightDatePickerScreenState extends State<FlightDatePickerScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Top “doctor card” style (giống ảnh) — dùng làm header info
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
               child: Container(
@@ -159,7 +220,7 @@ class _FlightDatePickerScreenState extends State<FlightDatePickerScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            tr('flight_pick_date_title', 'Pick departure date'),
+                            tr('flight_pick_date_title', 'Pick date range'),
                             style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.w900,
@@ -168,11 +229,7 @@ class _FlightDatePickerScreenState extends State<FlightDatePickerScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            _selectedDate == null
-                                ? tr('flight_select_date', 'Select date')
-                                : '${_selectedDate!.year.toString().padLeft(4, '0')}-'
-                                '${_selectedDate!.month.toString().padLeft(2, '0')}-'
-                                '${_selectedDate!.day.toString().padLeft(2, '0')}',
+                            rangeText,
                             style: TextStyle(
                               color: Colors.white.withOpacity(0.9),
                               fontWeight: FontWeight.w700,
@@ -188,7 +245,6 @@ class _FlightDatePickerScreenState extends State<FlightDatePickerScreen> {
               ),
             ),
 
-            // Calendar card
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -210,8 +266,6 @@ class _FlightDatePickerScreenState extends State<FlightDatePickerScreen> {
                   child: Column(
                     children: [
                       const SizedBox(height: 14),
-
-                      // Month header with arrows
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         child: Row(
@@ -242,7 +296,6 @@ class _FlightDatePickerScreenState extends State<FlightDatePickerScreen> {
 
                       const SizedBox(height: 6),
 
-                      // Weekday labels (M T W T F S S)
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Row(
@@ -274,7 +327,6 @@ class _FlightDatePickerScreenState extends State<FlightDatePickerScreen> {
 
                       const SizedBox(height: 8),
 
-                      // Calendar grid
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         child: GridView.builder(
@@ -292,29 +344,35 @@ class _FlightDatePickerScreenState extends State<FlightDatePickerScreen> {
                             if (d == null) return const SizedBox.shrink();
 
                             final inRange = _isInRange(d);
-                            final isSelected = _selectedDate != null && _isSameDay(d, _selectedDate!);
 
-                            final fg = !inRange
+                            final isStart = _startDate != null && _isSameDay(d, _startDate!);
+                            final isEnd = _endDate != null && _isSameDay(d, _endDate!);
+
+                            final inSelectedRange = (_startDate != null && _endDate != null)
+                                ? _isBetweenInclusive(d, _startDate!, _endDate!)
+                                : false;
+
+                            final bgColor = (isStart || isEnd)
+                                ? widget.accentColor
+                                : (inSelectedRange ? widget.accentColor.withOpacity(isDark ? 0.22 : 0.16) : Colors.transparent);
+
+                            final fgColor = !inRange
                                 ? (isDark ? Colors.white24 : Colors.black26)
-                                : (isSelected ? Colors.white : textMain);
+                                : ((isStart || isEnd) ? Colors.white : textMain);
 
                             return InkWell(
-                              onTap: !inRange
-                                  ? null
-                                  : () {
-                                setState(() => _selectedDate = d);
-                              },
+                              onTap: !inRange ? null : () => _onPickDay(d),
                               borderRadius: BorderRadius.circular(10),
                               child: Container(
                                 alignment: Alignment.center,
                                 decoration: BoxDecoration(
-                                  color: isSelected ? widget.accentColor : Colors.transparent,
+                                  color: bgColor,
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
                                   '${d.day}',
                                   style: TextStyle(
-                                    color: fg,
+                                    color: fgColor,
                                     fontWeight: FontWeight.w900,
                                     fontSize: 12,
                                   ),
@@ -329,7 +387,6 @@ class _FlightDatePickerScreenState extends State<FlightDatePickerScreen> {
                       Divider(height: 1, color: divider),
                       const SizedBox(height: 10),
 
-                      // Available times (giống ảnh) — tuỳ chọn dùng hay không
                       Text(
                         tr('flight_available_times', 'Available Times'),
                         style: TextStyle(
@@ -354,7 +411,9 @@ class _FlightDatePickerScreenState extends State<FlightDatePickerScreen> {
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                 decoration: BoxDecoration(
-                                  color: selected ? widget.accentColor : (isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9)),
+                                  color: selected
+                                      ? widget.accentColor
+                                      : (isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9)),
                                   borderRadius: BorderRadius.circular(10),
                                   border: Border.all(color: selected ? Colors.transparent : divider),
                                 ),
@@ -374,7 +433,6 @@ class _FlightDatePickerScreenState extends State<FlightDatePickerScreen> {
 
                       const Spacer(),
 
-                      // Bottom button
                       Padding(
                         padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
                         child: SizedBox(
