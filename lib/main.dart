@@ -87,6 +87,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/call/zego_call_servi
 
 import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
 import 'package:zego_uikit_signaling_plugin/zego_uikit_signaling_plugin.dart';
+import 'package:zego_zpns/zego_zpns.dart';
 
 import 'di_container.dart' as di;
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_page_controller.dart';
@@ -174,6 +175,23 @@ Future<void> _setHighRefreshRate() async {
     debugPrint('High refresh rate mode applied');
   } catch (e) {
     debugPrint('Không set du?c high refresh rate: $e');
+  }
+}
+
+Future<void> _initZpnsPush() async {
+  final isProd = kReleaseMode || kProfileMode;
+  try {
+    // Bật log debug cho ZPNs khi build dev.
+    ZPNs.enableDebug(!isProd);
+  } catch (_) {}
+
+  try {
+    await ZPNs.getInstance().registerPush(
+      enableIOSVoIP: true, // iOS VoIP; Android bỏ qua
+    );
+    debugPrint('[ZPNs] registerPush success');
+  } catch (e) {
+    debugPrint('[ZPNs] registerPush failed: $e');
   }
 }
 
@@ -384,6 +402,7 @@ Future<void> main() async {
 
   await FlutterDownloader.initialize(debug: true, ignoreSsl: true);
   await di.init();
+  await _initZpnsPush();
 
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     await FirebaseTokenUpdater.update();
