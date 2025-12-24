@@ -431,7 +431,6 @@ Future<void> main() async {
 
   await FlutterDownloader.initialize(debug: true, ignoreSsl: true);
   await di.init();
-  await _initZpnsPush();
 
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     await FirebaseTokenUpdater.update();

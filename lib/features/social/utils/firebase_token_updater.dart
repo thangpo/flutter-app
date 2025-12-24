@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/call/zpns_push_registrar.dart';
 
 class FirebaseTokenUpdater {
   static Future<void> update() async {
@@ -34,6 +35,11 @@ class FirebaseTokenUpdater {
       final body = await streamed.stream.bytesToString();
       log('update_fcm_token => ${streamed.statusCode}');
       log('response => $body');
+
+      // Sau khi có FCM token + social access_token, đăng ký push ZPNs (offline call).
+      // Không chờ kết quả để tránh chặn luồng.
+      // ignore: discarded_futures
+      ZpnsPushRegistrar.registerIfNeeded();
     } catch (e, st) {
       log('❌ Error updating FCM token: $e\n$st');
     }
