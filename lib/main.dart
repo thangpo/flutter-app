@@ -84,6 +84,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/utils/firebase_token
 import 'package:flutter_sixvalley_ecommerce/features/social/utils/push_navigation_helper.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/fcm/fcm_chat_handler.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/call/zego_call_service.dart';
+import 'package:flutter_sixvalley_ecommerce/features/social/call/zego_remote_logger.dart';
 
 import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
 import 'package:zego_uikit_signaling_plugin/zego_uikit_signaling_plugin.dart';
@@ -184,6 +185,33 @@ Future<void> _initZpnsPush() async {
   try {
     // Bật log debug cho ZPNs khi build dev.
     ZPNs.enableDebug(!isProd);
+  } catch (_) {}
+
+  try {
+    ZPNs.setPushConfig(ZPNsConfig()..enableFCMPush = true);
+  } catch (e) {
+    unawaited(ZegoRemoteLogger.I
+        .log('zpns_set_push_config_failed', {'error': e.toString()}));
+  }
+
+  try {
+    ZPNsEventHandler.onRegistered = (msg) {
+      unawaited(ZegoRemoteLogger.I.log('zpns_registered', {
+        'push_id': msg.pushID,
+        'error': msg.errorCode,
+        'source': msg.pushSourceType.name,
+        'error_message': msg.errorMessage,
+      }));
+    };
+    ZPNsEventHandler.onThroughMessageReceived = (msg) {
+      unawaited(ZegoRemoteLogger.I.log('zpns_through_message', {
+        'title': msg.title,
+        'content': msg.content,
+        'payload': msg.payload,
+        'extras_keys': msg.extras.keys.join(','),
+        'source': msg.pushSourceType.name,
+      }));
+    };
   } catch (_) {}
 
   try {
