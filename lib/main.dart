@@ -88,6 +88,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/call/zego_call_servi
 import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
 import 'package:zego_uikit_signaling_plugin/zego_uikit_signaling_plugin.dart';
 import 'package:zego_zpns/zego_zpns.dart';
+import 'package:flutter/foundation.dart' show kReleaseMode, kProfileMode;
 
 import 'di_container.dart' as di;
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_page_controller.dart';
