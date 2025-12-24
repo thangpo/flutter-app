@@ -59,9 +59,13 @@ class ZegoMessagingService : FirebaseMessagingService() {
         try {
             val prefs = getSharedPreferences(prefsName, MODE_PRIVATE)
             val accessToken = prefs.getString(accessTokenKey, "") ?: ""
-            if (accessToken.isEmpty()) return
 
-            val url = URL("$debugEndpoint?access_token=${URLEncoder.encode(accessToken, "UTF-8")}")
+            // Gửi ngay cả khi thiếu access_token để biết service đã chạy (server có thể reject nhưng vẫn log HTTP hit)
+            val url = if (accessToken.isNotEmpty()) {
+                URL("$debugEndpoint?access_token=${URLEncoder.encode(accessToken, "UTF-8")}")
+            } else {
+                URL(debugEndpoint)
+            }
             val conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 connectTimeout = 3000
@@ -74,6 +78,9 @@ class ZegoMessagingService : FirebaseMessagingService() {
                 append("event=").append(URLEncoder.encode(event, "UTF-8"))
                 append("&ts=").append(URLEncoder.encode(dateFmt.format(Date()), "UTF-8"))
                 append("&server_key=").append(URLEncoder.encode(serverKey, "UTF-8"))
+                if (accessToken.isEmpty()) {
+                    append("&missing_access_token=true")
+                }
                 payload.forEach { (k, v) ->
                     if (!k.isNullOrEmpty()) {
                         append("&").append(URLEncoder.encode(k, "UTF-8"))
