@@ -2,6 +2,8 @@ allprojects {
     repositories {
         // ZEGOCLOUD maven (chứa zpns + plugin push)
         maven(url = "https://storage.zego.im/maven")
+        maven(url = "https://storage.zego.im/downloads/maven")
+        maven(url = "https://storage.zego.im/downloads/maven-repo")
         // Huawei/Heytap repo để tránh lỗi thiếu dependencies khi bật push vendor khác
         maven(url = "https://developer.huawei.com/repo/")
         maven {
