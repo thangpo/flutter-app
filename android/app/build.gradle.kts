@@ -78,6 +78,6 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.6.0"))
     implementation("com.google.firebase:firebase-messaging")
     implementation("androidx.activity:activity-ktx:1.9.0")
-    // Bổ sung plugin FCM cho ZPNs để offline call hoạt động trên Android
-    implementation("im.zego:zpns_android_plugin_fcm:2.8.0")
+    // Bổ sung plugin FCM cho ZPNs để offline call hoạt động trên Android (artifact mới)
+    implementation("im.zego:zpns-fcm:2.8.2")
 }

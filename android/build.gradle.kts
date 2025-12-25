@@ -4,6 +4,8 @@ allprojects {
         maven(url = "https://storage.zego.im/maven")
         maven(url = "https://storage.zego.im/downloads/maven")
         maven(url = "https://storage.zego.im/downloads/maven-repo")
+        maven(url = "https://maven.zego.im")
+        maven(url = "https://jitpack.io")
         // Huawei/Heytap repo để tránh lỗi thiếu dependencies khi bật push vendor khác
         maven(url = "https://developer.huawei.com/repo/")
         maven {
@@ -15,6 +17,16 @@ allprojects {
         }
         google()
         mavenCentral()
+    }
+}
+
+// Nếu plugin nào đó vẫn yêu cầu artifact tên cũ, map sang artifact mới của Zego.
+allprojects {
+    configurations.all {
+        resolutionStrategy.dependencySubstitution {
+            substitute(module("im.zego:zpns_android_plugin_fcm")) using
+                module("im.zego:zpns-fcm:2.8.2")
+        }
     }
 }
 

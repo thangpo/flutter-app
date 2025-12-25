@@ -17,6 +17,8 @@ pluginManagement {
         google()
         mavenCentral()
         gradlePluginPortal()
+        maven(url = "https://maven.zego.im")
+        maven(url = "https://jitpack.io")
     }
 }
 
@@ -28,3 +30,14 @@ plugins {
 }
 
 include(":app")
+
+// For AGP 8+, define dependency resolution repositories here (includes ZEGOCLOUD repo).
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+        maven(url = "https://maven.zego.im")
+        maven(url = "https://jitpack.io")
+    }
+}
