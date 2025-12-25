@@ -29,8 +29,6 @@ plugins {
     id("com.google.gms.google-services") version "4.3.15" apply false
 }
 
-include(":app")
-
 // For AGP 8+, define dependency resolution repositories here (includes ZEGOCLOUD repo).
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
@@ -41,3 +39,6 @@ dependencyResolutionManagement {
         maven(url = "https://jitpack.io")
     }
 }
+
+rootProject.name = "flutter-app"
+include(":app")
