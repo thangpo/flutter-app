@@ -2,8 +2,8 @@
 allprojects {
     configurations.all {
         resolutionStrategy.dependencySubstitution {
-            substitute(module("im.zego:zpns_android_plugin_fcm")) using
-                module("im.zego:zpns-fcm:2.8.2")
+            substitute(module("im.zego:zpns_android_plugin_fcm"))
+                .using(module("im.zego:zpns-fcm:2.8.0"))
         }
     }
 }

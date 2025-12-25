@@ -31,10 +31,11 @@ plugins {
 
 // For AGP 8+, define dependency resolution repositories here (includes ZEGOCLOUD repo).
 dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS) 
     repositories {
         google()
         mavenCentral()
+        maven { url = uri("https://storage.googleapis.com/download.flutter.io") }
         maven(url = "https://maven.zego.im")
         maven(url = "https://jitpack.io")
     }
