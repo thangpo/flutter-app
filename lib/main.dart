@@ -684,26 +684,41 @@ class _CallkitResumeWrapper extends StatefulWidget {
   State<_CallkitResumeWrapper> createState() => _CallkitResumeWrapperState();
 }
 
-class _CallkitResumeWrapperState extends State<_CallkitResumeWrapper> {
+class _CallkitResumeWrapperState extends State<_CallkitResumeWrapper>
+    with WidgetsBindingObserver {
   bool _didResume = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (_didResume) return;
       _didResume = true;
 
-      // ✅ Nhịp 1: ngay sau frame đầu
+      // nhịp cold-start bạn đã có
       ZegoCallService.I.ensureEnterAcceptedOfflineCall(source: 'post_frame#1');
-
-      // ✅ Nhịp 2..5: cold start iOS có thể nhận event trễ → gọi lại vài nhịp
       for (int i = 2; i <= 5; i++) {
-        await Future.delayed(const Duration(milliseconds: 600));
-        ZegoCallService.I.ensureEnterAcceptedOfflineCall(source: 'post_frame#$i');
+        await Future.delayed(const Duration(milliseconds: 350));
+        ZegoCallService.I
+            .ensureEnterAcceptedOfflineCall(source: 'post_frame#$i');
       }
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // ✅ quan trọng: bấm "Nghe" từ call UI thường rơi vào nhịp này
+      ZegoCallService.I.ensureEnterAcceptedOfflineCall(source: 'app_resumed');
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   @override

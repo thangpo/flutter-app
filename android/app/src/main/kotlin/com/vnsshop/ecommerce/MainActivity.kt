@@ -14,6 +14,11 @@ class MainActivity : FlutterActivity() {
 
         // Bật edge-to-edge đúng cách cho Flutter
         WindowCompat.setDecorFitsSystemWindows(window, false)
-
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent) // để FlutterActivity/plugin đọc intent mới
+    }
+
 }
