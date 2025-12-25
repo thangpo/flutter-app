@@ -446,7 +446,7 @@ class _MoreScreenState extends State<MoreScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            '${getTranslated('version', context)} ${AppConstants.appVersion} 2.2-72',
+                            '${getTranslated('version', context)} ${AppConstants.appVersion}apk-4 2.2-72',
                             style: textRegular.copyWith(
                                 fontSize: Dimensions.fontSizeLarge,
                                 color: Theme.of(context).hintColor),
