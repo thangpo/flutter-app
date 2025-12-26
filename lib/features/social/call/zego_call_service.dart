@@ -66,7 +66,7 @@ class ZegoCallService {
       androidNotificationConfig: ZegoCallAndroidNotificationConfig(
         callIDVisibility: true,
         showOnLockedScreen: true,
-        showOnFullScreen: true,
+        showOnFullScreen: false,
         callChannel: ZegoCallAndroidNotificationChannelConfig(
           channelID: 'zego_incoming_call',
           channelName: 'Incoming Calls',
@@ -125,7 +125,8 @@ class ZegoCallService {
         ),
         config: ZegoCallInvitationConfig(
           offline: ZegoCallInvitationOfflineConfig(
-            autoEnterAcceptedOfflineCall: true,
+            // Để chủ động gọi enterAcceptedOfflineCall sau khi UI sẵn sàng.
+            autoEnterAcceptedOfflineCall: false,
           ),
         ),
         notificationConfig: notificationConfig,

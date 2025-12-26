@@ -97,6 +97,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_p
 // === ADD (n?u chua có bi?n này) ===
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
+const MethodChannel _callkitChannel = MethodChannel('com.vnsshop/callkit');
 
 // =================== FIREBASE ANALYTICS INSTANCES ===================
 final FirebaseAnalytics analytics = FirebaseAnalytics.instance;
@@ -343,6 +344,18 @@ Future<void> _ensureAndroidNotificationPermission() async {
 Future<void> main() async {
   HttpOverrides.global = MyHttpOverrides();
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Nhận tín hiệu accept từ native CallKit (flutter_callkit_incoming) khi app bị kill.
+  _callkitChannel.setMethodCallHandler((call) async {
+    if (call.method == 'callkit_action') {
+      final args = (call.arguments as Map?) ?? {};
+      final action = (args['action'] ?? '').toString();
+      if (action == 'accept') {
+        ZegoCallService.I.ensureEnterAcceptedOfflineCall(
+            source: 'native_callkit');
+      }
+    }
+  });
   // Đăng ký navigator key cho Zego invitation để CallKit có context push trang gọi.
   ZegoUIKitPrebuiltCallInvitationService().setNavigatorKey(navigatorKey);
   // Bật CallKit/ConnectionService TRƯỚC khi init để cold-start nhận sự kiện accept.
