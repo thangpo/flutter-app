@@ -4,7 +4,6 @@ import 'package:flutter_sixvalley_ecommerce/features/order/domain/services/tour_
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
 import 'package:provider/provider.dart';
-
 import 'qr_page.dart';
 import 'tour_booking_card.dart';
 import 'past_booking_screen.dart';
@@ -24,7 +23,6 @@ class _TourOrderScreenState extends State<TourOrderScreen> {
   String? _selectedStatus;
 
   final TourOrderService _tourService = TourOrderService();
-
   final List<Map<String, String>> _statuses = [
     {"label": "all", "value": ""},
     {"label": "draft", "value": "draft"},
@@ -64,13 +62,11 @@ class _TourOrderScreenState extends State<TourOrderScreen> {
     }
   }
 
-  /// Mở Google Maps dẫn đường tới điểm của booking
   Future<void> _openMapForBooking(
       BuildContext context, Map<String, dynamic> booking) async {
     final service = booking['service'] as Map<String, dynamic>? ?? {};
     final latStr = service['lat']?.toString();
     final lngStr = service['lng']?.toString();
-
     final lat = double.tryParse(latStr ?? '');
     final lng = double.tryParse(lngStr ?? '');
 
@@ -90,7 +86,6 @@ class _TourOrderScreenState extends State<TourOrderScreen> {
       'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving',
     );
 
-    // Mở app Google Maps nếu có, fallback sang browser
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (!await launchUrl(uri, mode: LaunchMode.inAppBrowserView)) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -105,7 +100,6 @@ class _TourOrderScreenState extends State<TourOrderScreen> {
     }
   }
 
-  /// today / upcoming / past / unknown
   String _classifyByDate(String? dateStr) {
     if (dateStr == null || dateStr.isEmpty) return 'unknown';
     try {
@@ -122,7 +116,6 @@ class _TourOrderScreenState extends State<TourOrderScreen> {
     }
   }
 
-  /// Lấy TOUR/HOTEL từ hôm nay trở đi
   List<Map<String, dynamic>> _filterUpcomingByType(String type) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -245,7 +238,6 @@ class _TourOrderScreenState extends State<TourOrderScreen> {
           ),
           body: Column(
             children: [
-              // ========== FILTER + QR ==========
               Container(
                 margin: const EdgeInsets.all(16),
                 padding: const EdgeInsets.all(16),
@@ -367,7 +359,6 @@ class _TourOrderScreenState extends State<TourOrderScreen> {
                 ),
               ),
 
-              // ========== NỘI DUNG 2 TAB (Hôm nay + Sắp tới) ==========
               Expanded(
                 child: _isLoading
                     ? Center(
@@ -381,7 +372,6 @@ class _TourOrderScreenState extends State<TourOrderScreen> {
                     ? _buildError(context)
                     : TabBarView(
                   children: [
-                    // Tab Tour
                     _buildTabList(
                       context: context,
                       bookings: _filterUpcomingByType('tour'),
@@ -393,7 +383,6 @@ class _TourOrderScreenState extends State<TourOrderScreen> {
                           'Không có tour nào từ hôm nay trở đi',
                       serviceTypeTab: 'tour',
                     ),
-                    // Tab Hotel
                     _buildTabList(
                       context: context,
                       bookings: _filterUpcomingByType('hotel'),
@@ -439,7 +428,6 @@ class _TourOrderScreenState extends State<TourOrderScreen> {
     );
   }
 
-  /// Hôm nay / Sắp tới cho từng tab
   Widget _buildTabList({
     required BuildContext context,
     required List<Map<String, dynamic>> bookings,
@@ -447,7 +435,7 @@ class _TourOrderScreenState extends State<TourOrderScreen> {
     required Color oceanBlue,
     required Color lightOceanBlue,
     required String emptyText,
-    required String serviceTypeTab, // 'tour' hoặc 'hotel'
+    required String serviceTypeTab,
   }) {
     if (bookings.isEmpty) {
       return Center(

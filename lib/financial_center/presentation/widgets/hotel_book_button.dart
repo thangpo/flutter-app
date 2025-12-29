@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 
 class HotelBookButton extends StatelessWidget {
   final int totalRoomsSelected;
@@ -13,9 +14,13 @@ class HotelBookButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasSelection = totalRoomsSelected > 0;
+
+    final bookNow = getTranslated('hotel_book_now', context) ?? 'Đặt phòng ngay';
+    final roomText = getTranslated('hotel_room', context) ?? 'phòng';
+
     final label = hasSelection
-        ? 'Đặt phòng ngay ($totalRoomsSelected phòng)'
-        : 'Đặt phòng ngay';
+        ? '$bookNow ($totalRoomsSelected $roomText)'
+        : bookNow;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),

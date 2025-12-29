@@ -16,6 +16,7 @@ import 'flight_invoice_screen.dart';
 import '../models/flight_checkout_args.dart' as m;
 import '../widgets/flight_route_hero_map.dart';
 import '../widgets/flight_passenger_form_widget.dart';
+import 'sepay_qr_screen.dart';
 
 class FlightCheckoutScreen extends StatefulWidget {
   final m.FlightCheckoutArgs args;
@@ -144,55 +145,68 @@ class _FlightCheckoutScreenState extends State<FlightCheckoutScreen> {
 
       final passengers = _passengerNameCtrls.asMap().entries.map((e) {
         return {
-          "index": e.key + 1,
           "full_name": e.value.text.trim(),
         };
       }).toList();
 
       final paxCount = passengers.length;
-      final gateway = _selectedPayment == PaymentMethod.sepay ? "sepay" : "offline_payment";
+
       final seatClassName = (widget.args.seatClassName?.toString().trim().isNotEmpty ?? false)
           ? widget.args.seatClassName.toString().trim()
           : "Economy";
+
       final amount = widget.args.totalPrice;
+
       final flightInfo = <String, dynamic>{
-        "airline_name": widget.args.airlineName,
-        "flight_code": widget.args.flightCode,
-        "from_code": widget.args.fromCode,
-        "to_code": widget.args.toCode,
         "depart_time": widget.args.departTimeText,
         "arrive_time": widget.args.arriveTimeText,
-        "unit_price": widget.args.unitPrice,
-        "total_price": widget.args.totalPrice,
         "seat_class": seatClassName,
         "seat_qty": paxCount,
-        "items": [
-          {
-            "name": seatClassName,
-            "qty": paxCount,
-            "unit_price": widget.args.unitPrice,
-            "line_total": widget.args.unitPrice * paxCount,
-          }
-        ],
+        "unit_price": widget.args.unitPrice,
       };
 
-      final debugPayload = {
-        "object_model": "flight",
-        "object_id": widget.args.flightId,
-        "start_date": widget.args.departDateIso,
-        "end_date": null,
-        "total_guests": paxCount,
-        "customer_notes": _specialRequestCtrl.text.trim(),
-        "gateway": gateway,
-        "amount": amount,
-        "contact_info": contactInfo,
-        "passengers": passengers,
-        "flight_info": flightInfo,
-        if (_couponCtrl.text.trim().isNotEmpty) "coupon_code": _couponCtrl.text.trim(),
-      };
+      if (_selectedPayment == PaymentMethod.sepay) {
+        final res = await FlightService.createSepayPayment(
+          objectModel: "flight",
+          objectId: widget.args.flightId,
+          startDate: widget.args.departDateIso,
+          endDate: null,
+          totalGuests: paxCount,
+          customerNotes: _specialRequestCtrl.text.trim().isEmpty ? null : _specialRequestCtrl.text.trim(),
+          amount: amount,
+          contactInfo: contactInfo,
+          passengers: passengers,
+          flightInfo: flightInfo,
+          couponCode: _couponCtrl.text.trim().isEmpty ? null : _couponCtrl.text.trim(),
+        );
 
-      debugPrint("BOOKING_PAYLOAD:\n${const JsonEncoder.withIndent('  ').convert(debugPayload)}");
+        final data = (res["data"] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
+        final orderCode = (data["order_code"] ?? "").toString();
+        final qrLink = (data["qr_link"] ?? "").toString();
 
+        if (orderCode.isEmpty || qrLink.isEmpty) {
+          throw Exception("Thiếu order_code/qr_link từ SePay.");
+        }
+
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => SepayQrScreen(
+              orderCode: orderCode,
+              qrLink: qrLink,
+              amount: (data["amount"] is num) ? (data["amount"] as num).toDouble() : amount,
+              flightInfo: flightInfo,
+              contactInfo: contactInfo,
+              passengers: passengers.cast<Map<String, dynamic>>(),
+              homeRouteName: '/',
+              booking: null,
+            ),
+          ),
+        );
+        return;
+      }
+
+      final gateway = "offline_payment";
       final res = await FlightService.createBooking(
         objectModel: "flight",
         objectId: widget.args.flightId,
@@ -210,10 +224,7 @@ class _FlightCheckoutScreenState extends State<FlightCheckoutScreen> {
         },
       );
 
-      debugPrint("BOOKING_OK:\n${const JsonEncoder.withIndent('  ').convert(res)}");
-
       if (!mounted) return;
-
       final success = res["success"] == true;
       if (!success) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -223,7 +234,6 @@ class _FlightCheckoutScreenState extends State<FlightCheckoutScreen> {
       }
 
       final bookingData = Map<String, dynamic>.from(res["data"] ?? {});
-
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => FlightInvoiceScreen(

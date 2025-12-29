@@ -29,6 +29,63 @@ class HotelDetailBody extends StatefulWidget {
 class _HotelDetailBodyState extends State<HotelDetailBody> {
   int _currentTab = 0;
 
+  String _sanitizeHotelHtml(String html) {
+    var out = html;
+
+    out = out.replaceAllMapped(
+      RegExp(r'\sstyle="([^"]*)"', caseSensitive: false),
+          (m) {
+        var style = m.group(1) ?? '';
+
+        style = style
+            .replaceAll(
+          RegExp(r'background(?:-color)?\s*:\s*[^;"]+;?', caseSensitive: false),
+          '',
+        )
+            .replaceAll(
+          RegExp(r'color\s*:\s*[^;"]+;?', caseSensitive: false),
+          '',
+        )
+            .replaceAll(RegExp(r'\s{2,}'), ' ')
+            .replaceAll(RegExp(r';\s*;'), ';')
+            .trim();
+
+        if (style.isEmpty) return '';
+        return ' style="$style"';
+      },
+    );
+
+    out = out.replaceAllMapped(
+      RegExp(r"\sstyle='([^']*)'", caseSensitive: false),
+          (m) {
+        var style = m.group(1) ?? '';
+
+        style = style
+            .replaceAll(
+          RegExp(r"background(?:-color)?\s*:\s*[^;']+;?", caseSensitive: false),
+          '',
+        )
+            .replaceAll(
+          RegExp(r"color\s*:\s*[^;']+;?", caseSensitive: false),
+          '',
+        )
+            .replaceAll(RegExp(r'\s{2,}'), ' ')
+            .replaceAll(RegExp(r';\s*;'), ';')
+            .trim();
+
+        if (style.isEmpty) return '';
+        return " style='$style'";
+      },
+    );
+
+    out = out.replaceAll(
+      RegExp(r'\sbgcolor\s*=\s*"[^"]*"', caseSensitive: false),
+      '',
+    );
+
+    return out;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Provider.of<ThemeController>(context, listen: true);
@@ -338,28 +395,34 @@ class _HotelDetailBodyState extends State<HotelDetailBody> {
   }) {
     final textColor = isDark ? Colors.white : Colors.black87;
     final greyText = isDark ? Colors.white70 : Colors.grey[800];
+    final safeContentHtml = _sanitizeHotelHtml(contentHtml);
+    final safePolicyHtml = _sanitizeHotelHtml(policyHtml);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (contentHtml.isNotEmpty)
           Html(
-            data: contentHtml,
+            data: safeContentHtml,
             style: {
-              "html": Style(
+              "html": Style(backgroundColor: Colors.transparent),
+              "body": Style(backgroundColor: Colors.transparent, color: greyText),
+              "*": Style(
                 backgroundColor: Colors.transparent,
-              ),
-              "body": Style(
-                backgroundColor: Colors.transparent,
+                color: greyText,
+                fontSize: FontSize(15),
+                lineHeight: LineHeight(1.7),
               ),
               "p": Style(
                 fontSize: FontSize(15),
                 lineHeight: LineHeight(1.7),
                 color: greyText,
+                backgroundColor: Colors.transparent,
               ),
               "strong": Style(
                 fontWeight: FontWeight.bold,
                 color: textColor,
+                backgroundColor: Colors.transparent,
               ),
             },
           ),
@@ -375,18 +438,21 @@ class _HotelDetailBodyState extends State<HotelDetailBody> {
           ),
           const SizedBox(height: 8),
           Html(
-            data: policyHtml,
+            data: safePolicyHtml,
             style: {
-              "html": Style(
+              "html": Style(backgroundColor: Colors.transparent),
+              "body": Style(backgroundColor: Colors.transparent, color: greyText),
+              "*": Style(
                 backgroundColor: Colors.transparent,
-              ),
-              "body": Style(
-                backgroundColor: Colors.transparent,
+                color: greyText,
+                fontSize: FontSize(15),
+                lineHeight: LineHeight(1.6),
               ),
               "p": Style(
                 fontSize: FontSize(15),
                 lineHeight: LineHeight(1.6),
                 color: greyText,
+                backgroundColor: Colors.transparent,
               ),
             },
           ),

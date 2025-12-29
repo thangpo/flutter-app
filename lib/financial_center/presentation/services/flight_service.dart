@@ -228,4 +228,91 @@ class FlightService {
     }
   }
 
+  static void _ensureOkSepay(Map<String, dynamic> body) {
+    final s = body["status"];
+    final ok = (s == true) || (s == 1) || (s == "1") || (s == "true");
+    if (!ok) {
+      throw Exception(body["message"] ?? "SePay API error");
+    }
+  }
+
+  static Future<Map<String, dynamic>> createSepayPayment({
+    required String objectModel,
+    required int objectId,
+    required String startDate,
+    String? endDate,
+    required int totalGuests,
+    String? customerNotes,
+    required double amount,
+    required Map<String, dynamic> contactInfo,
+    required List<Map<String, dynamic>> passengers,
+    required Map<String, dynamic> flightInfo,
+    String? couponCode,
+  }) async {
+    final payload = <String, dynamic>{
+      "object_model": objectModel,
+      "object_id": objectId,
+      "start_date": startDate,
+      "end_date": endDate,
+      "total_guests": totalGuests,
+      "customer_notes": customerNotes,
+      "gateway": "sepay",
+      "amount": amount,
+      "contact_info": contactInfo,
+      "passengers": passengers,
+      "flight_info": flightInfo,
+      if (couponCode != null && couponCode.trim().isNotEmpty) "coupon_code": couponCode.trim(),
+    };
+
+    final url = Uri.parse("$baseUrl/bookings/sepay/payment");
+    final response = await http.post(url, headers: _headers(), body: jsonEncode(payload));
+    final rawText = utf8.decode(response.bodyBytes);
+
+    late final Map<String, dynamic> body;
+    try {
+      body = jsonDecode(rawText) as Map<String, dynamic>;
+    } catch (_) {
+      throw Exception("Response không phải JSON. Status=${response.statusCode}, body=$rawText");
+    }
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      _ensureOkSepay(body);
+      return body;
+    }
+
+    throw Exception("SePay create payment failed: ${response.statusCode} - $rawText");
+  }
+
+  static Future<Map<String, dynamic>> checkBookingStatus(String code) async {
+    final url = Uri.parse("$baseUrl/bookings/check/$code");
+    final response = await http.get(url, headers: _headers());
+    final rawText = utf8.decode(response.bodyBytes);
+
+    late final Map<String, dynamic> body;
+    try {
+      body = jsonDecode(rawText) as Map<String, dynamic>;
+    } catch (_) {
+      throw Exception("Response không phải JSON. Status=${response.statusCode}, body=$rawText");
+    }
+
+    if (response.statusCode == 200) {
+      return body;
+    }
+
+    throw Exception("checkBookingStatus failed: ${response.statusCode} - $rawText");
+  }
+
+  static Future<Map<String, dynamic>> cancelBooking(String code) async {
+    final url = Uri.parse("$baseUrl/bookings/cancel");
+    final payload = {"code": code};
+    final response = await http.post(url, headers: _headers(), body: jsonEncode(payload));
+    final rawText = utf8.decode(response.bodyBytes);
+
+    try {
+      return jsonDecode(rawText) as Map<String, dynamic>;
+    } catch (_) {
+      throw Exception("Cancel response không phải JSON. Status=${response.statusCode}, body=$rawText");
+    }
+  }
+
 }

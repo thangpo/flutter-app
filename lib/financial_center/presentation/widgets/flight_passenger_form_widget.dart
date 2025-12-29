@@ -26,14 +26,11 @@ extension PaymentMethodX on PaymentMethod {
 
 class FlightPassengerFormWidget extends StatefulWidget {
   final m.FlightCheckoutArgs args;
-
-  // Giữ lại để không break chỗ gọi cũ, nhưng file này không dùng nữa
   final bool isDark;
   final Color card;
   final Color textMain;
   final Color textSub;
   final Color accent;
-
   final GlobalKey<FormState> formKey;
   final TextEditingController firstNameCtrl;
   final TextEditingController lastNameCtrl;
@@ -108,22 +105,17 @@ class _FlightPassengerFormWidgetState extends State<FlightPassengerFormWidget> {
 
   @override
   Widget build(BuildContext context) {
-    // ====== THEME AUTO (light/dark) ======
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-
-    // Card + text tự theo theme
     final card = scheme.surface;
     final textMain = theme.textTheme.bodyLarge?.color ?? (isDark ? Colors.white : Colors.black);
     final textSub = textMain.withOpacity(0.65);
     final accent = scheme.primary;
-
     final payNow = getTranslated('pay_now', context) ?? 'Pay now';
     final headerTitle = _step == 0
         ? (getTranslated('booking_info_title', context) ?? 'Thông tin người đặt')
         : (getTranslated('companions_info_title', context) ?? 'Thông tin người đi cùng');
-
     Widget stepChild;
 
     if (_step == 0) {
@@ -298,10 +290,8 @@ class _FlightPassengerFormWidgetState extends State<FlightPassengerFormWidget> {
   void _handlePayNow() {
     debugPrint('[PAY_NOW] pressed');
     FocusScope.of(context).unfocus();
-
     final formState = widget.formKey.currentState;
     if (formState == null) return;
-
     final ok = formState.validate();
     if (!ok) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -314,7 +304,6 @@ class _FlightPassengerFormWidgetState extends State<FlightPassengerFormWidget> {
       );
       return;
     }
-
     widget.onSubmit();
   }
 
@@ -694,7 +683,6 @@ class _PaymentRadioTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final border = isDark ? Colors.white12 : Colors.black12;
     final label = getTranslated(value.key(), context) ?? value.fallbackLabel();
-
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
@@ -777,7 +765,6 @@ class _FieldState extends State<_Field> {
     final fill = widget.isDark ? const Color(0xFF0E1621) : const Color(0xFFF6F6F7);
     final text = widget.isDark ? Colors.white : Colors.black;
     final activeBorderColor = _focused ? Theme.of(context).colorScheme.primary : border;
-
     final activeShadow = _focused
         ? [
       BoxShadow(
