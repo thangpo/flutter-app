@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/flight_data_models.dart';
 import '../widgets/fade_route.dart';
-import '../screens/checkout_transition_video.dart';
+import '../models/flight_itinerary.dart';
+import '../models/flight_checkout_args.dart';
+import '../screens/checkout_transition_video.dart' show CheckoutTransitionVideoScreen;
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
 
@@ -107,6 +109,7 @@ class FlightBookingCTA extends StatelessWidget {
 
 Future<SeatPickResult?> showSeatClassPickerSheet({
   required BuildContext context,
+  required int flightId,
   required List<FlightSeat> seats,
   required String airlineName,
   required String fromCode,
@@ -114,6 +117,8 @@ Future<SeatPickResult?> showSeatClassPickerSheet({
   required String departTimeText,
   required String arriveTimeText,
   required String flightCode,
+  required DateTime? departureAt,
+  required FlightItinerary itinerary,
   int initialPassengers = 1,
 }) async {
   if (seats.isEmpty) return null;
@@ -124,6 +129,7 @@ Future<SeatPickResult?> showSeatClassPickerSheet({
     backgroundColor: Colors.transparent,
     builder: (_) {
       return _SeatClassPickerSheet(
+        flightId: flightId,
         seats: seats,
         airlineName: airlineName,
         fromCode: fromCode,
@@ -131,6 +137,8 @@ Future<SeatPickResult?> showSeatClassPickerSheet({
         departTimeText: departTimeText,
         arriveTimeText: arriveTimeText,
         flightCode: flightCode,
+        departureAt: departureAt,
+        itinerary: itinerary,
         initialPassengers: initialPassengers < 1 ? 1 : initialPassengers,
       );
     },
@@ -139,23 +147,29 @@ Future<SeatPickResult?> showSeatClassPickerSheet({
 
 class _SeatClassPickerSheet extends StatefulWidget {
   final List<FlightSeat> seats;
+  final int flightId;
   final String airlineName;
   final String fromCode;
   final String toCode;
   final String departTimeText;
   final String arriveTimeText;
   final String flightCode;
+  final DateTime? departureAt;
+  final FlightItinerary itinerary;
   final int initialPassengers;
 
   const _SeatClassPickerSheet({
     required this.seats,
+    required this.flightId,
     required this.airlineName,
     required this.fromCode,
     required this.toCode,
     required this.departTimeText,
     required this.arriveTimeText,
     required this.flightCode,
+    required this.departureAt,
     required this.initialPassengers,
+    required this.itinerary,
   });
 
   @override
@@ -200,14 +214,40 @@ class _SeatClassPickerSheetState extends State<_SeatClassPickerSheet> {
 
   void _validate() {
     final remain = _remain(_selected);
-    final labelNotEnough = getTranslated('not_enough_seats', context) ?? 'Số vé còn lại không đủ.';
-    setState(() {
-      if (remain > 0 && _passengers > remain) {
-        _errorText = '$labelNotEnough ($remain)';
+
+    final labelNotEnough =
+        getTranslated('not_enough_seats', context) ?? 'Số vé còn lại không đủ.';
+    final labelTooSoon =
+        getTranslated('cannot_book_within_12h', context) ??
+            'Không thể đặt vé khi giờ bay còn dưới 12 tiếng.';
+    final labelInvalidTime =
+        getTranslated('invalid_departure_time', context) ??
+            'Không xác định được thời gian bay.';
+
+    String? err;
+
+    // 1) Check tồn vé theo số hành khách
+    if (remain > 0 && _passengers > remain) {
+      err = '$labelNotEnough ($remain)';
+    }
+
+    // 2) Check 12 tiếng
+    final dep = widget.departureAt;
+    if (err == null) {
+      if (dep == null) {
+        err = labelInvalidTime;
       } else {
-        _errorText = null;
+        final now = DateTime.now();
+        final diff = dep.difference(now);
+
+        // đã qua giờ bay hoặc còn <= 12h
+        if (diff.isNegative || diff <= const Duration(hours: 12)) {
+          err = labelTooSoon;
+        }
       }
-    });
+    }
+
+    setState(() => _errorText = err);
   }
 
   void _inc() {
@@ -300,7 +340,7 @@ class _SeatClassPickerSheetState extends State<_SeatClassPickerSheet> {
 
     return SafeArea(
       child: IgnorePointer(
-        ignoring: _navigating, // đang chuyển trang thì khóa thao tác
+        ignoring: _navigating,
         child: AnimatedOpacity(
           opacity: _sheetOpacity,
           duration: const Duration(milliseconds: 220),
@@ -588,12 +628,16 @@ class _SeatClassPickerSheetState extends State<_SeatClassPickerSheet> {
                           child: ElevatedButton(
                             onPressed: canSubmit
                                 ? () async {
+                              _validate();
+                              if (_errorText != null) return;
                               final unit = _priceToDouble(_selected.price) ?? 0;
                               final total = unit * _passengers;
-
                               final args = FlightCheckoutArgs(
+                                flightId: widget.flightId,
+                                departDateIso: widget.departureAt?.toIso8601String() ?? '',
                                 seat: _selected,
                                 passengers: _passengers,
+                                itinerary: widget.itinerary,
                                 airlineName: widget.airlineName,
                                 fromCode: widget.fromCode,
                                 toCode: widget.toCode,
@@ -931,7 +975,6 @@ class _FadeToBlackOverlayState extends State<_FadeToBlackOverlay> {
   @override
   void initState() {
     super.initState();
-    // trigger fade-in
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) setState(() => _opacity = 1);
     });
