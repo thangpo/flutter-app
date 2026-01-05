@@ -9,6 +9,12 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
 
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+        // Giữ intent ACCEPT lại cho Flutter khi engine vừa khởi tạo (cold start từ notif).
+        intent?.let { setIntent(it) }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 

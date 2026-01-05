@@ -343,7 +343,7 @@ Future<void> _ensureAndroidNotificationPermission() async {
 Future<void> main() async {
   HttpOverrides.global = MyHttpOverrides();
   WidgetsFlutterBinding.ensureInitialized();
-  // Đăng ký navigator key cho Zego invitation để CallKit có context push trang gọi.
+  // Gắn navigatorKey sớm cho CallKit (trước khi có sự kiện offline accept).
   ZegoUIKitPrebuiltCallInvitationService().setNavigatorKey(navigatorKey);
   // Bật CallKit/ConnectionService TRƯỚC khi init để cold-start nhận sự kiện accept.
   try {
@@ -433,11 +433,25 @@ Future<void> main() async {
   await di.init();
 
   WidgetsBinding.instance.addPostFrameCallback((_) async {
+    // Đảm bảo navigatorKey đã gắn với tree trước khi Zego push UI.
+    ZegoUIKitPrebuiltCallInvitationService().setNavigatorKey(navigatorKey);
+
     await FirebaseTokenUpdater.update();
 
     // =================== LOG APP OPEN ===================
     await AnalyticsHelper.logAppOpen();
     await _debugPrintFcmToken();
+
+    // Khi app vừa dựng UI (kể cả cold start từ CallKit), thử join cuộc gọi đã accept.
+    ZegoCallService.I.ensureEnterAcceptedOfflineCall(
+        source: 'main_post_frame');
+
+    // Nếu app vào resumed sau khi nhận intent ACCEPT, thử lại một lần nữa.
+    if (WidgetsBinding.instance.lifecycleState ==
+        AppLifecycleState.resumed) {
+      ZegoCallService.I
+          .ensureEnterAcceptedOfflineCall(source: 'main_post_frame_resumed');
+    }
   });
   // === ADD (tru?c khi t?o channel) ===
   await _ensureAndroidNotificationPermission();
