@@ -1,7 +1,10 @@
+// Nếu plugin nào đó vẫn yêu cầu artifact tên cũ, map sang artifact mới của Zego.
 allprojects {
-    repositories {
-        google()
-        mavenCentral()
+    configurations.all {
+        resolutionStrategy.dependencySubstitution {
+            substitute(module("im.zego:zpns_android_plugin_fcm"))
+                .using(module("im.zego:zpns-fcm:2.8.0"))
+        }
     }
 }
 

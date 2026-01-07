@@ -17,6 +17,8 @@ pluginManagement {
         google()
         mavenCentral()
         gradlePluginPortal()
+        maven(url = "https://maven.zego.im")
+        maven(url = "https://jitpack.io")
     }
 }
 
@@ -27,4 +29,17 @@ plugins {
     id("com.google.gms.google-services") version "4.3.15" apply false
 }
 
+// For AGP 8+, define dependency resolution repositories here (includes ZEGOCLOUD repo).
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS) 
+    repositories {
+        google()
+        mavenCentral()
+        maven { url = uri("https://storage.googleapis.com/download.flutter.io") }
+        maven(url = "https://maven.zego.im")
+        maven(url = "https://jitpack.io")
+    }
+}
+
+rootProject.name = "flutter-app"
 include(":app")
