@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart';
 
 class FlightService {
   static const String baseUrl = "https://vietnamtoure.com/api";
@@ -144,4 +145,174 @@ class FlightService {
 
     return <dynamic>[];
   }
+
+  static Future<Map<String, dynamic>> createBooking({
+    required String objectModel,
+    required int objectId,
+    required String startDate,
+    String? endDate,
+    required int totalGuests,
+    String? customerNotes,
+    String? gateway,
+    required double amount,
+    required Map<String, dynamic> contactInfo,
+    List<Map<String, dynamic>>? passengers,
+    Map<String, dynamic>? flightInfo,
+    Map<String, dynamic>? extra,
+
+    bool enableLog = true,
+  }) async {
+    final payload = <String, dynamic>{
+      "object_model": objectModel,
+      "object_id": objectId,
+      "start_date": startDate,
+      "end_date": endDate,
+      "total_guests": totalGuests,
+      "customer_notes": customerNotes,
+      "gateway": gateway,
+      "amount": amount,
+      "contact_info": contactInfo,
+      if (passengers != null) "passengers": passengers,
+      if (flightInfo != null) "flight_info": flightInfo,
+    };
+
+    if (extra != null) payload.addAll(extra);
+
+    final url = Uri.parse("$baseUrl/bookings");
+    final headers = _headers();
+    final safeHeaders = Map<String, String>.from(headers);
+    if (safeHeaders.containsKey("Authorization")) {
+      final v = safeHeaders["Authorization"] ?? "";
+      safeHeaders["Authorization"] = v.length > 18 ? "${v.substring(0, 18)}***" : "***";
+    }
+
+    if (enableLog) {
+      debugPrint("========== [BOOKING REQUEST] ==========");
+      debugPrint("POST: $url");
+      debugPrint("Headers: ${jsonEncode(safeHeaders)}");
+      debugPrint("Payload:\n${const JsonEncoder.withIndent('  ').convert(payload)}");
+    }
+
+    final response = await http.post(
+      url,
+      headers: headers,
+      body: jsonEncode(payload),
+    );
+
+    final rawText = utf8.decode(response.bodyBytes);
+    if (enableLog) {
+      debugPrint("========== [BOOKING RESPONSE] ==========");
+      debugPrint("Status: ${response.statusCode}");
+      debugPrint("Body:\n$rawText");
+      debugPrint("=======================================");
+    }
+
+    late final Map<String, dynamic> body;
+    try {
+      body = jsonDecode(rawText) as Map<String, dynamic>;
+    } catch (_) {
+      throw Exception("Response không phải JSON. Status=${response.statusCode}, body=$rawText");
+    }
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      if (body.containsKey("status")) {
+        _ensureOk(body);
+      } else if (body["success"] == false) {
+        throw Exception(body["message"] ?? "Booking failed");
+      }
+      return body;
+    } else if (response.statusCode == 422) {
+      throw Exception("Validation error: $rawText");
+    } else {
+      throw Exception("Lỗi khi tạo booking: ${response.statusCode} - $rawText");
+    }
+  }
+
+  static void _ensureOkSepay(Map<String, dynamic> body) {
+    final s = body["status"];
+    final ok = (s == true) || (s == 1) || (s == "1") || (s == "true");
+    if (!ok) {
+      throw Exception(body["message"] ?? "SePay API error");
+    }
+  }
+
+  static Future<Map<String, dynamic>> createSepayPayment({
+    required String objectModel,
+    required int objectId,
+    required String startDate,
+    String? endDate,
+    required int totalGuests,
+    String? customerNotes,
+    required double amount,
+    required Map<String, dynamic> contactInfo,
+    required List<Map<String, dynamic>> passengers,
+    required Map<String, dynamic> flightInfo,
+    String? couponCode,
+  }) async {
+    final payload = <String, dynamic>{
+      "object_model": objectModel,
+      "object_id": objectId,
+      "start_date": startDate,
+      "end_date": endDate,
+      "total_guests": totalGuests,
+      "customer_notes": customerNotes,
+      "gateway": "sepay",
+      "amount": amount,
+      "contact_info": contactInfo,
+      "passengers": passengers,
+      "flight_info": flightInfo,
+      if (couponCode != null && couponCode.trim().isNotEmpty) "coupon_code": couponCode.trim(),
+    };
+
+    final url = Uri.parse("$baseUrl/bookings/sepay/payment");
+    final response = await http.post(url, headers: _headers(), body: jsonEncode(payload));
+    final rawText = utf8.decode(response.bodyBytes);
+
+    late final Map<String, dynamic> body;
+    try {
+      body = jsonDecode(rawText) as Map<String, dynamic>;
+    } catch (_) {
+      throw Exception("Response không phải JSON. Status=${response.statusCode}, body=$rawText");
+    }
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      _ensureOkSepay(body);
+      return body;
+    }
+
+    throw Exception("SePay create payment failed: ${response.statusCode} - $rawText");
+  }
+
+  static Future<Map<String, dynamic>> checkBookingStatus(String code) async {
+    final url = Uri.parse("$baseUrl/bookings/check/$code");
+    final response = await http.get(url, headers: _headers());
+    final rawText = utf8.decode(response.bodyBytes);
+
+    late final Map<String, dynamic> body;
+    try {
+      body = jsonDecode(rawText) as Map<String, dynamic>;
+    } catch (_) {
+      throw Exception("Response không phải JSON. Status=${response.statusCode}, body=$rawText");
+    }
+
+    if (response.statusCode == 200) {
+      return body;
+    }
+
+    throw Exception("checkBookingStatus failed: ${response.statusCode} - $rawText");
+  }
+
+  static Future<Map<String, dynamic>> cancelBooking(String code) async {
+    final url = Uri.parse("$baseUrl/bookings/cancel");
+    final payload = {"code": code};
+    final response = await http.post(url, headers: _headers(), body: jsonEncode(payload));
+    final rawText = utf8.decode(response.bodyBytes);
+
+    try {
+      return jsonDecode(rawText) as Map<String, dynamic>;
+    } catch (_) {
+      throw Exception("Cancel response không phải JSON. Status=${response.statusCode}, body=$rawText");
+    }
+  }
+
 }

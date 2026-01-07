@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter/material.dart';
 import '../services/flight_service.dart';
 import '../models/flight_data_models.dart';
+import '../models/flight_itinerary.dart';
 import '../widgets/flight_route_header_map.dart';
 import '../widgets/flight_booking_cta.dart';
 import '../widgets/modern_boarding_pass_card.dart';
@@ -204,6 +205,7 @@ class FlightDetailScreen extends StatelessWidget {
               onTap: () async {
                 final selected = await showSeatClassPickerSheet(
                   context: context,
+                  flightId: int.tryParse(flight.id?.toString() ?? '') ?? int.tryParse(flightId) ?? 0,
                   seats: flight.flightSeat,
                   airlineName: airlineName,
                   fromCode: fromCode,
@@ -211,6 +213,19 @@ class FlightDetailScreen extends StatelessWidget {
                   departTimeText: departText,
                   arriveTimeText: arriveText,
                   flightCode: flight.code ?? 'N/A',
+                  departureAt: dep,
+                  itinerary: FlightItinerary(
+                    airlineName: airlineName,
+                    flightCode: flight.code ?? 'N/A',
+                    fromCode: fromCode,
+                    toCode: toCode,
+                    departTimeText: departText,
+                    arriveTimeText: arriveText,
+                    departureAt: dep,
+                    fromLatLng: fromPos ?? const ll.LatLng(0, 0),
+                    toLatLng: toPos ?? const ll.LatLng(0, 0),
+                    flightImage: coverUrl,
+                  ),
                 );
 
                 if (selected == null) return;

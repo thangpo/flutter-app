@@ -1,42 +1,16 @@
 import 'dart:async';
 import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
+import '../models/flight_checkout_args.dart' as m;
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
-
 import '../models/flight_data_models.dart';
 import 'flight_checkout_screen.dart';
 
-class FlightCheckoutArgs {
-  final FlightSeat seat;
-  final int passengers;
-  final String airlineName;
-  final String fromCode;
-  final String toCode;
-  final String departTimeText;
-  final String arriveTimeText;
-  final String flightCode;
-  final double unitPrice;
-  final double totalPrice;
-
-  const FlightCheckoutArgs({
-    required this.seat,
-    required this.passengers,
-    required this.airlineName,
-    required this.fromCode,
-    required this.toCode,
-    required this.departTimeText,
-    required this.arriveTimeText,
-    required this.flightCode,
-    required this.unitPrice,
-    required this.totalPrice,
-  });
-}
 
 class CheckoutTransitionVideoScreen extends StatefulWidget {
-  final FlightCheckoutArgs args;
+  final m.FlightCheckoutArgs args;
 
   const CheckoutTransitionVideoScreen({super.key, required this.args});
 

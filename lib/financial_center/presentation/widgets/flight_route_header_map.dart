@@ -39,16 +39,10 @@ class _FlightRouteHeaderMapState extends State<FlightRouteHeaderMap> {
   Widget build(BuildContext context) {
     final from = widget.from;
     final to = widget.to;
-
     final bounds = LatLngBounds.fromPoints([from, to]);
     final mid = _midPoint(from, to);
-
-    // bearing (radians) from->to
     final bearing = _bearingRad(from, to);
-
-    // rotate map so flight direction becomes horizontal (east)
     final mapRotation = bearing - math.pi / 2;
-
     final dashed = _buildDashedPolylines(
       from,
       to,
@@ -77,8 +71,6 @@ class _FlightRouteHeaderMapState extends State<FlightRouteHeaderMap> {
                 onMapReady: () {
                   if (_fitted) return;
                   _fitted = true;
-
-                  // Fit trước, rồi rotate lại để không bị fit reset rotation
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     _mapController.fitCamera(
                       CameraFit.bounds(
@@ -86,8 +78,6 @@ class _FlightRouteHeaderMapState extends State<FlightRouteHeaderMap> {
                         padding: const EdgeInsets.fromLTRB(64, 28, 64, 28),
                       ),
                     );
-
-                    // rotate lại sau fit (quan trọng)
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       _mapController.rotate(mapRotation);
                     });
@@ -119,7 +109,7 @@ class _FlightRouteHeaderMapState extends State<FlightRouteHeaderMap> {
                       width: 34,
                       height: 34,
                       child: Transform.rotate(
-                        angle: bearing, // icon plane xoay theo hướng bay
+                        angle: bearing,
                         child: const Icon(Icons.flight, size: 22, color: Colors.white),
                       ),
                     ),
@@ -128,14 +118,12 @@ class _FlightRouteHeaderMapState extends State<FlightRouteHeaderMap> {
               ],
             ),
 
-            // (TÙY CHỌN) lớp tối nhẹ toàn map
             Positioned.fill(
               child: IgnorePointer(
                 child: ColoredBox(color: Colors.black.withOpacity(0.10)),
               ),
             ),
 
-            // Scrim gradient: tối phần dưới để chữ trắng nổi rõ
             Positioned.fill(
               child: IgnorePointer(
                 child: DecoratedBox(
@@ -154,7 +142,6 @@ class _FlightRouteHeaderMapState extends State<FlightRouteHeaderMap> {
               ),
             ),
 
-            // Labels
             Positioned(
               left: 14,
               bottom: 12,
