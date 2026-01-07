@@ -34,6 +34,8 @@ class SplashScreen extends StatefulWidget {
 
 class SplashScreenState extends State<SplashScreen> {
   final GlobalKey<ScaffoldMessengerState> _globalKey = GlobalKey();
+  bool _routeRetryScheduled = false;
+  bool _hasStartedRouting = false;
 
   @override
   void initState() {
@@ -52,6 +54,14 @@ class SplashScreenState extends State<SplashScreen> {
   }
 
   void _route() {
+    if (_hasStartedRouting) return;
+
+    final route = ModalRoute.of(context);
+    if (route == null || !route.isCurrent) {
+      _scheduleRouteRetry();
+      return;
+    }
+
     NetworkInfo.checkConnectivity(context);
     Provider.of<SplashController>(context, listen: false).initConfig(context,
         (ConfigModel? configModel) {
@@ -78,8 +88,10 @@ class SplashScreenState extends State<SplashScreen> {
         if (route == null || !route.isCurrent) {
           debugPrint(
               '[Splash] Skip routing because another route is on top (e.g. Call screen)');
+          _scheduleRouteRetry();
           return;
         }
+        _hasStartedRouting = true;
 
         if (compareVersions(minimumVersion!, AppConstants.appVersion) == 1) {
           Navigator.of(context).pushReplacement(
@@ -308,6 +320,17 @@ class SplashScreenState extends State<SplashScreen> {
       }
     }).then((bool isSuccess) {
       if (isSuccess) {}
+    });
+  }
+
+  void _scheduleRouteRetry() {
+    if (_routeRetryScheduled) return;
+    _routeRetryScheduled = true;
+    Future.delayed(const Duration(milliseconds: 600), () {
+      _routeRetryScheduled = false;
+      if (mounted) {
+        _route();
+      }
     });
   }
 
