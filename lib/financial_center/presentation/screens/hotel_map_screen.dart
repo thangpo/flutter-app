@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
 import 'package:provider/provider.dart';
 
@@ -28,7 +27,7 @@ class HotelMapScreen extends StatefulWidget {
 }
 
 class _HotelMapScreenState extends State<HotelMapScreen> {
-  late MapController _map;
+  late final MapController _map;
 
   Map<String, dynamic>? _selected;
 
@@ -47,7 +46,9 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
     _map = MapController();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _goToMyLocation();
+      if (widget.autoLocateOnStart) {
+        await _goToMyLocation();
+      }
       _applyInitialSelection();
     });
   }
@@ -67,10 +68,10 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
 
   Future<void> _goToMyLocation() async {
     try {
-      bool enabled = await Geolocator.isLocationServiceEnabled();
+      final enabled = await Geolocator.isLocationServiceEnabled();
       if (!enabled) return;
 
-      LocationPermission permission = await Geolocator.checkPermission();
+      var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
@@ -90,7 +91,6 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
 
       _map.move(user, 15);
       _loadNearbyUser(user);
-
     } catch (e) {
       debugPrint("Location Error: $e");
     }
@@ -106,13 +106,13 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
       if (la == null || lo == null) continue;
 
       final d = calc(user, LatLng(la, lo));
-
       if (d <= 15000) {
         rs.add({...h, '_distance': d});
       }
     }
 
-    rs.sort((a, b) => (a['_distance'] as double).compareTo(b['_distance'] as double));
+    rs.sort((a, b) =>
+        (a['_distance'] as double).compareTo(b['_distance'] as double));
 
     setState(() {
       _nearby = rs;
@@ -152,8 +152,7 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
       final selected = _selected?['id'] == h['id'];
 
       final name = h['title'] ?? "";
-      final short =
-      name.length > 18 ? "${name.substring(0, 18)}…" : name;
+      final short = name.length > 18 ? "${name.substring(0, 18)}…" : name;
 
       final rating = double.tryParse(h['review_score']?.toString() ?? '');
       final isTour = _isTour(h);
@@ -176,9 +175,13 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
                 ),
                 child: Column(
                   children: [
-                    Text(short,
-                        style: const TextStyle(
-                            fontSize: 11, fontWeight: FontWeight.w600)),
+                    Text(
+                      short,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                     if (!isTour && rating != null)
                       Row(
                         mainAxisSize: MainAxisSize.min,
@@ -193,16 +196,16 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 6),
-
               Container(
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
-                      color: selected ? Colors.green : Colors.white, width: 3),
+                    color: selected ? Colors.green : Colors.white,
+                    width: 3,
+                  ),
                   image: img != ""
                       ? DecorationImage(image: NetworkImage(img), fit: BoxFit.cover)
                       : null,
@@ -222,6 +225,16 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
     }).whereType<Marker>().toList();
   }
 
+  void _handleBack() {
+    // chắc chắn pop được cả khi context bị lồng Navigator
+    final nav = Navigator.of(context);
+    if (nav.canPop()) {
+      nav.pop();
+    } else {
+      Navigator.of(context, rootNavigator: true).maybePop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Provider.of<ThemeController>(context).darkTheme;
@@ -234,12 +247,36 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
               mapController: _map,
               options: MapOptions(initialCenter: _center, initialZoom: _zoom),
               children: [
-                TileLayer(urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
-
+                TileLayer(
+                  urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                ),
                 VietnamIslandsOverlay(isDark: isDark),
-
                 MarkerLayer(markers: _markers()),
               ],
+            ),
+          ),
+
+          // ===== Back button (Positioned phải là con trực tiếp của Stack) =====
+          Positioned(
+            left: 12,
+            top: 12,
+            child: SafeArea(
+              child: _CircleIconButton(
+                icon: Icons.arrow_back_rounded,
+                onPressed: _handleBack,
+              ),
+            ),
+          ),
+
+          // ===== My location =====
+          Positioned(
+            right: 12,
+            top: 12,
+            child: SafeArea(
+              child: _CircleIconButton(
+                icon: Icons.my_location_rounded,
+                onPressed: _goToMyLocation,
+              ),
             ),
           ),
 
@@ -262,6 +299,36 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
               onClose: () => setState(() => _showTourPopup = false),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _CircleIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  const _CircleIconButton({
+    required this.icon,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withOpacity(0.95),
+      shape: const CircleBorder(),
+      elevation: 4,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onPressed,
+        child: SizedBox(
+          width: 40,
+          height: 40,
+          child: Center(
+            child: Icon(icon, size: 20, color: Colors.black87),
+          ),
+        ),
       ),
     );
   }
