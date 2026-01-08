@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import '../screens/hotel_map_screen.dart';
 
 class HotelMapPreview extends StatelessWidget {
   final List<Map<String, dynamic>> hotels;
   final LatLng center;
   final double zoom;
   final MapController controller;
-  final VoidCallback onOpenMap;
+  final VoidCallback? onOpenMap;
+  final BorderRadius borderRadius;
+
+  // NEW
+  final bool showTopLabel;
 
   const HotelMapPreview({
     super.key,
@@ -16,14 +19,16 @@ class HotelMapPreview extends StatelessWidget {
     required this.center,
     required this.zoom,
     required this.controller,
-    required this.onOpenMap,
+    this.onOpenMap,
+    this.borderRadius = const BorderRadius.all(Radius.circular(24)),
+    this.showTopLabel = true,
   });
 
   List<Marker> _buildMarkers() {
     return hotels.map((h) {
       final lat = double.tryParse(h['lat']?.toString() ?? '');
       final lng = double.tryParse(h['lng']?.toString() ?? '');
-      if (lat == null || lng == null) return null;
+      if (lat == null || lng == null || (lat == 0 && lng == 0)) return null;
 
       return Marker(
         point: LatLng(lat, lng),
@@ -53,62 +58,64 @@ class HotelMapPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final content = ClipRRect(
+      borderRadius: borderRadius,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: FlutterMap(
+              mapController: controller,
+              options: MapOptions(
+                initialCenter: center,
+                initialZoom: zoom,
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.vnshop.vietnamtoure',
+                ),
+                MarkerLayer(markers: _buildMarkers()),
+              ],
+            ),
+          ),
+
+          // TOP LABEL (optional)
+          if (showTopLabel)
+            Positioned(
+              left: 12,
+              top: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.45),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.map_rounded, size: 16, color: Colors.white),
+                    SizedBox(width: 6),
+                    Text(
+                      'Bản đồ khách sạn',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+
+    if (onOpenMap == null) return content;
+
     return GestureDetector(
       onTap: onOpenMap,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: SizedBox(
-          height: 240,
-          child: Stack(
-            children: [
-              FlutterMap(
-                mapController: controller,
-                options: MapOptions(
-                  initialCenter: center,
-                  initialZoom: zoom,
-                ),
-                children: [
-                  TileLayer(
-                    urlTemplate:
-                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName:
-                    'com.vnshop.vietnamtoure',
-                  ),
-                  MarkerLayer(markers: _buildMarkers()),
-                ],
-              ),
-              Positioned(
-                left: 12,
-                top: 12,
-                child: Container(
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.45),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.map_rounded,
-                          size: 16, color: Colors.white),
-                      SizedBox(width: 6),
-                      Text(
-                        'Bản đồ khách sạn',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      child: content,
     );
   }
 }

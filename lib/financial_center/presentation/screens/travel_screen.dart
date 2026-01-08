@@ -9,6 +9,7 @@ import '../widgets/hotel_list_widget.dart';
 import '../widgets/location_list_widget.dart';
 import '../widgets/tour_list_widget.dart';
 import '../widgets/flights_list_widget.dart';
+import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/hotel_home_shell.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
 
 class TravelScreen extends StatefulWidget {

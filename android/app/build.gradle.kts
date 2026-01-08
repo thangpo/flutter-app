@@ -1,14 +1,11 @@
 import java.util.Properties
 import java.io.FileInputStream
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("dev.flutter.flutter-gradle-plugin")
     id("com.google.gms.google-services")
 }
-
-// Đọc file key.properties
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
 if (keystorePropertiesFile.exists()) {
@@ -16,7 +13,6 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    //Không sửa com.vnsshop.ecommerce
     namespace = "com.vnsshop.ecommerce"
     compileSdk = 36
 
@@ -31,7 +27,6 @@ android {
     }
 
     defaultConfig {
-        // Không sửa com.vnsshop.ecommerce
         applicationId = "com.vnsshop.ecommerce"
         minSdk = flutter.minSdkVersion
         targetSdk = 36
@@ -40,7 +35,6 @@ android {
         multiDexEnabled = true
     }
 
-    // 🔐 Cấu hình ký app với keystore thật
     signingConfigs {
         create("release") {
             keyAlias = keystoreProperties["keyAlias"] as String?
@@ -52,19 +46,14 @@ android {
 
     buildTypes {
         getByName("release") {
-            // Dùng keystore thật để ký bản release
             signingConfig = signingConfigs.getByName("release")
-
-            // ⚙️ Tuỳ chọn tối ưu hoá (bật nếu bạn muốn giảm kích thước app)
             isMinifyEnabled = false
             isShrinkResources = false
-
-            // Nếu có file proguard thì bật dòng sau
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
 
         getByName("debug") {
-            //signingConfig = signingConfigs.getByName("release") // để test bằng cùng keystore (không bắt buộc)
+
         }
     }
 }
@@ -78,6 +67,5 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.6.0"))
     implementation("com.google.firebase:firebase-messaging")
     implementation("androidx.activity:activity-ktx:1.9.0")
-    // Bổ sung plugin FCM cho ZPNs để offline call hoạt động trên Android (artifact mới)
     implementation("im.zego:zpns-fcm:2.8.0")
 }

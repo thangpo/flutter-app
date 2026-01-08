@@ -8,7 +8,7 @@ import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.d
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/tour_list_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/hotel_list_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/flight_booking_screen.dart';
-
+import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/screens/hotel_home_shell.dart';
 
 class IOSAppLaunchPageRoute extends PageRouteBuilder {
   final Widget page;
@@ -162,7 +162,7 @@ class _TravelMenuWidgetState extends State<TravelMenuWidget>
               Navigator.push(
                 context,
                 IOSAppLaunchPageRoute(
-                  page: const HotelListScreen(),
+                  page: const HotelHomeShell(),
                   startPosition: position,
                 ),
               );

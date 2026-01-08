@@ -2,24 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
-
 import '../services/hotel_service.dart';
 import '../widgets/hotel_map_preview.dart';
-import '../widgets/hotel_list_section.dart';
 import '../widgets/hotel_highlight_carousel.dart';
-
+import '../widgets/hotel_list_section.dart';
 import 'hotel_map_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
 
-class HotelListScreen extends StatefulWidget {
-  const HotelListScreen({super.key});
+class HotelHomeShell extends StatefulWidget {
+  const HotelHomeShell({super.key});
 
   @override
-  State<HotelListScreen> createState() => _HotelListScreenState();
+  State<HotelHomeShell> createState() => _HotelHomeShellState();
 }
 
-class _HotelListScreenState extends State<HotelListScreen> {
+class _HotelHomeShellState extends State<HotelHomeShell> {
   final HotelService _hotelService = HotelService();
 
   int _tabIndex = 0;
@@ -36,6 +34,10 @@ class _HotelListScreenState extends State<HotelListScreen> {
   void initState() {
     super.initState();
     _loadHotels();
+  }
+
+  String _tr(BuildContext context, String key, String fallback) {
+    return getTranslated(key, context) ?? fallback;
   }
 
   Future<void> _loadHotels() async {
@@ -106,10 +108,6 @@ class _HotelListScreenState extends State<HotelListScreen> {
     return result;
   }
 
-  String _tr(BuildContext context, String key, String fallback) {
-    return getTranslated(key, context) ?? fallback;
-  }
-
   void _moveToHotel(Map<String, dynamic> hotel) {
     final lat = double.tryParse(hotel['lat']?.toString() ?? '');
     final lng = double.tryParse(hotel['lng']?.toString() ?? '');
@@ -120,19 +118,19 @@ class _HotelListScreenState extends State<HotelListScreen> {
     setState(() {
       _mapCenter = target;
       _mapZoom = 12;
-      _tabIndex = 0; // nhảy về tab Map luôn
+      _tabIndex = 0; // chuyển về tab Map luôn nếu muốn
     });
 
     _mapController.move(target, 12);
   }
 
-  void _openFullMap(BuildContext context, List<Map<String, dynamic>> mapData, Map<String, dynamic> initial) {
+  void _openFullMapScreen(BuildContext context, List<Map<String, dynamic>> mapData) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => HotelMapScreen(
           hotels: mapData,
-          initialHotel: initial,
+          initialHotel: mapData.first,
           autoLocateOnStart: true,
         ),
       ),
@@ -143,20 +141,21 @@ class _HotelListScreenState extends State<HotelListScreen> {
   Widget build(BuildContext context) {
     final themeController = Provider.of<ThemeController>(context, listen: true);
     final isDark = themeController.darkTheme;
-
     final mapData = _buildMapDataFromHotels();
-    final isMapTab = _tabIndex == 0;
+
+    final bgColor = isDark ? const Color(0xFF020617) : const Color(0xFFF3F4F6);
 
     return Scaffold(
-      // Tab Map cần full màn hình => không AppBar, và extend body
-      extendBodyBehindAppBar: isMapTab,
-      appBar: isMapTab
-          ? null
-          : AppBar(
+      backgroundColor: bgColor,
+
+      // Nếu Bố muốn AppBar chung (optional)
+      appBar: AppBar(
         title: Text(
-          _tabIndex == 1
+          _tabIndex == 0
+              ? _tr(context, 'hotel_map_title', 'Bản đồ')
+              : _tabIndex == 1
               ? _tr(context, 'hotel_banner_title', 'Nổi bật')
-              : _tr(context, 'hotel_list_title', 'Danh sách khách sạn'),
+              : _tr(context, 'hotel_list_title', 'Danh sách'),
         ),
         backgroundColor: isDark ? const Color(0xFF020617) : Colors.white,
         foregroundColor: isDark ? Colors.white : Colors.black,
@@ -165,7 +164,7 @@ class _HotelListScreenState extends State<HotelListScreen> {
           IconButton(
             onPressed: _loadHotels,
             icon: const Icon(Icons.refresh),
-          )
+          ),
         ],
       ),
 
@@ -178,7 +177,8 @@ class _HotelListScreenState extends State<HotelListScreen> {
           : IndexedStack(
         index: _tabIndex,
         children: [
-          // ===== TAB 1: MAP FULL SCREEN + floating buttons (ảnh 2) =====
+          // ===== TAB 1: MAP FULL SCREEN =====
+          // Map full màn hình: dùng Positioned.fill / Expanded
           Stack(
             children: [
               Positioned.fill(
@@ -187,67 +187,26 @@ class _HotelListScreenState extends State<HotelListScreen> {
                   center: _mapCenter,
                   zoom: _mapZoom,
                   controller: _mapController,
-                  onOpenMap: null,
+                  onOpenMap: null, // full screen thì không cần tap open
                   borderRadius: BorderRadius.zero,
-                  showTopLabel: false, // bỏ chữ "Bản đồ khách sạn"
                 ),
               ),
-
-              SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _CircleIconButton(
-                        icon: Icons.arrow_back_ios_new_rounded,
-                        onTap: () => Navigator.pop(context),
-                      ),
-                      Row(
-                        children: [
-                          _CircleIconButton(
-                            icon: Icons.search_rounded,
-                            onTap: () {
-                              // TODO: mở search (Bố muốn màn search kiểu nào con làm tiếp)
-                            },
-                          ),
-                          const SizedBox(width: 10),
-                          _CircleIconButton(
-                            icon: Icons.favorite_border_rounded,
-                            onTap: () {
-                              // TODO: favorite
-                            },
-                          ),
-                          const SizedBox(width: 10),
-                          _CircleIconButton(
-                            icon: Icons.ios_share_rounded,
-                            onTap: () {
-                              // TODO: share
-                            },
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // (optional) nút mở HotelMapScreen full feature
               Positioned(
                 right: 16,
                 bottom: 16,
-                child: FloatingActionButton(
+                child: FloatingActionButton.extended(
                   onPressed: () {
                     if (mapData.isEmpty) return;
-                    _openFullMap(context, mapData, mapData.first);
+                    _openFullMapScreen(context, mapData);
                   },
-                  child: const Icon(Icons.open_in_full_rounded),
+                  icon: const Icon(Icons.open_in_full),
+                  label: Text(_tr(context, 'open_full_map', 'Mở bản đồ')),
                 ),
               ),
             ],
           ),
 
-          // ===== TAB 2: BANNER FULL SCREEN =====
+          // ===== TAB 2: BANNER/CAROUSEL FULL SCREEN =====
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.only(top: 12),
@@ -279,21 +238,21 @@ class _HotelListScreenState extends State<HotelListScreen> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tabIndex,
         onDestinationSelected: (i) => setState(() => _tabIndex = i),
-        destinations: [
+        destinations: const [
           NavigationDestination(
-            icon: const Icon(Icons.map_outlined),
-            selectedIcon: const Icon(Icons.map),
-            label: _tr(context, 'tab_map', 'Map'),
+            icon: Icon(Icons.map_outlined),
+            selectedIcon: Icon(Icons.map),
+            label: 'Map',
           ),
           NavigationDestination(
-            icon: const Icon(Icons.auto_awesome_outlined),
-            selectedIcon: const Icon(Icons.auto_awesome),
-            label: _tr(context, 'tab_banner', 'Banner'),
+            icon: Icon(Icons.auto_awesome_outlined),
+            selectedIcon: Icon(Icons.auto_awesome),
+            label: 'Banner',
           ),
           NavigationDestination(
-            icon: const Icon(Icons.list_alt_outlined),
-            selectedIcon: const Icon(Icons.list_alt),
-            label: _tr(context, 'tab_list', 'List'),
+            icon: Icon(Icons.list_alt_outlined),
+            selectedIcon: Icon(Icons.list_alt),
+            label: 'List',
           ),
         ],
       ),
@@ -345,34 +304,6 @@ class _HotelListScreenState extends State<HotelListScreen> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CircleIconButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _CircleIconButton({
-    required this.icon,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white.withOpacity(0.95),
-      shape: const CircleBorder(),
-      elevation: 2,
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onTap,
-        child: SizedBox(
-          width: 42,
-          height: 42,
-          child: Icon(icon, size: 22, color: Colors.black87),
         ),
       ),
     );
