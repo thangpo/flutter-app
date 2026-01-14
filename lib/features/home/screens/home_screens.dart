@@ -156,9 +156,11 @@ class HomePage extends StatefulWidget {
     }
   }
 }
+// Nếu muốn bật lại, đổi _showAffiliateProducts thành true.
 
 class _HomePageState extends State<HomePage> {
   final ScrollController _scrollController = ScrollController();
+  static const bool _showAffiliateProducts = false;
 
   void passData(int index, String title) {
     index = index;
@@ -188,6 +190,15 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     final ConfigModel? configModel =
         Provider.of<SplashController>(context, listen: false).configModel;
+    final bool showClearanceSection =
+        context.select<ProductController, bool>((controller) {
+      final model = controller.clearanceProductModel;
+      return model == null || (model.products?.isNotEmpty ?? false);
+    });
+    final bool showFooterBannerSection =
+        context.select<BannerController, bool>(
+      (controller) => controller.footerBannerList?.isNotEmpty ?? false,
+    );
     final double bottomGlassGap =
         MediaQuery.of(context).viewPadding.bottom + 80.0; // keep space for glass nav
 
@@ -288,71 +299,83 @@ class _HomePageState extends State<HomePage> {
                       ),
 
                       const CategoryListWidget(isHomePage: true),
-                      const SizedBox(height: Dimensions.paddingSizeDefault),
+                      const SizedBox(height: Dimensions.paddingSizeSmall),
 
 
-                      const AffiliateProductWidget(),
-                      const SizedBox(height: Dimensions.paddingSizeDefault),
+                      if (_showAffiliateProducts) ...[
+                        const AffiliateProductWidget(),
+                        const SizedBox(height: Dimensions.paddingSizeDefault),
+                      ],
 
                       Consumer<FlashDealController>(
                           builder: (context, megaDeal, child) {
                             return megaDeal.flashDeal == null
-                                ? const FlashDealShimmer()
+                                ? const Padding(
+                                    padding: EdgeInsets.only(
+                                        bottom:
+                                            Dimensions.paddingSizeExtraSmall),
+                                    child: FlashDealShimmer(),
+                                  )
                                 : megaDeal.flashDealList.isNotEmpty
-                                ? Column(children: [
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal:
-                                    Dimensions.paddingSizeDefault),
-                                child: TitleRowWidget(
-                                  title:
-                                  getTranslated('flash_deal', context)
-                                      ?.toUpperCase(),
-                                  eventDuration:
-                                  megaDeal.flashDeal != null
-                                      ? megaDeal.duration
-                                      : null,
-                                  onTap: () {
-                                    Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                            builder: (_) =>
-                                            const FlashDealScreenView()));
-                                  },
-                                  isFlash: true,
-                                ),
-                              ),
-                              const SizedBox(
-                                  height: Dimensions.paddingSizeSmall),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal:
-                                    Dimensions.paddingSizeDefault),
-                                child: Text(
-                                  getTranslated(
-                                      'hurry_up_the_offer_is_limited_grab_while_it_lasts',
-                                      context) ??
-                                      '',
-                                  style: textRegular.copyWith(
-                                      color: Provider.of<ThemeController>(
-                                          context,
-                                          listen: false)
-                                          .darkTheme
-                                          ? Theme.of(context).hintColor
-                                          : Theme.of(context)
-                                          .primaryColor,
-                                      fontSize:
-                                      Dimensions.fontSizeDefault),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
-                              const SizedBox(
-                                  height: Dimensions.paddingSizeSmall),
-                              const FlashDealsListWidget()
-                            ])
+                                ? Column(
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: Dimensions
+                                                .paddingSizeDefault),
+                                        child: TitleRowWidget(
+                                          title: getTranslated(
+                                                  'flash_deal', context)
+                                              ?.toUpperCase(),
+                                          eventDuration:
+                                              megaDeal.flashDeal != null
+                                                  ? megaDeal.duration
+                                                  : null,
+                                          onTap: () {
+                                            Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        const FlashDealScreenView()));
+                                          },
+                                          isFlash: true,
+                                        ),
+                                      ),
+                                      const SizedBox(
+                                          height: Dimensions.paddingSizeSmall),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: Dimensions
+                                                .paddingSizeDefault),
+                                        child: Text(
+                                          getTranslated(
+                                                  'hurry_up_the_offer_is_limited_grab_while_it_lasts',
+                                                  context) ??
+                                              '',
+                                          style: textRegular.copyWith(
+                                              color: Provider.of<
+                                                          ThemeController>(
+                                                      context,
+                                                      listen: false)
+                                                  .darkTheme
+                                                  ? Theme.of(context).hintColor
+                                                  : Theme.of(context)
+                                                      .primaryColor,
+                                              fontSize:
+                                                  Dimensions.fontSizeDefault),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                      const SizedBox(
+                                          height: Dimensions.paddingSizeSmall),
+                                      const FlashDealsListWidget(),
+                                      const SizedBox(
+                                          height: Dimensions
+                                              .paddingSizeExtraSmall),
+                                    ],
+                                  )
                                 : const SizedBox.shrink();
                           }),
-                      const SizedBox(height: Dimensions.paddingSizeExtraSmall),
 
                       Consumer<FeaturedDealController>(
                           builder: (context, featuredDealProvider, child) {
@@ -404,7 +427,8 @@ class _HomePageState extends State<HomePage> {
                           }),
 
                       const ClearanceListWidget(),
-                      const SizedBox(height: Dimensions.paddingSizeDefault),
+                      if (showClearanceSection)
+                        const SizedBox(height: Dimensions.paddingSizeDefault),
 
                       Consumer<BannerController>(
                           builder: (context, footerBannerProvider, child) {
@@ -419,7 +443,8 @@ class _HomePageState extends State<HomePage> {
                                         .footerBannerList?[0]))
                                 : const SizedBox();
                           }),
-                      const SizedBox(height: Dimensions.paddingSizeDefault),
+                      if (showFooterBannerSection)
+                        const SizedBox(height: Dimensions.paddingSizeDefault),
 
                       const FeaturedProductWidget(),
                       const SizedBox(height: Dimensions.paddingSizeDefault),

@@ -657,6 +657,29 @@
   "no_product_found": "No se encontró ningún producto",
   "no_address_found": "No se encontró ninguna dirección",
   "no_notification": "Sin notificación",
+  "no_social_notifications": "No hay notificaciones sociales",
+  "no_shop_notifications": "No hay notificaciones de la tienda",
+  "notification_deleted": "Notificación eliminada",
+  "notification_reacted_to_story": "reaccionó a tu historia.",
+  "notification_reacted_to_post": "reaccionó a tu publicación.",
+  "notification_commented_on_post": "comentó en tu publicación.",
+  "notification_replied_to_comment": "respondió a tu comentario.",
+  "notification_mentioned_in_comment": "te mencionó en un comentario.",
+  "notification_shared_post": "compartió tu publicación.",
+  "notification_mentioned_in_post": "te mencionó en una publicación.",
+  "notification_visited_profile": "visitó tu perfil.",
+  "notification_invited_to_group": "te invitó a un grupo.",
+  "notification_joined_your_group": "se unió a tu grupo.",
+  "notification_requested_to_join_group": "solicitó unirse a tu grupo.",
+  "notification_accepted_join_request": "aceptó tu solicitud para unirse al grupo.",
+  "notification_set_group_admin": "te convirtió en administrador del grupo.",
+  "notification_started_following": "empezó a seguirte.",
+  "notification_viewed_story": "vio tu historia.",
+  "notification_poked_you": "te dio un toque.",
+  "notification_sent_family_request": "te envió una solicitud de familia.",
+  "notification_interested_in_event": "está interesado en tu evento.",
+  "notification_going_to_event": "va a asistir a tu evento.",
+  "notification_interacted": "interactuó contigo.",
   "close_the_app": "Cierra la aplicación",
   "do_you_want_to_close_and_exit_app": "¿Quieres cerrar y salir de la aplicación?",
   "select_language": "Seleccionar idioma",
@@ -912,6 +935,4 @@
   "all_sellers": "All Sellers"
 
 }
-
-
 

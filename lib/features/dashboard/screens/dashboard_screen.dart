@@ -30,15 +30,17 @@ import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_n
 import 'package:flutter_sixvalley_ecommerce/features/search_product/controllers/search_product_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/app_exit_guard.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/call/zego_call_service.dart';
+import 'package:flutter_sixvalley_ecommerce/features/auth/screens/login_screen.dart';
 
 class DashBoardScreen extends StatefulWidget {
-  const DashBoardScreen({super.key});
+  final int initialPageIndex;
+  const DashBoardScreen({super.key, this.initialPageIndex = 1});
   @override
   DashBoardScreenState createState() => DashBoardScreenState();
 }
 
 class DashBoardScreenState extends State<DashBoardScreen> {
-  int _pageIndex = 1;
+  late int _pageIndex;
   late List<NavigationModel> _screens;
   final PageStorageBucket bucket = PageStorageBucket();
   final GlobalKey<SocialFeedScreenState> _socialFeedKey =
@@ -46,6 +48,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
   int? _socialTabIndex;
   bool _showBottomNav = true;
   bool _didTryEnterOfflineCall = false;
+  bool _redirectingSocialLogin = false;
 
   // iOS major version (26, 17, 16, ...)
   int? _iosMajor;
@@ -53,6 +56,7 @@ class DashBoardScreenState extends State<DashBoardScreen> {
   @override
   void initState() {
     super.initState();
+    _pageIndex = widget.initialPageIndex;
 
     // Lấy version iOS không cần device_info_plus
     if (!kIsWeb && Platform.isIOS) {
@@ -129,6 +133,9 @@ class DashBoardScreenState extends State<DashBoardScreen> {
       NavigationModel(
           name: 'more', icon: Images.moreImage, screen: const MoreScreen()),
     ];
+    if (_pageIndex < 0 || _pageIndex >= _screens.length) {
+      _pageIndex = 1;
+    }
 
     _socialTabIndex =
         _screens.indexWhere((element) => element.name == 'social');
@@ -333,10 +340,30 @@ class DashBoardScreenState extends State<DashBoardScreen> {
     });
   }
 
-  void _handleNavigationTap(NavigationModel item, int index) {
+  Future<void> _handleNavigationTap(NavigationModel item, int index) async {
     final bool isSocialTab =
         _socialTabIndex != null && index == _socialTabIndex;
     final bool isCurrent = _pageIndex == index;
+    if (isSocialTab) {
+      final auth = context.read<AuthController>();
+      final token = await auth.authServiceInterface.getSocialAccessToken();
+      if (token == null || token.isEmpty) {
+        if (_redirectingSocialLogin) return;
+        _redirectingSocialLogin = true;
+        try {
+          if (!mounted) return;
+          await Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+          );
+        } finally {
+          _redirectingSocialLogin = false;
+        }
+        if (mounted) {
+          setState(() {});
+        }
+        return;
+      }
+    }
     if (isSocialTab && isCurrent) {
       final SocialFeedScreenState? state = _socialFeedKey.currentState;
       if (state == null) return;

@@ -15,6 +15,7 @@ import 'package:flutter_sixvalley_ecommerce/features/social/screens/profile_scre
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_group_detail_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/social_groups_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/features/social/screens/event_detail_screen.dart';
+import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 
 class NotificationItem extends StatefulWidget {
   final SocialNotification n;
@@ -78,6 +79,9 @@ class _NotificationItemState extends State<NotificationItem> {
         : theme.cardColor;
     final textColor = theme.textTheme.bodyLarge?.color ?? Colors.black87;
     final secondary = theme.hintColor;
+    final String tNotificationDeleted =
+        getTranslated('notification_deleted', context) ??
+            'Đã xoá thông báo';
 
 
     final t = (_drag / _revealMax).clamp(0.0, 1.0);
@@ -117,7 +121,7 @@ class _NotificationItemState extends State<NotificationItem> {
                         if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text(msg ?? 'Đã xoá thông báo'),
+                            content: Text(msg ?? tNotificationDeleted),
                             backgroundColor: theme.colorScheme.error,
                             duration: const Duration(seconds: 1),
                           ),
@@ -200,7 +204,7 @@ class _NotificationItemState extends State<NotificationItem> {
                                 ),
                               ),
                             if (n.name.isNotEmpty) const TextSpan(text: ' '),
-                            TextSpan(text: _messageByType(n)),
+                            TextSpan(text: _messageByType(context, n)),
                           ],
                         ),
                         softWrap: true,
@@ -365,7 +369,7 @@ class _NotificationItemState extends State<NotificationItem> {
   }
 
   // ------------------ helpers ------------------
-  static String _messageByType(SocialNotification n) {
+  static String _messageByType(BuildContext context, SocialNotification n) {
     final url = n.url;
     final isStory = (n.storyId != null && n.storyId != '0') ||
         url.contains('story=true') ||
@@ -374,44 +378,64 @@ class _NotificationItemState extends State<NotificationItem> {
     switch (n.type) {
       case 'reaction':
         return isStory
-            ? "đã thả cảm xúc vào story của bạn."
-            : "đã thả cảm xúc vào bài viết của bạn.";
+            ? (getTranslated('notification_reacted_to_story', context) ??
+                'đã thả cảm xúc vào story của bạn.')
+            : (getTranslated('notification_reacted_to_post', context) ??
+                'đã thả cảm xúc vào bài viết của bạn.');
       case 'comment':
-        return "đã bình luận vào bài viết của bạn.";
+        return getTranslated('notification_commented_on_post', context) ??
+            'đã bình luận vào bài viết của bạn.';
       case 'comment_reply':
-        return "đã trả lời bình luận của bạn.";
+        return getTranslated('notification_replied_to_comment', context) ??
+            'đã trả lời bình luận của bạn.';
       case 'comment_mention':
-        return "đã nhắc đến bạn trong một bình luận.";
+        return getTranslated('notification_mentioned_in_comment', context) ??
+            'đã nhắc đến bạn trong một bình luận.';
       case 'shared_your_post':
-        return "đã chia sẻ bài viết của bạn.";
+        return getTranslated('notification_shared_post', context) ??
+            'đã chia sẻ bài viết của bạn.';
       case 'post_mention':
-        return "đã nhắc đến bạn trong một bài viết.";
+        return getTranslated('notification_mentioned_in_post', context) ??
+            'đã nhắc đến bạn trong một bài viết.';
       case 'visited_profile':
-        return "đã ghé thăm trang cá nhân của bạn.";
+        return getTranslated('notification_visited_profile', context) ??
+            'đã ghé thăm trang cá nhân của bạn.';
       case 'invited_you_to_the_group':
-        return "đã mời bạn tham gia nhóm.";
+        return getTranslated('notification_invited_to_group', context) ??
+            'đã mời bạn tham gia nhóm.';
       case 'joined_group':
-        return "đã tham gia nhóm của bạn.";
+        return getTranslated('notification_joined_your_group', context) ??
+            'đã tham gia nhóm của bạn.';
       case 'requested_to_join_group':
-        return "đã gửi yêu cầu tham gia nhóm.";
+        return getTranslated('notification_requested_to_join_group', context) ??
+            'đã gửi yêu cầu tham gia nhóm.';
       case 'accepted_join_request':
-        return "đã chấp nhận yêu cầu tham gia nhóm của bạn.";
+        return getTranslated('notification_accepted_join_request', context) ??
+            'đã chấp nhận yêu cầu tham gia nhóm của bạn.';
       case 'group_admin':
-        return "đã đặt bạn làm quản trị viên nhóm.";
+        return getTranslated('notification_set_group_admin', context) ??
+            'đã đặt bạn làm quản trị viên nhóm.';
       case 'following':
-        return "đã bắt đầu theo dõi bạn.";
+        return getTranslated('notification_started_following', context) ??
+            'đã bắt đầu theo dõi bạn.';
       case 'viewed_story':
-        return "đã xem story của bạn.";
-        case 'poke':
-      return "đã chọc bạn.";
+        return getTranslated('notification_viewed_story', context) ??
+            'đã xem story của bạn.';
+      case 'poke':
+        return getTranslated('notification_poked_you', context) ??
+            'đã chọc bạn.';
       case 'added_u_as':
-        return "đã gửi cho bạn lời mời gia đình.";
+        return getTranslated('notification_sent_family_request', context) ??
+            'đã gửi cho bạn lời mời gia đình.';
       case 'interested_event':
-        return "đã quan tâm tới sự kiện của bạn.";
+        return getTranslated('notification_interested_in_event', context) ??
+            'đã quan tâm tới sự kiện của bạn.';
       case 'going_event':
-        return "đã đánh dấu sẽ tham gia sự kiện của bạn.";
+        return getTranslated('notification_going_to_event', context) ??
+            'đã đánh dấu sẽ tham gia sự kiện của bạn.';
       default:
-        return "đã tương tác với bạn.";
+        return getTranslated('notification_interacted', context) ??
+            'đã tương tác với bạn.';
     }
   }
 
@@ -526,6 +550,5 @@ class _NotificationItemState extends State<NotificationItem> {
 
 
 }
-
 
 

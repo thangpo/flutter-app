@@ -185,7 +185,7 @@ class _DashboardChatScreenState extends State<DashboardChatScreen> {
   }
 
   Future<bool> _onWillPop() async {
-    if (_tabHistory.length > 1) {
+    if (_pageIndex == _searchIndex && _tabHistory.length > 1) {
       setState(() {
         _tabHistory.removeLast();
         _pageIndex = _tabHistory.last;
@@ -195,7 +195,16 @@ class _DashboardChatScreenState extends State<DashboardChatScreen> {
       }
       return false;
     }
-    return true;
+    if (!mounted) return false;
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+      return false;
+    }
+    await Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+          builder: (_) => const DashBoardScreen(initialPageIndex: 2)),
+    );
+    return false;
   }
 
   void _pushTabHistory(int index) {
