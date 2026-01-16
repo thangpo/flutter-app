@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/features/wishlist/services/wishlist_service.dart';
+import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/common/basewidget/not_logged_in_bottom_sheet_widget.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -28,6 +31,16 @@ class TourDetailBody extends StatefulWidget {
 
 class _TourDetailBodyState extends State<TourDetailBody> {
   int _tabIndex = 0;
+  late final WishlistService _wishlist;
+  bool _isFav = false;
+  bool _favLoading = false;
+  bool _didInit = false;
+
+  int _tourId() {
+    final raw = widget.tour['id'];
+    if (raw is int) return raw;
+    return int.tryParse(raw?.toString() ?? '') ?? 0;
+  }
 
   String _formatPrice(dynamic raw) {
     if (raw == null) return '0 ₫';
@@ -36,6 +49,71 @@ class _TourDetailBodyState extends State<TourDetailBody> {
     final formatter =
     NumberFormat.currency(locale: 'vi_VN', symbol: '₫', decimalDigits: 0);
     return formatter.format(value);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didInit) return;
+    _didInit = true;
+
+    _wishlist = WishlistService(
+      baseUrl: 'https://vietnamtoure.com/api',
+      getAccessToken: () async {
+        final auth = Provider.of<AuthController>(context, listen: false);
+        return auth.getUserToken();
+      },
+    );
+
+    _loadFavState();
+  }
+
+  Future<void> _loadFavState() async {
+    final id = _tourId();
+    if (id <= 0) return;
+
+    final auth = Provider.of<AuthController>(context, listen: false);
+    if (!auth.isLoggedIn()) return;
+
+    try {
+      final active = await _wishlist.check(objectId: id, objectModel: 'tour');
+      if (!mounted) return;
+      setState(() => _isFav = active);
+    } catch (_) {
+
+    }
+  }
+
+  Future<void> _toggleFav() async {
+    if (_favLoading) return;
+
+    final auth = Provider.of<AuthController>(context, listen: false);
+    if (!auth.isLoggedIn()) {
+      showModalBottomSheet(
+        backgroundColor: const Color(0x00FFFFFF),
+        context: context,
+        builder: (_) => const NotLoggedInBottomSheetWidget(),
+      );
+      return;
+    }
+
+    final id = _tourId();
+    if (id <= 0) return;
+
+    setState(() => _favLoading = true);
+
+    try {
+      final active = await _wishlist.toggle(objectId: id, objectModel: 'tour');
+      if (!mounted) return;
+      setState(() => _isFav = active);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Không thể cập nhật yêu thích: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _favLoading = false);
+    }
   }
 
   @override
@@ -283,25 +361,40 @@ class _TourDetailBodyState extends State<TourDetailBody> {
 
                     const SizedBox(width: 12),
 
-                    Container(
-                      width: 46,
-                      height: 46,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.92),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.35),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
+                    GestureDetector(
+                      onTap: _favLoading ? null : _toggleFav,
+                      child: Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withOpacity(0.92),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.35),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Center(
+                          child: _favLoading
+                              ? SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: isDark ? widget.darkPrimary : widget.primaryOcean,
+                            ),
+                          )
+                              : Icon(
+                            _isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                            color: _isFav
+                                ? Colors.red
+                                : (isDark ? widget.darkPrimary : widget.primaryOcean),
+                            size: 22,
                           ),
-                        ],
-                      ),
-                      child: Icon(
-                        Icons.bookmark_border_rounded,
-                        color:
-                        isDark ? widget.darkPrimary : widget.primaryOcean,
-                        size: 22,
+                        ),
                       ),
                     ),
                   ],

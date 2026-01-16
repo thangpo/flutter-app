@@ -118,7 +118,7 @@ class _HotelHomeShellState extends State<HotelHomeShell> {
     setState(() {
       _mapCenter = target;
       _mapZoom = 12;
-      _tabIndex = 0; // chuyển về tab Map luôn nếu muốn
+      _tabIndex = 0;
     });
 
     _mapController.move(target, 12);
@@ -142,13 +142,10 @@ class _HotelHomeShellState extends State<HotelHomeShell> {
     final themeController = Provider.of<ThemeController>(context, listen: true);
     final isDark = themeController.darkTheme;
     final mapData = _buildMapDataFromHotels();
-
     final bgColor = isDark ? const Color(0xFF020617) : const Color(0xFFF3F4F6);
 
     return Scaffold(
       backgroundColor: bgColor,
-
-      // Nếu Bố muốn AppBar chung (optional)
       appBar: AppBar(
         title: Text(
           _tabIndex == 0
@@ -177,8 +174,6 @@ class _HotelHomeShellState extends State<HotelHomeShell> {
           : IndexedStack(
         index: _tabIndex,
         children: [
-          // ===== TAB 1: MAP FULL SCREEN =====
-          // Map full màn hình: dùng Positioned.fill / Expanded
           Stack(
             children: [
               Positioned.fill(
@@ -187,7 +182,7 @@ class _HotelHomeShellState extends State<HotelHomeShell> {
                   center: _mapCenter,
                   zoom: _mapZoom,
                   controller: _mapController,
-                  onOpenMap: null, // full screen thì không cần tap open
+                  onOpenMap: null,
                   borderRadius: BorderRadius.zero,
                 ),
               ),
@@ -206,18 +201,8 @@ class _HotelHomeShellState extends State<HotelHomeShell> {
             ],
           ),
 
-          // ===== TAB 2: BANNER/CAROUSEL FULL SCREEN =====
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: HotelHighlightCarousel(
-                hotels: _hotels,
-                onTap: (hotel) => _moveToHotel(hotel),
-              ),
-            ),
-          ),
+          HotelHighlightCarousel(hotels: _hotels),
 
-          // ===== TAB 3: LIST FULL SCREEN =====
           RefreshIndicator(
             onRefresh: _loadHotels,
             color: const Color(0xFF0EA5E9),
@@ -225,36 +210,61 @@ class _HotelHomeShellState extends State<HotelHomeShell> {
               physics: const AlwaysScrollableScrollPhysics(),
               child: HotelListSection(
                 hotels: _hotels,
-                mapData: mapData,
                 isDark: isDark,
                 tr: _tr,
-                onHotelTap: (hotel) => _moveToHotel(hotel),
               ),
             ),
           ),
         ],
       ),
 
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tabIndex,
-        onDestinationSelected: (i) => setState(() => _tabIndex = i),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.map_outlined),
-            selectedIcon: Icon(Icons.map),
-            label: 'Map',
+      bottomNavigationBar: Theme(
+        data: Theme.of(context).copyWith(
+          navigationBarTheme: NavigationBarThemeData(
+            backgroundColor: isDark ? const Color(0xFF0B1220) : Colors.white,
+            indicatorColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFE8F3FF),
+            labelTextStyle: MaterialStateProperty.resolveWith((states) {
+              final selected = states.contains(MaterialState.selected);
+              return TextStyle(
+                fontSize: 12,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                color: selected
+                    ? (isDark ? Colors.white : Colors.black87)
+                    : (isDark ? Colors.white70 : Colors.black54),
+              );
+            }),
+            iconTheme: MaterialStateProperty.resolveWith((states) {
+              final selected = states.contains(MaterialState.selected);
+              return IconThemeData(
+                size: 22,
+                color: selected
+                    ? (isDark ? Colors.white : Colors.black87)
+                    : (isDark ? Colors.white70 : Colors.black54),
+              );
+            }),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.auto_awesome_outlined),
-            selectedIcon: Icon(Icons.auto_awesome),
-            label: 'Banner',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.list_alt_outlined),
-            selectedIcon: Icon(Icons.list_alt),
-            label: 'List',
-          ),
-        ],
+        ),
+        child: NavigationBar(
+          selectedIndex: _tabIndex,
+          onDestinationSelected: (i) => setState(() => _tabIndex = i),
+          destinations: [
+            NavigationDestination(
+              icon: const Icon(Icons.map_outlined),
+              selectedIcon: const Icon(Icons.map),
+              label: _tr(context, 'nav_map', 'Map'),
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.auto_awesome_outlined),
+              selectedIcon: const Icon(Icons.auto_awesome),
+              label: _tr(context, 'nav_banner', 'Banner'),
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.list_alt_outlined),
+              selectedIcon: const Icon(Icons.list_alt),
+              label: _tr(context, 'nav_list', 'List'),
+            ),
+          ],
+        ),
       ),
     );
   }

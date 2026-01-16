@@ -3,7 +3,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import '../screens/hotel_detail_screen.dart';
 
-// Transition iOS style
 class IOSAppOpenTransition extends PageRouteBuilder {
   final Widget page;
   IOSAppOpenTransition({required this.page})

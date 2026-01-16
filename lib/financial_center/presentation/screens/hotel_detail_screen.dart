@@ -9,19 +9,18 @@ import '../widgets/hotel_detail_app_bar.dart';
 import '../screens/hotel_checkout_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/price_converter.dart';
 import '../widgets/hotel_rooms_section.dart' show HotelBookingSummary, HotelSelectedRoom;
 
 class HotelDetailScreen extends StatefulWidget {
   final String slug;
-
   const HotelDetailScreen({super.key, required this.slug});
 
   @override
   State<HotelDetailScreen> createState() => _HotelDetailScreenState();
 }
 
-class _HotelDetailScreenState extends State<HotelDetailScreen>
-    with TickerProviderStateMixin {
+class _HotelDetailScreenState extends State<HotelDetailScreen> with TickerProviderStateMixin {
   final HotelService _hotelService = HotelService();
   late Future<Map<String, dynamic>> _hotelFuture;
 
@@ -94,13 +93,42 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
     );
   }
 
-  String _formatVndPrice(num value) {
-    final formatter = NumberFormat.currency(
-      locale: 'vi_VN',
-      symbol: '₫',
-      decimalDigits: 0,
-    );
-    return formatter.format(value);
+  String _formatPrice(BuildContext context, num value) {
+    return PriceConverter.convertPrice(context, value.toDouble());
+  }
+
+  double _toPrice(dynamic raw) {
+    if (raw == null) return 0.0;
+    if (raw is num) return raw.toDouble();
+    final s = raw.toString().trim();
+    final direct = double.tryParse(s);
+    if (direct != null) return direct;
+
+    final cleaned = s.replaceAll(RegExp(r'[^0-9.\-]'), '');
+    return double.tryParse(cleaned) ?? 0.0;
+  }
+
+  String formatMoneyFromApi(num amount, Map<String, dynamic>? currencyInfo) {
+    final code = (currencyInfo?['code'] ?? 'USD').toString();
+    final symbol = (currencyInfo?['symbol'] ?? code).toString();
+    final position = (currencyInfo?['position'] ?? 'right').toString(); // left|right
+    final decimals = (currencyInfo?['decimals'] is int)
+        ? currencyInfo!['decimals'] as int
+        : int.tryParse(currencyInfo?['decimals']?.toString() ?? '') ?? (code == 'USD' ? 2 : 0);
+
+    final thousand = (currencyInfo?['thousand'] ?? ',').toString();
+    final decimalSep = (currencyInfo?['decimalSep'] ?? '.').toString();
+
+    // Intl dùng locale separators; nếu muốn theo API separators thì tự format thủ công.
+    final f = NumberFormat.currency(symbol: '', decimalDigits: decimals);
+    final n = f.format(amount);
+
+    // Nếu cần đúng thousand/decimalSep theo API, replace (đơn giản):
+    final normalized = n.replaceAll(',', 'TMP').replaceAll('.', decimalSep).replaceAll('TMP', thousand);
+
+    return position == 'left'
+        ? '$symbol $normalized'
+        : '$normalized $symbol';
   }
 
   @override
@@ -378,11 +406,17 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
           builder: (ctx, setState) {
             final theme = Provider.of<ThemeController>(ctx, listen: true);
             final isDark = theme.darkTheme;
-
             final Color cardBg = isDark ? const Color(0xFF1E1F23) : Colors.grey[50]!;
             final Color cardBorder = isDark ? Colors.white10 : Colors.grey[200]!;
             final Color primaryText = isDark ? Colors.white : Colors.black87;
             final Color secondaryText = isDark ? Colors.white70 : Colors.grey[700]!;
+
+            final Map<String, dynamic>? currencyInfo = (_hotelDetail?['currency_info'] as Map?)?.cast<String, dynamic>();
+
+            String money(num v) {
+              if (currencyInfo != null) return formatMoneyFromApi(v, currencyInfo);
+              return _formatPrice(context, v);
+            }
 
             double _calcRoomLineTotal(HotelSelectedRoom r, int nights) {
               final int qty = r.quantity <= 0 ? 1 : r.quantity;
@@ -409,20 +443,12 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
             double extrasTotal = 0;
             for (int i = 0; i < extraPriceItems.length; i++) {
               if (!extraSelected[i]) continue;
-              final priceStr = extraPriceItems[i]['price']?.toString() ?? '0';
-              final p = double.tryParse(
-                  priceStr.replaceAll(RegExp(r'[^0-9.]'), '')) ??
-                  0;
-              extrasTotal += p;
+              extrasTotal += _toPrice(extraPriceItems[i]['price']);
             }
 
-            double buyerFeesTotal = 0;
+            double buyerFeesTotal = 0.0;
             for (final fee in buyerFeeItems) {
-              final priceStr = fee['price']?.toString() ?? '0';
-              final p = double.tryParse(
-                  priceStr.replaceAll(RegExp(r'[^0-9.]'), '')) ??
-                  0;
-              buyerFeesTotal += p;
+              buyerFeesTotal += _toPrice(fee['price']);
             }
 
             final double grandTotal =
@@ -652,6 +678,9 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
               }
 
               Navigator.of(ctx).pop();
+              final apiCurrency = (_hotelDetail?['currency'] ?? 'USD').toString().toUpperCase();
+              final apiRate = (_hotelDetail?['rate'] is num) ? (_hotelDetail!['rate'] as num).toDouble() : double.tryParse('${_hotelDetail?['rate']}') ?? 1.0;
+              final displayCurrency = 'VND';
 
               Future.microtask(() {
                 Navigator.of(context).push(
@@ -677,6 +706,10 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                         hotelRating: hotelRating,
                         reviewCount: reviewCount,
                         hotelLocation: hotelLocation,
+                        currencyInfo: currencyInfo,
+                        apiCurrency: apiCurrency,
+                        apiRate: apiRate,
+                        displayCurrency: displayCurrency,
                       ),
                     ),
                   ),
@@ -884,7 +917,7 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                                 if (r.nights > 0)
                                                   Text(
                                                     '${r.nights} ${getTranslated('nights', ctx) ?? 'đêm'} • '
-                                                        '${_formatVndPrice(r.pricePerNight)} / ${getTranslated('per_night', ctx) ?? 'đêm'}',
+                                                        '${money(r.pricePerNight)} / ${getTranslated('per_night', ctx) ?? 'đêm'}',
                                                     style: TextStyle(
                                                       fontSize: 12,
                                                       color: isDark
@@ -898,7 +931,7 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                           Column(
                                             children: [
                                               Text(
-                                                _formatVndPrice(lineTotal),
+                                                money(lineTotal),
                                                 style: const TextStyle(
                                                   fontSize: 14,
                                                   fontWeight: FontWeight.w600,
@@ -1035,7 +1068,7 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                 const SizedBox(height: 12),
                                 Text(
                                   '${getTranslated('current_room_price', ctx) ?? 'Giá phòng hiện tại'}: '
-                                      '${_formatVndPrice(roomsTotal)}',
+                                      '${money(roomsTotal)}',
                                   style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w500,
@@ -1064,9 +1097,22 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                   ...extraPriceItems.asMap().entries.map((entry) {
                                     final i = entry.key;
                                     final item = entry.value;
+
                                     final name = (item['name'] ?? '').toString();
-                                    final priceHtml =
-                                    (item['price_html'] ?? '').toString();
+
+                                    // Lấy price dạng num an toàn
+                                    final dynamic rawPrice = item['price'];
+                                    final double itemPrice = rawPrice is num
+                                        ? rawPrice.toDouble()
+                                        : double.tryParse(rawPrice?.toString() ?? '') ?? 0.0;
+
+                                    // currency_info nên lấy từ response root (hotel detail)
+                                    final currencyInfo =
+                                    (_hotelDetail?['currency_info'] as Map?)?.cast<String, dynamic>();
+
+                                    // text hiển thị: ưu tiên format từ price + currency_info
+                                    final String priceText = money(itemPrice);
+
                                     return CheckboxListTile(
                                       contentPadding: EdgeInsets.zero,
                                       value: extraSelected[i],
@@ -1080,9 +1126,7 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                         style: TextStyle(color: primaryText),
                                       ),
                                       subtitle: Text(
-                                        priceHtml.isNotEmpty
-                                            ? priceHtml
-                                            : '${item['price'] ?? '0'} ₫',
+                                        priceText.isNotEmpty ? priceText : itemPrice.toStringAsFixed(2),
                                         style: TextStyle(
                                           color: secondaryText,
                                           fontSize: 13,
@@ -1093,13 +1137,10 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                   if (buyerFeeItems.isNotEmpty) ...[
                                     const SizedBox(height: 4),
                                     ...buyerFeeItems.map((fee) {
-                                      final name = (fee['name'] ??
-                                          fee['type_name'] ??
-                                          'Phí dịch vụ')
-                                          .toString();
-                                      final priceHtml =
-                                      (fee['price_html'] ?? '').toString();
-                                      final price = (fee['price'] ?? '').toString();
+                                      final name = (fee['name'] ?? fee['type_name'] ?? 'Phí dịch vụ').toString();
+                                      final feePrice = _toPrice(fee['price']);
+                                      final priceText = money(feePrice);
+
                                       return ListTile(
                                         contentPadding: EdgeInsets.zero,
                                         leading: const Icon(
@@ -1107,17 +1148,10 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                           size: 20,
                                           color: Colors.orange,
                                         ),
-                                        title: Text(
-                                          name,
-                                          style: TextStyle(color: primaryText),
-                                        ),
+                                        title: Text(name, style: TextStyle(color: primaryText)),
                                         subtitle: Text(
-                                          '${getTranslated('auto_included', ctx) ?? 'Đã bao gồm tự động'} • '
-                                              '${priceHtml.isNotEmpty ? priceHtml : '$price ₫'}',
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            color: secondaryText,
-                                          ),
+                                          '${getTranslated('auto_included', ctx) ?? 'Đã bao gồm tự động'} • $priceText',
+                                          style: TextStyle(fontSize: 13, color: secondaryText),
                                         ),
                                       );
                                     }).toList(),
@@ -1142,8 +1176,8 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  _formatVndPrice(grandTotal),
-                                  style: const TextStyle(
+                                  money(grandTotal),
+                                style: const TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.w700,
                                     color: Colors.blue,
@@ -1208,7 +1242,7 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                               Text(
                                                 '$qty ${getTranslated('room', ctx) ?? 'phòng'} • '
                                                     '$usedNights ${getTranslated('nights', ctx) ?? 'đêm'} × '
-                                                    '${_formatVndPrice(r.pricePerNight)} / '
+                                                    '${money(r.pricePerNight)} / '
                                                     '${getTranslated('per_night', ctx) ?? 'đêm'}',
                                                 style: TextStyle(
                                                   fontSize: 12,
@@ -1219,7 +1253,7 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                           ),
                                         ),
                                         Text(
-                                          _formatVndPrice(lineTotal),
+                                          money(lineTotal),
                                           style: TextStyle(
                                             fontSize: 13,
                                             fontWeight: FontWeight.w600,
@@ -1279,8 +1313,7 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                       final item = entry.value;
                                       final name =
                                       (item['name'] ?? '').toString();
-                                      final priceHtml =
-                                      (item['price_html'] ?? '').toString();
+                                      final extraPrice = _toPrice(item['price']);
                                       return Row(
                                         children: [
                                           Expanded(
@@ -1292,46 +1325,25 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                               ),
                                             ),
                                           ),
-                                          Text(
-                                            priceHtml.isNotEmpty
-                                                ? priceHtml
-                                                : '${item['price'] ?? '0'} ₫',
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              color: primaryText,
-                                            ),
-                                          ),
+                                          Text(money(extraPrice))
                                         ],
                                       );
                                     }),
                                   if (buyerFeeItems.isNotEmpty)
                                     ...buyerFeeItems.map((fee) {
-                                      final name =
-                                      (fee['name'] ?? fee['type_name'] ?? 'Phí dịch vụ')
-                                          .toString();
-                                      final priceHtml =
-                                      (fee['price_html'] ?? '').toString();
-                                      final price =
-                                      (fee['price'] ?? '').toString();
+                                      final name = (fee['name'] ?? fee['type_name'] ?? 'Phí dịch vụ').toString();
+                                      final feePrice = _toPrice(fee['price']);
                                       return Row(
                                         children: [
                                           Expanded(
                                             child: Text(
                                               '$name (${getTranslated('auto', ctx) ?? 'tự động'})',
-                                              style: TextStyle(
-                                                fontSize: 13,
-                                                color: primaryText,
-                                              ),
+                                              style: TextStyle(fontSize: 13, color: primaryText),
                                             ),
                                           ),
                                           Text(
-                                            priceHtml.isNotEmpty
-                                                ? priceHtml
-                                                : '$price ₫',
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              color: primaryText,
-                                            ),
+                                            money(feePrice),
+                                            style: TextStyle(fontSize: 13, color: primaryText),
                                           ),
                                         ],
                                       );
@@ -1348,8 +1360,8 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  _formatVndPrice(grandTotal),
-                                  style: const TextStyle(
+                                  money(grandTotal),
+                                style: const TextStyle(
                                     fontSize: 20,
                                     fontWeight: FontWeight.w700,
                                     color: Colors.blue,
@@ -1368,7 +1380,7 @@ class _HotelDetailScreenState extends State<HotelDetailScreen>
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
-                          '${_tr(context, "booking_current_subtotal", "Tổng tạm tính hiện tại:")} ${_formatVndPrice(grandTotal)}',
+                          '${_tr(context, "booking_current_subtotal", "Tổng tạm tính hiện tại:")} ${money(grandTotal)}',
                           style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w500,

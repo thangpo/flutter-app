@@ -8,7 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_map/flutter_map.dart' as fm;
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
-
+import 'package:flutter_sixvalley_ecommerce/helper/price_converter.dart';
 
 class HotelDetailBody extends StatefulWidget {
   final Map<String, dynamic> hotel;
@@ -86,6 +86,20 @@ class _HotelDetailBodyState extends State<HotelDetailBody> {
     return out;
   }
 
+  double _parseMoney(dynamic raw) {
+    if (raw == null) return 0;
+    if (raw is num) return raw.toDouble();
+    final s = raw.toString().trim();
+    if (s.isEmpty) return 0;
+    var t = s.replaceAll(RegExp(r'[^0-9,\.\-]'), '');
+    t = t.replaceAll('.', '').replaceAll(',', '');
+    return double.tryParse(t) ?? 0;
+  }
+
+  String _formatMoneyFromVnd(BuildContext context, double vndAmount) {
+    return PriceConverter.convertPrice(context, vndAmount);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Provider.of<ThemeController>(context, listen: true);
@@ -94,18 +108,13 @@ class _HotelDetailBodyState extends State<HotelDetailBody> {
     return _buildHotelInfo(context, widget.hotel, isDark);
   }
 
-  Widget _buildHotelInfo(
-      BuildContext context, Map<String, dynamic> hotel, bool isDark) {
+  Widget _buildHotelInfo(BuildContext context, Map<String, dynamic> hotel, bool isDark) {
     final String title = (hotel['title'] ?? hotel['name'] ?? '').toString();
-    final String locationText = (hotel['location'] is Map)
-        ? (hotel['location']?['name'] ?? '').toString()
-        : (hotel['location'] ?? '').toString();
-    final String address =
-    (hotel['address'] ?? hotel['map_address'] ?? '').toString();
+    final String locationText = (hotel['location'] is Map) ? (hotel['location']?['name'] ?? '').toString() : (hotel['location'] ?? '').toString();
+    final String address = (hotel['address'] ?? hotel['map_address'] ?? '').toString();
     final String? lat = hotel['map_lat']?.toString();
     final String? lng = hotel['map_lng']?.toString();
     final dynamic reviewSummaryRaw = hotel['review_summary'];
-
     final double score = double.tryParse(
       (reviewSummaryRaw is Map
           ? reviewSummaryRaw['score']
@@ -125,25 +134,16 @@ class _HotelDetailBodyState extends State<HotelDetailBody> {
       reviews = const [];
     }
 
-    final int reviewCount =
-        int.tryParse(hotel['review_count']?.toString() ?? '') ??
-            (reviewListRaw is Map && reviewListRaw['total'] != null
-                ? int.tryParse(reviewListRaw['total'].toString()) ??
-                reviews.length
-                : reviews.length);
-
-    final String priceText = (hotel['price'] ?? hotel['min_price'] ?? '')
-        .toString()
-        .replaceAll('.0', '');
-
+    final int reviewCount = int.tryParse(hotel['review_count']?.toString() ?? '') ?? (reviewListRaw is Map && reviewListRaw['total'] != null ? int.tryParse(reviewListRaw['total'].toString()) ?? reviews.length : reviews.length);
+    final double priceAmount = _parseMoney(hotel['price'] ?? hotel['min_price']);
+    final bool hasPrice = priceAmount  > 0;
+    final String priceFormatted = _formatMoneyFromVnd(context, priceAmount );
     final dynamic attributesRaw = hotel['attributes'];
-    final List<dynamic> attributes =
-    attributesRaw is List ? attributesRaw : const [];
+    final List<dynamic> attributes = attributesRaw is List ? attributesRaw : const [];
     final dynamic termsRaw = hotel['terms'];
     final List<dynamic> rawTerms = termsRaw is List ? termsRaw : const [];
     final dynamic roomsRaw = hotel['rooms'];
     final List<dynamic> rooms = roomsRaw is List ? roomsRaw : const [];
-
     final Map<int, String> roomTermNameMap = {};
     for (final attr in attributes) {
       if (attr is Map && attr['terms'] is List) {
@@ -226,13 +226,13 @@ class _HotelDetailBodyState extends State<HotelDetailBody> {
                         ),
                       ),
                     ),
-                    if (priceText.isNotEmpty) ...[
+                    if (hasPrice) ...[
                       const SizedBox(width: 8),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(
-                            '$priceText ₫',
+                            priceFormatted,
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w700,
@@ -241,7 +241,7 @@ class _HotelDetailBodyState extends State<HotelDetailBody> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            '/Đêm',
+                            getTranslated('hotel_per_night', context) ?? '/night',
                             style: TextStyle(
                               fontSize: 12,
                               color: secondaryText,
@@ -293,7 +293,7 @@ class _HotelDetailBodyState extends State<HotelDetailBody> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        '($reviewCount đánh giá)',
+                        '($reviewCount ${getTranslated('hotel_reviews_count', context) ?? 'reviews'})',
                         style: TextStyle(
                           fontSize: 12,
                           color: secondaryText,
@@ -338,43 +338,70 @@ class _HotelDetailBodyState extends State<HotelDetailBody> {
   }
 
   Widget _buildTabs(bool isDark) {
-    final labels = ['Mô tả', 'Vị trí & ích', 'Đánh giá'];
-    final bg = isDark ? const Color(0xFF181A1F) : Colors.grey[100];
+    final labels = [
+      getTranslated('hotel_tab_description', context) ?? 'Description',
+      getTranslated('hotel_tab_location_facilities', context) ?? 'Location',
+      getTranslated('hotel_tab_reviews', context) ?? 'Reviews',
+    ];
+
+    final Color outerBg = isDark ? const Color(0xFF171A1F) : const Color(0xFFF3F4F6);
+    final Color outerBorder = isDark ? Colors.white10 : Colors.black12;
+
+    final Color activeBg = isDark ? (Colors.blue[600] ?? Colors.blue) : (Colors.blue[700] ?? Colors.blue);
+    final Color inactiveText = isDark ? Colors.white70 : Colors.grey[700]!;
+    final Color activeText = Colors.white;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Container(
+        padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
-          color: bg,
+          color: outerBg,
           borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: outerBorder),
+          boxShadow: [
+            if (!isDark)
+              BoxShadow(
+                color: Colors.black.withOpacity(0.06),
+                blurRadius: 10,
+                offset: const Offset(0, 6),
+              ),
+          ],
         ),
         child: Row(
           children: List.generate(labels.length, (index) {
             final selected = index == _currentTab;
+
             return Expanded(
-              child: GestureDetector(
-                onTap: () {
-                  setState(() => _currentTab = index);
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      vertical: 10, horizontal: 6),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(999),
+                onTap: () => setState(() => _currentTab = index),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOut,
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
                   decoration: BoxDecoration(
-                    color: selected
-                        ? (isDark ? Colors.blue[700] : Colors.white)
-                        : Colors.transparent,
+                    color: selected ? activeBg : Colors.transparent,
                     borderRadius: BorderRadius.circular(999),
+                    boxShadow: selected
+                        ? [
+                      BoxShadow(
+                        color: activeBg.withOpacity(isDark ? 0.35 : 0.25),
+                        blurRadius: 10,
+                        offset: const Offset(0, 6),
+                      ),
+                    ]
+                        : null,
                   ),
                   child: Center(
                     child: Text(
                       labels[index],
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 13,
-                        fontWeight:
-                        selected ? FontWeight.w600 : FontWeight.w400,
-                        color: selected
-                            ? (isDark ? Colors.white : Colors.blue[700])
-                            : (isDark ? Colors.white70 : Colors.grey[700]),
+                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                        color: selected ? activeText : inactiveText,
                       ),
                     ),
                   ),
@@ -429,7 +456,7 @@ class _HotelDetailBodyState extends State<HotelDetailBody> {
         if (policyHtml.isNotEmpty) ...[
           const SizedBox(height: 16),
           Text(
-            "Chính sách & lưu ý",
+            getTranslated('hotel_policies_notes', context) ?? 'Policies & notes',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
@@ -511,7 +538,7 @@ class _HotelDetailBodyState extends State<HotelDetailBody> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Tiện nghi & dịch vụ',
+                getTranslated('hotel_amenities_services', context) ?? 'Amenities & services',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
@@ -519,7 +546,7 @@ class _HotelDetailBodyState extends State<HotelDetailBody> {
                 ),
               ),
               Text(
-                'Xem tất cả',
+                getTranslated('hotel_view_all', context) ?? 'View all',
                 style: TextStyle(
                   fontSize: 13,
                   color: Colors.blue[600],
@@ -784,13 +811,13 @@ class _HotelDetailBodyState extends State<HotelDetailBody> {
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: const [
+          children: [
             Row(
               children: [
                 Icon(Icons.near_me_rounded, color: Colors.white, size: 18),
                 SizedBox(width: 6),
                 Text(
-                  'Google Maps',
+                  getTranslated('hotel_google_maps', context) ?? 'Google Maps',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 13,
@@ -800,7 +827,7 @@ class _HotelDetailBodyState extends State<HotelDetailBody> {
               ],
             ),
             Text(
-              'Xem bản đồ',
+              getTranslated('hotel_view_map', context) ?? 'View map',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 13,
