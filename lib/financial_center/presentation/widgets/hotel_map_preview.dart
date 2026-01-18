@@ -9,8 +9,6 @@ class HotelMapPreview extends StatelessWidget {
   final MapController controller;
   final VoidCallback? onOpenMap;
   final BorderRadius borderRadius;
-
-  // NEW
   final bool showTopLabel;
 
   const HotelMapPreview({

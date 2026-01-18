@@ -192,11 +192,9 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
   }
 }
 
-/// Popup yêu cầu đăng nhập – giữ nguyên, chỉ dùng chung cho UI mới
 class TourLoginRequiredDialog extends StatelessWidget {
   final bool isDark;
   const TourLoginRequiredDialog({super.key, required this.isDark});
-
   static const Color primaryOcean = Color(0xFF0077BE);
   static const Color lightOcean = Color(0xFF4DA6D6);
   static const Color darkPrimary = Color(0xFF64B5F6);

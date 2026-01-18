@@ -7,7 +7,10 @@ import '../screens/hotel_detail_screen.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/financial_center/presentation/hotel_flip_transition.dart';
-
+import 'package:flutter_sixvalley_ecommerce/features/wishlist/services/wishlist_service.dart';
+import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_controller.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/price_converter.dart';
+import 'package:flutter_sixvalley_ecommerce/common/basewidget/not_logged_in_bottom_sheet_widget.dart';
 
 class HotelListWidget extends StatefulWidget {
   const HotelListWidget({super.key});
@@ -16,12 +19,16 @@ class HotelListWidget extends StatefulWidget {
   State<HotelListWidget> createState() => _HotelListWidgetState();
 }
 
-class _HotelListWidgetState extends State<HotelListWidget>
-    with TickerProviderStateMixin {
+class _HotelListWidgetState extends State<HotelListWidget> with TickerProviderStateMixin {
   final HotelService _hotelService = HotelService();
   bool _isLoading = true;
   List<dynamic> _hotels = [];
   late AnimationController _animationController;
+  late final WishlistService _wishlist;
+  final Map<int, bool> _favMap = {};
+  final Set<int> _favLoading = <int>{};
+  bool _wishlistInit = false;
+
 
   @override
   void initState() {
@@ -39,17 +46,95 @@ class _HotelListWidgetState extends State<HotelListWidget>
     super.dispose();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_wishlistInit) return;
+    _wishlistInit = true;
+    _wishlist = WishlistService(
+      baseUrl: 'https://vietnamtoure.com/api',
+      getAccessToken: () async {
+        final auth = Provider.of<AuthController>(context, listen: false);
+        return auth.getUserToken();
+      },
+    );
+  }
+
   Future<void> _loadHotels() async {
     try {
       final hotels = await _hotelService.fetchHotels(limit: 10);
+
+      if (!mounted) return;
       setState(() {
         _hotels = hotels;
         _isLoading = false;
       });
       _animationController.forward();
+      _prefetchFavStates();
     } catch (e) {
       debugPrint('Error loading hotels: $e');
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  int _hotelId(dynamic hotel) {
+    final raw = hotel['id'];
+    if (raw is int) return raw;
+    return int.tryParse(raw?.toString() ?? '') ?? 0;
+  }
+
+  Future<void> _prefetchFavStates() async {
+    final auth = Provider.of<AuthController>(context, listen: false);
+    if (!auth.isLoggedIn()) return;
+
+    for (final h in _hotels) {
+      final id = _hotelId(h);
+      if (id <= 0) continue;
+      if (_favMap.containsKey(id)) continue;
+
+      try {
+        final active = await _wishlist.check(objectId: id, objectModel: 'hotel');
+        if (!mounted) return;
+        setState(() => _favMap[id] = active);
+      } catch (e) {
+        debugPrint('prefetch fav failed for $id: $e');
+      }
+    }
+  }
+
+  Future<void> _toggleFavForHotel(dynamic hotel) async {
+    final auth = Provider.of<AuthController>(context, listen: false);
+    if (!auth.isLoggedIn()) {
+      showModalBottomSheet(
+        backgroundColor: const Color(0x00FFFFFF),
+        context: context,
+        builder: (_) => const NotLoggedInBottomSheetWidget(),
+      );
+      return;
+    }
+
+    final id = _hotelId(hotel);
+    if (id <= 0) return;
+    if (_favLoading.contains(id)) return;
+
+    setState(() => _favLoading.add(id));
+
+    try {
+      final active = await _wishlist.toggle(objectId: id, objectModel: 'hotel');
+      if (!mounted) return;
+      setState(() => _favMap[id] = active);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              (getTranslated('wishlist_update_failed', context) ?? 'Không thể cập nhật yêu thích')
+                  + ': $e',
+            ),
+          ),
+      );
+    } finally {
+      if (mounted) setState(() => _favLoading.remove(id));
     }
   }
 
@@ -188,6 +273,9 @@ class _HotelListWidgetState extends State<HotelListWidget>
           children: _hotels.asMap().entries.map((entry) {
             final index = entry.key;
             final hotel = entry.value;
+            final id = _hotelId(hotel);
+            final isFav = _favMap[id] ?? false;
+            final loading = _favLoading.contains(id);
             final animation = Tween<double>(begin: 0.0, end: 1.0).animate(
               CurvedAnimation(
                 parent: _animationController,
@@ -205,6 +293,10 @@ class _HotelListWidgetState extends State<HotelListWidget>
                 child: _HotelCardItem(
                   hotel: hotel,
                   isDark: isDark,
+                  wishlist: _wishlist,
+                  isFav: isFav,
+                  favLoading: loading,
+                  onToggleFav: () => _toggleFavForHotel(hotel),
                 ),
               ),
             );
@@ -218,8 +310,19 @@ class _HotelListWidgetState extends State<HotelListWidget>
 class _HotelCardItem extends StatefulWidget {
   final dynamic hotel;
   final bool isDark;
+  final WishlistService wishlist;
+  final bool isFav;
+  final bool favLoading;
+  final VoidCallback onToggleFav;
 
-  const _HotelCardItem({required this.hotel, required this.isDark});
+  const _HotelCardItem({
+    required this.hotel,
+    required this.isDark,
+    required this.wishlist,
+    required this.isFav,
+    required this.favLoading,
+    required this.onToggleFav,
+  });
 
   @override
   State<_HotelCardItem> createState() => _HotelCardItemState();
@@ -248,13 +351,19 @@ class _HotelCardItemState extends State<_HotelCardItem>
     super.dispose();
   }
 
-  String _formatPrice(dynamic raw) {
-    if (raw == null) return '—';
-    final rawStr = raw.toString().replaceAll(',', '');
-    final value = double.tryParse(rawStr);
-    if (value == null) return raw.toString();
-    final format = NumberFormat('#,###');
-    return '${format.format(value)} ₫';
+  double _parsePrice(dynamic raw) {
+    if (raw == null) return 0;
+    if (raw is num) return raw.toDouble();
+    final s = raw.toString().trim();
+    if (s.isEmpty) return 0;
+    final normalized = s.replaceAll(RegExp(r'[^0-9\.\-]'), '');
+    return double.tryParse(normalized) ?? 0;
+  }
+
+  String _formatPrice(BuildContext context, dynamic raw) {
+    final v = _parsePrice(raw);
+    if (v <= 0) return getTranslated('not_available', context) ?? '—';
+    return PriceConverter.convertPrice(context, v);
   }
 
   String _getLocation(dynamic loc) {
@@ -274,12 +383,9 @@ class _HotelCardItemState extends State<_HotelCardItem>
         '')
         .toString();
 
-    final title =
-    (hotel['title'] ?? hotel['name'] ?? 'Hotel').toString();
-
+    final title = (hotel['title'] ?? hotel['name'] ?? 'Hotel').toString();
     final location = _getLocation(hotel['location']);
-    final price = _formatPrice(hotel['price']);
-
+    final price = _formatPrice(context, hotel['price']);
     final outerShadowColor = widget.isDark
         ? Colors.black.withOpacity(0.7)
         : Colors.black.withOpacity(0.12);
@@ -372,10 +478,27 @@ class _HotelCardItemState extends State<_HotelCardItem>
                           ),
                         ],
                       ),
-                      child: Icon(
-                        Icons.favorite_border_rounded,
-                        size: 18,
-                        color: Colors.grey[800],
+                      child: InkWell(
+                        onTap: widget.favLoading ? null : () {
+                          widget.onToggleFav();
+                        },
+                        borderRadius: BorderRadius.circular(999),
+                        child: Center(
+                          child: widget.favLoading
+                              ? SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.grey[800],
+                            ),
+                          )
+                              : Icon(
+                            widget.isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                            size: 18,
+                            color: widget.isFav ? Colors.red : Colors.grey[800],
+                          ),
+                        ),
                       ),
                     ),
                   ),
