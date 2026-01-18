@@ -35,6 +35,7 @@ class SocialLoginWidget extends StatefulWidget {
 
 class SocialLoginWidgetState extends State<SocialLoginWidget> {
   SocialLoginModel socialLogin = SocialLoginModel();
+  static const bool _hideGoogleLogin = true;
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +47,7 @@ class SocialLoginWidgetState extends State<SocialLoginWidget> {
       socialLoginList.add("facebook");
     }
 
-    if (socialLoginConfig?.google == 1) {
+    if (!_hideGoogleLogin && socialLoginConfig?.google == 1) {
       socialLoginList.add("google");
     }
 
@@ -57,15 +58,15 @@ class SocialLoginWidgetState extends State<SocialLoginWidget> {
     return Consumer<AuthController>(builder: (context, authProvider, _) {
       if (socialLoginList.length == 1) {
         return Row(children: [
-          if (socialLoginConfig?.google == 1)
-            Expanded(
-                child: InkWell(
-                  onTap: () => googleLogin(context),
-                  child: SocialLoginButtonWidget(
-                    text: getTranslated('continue_with_google', context)!,
-                    image: Images.google,
-                  ),
-                )),
+          // if (!_hideGoogleLogin && socialLoginConfig?.google == 1)
+          //   Expanded(
+          //       child: InkWell(
+          //         onTap: () => googleLogin(context),
+          //         child: SocialLoginButtonWidget(
+          //           text: getTranslated('continue_with_google', context)!,
+          //           image: Images.google,
+          //         ),
+          //       )),
            if (socialLoginConfig?.facebook == 1)
             Expanded(
               child: InkWell(
@@ -91,7 +92,7 @@ class SocialLoginWidgetState extends State<SocialLoginWidget> {
         } else if(socialLoginList.length == 2){
           return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
 
-            if(socialLoginConfig?.google == 1)...[
+            if(!_hideGoogleLogin && socialLoginConfig?.google == 1)...[
               Expanded(child: InkWell(
                 onTap: () => googleLogin(context),
                 child: SocialLoginButtonWidget(
@@ -133,7 +134,7 @@ class SocialLoginWidgetState extends State<SocialLoginWidget> {
           ]);
         }   else if(socialLoginList.length == 3){
         return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          if (socialLoginConfig?.google == 1) ...[
+          if (!_hideGoogleLogin && socialLoginConfig?.google == 1) ...[
             InkWell(
               onTap: () => googleLogin(context),
               child: const SocialLoginButtonWidget(
@@ -166,11 +167,7 @@ class SocialLoginWidgetState extends State<SocialLoginWidget> {
           // ],
         ]);
       } else {
-        return Container(
-          height: 50,
-          width: 50,
-          color: Colors.red,
-        );
+        return const SizedBox.shrink();
       }
     });
 
@@ -460,4 +457,3 @@ class SocialLoginButtonWidget extends StatelessWidget {
     );
   }
 }
-
