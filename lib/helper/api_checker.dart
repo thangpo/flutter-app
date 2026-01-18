@@ -9,7 +9,9 @@ import 'package:flutter_sixvalley_ecommerce/features/auth/controllers/auth_contr
 import 'package:flutter_sixvalley_ecommerce/features/social/controllers/social_controller.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/helper/app_globals.dart';
+import 'package:flutter_sixvalley_ecommerce/utill/app_constants.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiChecker {
   static const String _missingSocialTokenText = 'Please log in to your social network account';
@@ -31,7 +33,11 @@ class ApiChecker {
       final String message = missingToken
           ? 'Social session expired. Please sign in again.'
           : 'Session expired. Please sign in again.';
-      _forceLogoutAndRedirect(context, message);
+      if (missingToken) {
+        _redirectToSocialLogin(context, message);
+      } else {
+        _forceLogoutAndRedirect(context, message);
+      }
       return;
     }
 
@@ -93,6 +99,28 @@ class ApiChecker {
 
     Future.microtask(() {
       Get.navigator?.pushNamedAndRemoveUntil('/login', (route) => false);
+      _isRedirectingToLogin = false;
+    });
+  }
+
+  static void _redirectToSocialLogin(BuildContext context, String message) {
+    if (_isRedirectingToLogin) return;
+    _isRedirectingToLogin = true;
+
+    showCustomSnackBar(message, context);
+
+    Future.microtask(() async {
+      final auth = Provider.of<AuthController>(context, listen: false);
+      await auth.authServiceInterface.clearSocialAccessToken();
+      await auth.authServiceInterface.clearSocialUserId();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(AppConstants.socialUserName);
+      await prefs.remove(AppConstants.socialUserAvatar);
+      try {
+        Provider.of<SocialController>(context, listen: false)
+            .clearAuthState();
+      } catch (_) {}
+      Get.navigator?.pushNamed('/login');
       _isRedirectingToLogin = false;
     });
   }
