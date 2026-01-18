@@ -2,8 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class HotelRoomService {
-  static const String baseUrl =
-      'https://vietnamtoure.com/api/hotel/check-availability';
+  static const String baseUrl = 'https://vietnamtoure.com/api/hotel/check-availability';
 
   static Future<List<dynamic>> checkAvailability({
     required int hotelId,

@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/price_converter.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 
 class HotelRoomCard extends StatelessWidget {
@@ -245,7 +246,7 @@ class HotelRoomCard extends StatelessWidget {
                 const SizedBox(height: 10),
                 if (pricePerNight > 0)
                   Text(
-                    '${_formatVndPrice(pricePerNight)}/${getTranslated('night', context) ?? 'đêm'}',
+                    '${_formatPrice(context, pricePerNight)}/${getTranslated('night', context) ?? 'đêm'}',
                     style: TextStyle(
                       color: isDark ? Colors.blue[300] : Colors.blue[700],
                       fontWeight: FontWeight.bold,
@@ -419,11 +420,8 @@ class HotelRoomCard extends StatelessWidget {
                     }
 
                     final total = pricePerNight * i * nights;
-                    final nightsLabel =
-                    nights > 1 ? '$nights đêm' : '1 đêm';
-                    final text =
-                        '$i ${getTranslated('rooms', context) ?? 'phòng'} '
-                        '(${_formatVndPrice(total)} / $nightsLabel)';
+                    final nightsLabel = nights > 1 ? '$nights đêm' : '1 đêm';
+                    final text = '$i ${getTranslated('rooms', context) ?? 'phòng'} ''(${_formatPrice(context, total)} / $nightsLabel)';
 
                     return DropdownMenuItem(
                       value: i,
@@ -445,7 +443,7 @@ class HotelRoomCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(left: 8),
               child: Text(
-                _formatVndPrice(totalPrice),
+                _formatPrice(context, totalPrice),
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -470,18 +468,14 @@ class HotelRoomCard extends StatelessWidget {
             child: ElevatedButton(
               onPressed: () {
                 if (selectedRooms <= 0) {
-                  final msg =
-                      getTranslated('please_select_room_qty', context) ??
-                          'Vui lòng chọn số phòng ở phía trên.';
+                  final msg = getTranslated('please_select_room_qty', context) ?? 'Vui lòng chọn số phòng ở phía trên.';
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text(msg)),
                   );
                   return;
                 }
 
-                final msg =
-                    '${getTranslated('selected_room', context) ?? 'Đã chọn'}: '
-                    '$name - $selectedRooms ${getTranslated('rooms', context) ?? 'phòng'}';
+                final msg = '${getTranslated('selected_room', context) ?? 'Đã chọn'}: ''$name - $selectedRooms ${getTranslated('rooms', context) ?? 'phòng'}';
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(msg),
@@ -526,21 +520,35 @@ class HotelRoomCard extends StatelessWidget {
     );
   }
 
-  String _formatVndPrice(dynamic raw) {
-    double value;
+  String _formatPrice(BuildContext context, dynamic raw) {
+    double value = 0;
+
     if (raw is num) {
       value = raw.toDouble();
     } else {
-      final s = raw.toString();
-      value = double.tryParse(s.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+      final s = raw.toString().trim();
+      var cleaned = s.replaceAll(RegExp(r'[^0-9\-,\.]'), '');
+      final lastDot = cleaned.lastIndexOf('.');
+      final lastComma = cleaned.lastIndexOf(',');
+      final lastSep = (lastDot > lastComma) ? lastDot : lastComma;
+
+      if (lastSep >= 0) {
+        final decimals = cleaned.length - lastSep - 1;
+        if (decimals > 0 && decimals <= 2) {
+          final intPart = cleaned.substring(0, lastSep).replaceAll(RegExp(r'[.,]'), '');
+          final fracPart = cleaned.substring(lastSep + 1);
+          cleaned = '$intPart.$fracPart';
+        } else {
+          cleaned = cleaned.replaceAll(RegExp(r'[.,]'), '');
+        }
+      } else {
+        cleaned = cleaned.replaceAll(RegExp(r'[.,]'), '');
+      }
+
+      value = double.tryParse(cleaned) ?? 0;
     }
 
-    final formatter = NumberFormat.currency(
-      locale: 'vi_VN',
-      symbol: '₫',
-      decimalDigits: 0,
-    );
-    return formatter.format(value);
+    return PriceConverter.convertPrice(context, value);
   }
 
   Widget _buildRoomMiniChip(

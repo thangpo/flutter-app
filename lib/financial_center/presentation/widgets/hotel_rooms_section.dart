@@ -1,10 +1,10 @@
 import 'dart:ui';
+import 'hotel_room_card.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import '../services/hotel_room_service.dart';
-import 'hotel_room_card.dart';
+import 'package:flutter_sixvalley_ecommerce/helper/price_converter.dart';
 import 'package:flutter_sixvalley_ecommerce/localization/language_constrants.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
 
@@ -164,6 +164,37 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
     return int.tryParse(match.group(0)!) ?? 0;
   }
 
+  double _parseMoney(dynamic raw) {
+    if (raw == null) return 0;
+    if (raw is num) return raw.toDouble();
+    var s = raw.toString().trim();
+    if (s.isEmpty) return 0;
+    s = s.replaceAll(RegExp(r'[^0-9\-,\.]'), '');
+    if (s.isEmpty) return 0;
+    final lastDot = s.lastIndexOf('.');
+    final lastComma = s.lastIndexOf(',');
+    final lastSep = (lastDot > lastComma) ? lastDot : lastComma;
+
+    if (lastSep >= 0) {
+      final decimals = s.length - lastSep - 1;
+      if (decimals > 0 && decimals <= 2) {
+        final intPart = s.substring(0, lastSep).replaceAll(RegExp(r'[.,]'), '');
+        final fracPart = s.substring(lastSep + 1);
+        s = '$intPart.$fracPart';
+      } else {
+        s = s.replaceAll(RegExp(r'[.,]'), '');
+      }
+    } else {
+
+    }
+
+    return double.tryParse(s) ?? 0;
+  }
+
+  String _formatPrice(BuildContext context, double amount) {
+    return PriceConverter.convertPrice(context, amount);
+  }
+
   HotelBookingSummary _buildBookingSummary() {
     final List<HotelSelectedRoom> selected = [];
     final int nights = (_startDate != null && _endDate != null)
@@ -173,23 +204,14 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
     for (final r in _rooms) {
       if (r is! Map) continue;
       final room = r as Map;
-
       final int id = int.tryParse(room['id']?.toString() ?? '0') ?? 0;
       if (id == 0) continue;
-
       final int quantity = _selectedRooms[id] ?? 0;
       if (quantity <= 0) continue;
-
-      final String name =
-      (room['title'] ?? room['name'] ?? '').toString();
-
+      final String name = (room['title'] ?? room['name'] ?? '').toString();
       final dynamic priceRaw = room['price'] ?? room['min_price'] ?? 0;
-      final double priceDouble = priceRaw is num
-          ? priceRaw.toDouble()
-          : double.tryParse(priceRaw.toString()) ?? 0.0;
-
-      final bool isAvailabilityResult =
-          room['price_text'] != null || room['price_html'] != null;
+      final double priceDouble = _parseMoney(priceRaw);
+      final bool isAvailabilityResult = room['price_text'] != null || room['price_html'] != null;
 
       final double pricePerNight =
       isAvailabilityResult && nights > 0
@@ -296,12 +318,8 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
                   .clamp(1, 365)
                   : 1;
 
-              final dynamic priceRaw =
-                  room['price'] ?? room['min_price'] ?? 0;
-              final double priceDouble = priceRaw is num
-                  ? priceRaw.toDouble()
-                  : double.tryParse(priceRaw.toString()) ??
-                  0.0;
+              final dynamic priceRaw = room['price'] ?? room['min_price'] ?? 0;
+              final double priceDouble = _parseMoney(priceRaw);
 
               final bool isAvailabilityResult =
                   room['price_text'] != null ||
@@ -422,22 +440,14 @@ class _HotelRoomsSectionState extends State<HotelRoomsSection> {
     );
   }
 
-  Widget _buildFilterBar(
-      BuildContext context, bool isDark) {
+  Widget _buildFilterBar(BuildContext context, bool isDark) {
     final dateFmt = DateFormat('dd/MM/yyyy');
-
-    String startText =
-        getTranslated('check_in', context) ??
-            'Nhận phòng';
-    String endText =
-        getTranslated('check_out', context) ??
-            'Trả phòng';
-
+    String startText = getTranslated('check_in', context) ?? 'Nhận phòng';
+    String endText = getTranslated('check_out', context) ?? 'Trả phòng';
     if (_startDate != null) startText = dateFmt.format(_startDate!);
     if (_endDate != null) endText = dateFmt.format(_endDate!);
 
-    final bool showGuests =
-        _startDate != null && _endDate != null;
+    final bool showGuests = _startDate != null && _endDate != null;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),

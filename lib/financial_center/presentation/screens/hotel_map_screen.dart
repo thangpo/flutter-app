@@ -4,7 +4,6 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_sixvalley_ecommerce/theme/controllers/theme_controller.dart';
 import 'package:provider/provider.dart';
-
 import 'popup_hotel.dart';
 import 'popup_tour.dart';
 import 'nearby_strip.dart';
@@ -150,13 +149,10 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
       if (la == null || lo == null) return null;
 
       final selected = _selected?['id'] == h['id'];
-
       final name = h['title'] ?? "";
       final short = name.length > 18 ? "${name.substring(0, 18)}…" : name;
-
       final rating = double.tryParse(h['review_score']?.toString() ?? '');
       final isTour = _isTour(h);
-
       final img = h['thumbnail'] ?? h['image_url'] ?? "";
 
       return Marker(
@@ -226,7 +222,6 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
   }
 
   void _handleBack() {
-    // chắc chắn pop được cả khi context bị lồng Navigator
     final nav = Navigator.of(context);
     if (nav.canPop()) {
       nav.pop();
@@ -256,7 +251,6 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
             ),
           ),
 
-          // ===== Back button (Positioned phải là con trực tiếp của Stack) =====
           Positioned(
             left: 12,
             top: 12,
@@ -268,7 +262,6 @@ class _HotelMapScreenState extends State<HotelMapScreen> {
             ),
           ),
 
-          // ===== My location =====
           Positioned(
             right: 12,
             top: 12,
