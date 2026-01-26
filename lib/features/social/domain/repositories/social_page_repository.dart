@@ -958,8 +958,8 @@
     }) async {
       try {
         final token = _getSocialAccessToken();
-        if (token == null) {
-          return ApiResponseModel.withError("Bạn chưa đăng nhập Social!");
+        if (token == null || token.isEmpty) {
+          return ApiResponseModel.withError('');
         }
 
         final String url =
